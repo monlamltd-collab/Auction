@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bridgematch — UK Property Auction Directory & Deal Analyser</title>
+<meta name="description" content="Free UK property auction directory by Bridgematch. Upcoming dates from Savills, Allsop, SDL, Network Auctions and more. AI-powered catalogue analyser scores every lot, finds title splits, filters to your budget.">
+<meta name="keywords" content="UK property auctions, auction directory, Savills auctions, Allsop auctions, SDL auctions, property investment, auction analysis, title split, freehold flats, bridgematch, bridging finance">
+<link rel="canonical" href="https://bridgematch.co.uk">
+<meta property="og:title" content="Bridgematch — UK Property Auction Directory & Deal Analyser">
+<meta property="og:description" content="Free AI-powered tool to analyse any UK auction catalogue. Scores every lot, finds title splits, filters to your budget.">
+<meta property="og:url" content="https://bridgematch.co.uk">
+<meta property="og:type" content="website">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#08080e;--surface:#101018;--surface2:#181824;--surface3:#222232;
+  --border:#2a2a3e;--text:#e6e6f2;--text2:#8a8aa6;--text3:#5a5a74;
+  --accent:#00e8b0;--accent2:#00c896;--accent-dim:rgba(0,232,176,.07);
+  --purple:#a78bfa;--purple-dim:rgba(167,139,250,.08);
+  --gold:#fbbf24;--gold-dim:rgba(251,191,36,.08);
+  --red:#f87171;--red-dim:rgba(248,113,113,.08);
+  --radius:12px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;line-height:1.5}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+
+/* Layout */
+.wrap{max-width:1080px;margin:0 auto;padding:0 20px}
+
+/* Hero */
+.hero{text-align:center;padding:56px 0 40px;position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;top:-120px;left:50%;transform:translateX(-50%);width:600px;height:600px;background:radial-gradient(circle,rgba(0,232,176,.06),transparent 70%);pointer-events:none}
+.hero h1{font-size:2.4rem;font-weight:800;letter-spacing:-1px;line-height:1.15;position:relative}
+.hero h1 .hl{background:linear-gradient(135deg,var(--accent),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.hero p{color:var(--text2);font-size:1rem;margin-top:10px;max-width:560px;margin-left:auto;margin-right:auto;position:relative}
+
+/* Navigation tabs */
+.tabs{display:flex;gap:4px;margin-bottom:28px;border-bottom:1px solid var(--border);padding-bottom:0}
+.tab{padding:10px 20px;font-weight:600;font-size:.9rem;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;background:none;border-top:none;border-left:none;border-right:none;font-family:inherit}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+/* Sections */
+.section{display:none}.section.active{display:block}
+
+/* Panel */
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px;margin-bottom:14px}
+.panel-t{font-weight:600;font-size:.78rem;color:var(--text3);text-transform:uppercase;letter-spacing:1.3px;margin-bottom:10px}
+
+/* Auction calendar cards */
+.cal-grid{display:grid;grid-template-columns:1fr;gap:10px}
+.cal-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;display:grid;grid-template-columns:56px 1fr auto;gap:16px;align-items:center;transition:all .15s}
+.cal-card:hover{border-color:var(--accent);transform:translateY(-1px)}
+.cal-date{text-align:center}
+.cal-date .day{font-size:1.5rem;font-weight:800;font-family:'JetBrains Mono',monospace;color:var(--accent);line-height:1}
+.cal-date .mon{font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text2);margin-top:2px}
+.cal-info h3{font-size:.95rem;font-weight:600;margin-bottom:2px}
+.cal-info .meta{font-size:.8rem;color:var(--text2)}
+.cal-info .meta span{margin-right:12px}
+.cal-actions{display:flex;gap:8px;flex-shrink:0}
+.cal-pill{font-size:.75rem;font-weight:600;padding:6px 14px;border-radius:20px;cursor:pointer;transition:all .15s;border:none;font-family:inherit}
+.cal-pill.primary{background:var(--accent);color:#000}.cal-pill.primary:hover{box-shadow:0 4px 16px rgba(0,232,176,.25)}
+.cal-pill.ghost{background:var(--surface2);color:var(--text2);border:1px solid var(--border)}.cal-pill.ghost:hover{border-color:var(--accent);color:var(--text)}
+
+/* House filter pills */
+.house-filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
+.hf{font-size:.78rem;padding:5px 12px;border-radius:16px;cursor:pointer;transition:all .15s;background:var(--surface2);color:var(--text2);border:1px solid var(--border);font-family:inherit;font-weight:500}
+.hf:hover,.hf.active{background:var(--accent-dim);color:var(--accent);border-color:rgba(0,232,176,.2)}
+
+/* Analyser section */
+.url-row{display:flex;gap:10px}
+.url-row input{flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:13px 14px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:.86rem;outline:0;transition:border .2s}
+.url-row input:focus{border-color:var(--accent)}
+.btn{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#000;font-weight:700;font-size:.88rem;border:none;border-radius:10px;padding:13px 24px;cursor:pointer;transition:all .15s;white-space:nowrap;font-family:inherit}
+.btn:hover{transform:translateY(-1px);box-shadow:0 6px 24px rgba(0,232,176,.25)}
+.btn:disabled{opacity:.35;cursor:not-allowed;transform:none;box-shadow:none}
+.btn-sm{padding:8px 14px;font-size:.78rem;border-radius:8px}
+.btn-ghost{background:var(--surface2);color:var(--text);border:1px solid var(--border)}.btn-ghost:hover{border-color:var(--accent)}
+
+/* Budget */
+.budget-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-top:12px}
+.field label{display:block;font-size:.76rem;color:var(--text3);margin-bottom:4px;font-weight:500}
+.field input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:.86rem;outline:0}
+.field input:focus{border-color:var(--accent)}
+.budget-info{margin-top:8px;font-family:'JetBrains Mono',monospace;font-size:.8rem;color:var(--text3)}
+.budget-info b{color:var(--accent)}
+
+/* Progress */
+#progressPanel{display:none}
+.p-track{background:var(--surface2);border-radius:6px;height:5px;overflow:hidden;margin:8px 0}
+.p-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--purple));border-radius:6px;transition:width .25s;width:0}
+.p-status{font-family:'JetBrains Mono',monospace;font-size:.8rem;color:var(--text2)}
+.log-box{max-height:160px;overflow-y:auto;margin-top:8px;padding:8px;background:var(--bg);border-radius:8px;font-family:'JetBrains Mono',monospace;font-size:.74rem;color:var(--text3)}
+.log-box div{padding:1px 0}.log-box .ok{color:var(--accent)}.log-box .warn{color:var(--gold)}.log-box .err{color:var(--red)}
+
+/* Results */
+#resultsPanel{display:none}
+.stats-row{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:18px}
+.stat{background:var(--surface2);border-radius:10px;padding:14px;text-align:center}
+.stat .v{font-size:1.5rem;font-weight:700;font-family:'JetBrains Mono',monospace}
+.stat .v.g{color:var(--accent)}.stat .v.y{color:var(--gold)}.stat .v.p{color:var(--purple)}
+.stat .l{color:var(--text3);font-size:.7rem;text-transform:uppercase;letter-spacing:1px;margin-top:2px}
+
+.dl-bar{display:flex;gap:8px;align-items:center;margin-bottom:18px}
+.dl-bar>span{color:var(--text2);font-size:.85rem;margin-right:auto}
+
+.filter-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.filter-bar select,.filter-bar input[type=text]{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:7px 10px;color:var(--text);font-size:.8rem;outline:0;font-family:inherit}
+
+/* Lot cards */
+.sec-head{font-size:1.1rem;font-weight:700;margin:24px 0 10px;display:flex;align-items:center;gap:8px}
+.pill{font-size:.7rem;font-weight:700;padding:3px 9px;border-radius:14px}
+.pill-g{background:rgba(0,232,176,.1);color:var(--accent)}.pill-p{background:var(--purple-dim);color:var(--purple)}.pill-y{background:var(--gold-dim);color:var(--gold)}
+
+.lot{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:8px;transition:all .15s}
+.lot:hover{border-color:var(--accent);transform:translateY(-1px)}
+.lot.ts{border-left:3px solid var(--purple)}
+.lot-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px}
+.lot-num{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:.95rem}
+.lot-badge{font-family:'JetBrains Mono',monospace;font-weight:700;padding:3px 10px;border-radius:14px;font-size:.8rem}
+.lot-badge.high{background:rgba(0,232,176,.1);color:var(--accent)}
+.lot-badge.mid{background:var(--gold-dim);color:var(--gold)}
+.lot-badge.low{background:var(--surface2);color:var(--text3)}
+.lot-addr{font-weight:600;font-size:.92rem;margin-bottom:3px}
+.lot-meta{font-family:'JetBrains Mono',monospace;font-size:.78rem;color:var(--text2);margin-bottom:5px}
+.lot-meta .price{color:var(--accent);font-weight:600}
+.lot-meta .dep{color:var(--gold)}
+.tags{display:flex;flex-wrap:wrap;gap:4px;margin:5px 0}
+.tag{font-size:.7rem;padding:2px 6px;border-radius:5px;font-weight:500}
+.tag-o{background:var(--accent-dim);color:var(--accent);border:1px solid rgba(0,232,176,.12)}
+.tag-r{background:var(--red-dim);color:var(--red);border:1px solid rgba(248,113,113,.12)}
+.tag-t{background:var(--purple-dim);color:var(--purple);border:1px solid rgba(167,139,250,.15);font-weight:700}
+.lot-bul{font-size:.8rem;color:var(--text2);margin-top:3px;list-style:none}
+.lot-bul li{padding:1px 0 1px 12px;position:relative}
+.lot-bul li::before{content:'›';position:absolute;left:0;color:var(--accent)}
+.lot-link{font-family:'JetBrains Mono',monospace;font-size:.7rem;margin-top:5px;word-break:break-all}
+.lot-link a{color:var(--accent)}
+
+/* Footer */
+footer{text-align:center;padding:40px 0 24px;color:var(--text3);font-size:.8rem;border-top:1px solid var(--border);margin-top:40px}
+
+/* Responsive */
+@media(max-width:768px){
+  .hero h1{font-size:1.6rem}
+  .stats-row{grid-template-columns:1fr 1fr}
+  .budget-grid{grid-template-columns:1fr}
+  .url-row{flex-direction:column}
+  .cal-card{grid-template-columns:48px 1fr;gap:12px}
+  .cal-actions{grid-column:1/-1;justify-content:flex-start}
+  .filter-bar{flex-direction:column}
+  .tabs{overflow-x:auto;white-space:nowrap}
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="hero">
+    <h1><span class="hl">Bridgematch</span></h1>
+    <p>UK property auction directory & AI deal analyser. Upcoming dates from every major house. Analyse any catalogue — scores lots, finds title splits, filters to your budget.</p>
+  </header>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('calendar')">Upcoming Auctions</button>
+    <button class="tab" onclick="switchTab('analyser')">Catalogue Analyser</button>
+  </div>
+
+  <!-- ═══════════════ CALENDAR SECTION ═══════════════ -->
+  <div class="section active" id="sec-calendar">
+    <div class="house-filters" id="houseFilters">
+      <button class="hf active" data-house="all">All Houses</button>
+    </div>
+    <div class="cal-grid" id="calGrid">
+      <div style="text-align:center;padding:40px;color:var(--text3)">Loading auction calendar...</div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ ANALYSER SECTION ═══════════════ -->
+  <div class="section" id="sec-analyser">
+    <div class="panel">
+      <div class="panel-t">Auction Catalogue URL</div>
+      <div class="url-row">
+        <input id="urlInput" placeholder="Paste any auction catalogue URL...">
+        <button class="btn" id="goBtn" onclick="runAnalysis()">Analyse</button>
+      </div>
+      <div class="panel-t" style="margin-top:16px">Budget</div>
+      <div class="budget-grid">
+        <div class="field"><label>Deposit (£)</label><input id="dep" type="number" value="150000"></div>
+        <div class="field"><label>Standard deposit %</label><input id="stdPct" type="number" value="25"></div>
+        <div class="field"><label>Title split deposit %</label><input id="tsPct" type="number" value="10"></div>
+      </div>
+      <div class="budget-info" id="budgetInfo"></div>
+    </div>
+
+    <div class="panel" id="progressPanel">
+      <div class="p-status" id="pStatus">Starting...</div>
+      <div class="p-track"><div class="p-fill" id="pBar"></div></div>
+      <div class="log-box" id="logBox"></div>
+    </div>
+
+    <div id="resultsPanel">
+      <div class="stats-row" id="statsRow"></div>
+      <div class="dl-bar">
+        <span>Export</span>
+        <button class="btn-ghost btn-sm" onclick="dlCSV()">CSV</button>
+        <button class="btn-ghost btn-sm" onclick="dlJSON()">JSON</button>
+      </div>
+      <div class="filter-bar">
+        <select id="fType" onchange="renderLots()"><option value="">All types</option></select>
+        <select id="fDeal" onchange="renderLots()"><option value="">All deals</option></select>
+        <select id="fBudget" onchange="renderLots()"><option value="budget">In budget</option><option value="all">All lots</option></select>
+        <select id="fTS" onchange="renderLots()"><option value="">All</option><option value="ts">Title splits</option></select>
+        <input type="text" id="fSearch" placeholder="Search..." oninput="renderLots()">
+      </div>
+      <div id="lotsOut"></div>
+    </div>
+  </div>
+
+  <footer>
+    <p>Bridgematch — UK Property Auction Directory & Deal Analyser. Data sourced from public auction house websites. Not financial advice.</p>
+  </footer>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════════
+const $=id=>document.getElementById(id);
+let LOTS=[];
+
+// ═══════════════════════════════════════════════
+// TABS + URL ROUTING
+// ═══════════════════════════════════════════════
+function switchTab(tab){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.querySelector(`.tab[onclick*="${tab}"]`).classList.add('active');
+  $(`sec-${tab}`).classList.add('active');
+  const path=tab==='calendar'?'/auctions':'/analyse';
+  if(window.location.pathname!==path)history.pushState(null,'',path);
+}
+function routeFromURL(){
+  const p=window.location.pathname;
+  if(p==='/analyse')switchTab('analyser');
+  else switchTab('calendar');
+}
+window.addEventListener('popstate',routeFromURL);
+
+// ═══════════════════════════════════════════════
+// BUDGET
+// ═══════════════════════════════════════════════
+function getBudget(){
+  const d=+$('dep').value||0,sp=+$('stdPct').value||25,tp=+$('tsPct').value||10;
+  const sm=Math.round(d/(sp/100)),tm=Math.round(d/(tp/100));
+  $('budgetInfo').innerHTML=`Standard max: <b>£${sm.toLocaleString()}</b> (${sp}%) | Title split max: <b>£${tm.toLocaleString()}</b> (${tp}%)`;
+  return {d,sp,tp,sm,tm};
+}
+['dep','stdPct','tsPct'].forEach(id=>$(id).addEventListener('input',getBudget));
+getBudget();
+
+// ═══════════════════════════════════════════════
+// CALENDAR
+// ═══════════════════════════════════════════════
+let calendarData=[];
+async function loadCalendar(){
+  try{
+    const r=await fetch('/api/auctions');
+    const d=await r.json();
+    calendarData=d.auctions||[];
+    buildHouseFilters();
+    renderCalendar();
+  }catch(e){
+    $('calGrid').innerHTML='<div style="padding:20px;color:var(--red)">Failed to load calendar. Refresh to retry.</div>';
+  }
+}
+
+function buildHouseFilters(){
+  const houses=[...new Set(calendarData.map(a=>a.house))];
+  $('houseFilters').innerHTML=`<button class="hf active" data-house="all" onclick="filterHouse('all')">All</button>`+
+    houses.map(h=>`<button class="hf" data-house="${h}" onclick="filterHouse('${h}')">${h}</button>`).join('');
+}
+
+let activeHouse='all';
+function filterHouse(h){
+  activeHouse=h;
+  document.querySelectorAll('.hf').forEach(f=>f.classList.toggle('active',f.dataset.house===h));
+  renderCalendar();
+}
+
+function renderCalendar(){
+  let auctions=calendarData;
+  if(activeHouse!=='all')auctions=auctions.filter(a=>a.house===activeHouse);
+  if(!auctions.length){$('calGrid').innerHTML='<div style="padding:20px;color:var(--text3)">No upcoming auctions found.</div>';return}
+
+  $('calGrid').innerHTML=auctions.map(a=>{
+    const d=new Date(a.date);
+    const day=d.getDate();
+    const mon=d.toLocaleDateString('en-GB',{month:'short'});
+    const lotsText=a.lots?`${a.lots} lots`:'TBC';
+    return`<div class="cal-card">
+      <div class="cal-date"><div class="day">${day}</div><div class="mon">${mon}</div></div>
+      <div class="cal-info">
+        <h3>${a.logo} ${a.house}</h3>
+        <div class="meta"><span>${a.type}</span><span>${a.location}</span><span>${lotsText}</span></div>
+      </div>
+      <div class="cal-actions">
+        <button class="cal-pill primary" onclick="analyseAuction('${a.url}')">Analyse</button>
+        <a href="${a.url}" target="_blank" class="cal-pill ghost">View</a>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function analyseAuction(url){
+  $('urlInput').value=url;
+  switchTab('analyser');
+  // Don't auto-run — let user review and adjust budget first
+}
+
+// ═══════════════════════════════════════════════
+// ANALYSER
+// ═══════════════════════════════════════════════
+function log(m,c=''){const d=document.createElement('div');d.className=c;d.textContent=`[${new Date().toLocaleTimeString()}] ${m}`;$('logBox').appendChild(d);$('logBox').scrollTop=9e9}
+function prog(p,t){$('pBar').style.width=p+'%';if(t)$('pStatus').textContent=t}
+
+async function runAnalysis(){
+  const url=$('urlInput').value.trim();
+  if(!url)return alert('Enter an auction URL');
+  const b=getBudget();
+
+  $('goBtn').disabled=true;
+  $('progressPanel').style.display='block';
+  $('resultsPanel').style.display='none';
+  $('logBox').innerHTML='';
+  LOTS=[];
+
+  log('Sending to server for analysis...');
+  prog(10,'Fetching & analysing...');
+
+  try{
+    // We use a polling approach — the analysis takes time
+    // For now, a single POST that waits for completion
+    log('Server is scraping pages, extracting with Claude, and scoring...');
+    prog(30,'Server working...');
+
+    const resp=await fetch('/api/analyse',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({url,budget:{deposit:+$('dep').value,stdPct:+$('stdPct').value,tsPct:+$('tsPct').value}})
+    });
+
+    if(!resp.ok){
+      const err=await resp.json().catch(()=>({error:'Server error'}));
+      throw new Error(err.error||'Analysis failed');
+    }
+
+    const data=await resp.json();
+    LOTS=data.lots||[];
+    log(`Done! ${data.totalLots} lots analysed. ${data.titleSplits} title splits found.`,'ok');
+    prog(100,'Complete');
+
+    buildLotFilters();
+    renderLots();
+    $('resultsPanel').style.display='block';
+  }catch(e){
+    log(`Error: ${e.message}`,'err');
+    prog(0,'Failed');
+  }
+  $('goBtn').disabled=false;
+}
+
+function buildLotFilters(){
+  const types=new Set(LOTS.map(l=>l.propType).filter(Boolean));
+  const deals=new Set(LOTS.map(l=>l.dealType).filter(Boolean));
+  $('fType').innerHTML='<option value="">All types</option>'+[...types].sort().map(t=>`<option>${t}</option>`).join('');
+  $('fDeal').innerHTML='<option value="">All deals</option>'+[...deals].sort().map(d=>`<option>${d}</option>`).join('');
+}
+
+function renderLots(){
+  const b=getBudget();
+  let lots=LOTS.slice();
+
+  const ft=$('fType').value,fd=$('fDeal').value,fb=$('fBudget').value,fts=$('fTS').value,fs=$('fSearch').value.toLowerCase();
+  if(ft)lots=lots.filter(l=>l.propType===ft);
+  if(fd)lots=lots.filter(l=>l.dealType===fd);
+  if(fb==='budget')lots=lots.filter(l=>{if(!l.price)return true;return l.price<=(l.titleSplit?b.tm:b.sm)});
+  if(fts==='ts')lots=lots.filter(l=>l.titleSplit);
+  if(fs)lots=lots.filter(l=>(l.address||'').toLowerCase().includes(fs)||(l.bullets||[]).join(' ').toLowerCase().includes(fs));
+
+  const ts=lots.filter(l=>l.titleSplit),top=lots.filter(l=>l.score>=3);
+  $('statsRow').innerHTML=`
+    <div class="stat"><div class="v g">${LOTS.length}</div><div class="l">Total</div></div>
+    <div class="stat"><div class="v y">${lots.length}</div><div class="l">Filtered</div></div>
+    <div class="stat"><div class="v p">${ts.length}</div><div class="l">Title Splits</div></div>
+    <div class="stat"><div class="v g">${top.length}</div><div class="l">Score 3+</div></div>
+    <div class="stat"><div class="v y">${LOTS.filter(l=>l.price).length}</div><div class="l">Priced</div></div>`;
+
+  const out=$('lotsOut');out.innerHTML='';
+
+  const tsL=lots.filter(l=>l.titleSplit&&l.score>=2);
+  if(tsL.length){out.innerHTML+=`<div class="sec-head">🏢 Title Splits <span class="pill pill-p">${tsL.length}</span></div>`;tsL.forEach(l=>out.innerHTML+=card(l,b))}
+
+  const topL=lots.filter(l=>l.score>=3&&!l.titleSplit);
+  if(topL.length){out.innerHTML+=`<div class="sec-head">🔥 Top Picks <span class="pill pill-g">${topL.length}</span></div>`;topL.forEach(l=>out.innerHTML+=card(l,b))}
+
+  const midL=lots.filter(l=>l.score>=1.5&&l.score<3&&!(l.titleSplit&&l.score>=2));
+  if(midL.length){out.innerHTML+=`<div class="sec-head">👀 Worth a Look <span class="pill pill-y">${midL.length}</span></div>`;midL.forEach(l=>out.innerHTML+=card(l,b))}
+
+  const rest=lots.filter(l=>l.score<1.5&&!(l.titleSplit&&l.score>=2));
+  if(rest.length){out.innerHTML+=`<div class="sec-head">📋 Other <span class="pill" style="background:var(--surface2);color:var(--text3)">${rest.length}</span></div>`;rest.forEach(l=>out.innerHTML+=card(l,b))}
+}
+
+function card(l,b){
+  const dp=l.titleSplit?(b.tp/100):(b.sp/100);
+  const depE=l.price?`£${Math.round(l.price*dp).toLocaleString()}`:'TBA';
+  const sc=l.score>=3?'high':l.score>=1.5?'mid':'low';
+  let meta=[l.priceText||'TBA'];
+  if(l.propType)meta.push(l.propType);
+  if(l.beds!=null)meta.push(l.beds+' bed');
+  if(l.tenure)meta.push(l.tenure);
+  if(l.sqft)meta.push(l.sqft.toLocaleString()+' sqft');
+  let tags='';
+  if(l.titleSplit)tags+=`<span class="tag tag-t">🏢 TITLE SPLIT</span>`;
+  if(l.units)tags+=`<span class="tag tag-t">${l.units} units</span>`;
+  (l.opps||[]).filter(o=>!o.startsWith('Title split')).forEach(o=>tags+=`<span class="tag tag-o">${o}</span>`);
+  (l.risks||[]).forEach(r=>tags+=`<span class="tag tag-r">${r}</span>`);
+  const bul=(l.bullets||[]).slice(0,4).map(b=>`<li>${b}</li>`).join('');
+  const link=l.url?`<div class="lot-link"><a href="${l.url}" target="_blank">${l.url}</a></div>`:'';
+  const ppu=l.titleSplit&&l.price&&l.units?` | £${Math.round(l.price/l.units).toLocaleString()}/unit`:'';
+  return`<div class="lot ${l.titleSplit?'ts':''}">
+    <div class="lot-top"><div><div class="lot-num">Lot ${l.lot} — ${l.dealType||''}</div><div class="lot-addr">${l.address||''}</div></div><div class="lot-badge ${sc}">${l.score}</div></div>
+    <div class="lot-meta"><span class="price">${l.priceText||'TBA'}</span> | ${meta.slice(1).join(' | ')} | <span class="dep">Dep: ${depE}</span>${ppu}</div>
+    <div class="tags">${tags}</div>
+    <ul class="lot-bul">${bul}</ul>${link}</div>`;
+}
+
+// Downloads
+function dlCSV(){
+  const b=getBudget();
+  const rows=[['Rank','Lot','Score','Deal','TitleSplit','Units','Address','Guide','Deposit','Type','Beds','Tenure','Condition','Sqft','Opps','Risks','URL']];
+  LOTS.forEach((l,i)=>{const dp=l.titleSplit?(b.tp/100):(b.sp/100);
+    rows.push([i+1,l.lot,l.score,l.dealType,l.titleSplit?'YES':'',l.units||'',l.address,l.price||'TBA',l.price?Math.round(l.price*dp):'TBA',l.propType,l.beds??'',l.tenure,l.condition,l.sqft||'',(l.opps||[]).join(' | '),(l.risks||[]).join(' | '),l.url])});
+  dl(rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n'),'auction_analysis.csv','text/csv');
+}
+function dlJSON(){dl(JSON.stringify(LOTS,null,2),'auction_analysis.json','application/json')}
+function dl(c,n,t){const b=new Blob([c],{type:t}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=n;a.click()}
+
+// Init
+loadCalendar();
+routeFromURL();
+</script>
+</body>
+</html>
