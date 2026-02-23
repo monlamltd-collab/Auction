@@ -138,7 +138,18 @@ a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
 .lot-link{font-family:'JetBrains Mono',monospace;font-size:.7rem;margin-top:5px;word-break:break-all}
 .lot-link a{color:var(--accent)}
 
-/* Footer */
+/* Signup modal */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;align-items:center;justify-content:center}
+.modal-bg.show{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:28px;max-width:400px;width:90%}
+.modal h2{font-size:1.1rem;margin-bottom:4px}
+.modal p{color:var(--text2);font-size:.85rem;margin-bottom:16px}
+.modal input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:11px 14px;color:var(--text);font-size:.9rem;outline:0;margin-bottom:10px;font-family:inherit}
+.modal input:focus{border-color:var(--accent)}
+.modal .btn{width:100%}
+.user-bar{font-size:.8rem;color:var(--text2);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.user-bar .dot{width:6px;height:6px;border-radius:50%;background:var(--accent);display:inline-block}
+.user-bar a{cursor:pointer}
 footer{text-align:center;padding:40px 0 24px;color:var(--text3);font-size:.8rem;border-top:1px solid var(--border);margin-top:40px}
 
 /* Responsive */
@@ -177,8 +188,23 @@ footer{text-align:center;padding:40px 0 24px;color:var(--text3);font-size:.8rem;
     </div>
   </div>
 
+  <!-- ═══════════════ SIGNUP MODAL ═══════════════ -->
+  <div class="modal-bg" id="signupModal">
+    <div class="modal">
+      <h2>Sign up to analyse catalogues</h2>
+      <p>Free account — just an email to get started. We'll send you alerts when new catalogues drop.</p>
+      <input id="signupName" placeholder="Name (optional)">
+      <input id="signupEmail" placeholder="Email address" type="email">
+      <div id="signupError" style="color:var(--red);font-size:.8rem;margin-bottom:8px;display:none"></div>
+      <button class="btn" onclick="doSignup()">Get started</button>
+    </div>
+  </div>
+
   <!-- ═══════════════ ANALYSER SECTION ═══════════════ -->
   <div class="section" id="sec-analyser">
+    <div id="userBar" class="user-bar" style="display:none">
+      <span class="dot"></span> Signed in as <strong id="userEmail"></strong> &nbsp;|&nbsp; <a onclick="signOut()">sign out</a>
+    </div>
     <div class="panel">
       <div class="panel-t">Auction Catalogue URL</div>
       <div class="url-row">
@@ -299,6 +325,7 @@ function renderCalendar(){
     const day=d.getDate();
     const mon=d.toLocaleDateString('en-GB',{month:'short'});
     const lotsText=a.lots?`${a.lots} lots`:'TBC';
+    const analyseBtn=a.catalogueReady?`<button class="cal-pill primary" onclick="analyseAuction('${a.url}')">Analyse</button>`:'';
     return`<div class="cal-card">
       <div class="cal-date"><div class="day">${day}</div><div class="mon">${mon}</div></div>
       <div class="cal-info">
@@ -306,7 +333,7 @@ function renderCalendar(){
         <div class="meta"><span>${a.type}</span><span>${a.location}</span><span>${lotsText}</span></div>
       </div>
       <div class="cal-actions">
-        <button class="cal-pill primary" onclick="analyseAuction('${a.url}')">Analyse</button>
+        ${analyseBtn}
         <a href="${a.url}" target="_blank" class="cal-pill ghost">View</a>
       </div>
     </div>`;
@@ -320,12 +347,59 @@ function analyseAuction(url){
 }
 
 // ═══════════════════════════════════════════════
+// USER SIGNUP
+// ═══════════════════════════════════════════════
+let currentUser = JSON.parse(localStorage.getItem('bm_user') || 'null');
+
+function checkUser(){
+  if(currentUser){
+    $('userBar').style.display='flex';
+    $('userEmail').textContent=currentUser.email;
+  }else{
+    $('userBar').style.display='none';
+  }
+}
+checkUser();
+
+function requireSignup(){
+  if(currentUser) return true;
+  $('signupModal').classList.add('show');
+  return false;
+}
+
+async function doSignup(){
+  const email=$('signupEmail').value.trim();
+  const name=$('signupName').value.trim();
+  $('signupError').style.display='none';
+  if(!email||!email.includes('@')){$('signupError').textContent='Enter a valid email';$('signupError').style.display='block';return}
+  try{
+    const r=await fetch('/api/signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,name})});
+    const d=await r.json();
+    if(!r.ok){$('signupError').textContent=d.error||'Signup failed';$('signupError').style.display='block';return}
+    currentUser=d.user;
+    localStorage.setItem('bm_user',JSON.stringify(currentUser));
+    $('signupModal').classList.remove('show');
+    checkUser();
+  }catch(e){$('signupError').textContent='Connection error';$('signupError').style.display='block'}
+}
+
+function signOut(){
+  currentUser=null;
+  localStorage.removeItem('bm_user');
+  checkUser();
+}
+
+// Close modal on background click
+$('signupModal').addEventListener('click',e=>{if(e.target===$('signupModal'))$('signupModal').classList.remove('show')});
+
+// ═══════════════════════════════════════════════
 // ANALYSER
 // ═══════════════════════════════════════════════
 function log(m,c=''){const d=document.createElement('div');d.className=c;d.textContent=`[${new Date().toLocaleTimeString()}] ${m}`;$('logBox').appendChild(d);$('logBox').scrollTop=9e9}
 function prog(p,t){$('pBar').style.width=p+'%';if(t)$('pStatus').textContent=t}
 
 async function runAnalysis(){
+  if(!requireSignup()) return;
   const url=$('urlInput').value.trim();
   if(!url)return alert('Enter an auction URL');
   const b=getBudget();
@@ -337,28 +411,33 @@ async function runAnalysis(){
   LOTS=[];
 
   log('Sending to server for analysis...');
-  prog(10,'Fetching & analysing...');
+  prog(10,'Analysing...');
 
   try{
-    // We use a polling approach — the analysis takes time
-    // For now, a single POST that waits for completion
-    log('Server is scraping pages, extracting with Claude, and scoring...');
-    prog(30,'Server working...');
+    log('Server is checking cache, then scraping if needed...');
+    prog(30,'Working...');
 
     const resp=await fetch('/api/analyse',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({url,budget:{deposit:+$('dep').value,stdPct:+$('stdPct').value,tsPct:+$('tsPct').value}})
+      body:JSON.stringify({
+        url,
+        email: currentUser?.email,
+        budget:{deposit:+$('dep').value,stdPct:+$('stdPct').value,tsPct:+$('tsPct').value}
+      })
     });
 
+    const data=await resp.json();
+
     if(!resp.ok){
-      const err=await resp.json().catch(()=>({error:'Server error'}));
-      throw new Error(err.error||'Analysis failed');
+      if(data.error==='signup_required'){requireSignup();throw new Error('Please sign up first')}
+      if(data.error==='rate_limited'){throw new Error(data.message||'Daily limit reached')}
+      throw new Error(data.message||data.error||'Analysis failed');
     }
 
-    const data=await resp.json();
     LOTS=data.lots||[];
-    log(`Done! ${data.totalLots} lots analysed. ${data.titleSplits} title splits found.`,'ok');
+    const cacheNote=data.cached?' (cached — instant!)':'';
+    log(`Done! ${data.totalLots} lots analysed. ${data.titleSplits} title splits found.${cacheNote}`,'ok');
     prog(100,'Complete');
 
     buildLotFilters();

@@ -2,6 +2,7 @@ import express from 'express';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import Anthropic from '@anthropic-ai/sdk';
+import { createClient } from '@supabase/supabase-js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -10,9 +11,67 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 
 // ═══════════════════════════════════════════════════════════════
-// STATIC FILES — serve index.html for all non-API routes
+// SUPABASE CLIENT
+// ═══════════════════════════════════════════════════════════════
+const supabase = createClient(
+  process.env.SUPABASE_URL || '',
+  process.env.SUPABASE_SERVICE_KEY || ''
+);
+
+// ═══════════════════════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════════════════════
+const RATE_LIMIT = 5;
+const CACHE_DAYS = 7;
+const HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  'Accept-Language': 'en-GB,en;q=0.9',
+};
+const MAX_PAGES = 40;
+const TIMEOUT = 25000;
+
+function getClientIP(req) {
+  return req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// STATIC FILES
 // ═══════════════════════════════════════════════════════════════
 app.use('/public', express.static(join(__dirname, 'public')));
+
+// ═══════════════════════════════════════════════════════════════
+// API: USER SIGNUP
+// ═══════════════════════════════════════════════════════════════
+app.post('/api/signup', async (req, res) => {
+  const { email, name } = req.body || {};
+  if (!email || !email.includes('@')) return res.status(400).json({ error: 'Valid email required' });
+
+  try {
+    const { data: existing } = await supabase
+      .from('users')
+      .select('id, email, name')
+      .eq('email', email.toLowerCase().trim())
+      .single();
+
+    if (existing) {
+      await supabase.from('users').update({ last_login: new Date().toISOString() }).eq('id', existing.id);
+      return res.json({ user: existing, returning: true });
+    }
+
+    const { data: newUser, error } = await supabase
+      .from('users')
+      .insert({ email: email.toLowerCase().trim(), name: name || null })
+      .select('id, email, name')
+      .single();
+
+    if (error) throw error;
+    return res.json({ user: newUser, returning: false });
+  } catch (err) {
+    console.error('Signup error:', err);
+    return res.status(500).json({ error: 'Signup failed' });
+  }
+});
 
 // ═══════════════════════════════════════════════════════════════
 // API: AUCTION CALENDAR
@@ -27,6 +86,7 @@ app.get('/api/auctions', (req, res) => {
       title: '24 & 25 February 2026', lots: 280,
       url: 'https://auctions.savills.co.uk/auctions/24--25-february-2026-218',
       location: 'Online', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
     },
     {
       house: 'Savills', houseSlug: 'savills', logo: '🏛️',
@@ -34,72 +94,84 @@ app.get('/api/auctions', (req, res) => {
       title: '24 & 25 March 2026', lots: null,
       url: 'https://auctions.savills.co.uk',
       location: 'Online', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: false,
     },
     {
       house: 'Allsop', houseSlug: 'allsop', logo: '🔨',
       date: '2026-02-18', title: '18 February 2026 - Residential', lots: 200,
       url: 'https://www.allsop.co.uk/auction-calendar/',
       location: 'Online', type: 'Residential', status: 'upcoming',
+      catalogueReady: false,
     },
     {
       house: 'Allsop', houseSlug: 'allsop', logo: '🔨',
       date: '2026-03-11', title: '11 March 2026 - Commercial', lots: null,
       url: 'https://www.allsop.co.uk/auction-calendar/',
       location: 'Online', type: 'Commercial', status: 'upcoming',
+      catalogueReady: false,
     },
     {
       house: 'SDL Auctions', houseSlug: 'sdl', logo: '⚡',
       date: '2026-02-27', title: '27 February 2026 - National', lots: 150,
       url: 'https://www.sdlauctions.co.uk/property-auctions/upcoming/',
       location: 'Online', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: false,
     },
     {
       house: 'SDL Auctions', houseSlug: 'sdl', logo: '⚡',
       date: '2026-03-26', title: '26 March 2026 - National', lots: null,
       url: 'https://www.sdlauctions.co.uk/property-auctions/upcoming/',
       location: 'Online', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: false,
     },
     {
       house: 'Network Auctions', houseSlug: 'network', logo: '🌐',
       date: '2026-03-05', title: '5 March 2026', lots: 80,
       url: 'https://www.networkauctions.co.uk',
       location: 'Online', type: 'Residential', status: 'upcoming',
+      catalogueReady: false,
     },
     {
       house: 'Auction House', houseSlug: 'auctionhouse', logo: '🏠',
       date: '2026-02-26', title: '26 February 2026 - London', lots: 120,
       url: 'https://www.auctionhouse.co.uk/auction/results',
       location: 'London', type: 'Residential', status: 'upcoming',
+      catalogueReady: false,
     },
     {
       house: 'Auction House', houseSlug: 'auctionhouse', logo: '🏠',
       date: '2026-03-12', title: '12 March 2026 - North West', lots: null,
       url: 'https://www.auctionhouse.co.uk/auction/results',
       location: 'Manchester', type: 'Residential', status: 'upcoming',
+      catalogueReady: false,
     },
     {
       house: 'Barnard Marcus', houseSlug: 'barnardmarcus', logo: '🏘️',
       date: '2026-03-03', title: '3 March 2026', lots: 90,
       url: 'https://www.barnardmarcusauctions.co.uk',
       location: 'London', type: 'Residential', status: 'upcoming',
+      catalogueReady: false,
     },
     {
       house: 'Clive Emson', houseSlug: 'cliveemson', logo: '🔑',
       date: '2026-03-18', title: '18 March 2026', lots: null,
       url: 'https://www.cliveemson.co.uk',
       location: 'South East', type: 'Residential & Land', status: 'upcoming',
+      catalogueReady: false,
     },
     {
       house: 'Strettons', houseSlug: 'strettons', logo: '📋',
       date: '2026-03-10', title: '10 March 2026', lots: null,
       url: 'https://www.strettons.co.uk',
       location: 'London', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: false,
     },
     {
       house: 'Pugh', houseSlug: 'pugh', logo: '🏗️',
       date: '2026-02-20', title: '20 February 2026', lots: 100,
       url: 'https://www.pughauctions.com',
       location: 'Online', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: false,
     },
   ];
 
@@ -114,53 +186,138 @@ app.get('/api/auctions', (req, res) => {
 // ═══════════════════════════════════════════════════════════════
 // API: ANALYSE CATALOGUE
 // ═══════════════════════════════════════════════════════════════
-const HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-  'Accept-Language': 'en-GB,en;q=0.9',
-};
-const MAX_PAGES = 40;
-const TIMEOUT = 25000;
-
 app.post('/api/analyse', async (req, res) => {
-  const { url, budget } = req.body || {};
+  const { url, budget, email } = req.body || {};
   if (!url) return res.status(400).json({ error: 'Missing url' });
 
+  // ── Check user is signed up ──
+  if (!email) return res.status(401).json({ error: 'signup_required', message: 'Please sign up to use the analyser' });
+
+  const { data: user } = await supabase
+    .from('users')
+    .select('id, analyses_count')
+    .eq('email', email.toLowerCase().trim())
+    .single();
+
+  if (!user) return res.status(401).json({ error: 'signup_required', message: 'Please sign up first' });
+
+  // ── Rate limiting ──
+  const ip = getClientIP(req);
+  const today = new Date().toISOString().slice(0, 10);
+
+  const { data: rateRow } = await supabase
+    .from('rate_limits')
+    .select('requests')
+    .eq('ip', ip)
+    .eq('date', today)
+    .single();
+
+  if (rateRow && rateRow.requests >= RATE_LIMIT) {
+    return res.status(429).json({
+      error: 'rate_limited',
+      message: `Daily limit reached (${RATE_LIMIT} analyses per day). Try again tomorrow.`
+    });
+  }
+
+  // ── Check cache ──
+  const normalisedUrl = url.trim().replace(/\/+$/, '').toLowerCase();
+  const { data: cached } = await supabase
+    .from('cached_analyses')
+    .select('*')
+    .eq('url', normalisedUrl)
+    .gt('expires_at', new Date().toISOString())
+    .single();
+
+  if (cached) {
+    console.log(`Cache hit for ${normalisedUrl}`);
+    return res.json({
+      house: cached.house,
+      totalLots: cached.total_lots,
+      titleSplits: cached.title_splits,
+      topPicks: cached.top_picks,
+      lots: cached.lots,
+      cached: true,
+    });
+  }
+
+  // ── Increment rate counter (only for fresh analyses, not cached) ──
+  if (rateRow) {
+    await supabase.from('rate_limits').update({ requests: rateRow.requests + 1 }).eq('ip', ip).eq('date', today);
+  } else {
+    await supabase.from('rate_limits').insert({ ip, date: today, requests: 1 });
+  }
+
+  // ── Fresh analysis ──
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'API key not configured' });
 
   try {
     const house = detectAuctionHouse(url);
-    const pages = await scrapeAllPages(url, house);
-    const client = new Anthropic({ apiKey });
-    const rawLots = await extractLotsWithClaude(client, pages, house);
-    const analysed = rawLots.map(lot => analyseLot(lot)).sort((a, b) => b.score - a.score);
 
-    let inBudget = analysed;
-    if (budget) {
-      const { deposit = 150000, stdPct = 25, tsPct = 10 } = budget;
-      const stdMax = Math.round(deposit / (stdPct / 100));
-      const tsMax = Math.round(deposit / (tsPct / 100));
-      inBudget = analysed.filter(l => {
-        if (!l.price) return true;
-        return l.price <= (l.titleSplit ? tsMax : stdMax);
-      });
+    // Validate URL first
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+      const testResp = await fetch(url, { headers: HEADERS, signal: controller.signal });
+      clearTimeout(timeout);
+      if (!testResp.ok) {
+        return res.status(400).json({
+          error: 'url_error',
+          message: `That URL returned an error (${testResp.status}). It may not be a catalogue page, or the catalogue hasn't been published yet.`
+        });
+      }
+    } catch (e) {
+      return res.status(400).json({ error: 'url_unreachable', message: "Couldn't reach that URL. Check it's a valid catalogue page." });
     }
 
-    res.json({
-      house, totalLots: analysed.length, inBudget: inBudget.length,
+    const pages = await scrapeAllPages(url, house);
+    if (pages.length === 0) {
+      return res.status(400).json({ error: 'no_content', message: "Couldn't find any content on that page." });
+    }
+
+    const client = new Anthropic({ apiKey });
+    const rawLots = await extractLotsWithClaude(client, pages, house);
+
+    if (rawLots.length === 0) {
+      return res.status(400).json({ error: 'no_lots', message: "Couldn't find any auction lots. Make sure you're linking to the catalogue page, not the auction house homepage." });
+    }
+
+    const analysed = rawLots.map(lot => analyseLot(lot)).sort((a, b) => b.score - a.score);
+
+    // ── Cache results ──
+    const expiresAt = new Date(Date.now() + CACHE_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    await supabase.from('cached_analyses').upsert({
+      url: normalisedUrl,
+      house,
+      total_lots: analysed.length,
+      title_splits: analysed.filter(l => l.titleSplit).length,
+      top_picks: analysed.filter(l => l.score >= 3).length,
+      lots: analysed,
+      created_at: new Date().toISOString(),
+      expires_at: expiresAt,
+    }, { onConflict: 'url' });
+
+    // ── Update user count ──
+    await supabase.from('users')
+      .update({ analyses_count: (user.analyses_count || 0) + 1 })
+      .eq('id', user.id);
+
+    return res.json({
+      house,
+      totalLots: analysed.length,
       titleSplits: analysed.filter(l => l.titleSplit).length,
       topPicks: analysed.filter(l => l.score >= 3).length,
       lots: analysed,
+      cached: false,
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: err.message || 'Analysis failed' });
+    return res.status(500).json({ error: err.message || 'Analysis failed' });
   }
 });
 
 // ═══════════════════════════════════════════════════════════════
-// CATCH-ALL — serve index.html for /auctions, /analyse, /
+// CATCH-ALL
 // ═══════════════════════════════════════════════════════════════
 app.get('*', (req, res) => {
   res.sendFile(join(__dirname, 'index.html'));
@@ -202,16 +359,13 @@ async function scrapeAllPages(baseUrl, house) {
   const pages = [];
   const html1 = await fetchPage(baseUrl);
   pages.push({ page: 1, html: html1 });
-
   const totalPages = detectTotalPages(html1, baseUrl, house);
-
   for (let pg = 2; pg <= Math.min(totalPages, MAX_PAGES); pg++) {
     const pageUrl = buildPageUrl(baseUrl, pg, house);
     try {
       const html = await fetchPage(pageUrl);
-      if (html.length > 1000) {
-        pages.push({ page: pg, html });
-      } else { break; }
+      if (html.length > 1000) { pages.push({ page: pg, html }); }
+      else { break; }
       await new Promise(r => setTimeout(r, 300));
     } catch (e) { break; }
   }
@@ -249,11 +403,9 @@ async function extractLotsWithClaude(client, pages, house) {
   const allLots = [];
   const seenLots = new Set();
   const batchSize = 3;
-
   for (let i = 0; i < pages.length; i += batchSize) {
     const batch = pages.slice(i, i + batchSize);
     const strippedBatch = batch.map(p => ({ page: p.page, content: stripHtml(p.html) }));
-
     const prompt = `You are extracting property auction lot data from a UK auction house catalogue (${house}).
 
 Below are ${strippedBatch.length} page(s) of catalogue content. Extract EVERY auction lot you find.
@@ -276,14 +428,12 @@ Important:
 ${strippedBatch.map(p => `=== PAGE ${p.page} ===\n${p.content}`).join('\n\n')}
 
 Return ONLY the JSON array:`;
-
     try {
       const response = await client.messages.create({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 16000,
         messages: [{ role: 'user', content: prompt }],
       });
-
       const text = response.content.map(c => c.text || '').join('');
       const jsonMatch = text.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
@@ -338,7 +488,6 @@ function analyseLot(raw) {
   const L = { ...raw, score: 0, opps: [], risks: [], dealType: 'Standard', propType: '', beds: null,
     tenure: '', condition: '', vacant: true, sqft: null, titleSplit: false, units: 0 };
 
-  // Property type
   if (/flat|apartment|maisonette/.test(t)) L.propType = 'flat';
   else if (/bungalow/.test(t)) L.propType = 'bungalow';
   else if (/semi[- ]?detached|terraced?|terrace house|detached house|town\s?house|end of terrace|mid[- ]terrace/.test(t)) L.propType = 'house';
@@ -348,36 +497,29 @@ function analyseLot(raw) {
   else if (/garage|parking|lock.?up/.test(t)) L.propType = 'garage';
   else L.propType = 'other';
 
-  // Bedrooms
   const bm = t.match(/(\w+)\s*[-\s]?bed/);
   if (bm) { const v = bm[1].toLowerCase(); L.beds = W2N[v] || (v.match(/^\d+$/) ? +v : null); }
   if (/studio/.test(t) && L.beds === null) L.beds = 0;
 
-  // Tenure
   if (/share of freehold/.test(t)) L.tenure = 'Share of Freehold';
   else if (/freehold/.test(t) && !/leasehold/.test(t)) L.tenure = 'Freehold';
   else if (/leasehold/.test(t)) L.tenure = 'Leasehold';
 
-  // Condition
   if (/modernis|refurbishment|renovation|updating|in need of/.test(t)) L.condition = 'needs work';
   else if (/good order|good decorative|well maintained|recently refurbished/.test(t)) L.condition = 'good';
   else if (/derelict|dilapidated|fire damage/.test(t)) L.condition = 'poor';
 
-  // Occupancy
   if (/vacant/.test(t)) L.vacant = true;
   else if (/tenant|let to|tenanted|occupied|sitting tenant/.test(t)) L.vacant = false;
 
-  // Flags
   const executor = /executor|probate|estate of|personal representative/.test(t);
   const receivership = /receiver|receivership|administrator|liquidator|lpa receiver/.test(t);
   const devP = /development potential|development opportunity|planning permission|pp granted|change of use|conversion potential|redevelopment|building plot/.test(t);
   const extP = /extension potential|scope to extend|subject to requi[st]i?te? consents|loft conversion|\bhmo\b|potential to extend/.test(t);
 
-  // Sqft
   const sm = t.match(/([\d,]+)\s*sq\s*(?:ft|feet)/);
   if (sm) L.sqft = parseInt(sm[1].replace(/,/g, ''));
 
-  // Title split detection
   let uc = 0;
   const um = t.match(/(\d+)\s*(?:x\s*)?(?:self[- ]contained\s+)?(?:flat|apartment|unit)/); if (um) uc = Math.max(uc, +um[1]);
   const bk = t.match(/block\s+of\s+(\d+)/); if (bk) uc = Math.max(uc, +bk[1]);
@@ -393,7 +535,6 @@ function analyseLot(raw) {
   const indivSales = /individual flat sales|individual sales/.test(t);
   if (uc >= 2 || ((isFH && hasFlats) || indivSales)) { L.titleSplit = true; L.units = uc || 2; }
 
-  // Scoring
   let s = 0;
   if (L.condition === 'needs work') { s += 2; L.opps.push('Needs modernisation'); }
   if (L.condition === 'poor') { s += 2.5; L.opps.push('Poor condition'); }
@@ -420,7 +561,6 @@ function analyseLot(raw) {
   if (/by order of/.test(t) && !executor && !receivership) { s += 0.5; L.opps.push('Motivated seller'); }
   if (L.titleSplit) { s += 1; L.opps.push(`Title split (${L.units} units)`); }
 
-  // Risks
   if (/sitting tenant/.test(t)) { s -= 2; L.risks.push('Sitting tenant'); }
   if (/knotweed/.test(t)) { s -= 2; L.risks.push('Knotweed'); }
   if (/flying freehold/.test(t)) { s -= 1; L.risks.push('Flying freehold'); }
@@ -430,7 +570,6 @@ function analyseLot(raw) {
   if (/grade ii|listed/.test(t)) L.risks.push('Listed building');
   if (!L.price) L.risks.push('Guide TBA');
 
-  // Deal type
   if (devP) L.dealType = 'Development';
   else if ((L.condition === 'needs work' || L.condition === 'poor') && extP) L.dealType = 'Refurb+Extend';
   else if (L.condition === 'needs work' || L.condition === 'poor') L.dealType = 'Refurb';
@@ -447,4 +586,7 @@ function analyseLot(raw) {
 // ═══════════════════════════════════════════════════════════════
 app.listen(PORT, () => {
   console.log(`Bridgematch running on port ${PORT}`);
+  if (!process.env.SUPABASE_URL) console.warn('⚠️  SUPABASE_URL not set');
+  if (!process.env.SUPABASE_SERVICE_KEY) console.warn('⚠️  SUPABASE_SERVICE_KEY not set');
+  if (!process.env.ANTHROPIC_API_KEY) console.warn('⚠️  ANTHROPIC_API_KEY not set');
 });
