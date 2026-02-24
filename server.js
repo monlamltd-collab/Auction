@@ -284,7 +284,12 @@ app.post('/api/analyse', async (req, res) => {
       console.log(`No lots from static HTML, trying Puppeteer for ${house}...`);
       const puppeteerPages = await scrapeWithPuppeteer(url, house);
       if (puppeteerPages.length > 0) {
+        console.log(`Puppeteer got ${puppeteerPages.length} page(s), sending to Claude...`);
+        const stripped = stripHtml(puppeteerPages[0].html);
+        console.log(`Stripped content length: ${stripped.length} chars`);
+        console.log(`Content preview: ${stripped.substring(0, 500)}`);
         rawLots = await extractLotsWithClaude(client, puppeteerPages, house);
+        console.log(`Claude extracted ${rawLots.length} lots from Puppeteer content`);
       }
     }
 
@@ -579,7 +584,7 @@ function stripHtml(html) {
     .replace(/&#\d+;/g, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
-  if (text.length > 30000) text = text.substring(0, 30000);
+  if (text.length > 60000) text = text.substring(0, 60000);
   return text;
 }
 
