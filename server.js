@@ -146,46 +146,217 @@ app.get('/api/auctions', (req, res) => {
     {
       house: 'Network Auctions', houseSlug: 'network', logo: '🌐',
       date: '2026-03-26', title: '26 March 2026', lots: null,
-      url: 'https://www.networkauctions.co.uk/auctions/',
+      url: 'https://www.networkauctions.co.uk/auctions/next-auction/',
       location: 'Online', type: 'Residential', status: 'upcoming',
-      catalogueReady: false,
+      catalogueReady: true,
     },
     {
       house: 'Network Auctions', houseSlug: 'network', logo: '🌐',
       date: '2026-05-07', title: '7 May 2026', lots: null,
-      url: 'https://www.networkauctions.co.uk/auctions/',
+      url: 'https://www.networkauctions.co.uk/auctions/future-auctions/',
       location: 'Online', type: 'Residential', status: 'upcoming',
       catalogueReady: false,
     },
     {
       house: 'Network Auctions', houseSlug: 'network', logo: '🌐',
       date: '2026-06-18', title: '18 June 2026', lots: null,
-      url: 'https://www.networkauctions.co.uk/auctions/',
+      url: 'https://www.networkauctions.co.uk/auctions/future-auctions/',
       location: 'Online', type: 'Residential', status: 'upcoming',
       catalogueReady: false,
     },
-    // ── SDL AUCTIONS ──
+    // ── SDL AUCTIONS / BTG EDDISONS ──
     {
       house: 'SDL Auctions', houseSlug: 'sdl', logo: '⚡',
-      date: '2026-02-26', title: '26 February 2026 — National', lots: null,
-      url: 'https://www.sdlauctions.co.uk/property-auctions/upcoming-auctions/',
+      date: '2026-02-24', title: '24 February 2026 — Timed', lots: null,
+      url: 'https://www.sdlauctions.co.uk/auction/1310/multi-lot-timed-auction-2026-02-24/',
+      location: 'Online (Timed)', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
+    {
+      house: 'SDL Auctions', houseSlug: 'sdl', logo: '⚡',
+      date: '2026-02-26', title: '26 February 2026 — Live Stream', lots: null,
+      url: 'https://www.sdlauctions.co.uk/auction/1292/live-streamed-auction-2026-02-26/',
       location: 'Online (Live Stream)', type: 'Residential & Commercial', status: 'upcoming',
-      catalogueReady: false,
+      catalogueReady: true,
+    },
+    {
+      house: 'SDL Auctions', houseSlug: 'sdl', logo: '⚡',
+      date: '2026-03-24', title: '24 March 2026 — Timed', lots: null,
+      url: 'https://www.sdlauctions.co.uk/auction/1311/multi-lot-timed-auction-2026-03-24/',
+      location: 'Online (Timed)', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
+    {
+      house: 'SDL Auctions', houseSlug: 'sdl', logo: '⚡',
+      date: '2026-03-26', title: '26 March 2026 — Live Stream', lots: null,
+      url: 'https://www.sdlauctions.co.uk/auction/1297/live-streamed-auction-2026-03-26/',
+      location: 'Online (Live Stream)', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
+    {
+      house: 'SDL Auctions', houseSlug: 'sdl', logo: '⚡',
+      date: '2026-04-28', title: '28 April 2026 — Timed', lots: null,
+      url: 'https://www.sdlauctions.co.uk/auction/1312/multi-lot-timed-auction-2026-04-28/',
+      location: 'Online (Timed)', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
+    {
+      house: 'SDL Auctions', houseSlug: 'sdl', logo: '⚡',
+      date: '2026-04-30', title: '30 April 2026 — Live Stream', lots: null,
+      url: 'https://www.sdlauctions.co.uk/auction/1298/live-streamed-auction-2026-04-30/',
+      location: 'Online (Live Stream)', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
     },
     // ── BOND WOLFE ──
     {
       house: 'Bond Wolfe', houseSlug: 'bondwolfe', logo: '🔶',
       date: '2026-03-26', title: '26 March 2026', lots: null,
-      url: 'https://www.bondwolfe.com/property-auctions-west-midlands/upcoming-property-auctions/',
-      location: 'Online', type: 'Residential & Commercial', status: 'upcoming',
-      catalogueReady: false,
+      url: 'https://www.bondwolfe.com/auction/3448/',
+      location: 'Online (Live Stream)', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
     },
     {
       house: 'Bond Wolfe', houseSlug: 'bondwolfe', logo: '🔶',
       date: '2026-05-14', title: '14 May 2026', lots: null,
       url: 'https://www.bondwolfe.com/property-auctions-west-midlands/upcoming-property-auctions/',
+      location: 'Online (Live Stream)', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: false,
+    },
+    {
+      house: 'Bond Wolfe', houseSlug: 'bondwolfe', logo: '🔶',
+      date: '2026-07-09', title: '9 July 2026', lots: null,
+      url: 'https://www.bondwolfe.com/property-auctions-west-midlands/upcoming-property-auctions/',
+      location: 'Online (Live Stream)', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: false,
+    },
+    // ── BARNARD MARCUS ──
+    {
+      house: 'Barnard Marcus', houseSlug: 'barnardmarcus', logo: '🏠',
+      date: '2026-03-10', title: '10 March 2026', lots: null,
+      url: 'https://www.barnardmarcusauctions.co.uk/auctions/current/',
+      location: 'Grand Connaught Rooms, London WC2B', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
+    // ── AUCTION HOUSE LONDON ──
+    {
+      house: 'Auction House London', houseSlug: 'auctionhouselondon', logo: '🔑',
+      date: '2026-03-04', title: '4 March 2026', lots: 45,
+      url: 'https://auctionhouselondon.co.uk/current-auction',
+      location: 'Online (Live Stream)', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
+    {
+      house: 'Auction House London', houseSlug: 'auctionhouselondon', logo: '🔑',
+      date: '2026-03-18', dateEnd: '2026-03-19', title: '18 & 19 March 2026', lots: null,
+      url: 'https://auctionhouselondon.co.uk/auction/march-18-19-2026',
+      location: 'Online (Live Stream)', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
+    // ── CLIVE EMSON ──
+    {
+      house: 'Clive Emson', houseSlug: 'cliveemson', logo: '🌿',
+      date: '2026-03-05', title: '5 March 2026 catalogue live', lots: null,
+      url: 'https://www.cliveemson.co.uk/search/',
+      location: 'Online', type: 'Residential & Land', status: 'upcoming',
+      catalogueReady: true,
+    },
+    // ── STRETTONS ──
+    {
+      house: 'Strettons', houseSlug: 'strettons', logo: '📋',
+      date: '2026-03-19', title: '19 March 2026', lots: null,
+      url: 'https://www.strettons.co.uk/auctions/current-catalogue/',
+      location: 'Online (Live Stream)', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
+    // ── ACUITUS ──
+    {
+      house: 'Acuitus', houseSlug: 'acuitus', logo: '🏢',
+      date: '2026-03-26', title: '26 March 2026', lots: null,
+      url: 'https://www.acuitus.co.uk/find-a-property/',
+      location: 'Online (Live Stream)', type: 'Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
+    {
+      house: 'Acuitus', houseSlug: 'acuitus', logo: '🏢',
+      date: '2026-05-06', title: '6 May 2026', lots: null,
+      url: 'https://www.acuitus.co.uk/find-a-property/',
+      location: 'Online (Live Stream)', type: 'Commercial', status: 'upcoming',
+      catalogueReady: false,
+    },
+    {
+      house: 'Acuitus', houseSlug: 'acuitus', logo: '🏢',
+      date: '2026-06-11', title: '11 June 2026', lots: null,
+      url: 'https://www.acuitus.co.uk/find-a-property/',
+      location: 'Online (Live Stream)', type: 'Commercial', status: 'upcoming',
+      catalogueReady: false,
+    },
+    // ── HOLLIS MORGAN (Bristol) ──
+    {
+      house: 'Hollis Morgan', houseSlug: 'hollismorgan', logo: '🏘️',
+      date: '2026-03-11', title: '11 March 2026', lots: null,
+      url: 'https://www.hollismorgan.co.uk/search-auction/',
+      location: 'Online (Live Stream from Clifton, Bristol)', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
+    {
+      house: 'Hollis Morgan', houseSlug: 'hollismorgan', logo: '🏘️',
+      date: '2026-04-01', title: 'April 2026', lots: null,
+      url: 'https://www.hollismorgan.co.uk/search-auction/',
+      location: 'Online (Live Stream from Clifton, Bristol)', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: false,
+    },
+    // ── MAGGS & ALLEN (Bristol) ──
+    {
+      house: 'Maggs & Allen', houseSlug: 'maggsandallen', logo: '🔨',
+      date: '2026-03-19', title: '19 March 2026', lots: null,
+      url: 'https://www.maggsandallen.co.uk/search-auction/',
+      location: 'Online (Live Stream, Bristol)', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
+    {
+      house: 'Maggs & Allen', houseSlug: 'maggsandallen', logo: '🔨',
+      date: '2026-04-23', title: '23 April 2026', lots: null,
+      url: 'https://www.maggsandallen.co.uk/search-auction/',
+      location: 'Online (Live Stream, Bristol)', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: false,
+    },
+    {
+      house: 'Maggs & Allen', houseSlug: 'maggsandallen', logo: '🔨',
+      date: '2026-05-20', title: '20 May 2026', lots: null,
+      url: 'https://www.maggsandallen.co.uk/search-auction/',
+      location: 'Online (Live Stream, Bristol)', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: false,
+    },
+    // ── MCHUGH & CO ──
+    {
+      house: 'McHugh & Co', houseSlug: 'mchughandco', logo: '🏡',
+      date: '2026-03-25', title: '25 March 2026', lots: null,
+      url: 'https://www.mchughandco.com/pages/auctions',
+      location: 'Online', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
+    {
+      house: 'McHugh & Co', houseSlug: 'mchughandco', logo: '🏡',
+      date: '2026-05-13', title: '13 May 2026', lots: null,
+      url: 'https://www.mchughandco.com/pages/auctions',
       location: 'Online', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: false,
+    },
+    // ── BUTTERS JOHN BEE ──
+    {
+      house: 'Butters John Bee', houseSlug: 'buttersjohnbee', logo: '🐝',
+      date: '2026-03-09', title: '9 March 2026', lots: null,
+      url: 'https://www.buttersjohnbee.com/auctions/auction-catalogues',
+      location: 'Stoke-on-Trent (Live Stream)', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
+    // ── AUCTION HOUSE UK (National franchise) ──
+    {
+      house: 'Auction House UK', houseSlug: 'auctionhouse', logo: '🏛️',
+      date: '2026-03-10', title: '10 March 2026 (National Online)', lots: null,
+      url: 'https://www.auctionhouse.co.uk/online/auction/2026/3/10',
+      location: 'Online', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
     },
   ];
 
@@ -270,48 +441,65 @@ app.post('/api/analyse', async (req, res) => {
     const rewritten = rewriteUrl(url, house);
     const scrapeUrl = rewritten.baseUrl;
     
-    console.log(`House: ${house}, URL: ${scrapeUrl}, isApi: ${rewritten.isApi}`);
+    console.log(`House: ${house}, URL: ${scrapeUrl}, isApi: ${rewritten.isApi}, preferPuppeteer: ${!!rewritten.preferPuppeteer}`);
 
-    // Validate URL first (use original URL for validation, rewritten for scraping)
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 10000);
-      const testResp = await fetch(url, { headers: HEADERS, signal: controller.signal });
-      clearTimeout(timeout);
-      if (!testResp.ok) {
-        return res.status(400).json({
-          error: 'url_error',
-          message: `That URL returned an error (${testResp.status}). It may not be a catalogue page, or the catalogue hasn't been published yet.`
-        });
+    // Validate URL first (skip for sites that block server-side fetches)
+    if (!rewritten.preferPuppeteer) {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
+        const testResp = await fetch(url, { headers: HEADERS, signal: controller.signal });
+        clearTimeout(timeout);
+        if (!testResp.ok) {
+          return res.status(400).json({
+            error: 'url_error',
+            message: `That URL returned an error (${testResp.status}). It may not be a catalogue page, or the catalogue hasn't been published yet.`
+          });
+        }
+      } catch (e) {
+        return res.status(400).json({ error: 'url_unreachable', message: "Couldn't reach that URL. Check it's a valid catalogue page." });
       }
-    } catch (e) {
-      return res.status(400).json({ error: 'url_unreachable', message: "Couldn't reach that URL. Check it's a valid catalogue page." });
     }
 
     let pages;
+    const client = new Anthropic({ apiKey });
+    let rawLots = [];
+
     if (rewritten.paginateAs === 'allsop_api') {
       // Allsop API: paginate through JSON endpoint
       pages = await scrapeAllsopApi(rewritten.baseUrl);
-    } else {
-      pages = await scrapeAllPages(scrapeUrl, house);
-    }
-    
-    if (pages.length === 0) {
-      return res.status(400).json({ error: 'no_content', message: "Couldn't find any content on that page." });
-    }
-
-    const client = new Anthropic({ apiKey });
-    let rawLots = await extractLotsWithClaude(client, pages, house);
-
-    // ── Puppeteer fallback for JS-rendered sites (skip if we used API) ──
-    if (rawLots.length === 0 && !rewritten.isApi) {
-      console.log(`No lots from static HTML, trying Puppeteer for ${house}...`);
-      const puppeteerPages = await scrapeWithPuppeteer(url, house);
+      if (pages.length > 0) {
+        rawLots = await extractLotsWithClaude(client, pages, house);
+      }
+    } else if (rewritten.preferPuppeteer) {
+      // JS-rendered sites: go straight to Puppeteer (skip static fetch)
+      console.log(`Using Puppeteer directly for ${house} (JS-rendered site)...`);
+      const puppeteerPages = await scrapeWithPuppeteer(scrapeUrl, house);
       if (puppeteerPages.length > 0) {
         console.log(`Puppeteer got ${puppeteerPages.length} page(s), sending to Claude...`);
         rawLots = await extractLotsWithClaude(client, puppeteerPages, house);
         console.log(`Claude extracted ${rawLots.length} lots from Puppeteer content`);
       }
+    } else {
+      // Standard static HTML scraping
+      pages = await scrapeAllPages(scrapeUrl, house);
+      if (pages && pages.length > 0) {
+        rawLots = await extractLotsWithClaude(client, pages, house);
+      }
+      // Puppeteer fallback if static scraping found nothing
+      if (rawLots.length === 0) {
+        console.log(`No lots from static HTML, trying Puppeteer for ${house}...`);
+        const puppeteerPages = await scrapeWithPuppeteer(url, house);
+        if (puppeteerPages.length > 0) {
+          console.log(`Puppeteer got ${puppeteerPages.length} page(s), sending to Claude...`);
+          rawLots = await extractLotsWithClaude(client, puppeteerPages, house);
+          console.log(`Claude extracted ${rawLots.length} lots from Puppeteer content`);
+        }
+      }
+    }
+    
+    if (pages && pages.length === 0 && rawLots.length === 0) {
+      return res.status(400).json({ error: 'no_content', message: "Couldn't find any content on that page." });
     }
 
     if (rawLots.length === 0) {
@@ -319,6 +507,10 @@ app.post('/api/analyse', async (req, res) => {
     }
 
     const analysed = rawLots.map(lot => analyseLot(lot)).sort((a, b) => b.score - a.score);
+
+    // ── Enrich with Land Registry + rental yields ──
+    console.log('Starting Land Registry + rental yield enrichment...');
+    await enrichLots(analysed, house, url);
 
     // ── Cache results ──
     const expiresAt = new Date(Date.now() + CACHE_DAYS * 24 * 60 * 60 * 1000).toISOString();
@@ -366,13 +558,24 @@ function detectAuctionHouse(url) {
   const u = url.toLowerCase();
   if (u.includes('savills')) return 'savills';
   if (u.includes('allsop')) return 'allsop';
-  if (u.includes('sdlauctions') || u.includes('sdl')) return 'sdl';
+  if (u.includes('btgeddisonspropertyauctions') || u.includes('btgeddisons')) return 'sdl';
+  if (u.includes('pugh-auctions')) return 'sdl'; // Pugh merged into BTG Eddisons/SDL
+  if (u.includes('sdlauctions')) return 'sdl';
   if (u.includes('networkauctions')) return 'network';
-  if (u.includes('auctionhouse')) return 'auctionhouse';
-  if (u.includes('barnardmarcus') || u.includes('countrywide')) return 'barnardmarcus';
+  if (u.includes('bondwolfe')) return 'bondwolfe';
+  if (u.includes('barnardmarcusauctions') || u.includes('barnardmarcus')) return 'barnardmarcus';
+  if (u.includes('auctionhouselondon')) return 'auctionhouselondon';
+  if (u.includes('auctionhouse.co.uk')) return 'auctionhouse';
   if (u.includes('cliveemson')) return 'cliveemson';
   if (u.includes('strettons')) return 'strettons';
-  if (u.includes('pughauctions') || u.includes('pugh')) return 'pugh';
+  if (u.includes('acuitus')) return 'acuitus';
+  if (u.includes('hollismorgan')) return 'hollismorgan';
+  if (u.includes('maggsandallen')) return 'maggsandallen';
+  if (u.includes('mchughandco')) return 'mchughandco';
+  if (u.includes('buttersjohnbee')) return 'buttersjohnbee';
+  if (u.includes('auctionhouselondon')) return 'auctionhouselondon';
+  if (u.includes('auctionhouse.co.uk')) return 'auctionhouse';
+  if (u.includes('pughauctions') || u.includes('pugh')) return 'sdl';
   return 'unknown';
 }
 
@@ -402,6 +605,84 @@ function rewriteUrl(url, house) {
     if (u.includes('/api/property-search')) {
       return { baseUrl: url, isApi: true, paginateAs: 'allsop_api' };
     }
+  }
+
+  if (house === 'sdl') {
+    // SDL / BTG Eddisons: specific auction pages have lot listings loaded via JS
+    // /auction/1292/live-streamed-auction-2026-02-26/ → needs Puppeteer
+    // /property-auctions/upcoming-auctions/ → not a catalogue, redirect to specific auction
+    // BTG Eddisons: /properties → needs Puppeteer
+    // These all need Puppeteer, so no URL rewriting needed — just pass through
+    // But ensure we use the specific auction page, not the generic upcoming page
+    if (u.includes('btgeddisonspropertyauctions.com/properties')) {
+      return { baseUrl: url, isApi: false, paginateAs: null, preferPuppeteer: true };
+    }
+    if (u.includes('/auction/')) {
+      return { baseUrl: url, isApi: false, paginateAs: null, preferPuppeteer: true };
+    }
+    if (u.includes('/search')) {
+      return { baseUrl: url, isApi: false, paginateAs: null, preferPuppeteer: true };
+    }
+  }
+
+  if (house === 'bondwolfe') {
+    // Bond Wolfe: /auctions/properties/ or /auction/3448/ → JS-rendered, needs Puppeteer
+    if (u.includes('/auction/') || u.includes('/auctions/properties')) {
+      return { baseUrl: url, isApi: false, paginateAs: null, preferPuppeteer: true };
+    }
+  }
+
+  if (house === 'network') {
+    // Network Auctions: blocks server-side fetches (403), must use Puppeteer
+    // /auctions/next-auction/ or /auctions/current-lots/
+    return { baseUrl: url, isApi: false, paginateAs: null, preferPuppeteer: true };
+  }
+
+  if (house === 'barnardmarcus') {
+    // Barnard Marcus: /auctions/current/ has server-rendered HTML with lots
+    // Individual lots: /auctions/10-march-2026/665540/
+    return { baseUrl: url, isApi: false, paginateAs: null };
+  }
+
+  if (house === 'auctionhouselondon') {
+    // Auction House London: server-rendered Next.js with lots in HTML
+    // /current-auction has all lots
+    return { baseUrl: url, isApi: false, paginateAs: null };
+  }
+
+  if (house === 'cliveemson') {
+    // Clive Emson: /search/ or /properties/257/ — server-rendered
+    return { baseUrl: url, isApi: false, paginateAs: null };
+  }
+
+  if (house === 'strettons') {
+    // Strettons: /auctions/current-catalogue/ — server-rendered
+    return { baseUrl: url, isApi: false, paginateAs: null };
+  }
+
+  if (house === 'acuitus') {
+    // Acuitus: /find-a-property/ — may need Puppeteer
+    return { baseUrl: url, isApi: false, paginateAs: null, preferPuppeteer: true };
+  }
+
+  if (house === 'hollismorgan') {
+    // Hollis Morgan: /search-auction/ — server-rendered
+    return { baseUrl: url, isApi: false, paginateAs: null };
+  }
+
+  if (house === 'maggsandallen') {
+    // Maggs & Allen: /search-auction/ — server-rendered
+    return { baseUrl: url, isApi: false, paginateAs: null };
+  }
+
+  if (house === 'mchughandco') {
+    // McHugh & Co: /pages/auctions or /Auctions/LotList.aspx — may need Puppeteer
+    return { baseUrl: url, isApi: false, paginateAs: null, preferPuppeteer: true };
+  }
+
+  if (house === 'buttersjohnbee') {
+    // Butters John Bee: /auctions/auction-catalogues — may need Puppeteer
+    return { baseUrl: url, isApi: false, paginateAs: null, preferPuppeteer: true };
   }
 
   // No rewrite needed
@@ -480,6 +761,9 @@ function buildPageUrl(baseUrl, page, house) {
     case 'allsop': return `${clean}?page=${page}`;
     case 'sdl': return clean.includes('?') ? `${clean}&page=${page}` : `${clean}?page=${page}`;
     case 'network': return `${clean}?page=${page}`;
+    case 'bondwolfe': return clean.includes('?') ? `${clean}&page=${page}` : `${clean}?page=${page}`;
+    case 'barnardmarcus': return clean.includes('?') ? `${clean}&page=${page}` : `${clean}?page=${page}`;
+    case 'acuitus': return clean.includes('?') ? `${clean}&page=${page}` : `${clean}?page=${page}`;
     default:
       if (baseUrl.includes('/page-')) return `${clean}/page-${page}`;
       return clean.includes('?') ? `${clean}&page=${page}` : `${clean}?page=${page}`;
@@ -767,8 +1051,364 @@ function analyseLot(raw) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// START
+// LAND REGISTRY ENRICHMENT
 // ═══════════════════════════════════════════════════════════════
+function extractPostcode(address) {
+  if (!address) return null;
+  const m = address.match(/[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}/i);
+  return m ? m[0].toUpperCase().replace(/\s+/g, ' ') : null;
+}
+
+function extractStreet(address) {
+  if (!address) return null;
+  // Try to pull street name from address (between number and town/postcode)
+  const m = address.match(/\d+[a-z]?\s+(.+?)(?:,|\s+[A-Z]{1,2}\d)/i);
+  return m ? m[1].trim().toUpperCase() : null;
+}
+
+async function queryLandRegistry(postcode) {
+  if (!postcode) return [];
+  const sparql = `
+PREFIX lrppi: <http://landregistry.data.gov.uk/def/ppi/>
+PREFIX lrcommon: <http://landregistry.data.gov.uk/def/common/>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+SELECT ?paon ?saon ?street ?town ?postcode ?amount ?date ?category ?propertyType
+WHERE {
+  VALUES ?postcode {"${postcode}"^^xsd:string}
+  ?addr lrcommon:postcode ?postcode.
+  ?transx lrppi:propertyAddress ?addr ;
+          lrppi:pricePaid ?amount ;
+          lrppi:transactionDate ?date ;
+          lrppi:transactionCategory/skos:prefLabel ?category .
+  OPTIONAL {?addr lrcommon:paon ?paon}
+  OPTIONAL {?addr lrcommon:saon ?saon}
+  OPTIONAL {?addr lrcommon:street ?street}
+  OPTIONAL {?addr lrcommon:town ?town}
+  OPTIONAL {?transx lrppi:propertyType/skos:prefLabel ?propertyType}
+  FILTER(?date >= "${new Date(Date.now() - 3 * 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)}"^^xsd:date)
+}
+ORDER BY DESC(?date)
+LIMIT 30`;
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    const resp = await fetch('http://landregistry.data.gov.uk/landregistry/query', {
+      method: 'POST',
+      headers: { 'Accept': 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `query=${encodeURIComponent(sparql)}`,
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    const results = (data.results?.bindings || []).map(b => ({
+      address: [b.saon?.value, b.paon?.value, b.street?.value].filter(Boolean).join(', '),
+      town: b.town?.value || '',
+      postcode: b.postcode?.value || '',
+      price: parseInt(b.amount?.value) || 0,
+      date: b.date?.value || '',
+      category: b.category?.value || '',
+      propertyType: b.propertyType?.value || '',
+    }));
+    return results;
+  } catch (e) {
+    console.log(`Land Registry query failed for ${postcode}: ${e.message}`);
+    return [];
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// VOA RENTAL ESTIMATES (local authority averages by beds)
+// Monthly rent in £ — source: VOA Private Rental Market Statistics 2024/25
+// Format: { area_keyword: { 0: studio, 1: 1bed, 2: 2bed, 3: 3bed, 4: 4bed+ } }
+// ═══════════════════════════════════════════════════════════════
+const VOA_RENTS = {
+  // London boroughs
+  'london': { 0: 1200, 1: 1500, 2: 1800, 3: 2200, 4: 2800 },
+  'westminster': { 0: 1600, 1: 2000, 2: 2800, 3: 3800, 4: 5000 },
+  'camden': { 0: 1400, 1: 1800, 2: 2400, 3: 3200, 4: 4000 },
+  'islington': { 0: 1350, 1: 1750, 2: 2300, 3: 3000, 4: 3800 },
+  'hackney': { 0: 1200, 1: 1550, 2: 2000, 3: 2600, 4: 3200 },
+  'tower hamlets': { 0: 1300, 1: 1650, 2: 2100, 3: 2700, 4: 3400 },
+  'southwark': { 0: 1200, 1: 1550, 2: 2000, 3: 2600, 4: 3200 },
+  'lambeth': { 0: 1150, 1: 1500, 2: 1900, 3: 2500, 4: 3100 },
+  'lewisham': { 0: 1000, 1: 1300, 2: 1600, 3: 2000, 4: 2500 },
+  'greenwich': { 0: 1000, 1: 1300, 2: 1600, 3: 2000, 4: 2500 },
+  'newham': { 0: 950, 1: 1250, 2: 1550, 3: 1900, 4: 2400 },
+  'barking': { 0: 850, 1: 1100, 2: 1400, 3: 1700, 4: 2100 },
+  'croydon': { 0: 900, 1: 1150, 2: 1450, 3: 1800, 4: 2200 },
+  'ealing': { 0: 1000, 1: 1300, 2: 1650, 3: 2100, 4: 2600 },
+  'brent': { 0: 1050, 1: 1350, 2: 1700, 3: 2200, 4: 2700 },
+  'haringey': { 0: 1100, 1: 1400, 2: 1800, 3: 2300, 4: 2800 },
+  'waltham forest': { 0: 950, 1: 1250, 2: 1550, 3: 1950, 4: 2400 },
+  'enfield': { 0: 900, 1: 1150, 2: 1450, 3: 1800, 4: 2200 },
+  'hounslow': { 0: 950, 1: 1200, 2: 1500, 3: 1900, 4: 2400 },
+  'redbridge': { 0: 900, 1: 1150, 2: 1450, 3: 1800, 4: 2200 },
+  'hillingdon': { 0: 900, 1: 1150, 2: 1450, 3: 1800, 4: 2200 },
+  'barnet': { 0: 1000, 1: 1300, 2: 1650, 3: 2100, 4: 2600 },
+  'bromley': { 0: 900, 1: 1150, 2: 1450, 3: 1800, 4: 2200 },
+  'wandsworth': { 0: 1200, 1: 1550, 2: 2000, 3: 2600, 4: 3200 },
+  'richmond': { 0: 1100, 1: 1450, 2: 1850, 3: 2400, 4: 3000 },
+  'kingston': { 0: 1000, 1: 1300, 2: 1650, 3: 2100, 4: 2600 },
+  'merton': { 0: 1000, 1: 1300, 2: 1650, 3: 2100, 4: 2600 },
+  'sutton': { 0: 850, 1: 1100, 2: 1400, 3: 1750, 4: 2100 },
+  // Major cities & regions
+  'manchester': { 0: 700, 1: 850, 2: 1050, 3: 1300, 4: 1600 },
+  'birmingham': { 0: 600, 1: 750, 2: 900, 3: 1100, 4: 1400 },
+  'liverpool': { 0: 500, 1: 600, 2: 750, 3: 900, 4: 1100 },
+  'leeds': { 0: 600, 1: 700, 2: 850, 3: 1050, 4: 1300 },
+  'sheffield': { 0: 500, 1: 600, 2: 750, 3: 900, 4: 1100 },
+  'bristol': { 0: 750, 1: 900, 2: 1100, 3: 1400, 4: 1700 },
+  'newcastle': { 0: 500, 1: 600, 2: 750, 3: 950, 4: 1150 },
+  'nottingham': { 0: 550, 1: 650, 2: 800, 3: 1000, 4: 1200 },
+  'leicester': { 0: 550, 1: 650, 2: 800, 3: 1000, 4: 1200 },
+  'coventry': { 0: 550, 1: 650, 2: 800, 3: 1000, 4: 1200 },
+  'cardiff': { 0: 600, 1: 700, 2: 850, 3: 1050, 4: 1300 },
+  'swansea': { 0: 450, 1: 550, 2: 650, 3: 800, 4: 1000 },
+  'edinburgh': { 0: 700, 1: 850, 2: 1050, 3: 1350, 4: 1700 },
+  'glasgow': { 0: 550, 1: 650, 2: 800, 3: 1000, 4: 1250 },
+  'reading': { 0: 750, 1: 950, 2: 1200, 3: 1500, 4: 1800 },
+  'oxford': { 0: 800, 1: 1000, 2: 1300, 3: 1600, 4: 2000 },
+  'cambridge': { 0: 800, 1: 1000, 2: 1300, 3: 1600, 4: 2000 },
+  'brighton': { 0: 750, 1: 950, 2: 1200, 3: 1500, 4: 1800 },
+  'southampton': { 0: 600, 1: 750, 2: 950, 3: 1150, 4: 1400 },
+  'portsmouth': { 0: 550, 1: 700, 2: 850, 3: 1050, 4: 1300 },
+  'bournemouth': { 0: 600, 1: 750, 2: 950, 3: 1150, 4: 1400 },
+  'exeter': { 0: 600, 1: 750, 2: 950, 3: 1150, 4: 1400 },
+  'plymouth': { 0: 500, 1: 600, 2: 750, 3: 950, 4: 1150 },
+  'bath': { 0: 700, 1: 850, 2: 1100, 3: 1400, 4: 1700 },
+  'york': { 0: 600, 1: 750, 2: 950, 3: 1150, 4: 1400 },
+  'chester': { 0: 600, 1: 750, 2: 950, 3: 1150, 4: 1400 },
+  'norwich': { 0: 550, 1: 650, 2: 800, 3: 1000, 4: 1200 },
+  'ipswich': { 0: 500, 1: 600, 2: 750, 3: 950, 4: 1150 },
+  'stoke': { 0: 400, 1: 500, 2: 600, 3: 750, 4: 950 },
+  'derby': { 0: 500, 1: 600, 2: 750, 3: 950, 4: 1150 },
+  'wolverhampton': { 0: 450, 1: 550, 2: 700, 3: 850, 4: 1050 },
+  'walsall': { 0: 450, 1: 550, 2: 700, 3: 850, 4: 1050 },
+  'sunderland': { 0: 400, 1: 475, 2: 575, 3: 700, 4: 900 },
+  'middlesbrough': { 0: 400, 1: 475, 2: 575, 3: 700, 4: 900 },
+  'bradford': { 0: 400, 1: 475, 2: 575, 3: 700, 4: 900 },
+  'hull': { 0: 400, 1: 475, 2: 575, 3: 700, 4: 900 },
+  'blackburn': { 0: 400, 1: 475, 2: 575, 3: 700, 4: 900 },
+  'burnley': { 0: 375, 1: 450, 2: 550, 3: 675, 4: 850 },
+  'clitheroe': { 0: 425, 1: 525, 2: 650, 3: 800, 4: 1000 },
+  // Regional fallbacks
+  'south east': { 0: 750, 1: 950, 2: 1200, 3: 1500, 4: 1800 },
+  'south west': { 0: 600, 1: 750, 2: 950, 3: 1150, 4: 1400 },
+  'east midlands': { 0: 500, 1: 600, 2: 750, 3: 950, 4: 1150 },
+  'west midlands': { 0: 550, 1: 650, 2: 800, 3: 1000, 4: 1250 },
+  'north west': { 0: 500, 1: 600, 2: 750, 3: 950, 4: 1150 },
+  'north east': { 0: 400, 1: 475, 2: 575, 3: 700, 4: 900 },
+  'yorkshire': { 0: 500, 1: 600, 2: 750, 3: 950, 4: 1150 },
+  'east': { 0: 600, 1: 750, 2: 950, 3: 1150, 4: 1400 },
+  'wales': { 0: 475, 1: 575, 2: 700, 3: 875, 4: 1050 },
+  'scotland': { 0: 500, 1: 600, 2: 750, 3: 950, 4: 1200 },
+  // Default UK fallback
+  '_default': { 0: 550, 1: 675, 2: 825, 3: 1025, 4: 1275 },
+};
+
+function estimateMonthlyRent(address, beds) {
+  const a = (address || '').toLowerCase();
+  // Try specific towns/cities first, then regions
+  for (const [key, rents] of Object.entries(VOA_RENTS)) {
+    if (key === '_default') continue;
+    if (a.includes(key)) return rents[Math.min(beds ?? 2, 4)];
+  }
+  return VOA_RENTS._default[Math.min(beds ?? 2, 4)];
+}
+
+// ═══════════════════════════════════════════════════════════════
+// LOT URL CONSTRUCTION
+// ═══════════════════════════════════════════════════════════════
+function buildLotUrl(lot, house, sourceUrl) {
+  // If Claude already extracted a URL, use it
+  if (lot.url && lot.url.startsWith('http')) return lot.url;
+
+  switch (house) {
+    case 'savills':
+      // Savills lot pages: /auctions/auction-name/lot-number
+      if (sourceUrl.includes('savills.co.uk')) {
+        const base = sourceUrl.replace(/\/page-\d+.*/, '');
+        return `${base}?lot=${lot.lot}`;
+      }
+      break;
+    case 'allsop':
+      // Allsop: individual lot pages are /lot/{lot-number}/
+      return `https://www.allsop.co.uk/lot/${lot.lot}/`;
+    case 'sdl':
+      // SDL/BTG Eddisons: individual property pages are /property/{id}/slug
+      // If we have a property ID from Claude extraction, construct the URL
+      if (lot.propertyId) {
+        return `https://www.sdlauctions.co.uk/property/${lot.propertyId}/`;
+      }
+      // If lot URL was extracted as relative, make absolute
+      if (lot.url && lot.url.startsWith('/')) {
+        if (sourceUrl.includes('btgeddisonspropertyauctions')) {
+          return `https://www.btgeddisonspropertyauctions.com${lot.url}`;
+        }
+        return `https://www.sdlauctions.co.uk${lot.url}`;
+      }
+      break;
+    case 'bondwolfe':
+      // Bond Wolfe: /auctions/properties/{id}-property-auction-{location}/
+      if (lot.propertyId) {
+        return `https://www.bondwolfe.com/auctions/properties/${lot.propertyId}/`;
+      }
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://www.bondwolfe.com${lot.url}`;
+      }
+      break;
+    case 'network':
+      // Network Auctions: individual lot pages
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://www.networkauctions.co.uk${lot.url}`;
+      }
+      break;
+    case 'barnardmarcus':
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://www.barnardmarcusauctions.co.uk${lot.url}`;
+      }
+      break;
+    case 'auctionhouselondon':
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://auctionhouselondon.co.uk${lot.url}`;
+      }
+      break;
+    case 'cliveemson':
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://www.cliveemson.co.uk${lot.url}`;
+      }
+      break;
+    case 'strettons':
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://www.strettons.co.uk${lot.url}`;
+      }
+      break;
+    case 'acuitus':
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://www.acuitus.co.uk${lot.url}`;
+      }
+      break;
+    case 'auctionhouse':
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://www.auctionhouse.co.uk${lot.url}`;
+      }
+      break;
+    case 'hollismorgan':
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://www.hollismorgan.co.uk${lot.url}`;
+      }
+      break;
+    case 'maggsandallen':
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://www.maggsandallen.co.uk${lot.url}`;
+      }
+      break;
+    case 'mchughandco':
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://www.mchughandco.com${lot.url}`;
+      }
+      break;
+    case 'buttersjohnbee':
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://www.buttersjohnbee.com${lot.url}`;
+      }
+      break;
+  }
+  return lot.url || '';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ENRICHMENT: Land Registry + Rental Yield per lot
+// ═══════════════════════════════════════════════════════════════
+async function enrichLots(lots, house, sourceUrl) {
+  // Group lots by postcode to avoid duplicate queries
+  const postcodeMap = {};
+  for (const lot of lots) {
+    lot.url = buildLotUrl(lot, house, sourceUrl);
+    const pc = extractPostcode(lot.address);
+    lot.postcode = pc;
+    if (pc && !postcodeMap[pc]) postcodeMap[pc] = [];
+    if (pc) postcodeMap[pc].push(lot);
+  }
+
+  const postcodes = Object.keys(postcodeMap);
+  console.log(`Enriching ${lots.length} lots across ${postcodes.length} unique postcodes...`);
+
+  // Query Land Registry for each unique postcode (with concurrency limit)
+  const CONCURRENCY = 5;
+  const lrCache = {};
+  for (let i = 0; i < postcodes.length; i += CONCURRENCY) {
+    const batch = postcodes.slice(i, i + CONCURRENCY);
+    const results = await Promise.all(batch.map(pc => queryLandRegistry(pc)));
+    batch.forEach((pc, idx) => { lrCache[pc] = results[idx]; });
+    if (i + CONCURRENCY < postcodes.length) await new Promise(r => setTimeout(r, 200));
+  }
+
+  // Enrich each lot
+  for (const lot of lots) {
+    const pc = lot.postcode;
+    const sales = lrCache[pc] || [];
+    
+    // Street sales data
+    lot.streetSales = sales.slice(0, 10).map(s => ({
+      address: s.address,
+      price: s.price,
+      date: s.date,
+      type: s.propertyType,
+    }));
+
+    // Calculate street average (last 3 years)
+    const relevantSales = sales.filter(s => s.price > 0);
+    if (relevantSales.length > 0) {
+      const avg = Math.round(relevantSales.reduce((s, x) => s + x.price, 0) / relevantSales.length);
+      lot.streetAvg = avg;
+      lot.streetSalesCount = relevantSales.length;
+      
+      // Bargain score: how far below street average is the guide price?
+      if (lot.price && avg > 0) {
+        const discount = ((avg - lot.price) / avg) * 100;
+        lot.belowMarket = Math.round(discount);
+        if (discount > 20) {
+          lot.score += 2;
+          lot.opps.push(`${lot.belowMarket}% below market`);
+        } else if (discount > 10) {
+          lot.score += 1;
+          lot.opps.push(`${lot.belowMarket}% below market`);
+        } else if (discount < -10) {
+          lot.risks.push(`${Math.abs(lot.belowMarket)}% above market avg`);
+        }
+        lot.score = Math.round(lot.score * 10) / 10;
+      }
+    } else {
+      lot.streetAvg = null;
+      lot.streetSalesCount = 0;
+    }
+
+    // Rental yield estimate
+    const monthlyRent = estimateMonthlyRent(lot.address, lot.beds);
+    lot.estMonthlyRent = monthlyRent;
+    lot.estAnnualRent = monthlyRent * 12;
+    if (lot.price && lot.price > 0) {
+      lot.estGrossYield = Math.round((lot.estAnnualRent / lot.price) * 1000) / 10;
+      if (lot.estGrossYield > 8 && !lot.opps.some(o => o.includes('GIY'))) {
+        lot.score += 1.5;
+        lot.opps.push(`Est. ${lot.estGrossYield}% yield`);
+      } else if (lot.estGrossYield > 6 && !lot.opps.some(o => o.includes('GIY'))) {
+        lot.score += 0.5;
+        lot.opps.push(`Est. ${lot.estGrossYield}% yield`);
+      }
+      lot.score = Math.round(lot.score * 10) / 10;
+    }
+  }
+
+  // Re-sort by score after enrichment
+  lots.sort((a, b) => b.score - a.score);
+  console.log(`Enrichment complete. ${Object.values(lrCache).flat().length} total Land Registry sales found.`);
+  return lots;
+}
 app.listen(PORT, () => {
   console.log(`Bridgematch running on port ${PORT}`);
   if (!process.env.SUPABASE_URL) console.warn('⚠️  SUPABASE_URL not set');

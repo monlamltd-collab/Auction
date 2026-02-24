@@ -180,7 +180,17 @@ a{color:var(--green);text-decoration:none}a:hover{text-decoration:underline}
 .lot-bullets{font-size:.84rem;color:var(--text2);margin-top:6px;list-style:none}
 .lot-bullets li{padding:2px 0 2px 14px;position:relative}
 .lot-bullets li::before{content:'›';position:absolute;left:0;color:var(--green);font-weight:700}
-.lot-link{font-size:.72rem;margin-top:8px;word-break:break-all}.lot-link a{color:var(--text4)}.lot-link a:hover{color:var(--green)}
+.lot-link{font-size:.82rem;margin-top:8px}.lot-link a{color:var(--green);text-decoration:none;font-weight:500}.lot-link a:hover{text-decoration:underline}
+.enrich-panel{margin-top:10px;padding:10px 12px;background:var(--surface2);border-radius:var(--radius-sm);border:1px solid var(--border)}
+.enrich-item{display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:.84rem}
+.enrich-label{color:var(--text3);font-size:.78rem}.enrich-value{font-weight:600;color:var(--text)}
+.enrich-good{color:var(--green);font-weight:700}.enrich-warn{color:var(--red);font-weight:600}.enrich-neutral{color:var(--amber);font-weight:600}
+.street-sales{margin-top:6px;font-size:.78rem}
+.street-sales summary{cursor:pointer;color:var(--text3);font-size:.76rem;padding:2px 0}
+.street-sales summary:hover{color:var(--green)}
+.ss-list{margin-top:4px}.ss-row{display:flex;gap:8px;padding:3px 0;border-bottom:1px solid var(--border);font-size:.76rem;align-items:center}
+.ss-addr{flex:1;color:var(--text2);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ss-price{font-weight:600;color:var(--text);white-space:nowrap}.ss-date{color:var(--text4);white-space:nowrap}.ss-type{color:var(--text4);font-size:.72rem;white-space:nowrap}
 
 /* ── SIGNUP MODAL ── */
 .modal-bg{display:none;position:fixed;inset:0;background:rgba(26,23,20,.6);backdrop-filter:blur(4px);z-index:100;align-items:center;justify-content:center}
@@ -259,7 +269,7 @@ footer .logo-f span{color:var(--green)}
       <div class="how-card">
         <div class="how-icon">📅</div>
         <h3>Browse upcoming auctions</h3>
-        <p>Every major UK house in one calendar. Savills, Allsop, SDL, Network, and more — never miss a sale.</p>
+        <p>Every major UK house in one calendar. Savills, Allsop, SDL, Barnard Marcus, Auction House London, Auction House UK, Clive Emson, Network, Bond Wolfe, Strettons, Acuitus, Hollis Morgan, Maggs & Allen, McHugh & Co, Butters John Bee.</p>
       </div>
       <div class="how-card">
         <div class="how-icon">🤖</div>
@@ -608,22 +618,56 @@ function card(l,b){
   (l.opps||[]).filter(o=>!o.startsWith('Title split')).forEach(o=>tags+=`<span class="tag tag-o">${o}</span>`);
   (l.risks||[]).forEach(r=>tags+=`<span class="tag tag-r">${r}</span>`);
   const bul=(l.bullets||[]).slice(0,4).map(b=>`<li>${b}</li>`).join('');
-  const link=l.url?`<div class="lot-link"><a href="${l.url}" target="_blank">${l.url}</a></div>`:'';
+
+  // Land Registry + Yield enrichment panel
+  let enrichHtml='';
+  const hasLR=l.streetAvg||l.streetSalesCount>0;
+  const hasYield=l.estGrossYield;
+  if(hasLR||hasYield){
+    enrichHtml='<div class="enrich-panel">';
+    if(l.streetAvg){
+      const diffClass=l.belowMarket>10?'enrich-good':l.belowMarket<-10?'enrich-warn':'enrich-neutral';
+      const diffText=l.belowMarket>0?`${l.belowMarket}% below`:`${Math.abs(l.belowMarket||0)}% above`;
+      enrichHtml+=`<div class="enrich-item">
+        <div class="enrich-label">🏘️ Street avg (${l.streetSalesCount} sales, 3yr)</div>
+        <div class="enrich-value">£${l.streetAvg.toLocaleString()} <span class="${diffClass}">${l.price?diffText:'—'}</span></div>
+      </div>`;
+    }
+    if(hasYield){
+      const yClass=l.estGrossYield>=7?'enrich-good':l.estGrossYield>=5?'enrich-neutral':'enrich-warn';
+      enrichHtml+=`<div class="enrich-item">
+        <div class="enrich-label">📊 Est. gross yield</div>
+        <div class="enrich-value"><span class="${yClass}">${l.estGrossYield}%</span> (£${l.estMonthlyRent}/mo est.)</div>
+      </div>`;
+    }
+    // Expandable street sales
+    if(l.streetSales&&l.streetSales.length>0){
+      enrichHtml+=`<details class="street-sales"><summary>View ${l.streetSales.length} recent street sales</summary><div class="ss-list">`;
+      l.streetSales.forEach(s=>{
+        enrichHtml+=`<div class="ss-row"><span class="ss-addr">${s.address}</span><span class="ss-price">£${s.price.toLocaleString()}</span><span class="ss-date">${s.date.slice(0,10)}</span><span class="ss-type">${s.type||''}</span></div>`;
+      });
+      enrichHtml+=`</div></details>`;
+    }
+    enrichHtml+='</div>';
+  }
+
+  // Lot link
+  const link=l.url?`<div class="lot-link"><a href="${l.url}" target="_blank">View listing ↗</a></div>`:'';
 
   return`<div class="lot ${l.titleSplit?'ts':''}">
     <div class="lot-header"><div class="lot-title">Lot ${l.lot} · ${l.dealType||'Standard'}</div><div class="lot-score ${sc}">${l.score}</div></div>
     <div class="lot-addr">${l.address||'Address not available'}</div>
     <div class="lot-details">${details.join(' <span class="sep">·</span> ')}</div>
     <div class="tags">${tags}</div>
-    <ul class="lot-bullets">${bul}</ul>${link}</div>`;
+    <ul class="lot-bullets">${bul}</ul>${enrichHtml}${link}</div>`;
 }
 
 // Downloads
 function dlCSV(){
   const b=getBudget();
-  const rows=[['Rank','Lot','Score','Deal','TitleSplit','Units','Address','Guide','Deposit','Type','Beds','Tenure','Condition','Sqft','Opps','Risks','URL']];
+  const rows=[['Rank','Lot','Score','Deal','TitleSplit','Units','Address','Guide','Deposit','Type','Beds','Tenure','Condition','Sqft','StreetAvg','BelowMkt%','EstYield%','EstRent/mo','Opps','Risks','URL']];
   LOTS.forEach((l,i)=>{const dp=l.titleSplit?(b.tp/100):(b.sp/100);
-    rows.push([i+1,l.lot,l.score,l.dealType,l.titleSplit?'YES':'',l.units||'',l.address,l.price||'TBA',l.price?Math.round(l.price*dp):'TBA',l.propType,l.beds??'',l.tenure,l.condition,l.sqft||'',(l.opps||[]).join(' | '),(l.risks||[]).join(' | '),l.url])});
+    rows.push([i+1,l.lot,l.score,l.dealType,l.titleSplit?'YES':'',l.units||'',l.address,l.price||'TBA',l.price?Math.round(l.price*dp):'TBA',l.propType,l.beds??'',l.tenure,l.condition,l.sqft||'',l.streetAvg||'',l.belowMarket||'',l.estGrossYield||'',l.estMonthlyRent||'',(l.opps||[]).join(' | '),(l.risks||[]).join(' | '),l.url])});
   dl(rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n'),'auction_analysis.csv','text/csv');
 }
 function dlJSON(){dl(JSON.stringify(LOTS,null,2),'auction_analysis.json','application/json')}
