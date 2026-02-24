@@ -81,96 +81,109 @@ app.get('/api/auctions', (req, res) => {
   res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate');
 
   const auctions = [
+    // ── SAVILLS ──
     {
       house: 'Savills', houseSlug: 'savills', logo: '🏛️',
       date: '2026-02-24', dateEnd: '2026-02-25',
-      title: '24 & 25 February 2026', lots: 280,
+      title: '24 & 25 February 2026', lots: 322,
       url: 'https://auctions.savills.co.uk/auctions/24--25-february-2026-218',
       location: 'Online', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: true,
     },
     {
       house: 'Savills', houseSlug: 'savills', logo: '🏛️',
-      date: '2026-03-24', dateEnd: '2026-03-25',
-      title: '24 & 25 March 2026', lots: null,
-      url: 'https://auctions.savills.co.uk',
+      date: '2026-03-17', title: '17 March 2026', lots: null,
+      url: 'https://auctions.savills.co.uk/upcoming-auctions',
       location: 'Online', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: false,
     },
     {
+      house: 'Savills', houseSlug: 'savills', logo: '🏛️',
+      date: '2026-03-31', title: '31 March 2026', lots: null,
+      url: 'https://auctions.savills.co.uk/upcoming-auctions',
+      location: 'Online', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: false,
+    },
+    {
+      house: 'Savills', houseSlug: 'savills', logo: '🏛️',
+      date: '2026-04-21', title: '21 April 2026', lots: null,
+      url: 'https://auctions.savills.co.uk/upcoming-auctions',
+      location: 'Online', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: false,
+    },
+    {
+      house: 'Savills', houseSlug: 'savills', logo: '🏛️',
+      date: '2026-05-06', title: '6 May 2026', lots: null,
+      url: 'https://auctions.savills.co.uk/upcoming-auctions',
+      location: 'Online', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: false,
+    },
+    // ── ALLSOP ──
+    {
       house: 'Allsop', houseSlug: 'allsop', logo: '🔨',
-      date: '2026-02-18', title: '18 February 2026 - Residential', lots: 200,
-      url: 'https://www.allsop.co.uk/auction-calendar/',
+      date: '2026-02-25', dateEnd: '2026-02-26',
+      title: '25 & 26 February 2026 — Residential', lots: 325,
+      url: 'https://www.allsop.co.uk/residential-auction-view',
+      location: 'Online (Live Stream)', type: 'Residential', status: 'upcoming',
+      catalogueReady: true,
+    },
+    {
+      house: 'Allsop', houseSlug: 'allsop', logo: '🔨',
+      date: '2026-03-24', title: '24 March 2026 — Commercial', lots: null,
+      url: 'https://www.allsop.co.uk/commercial-auction-view',
+      location: 'Online (Live Stream)', type: 'Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
+    {
+      house: 'Allsop', houseSlug: 'allsop', logo: '🔨',
+      date: '2026-03-25', dateEnd: '2026-03-26',
+      title: '25 & 26 March 2026 — Residential', lots: null,
+      url: 'https://www.allsop.co.uk/residential-auction-view',
+      location: 'Online (Live Stream)', type: 'Residential', status: 'upcoming',
+      catalogueReady: true,
+    },
+    // ── NETWORK AUCTIONS ──
+    {
+      house: 'Network Auctions', houseSlug: 'network', logo: '🌐',
+      date: '2026-03-26', title: '26 March 2026', lots: null,
+      url: 'https://www.networkauctions.co.uk/auctions/',
       location: 'Online', type: 'Residential', status: 'upcoming',
-      catalogueReady: false,
-    },
-    {
-      house: 'Allsop', houseSlug: 'allsop', logo: '🔨',
-      date: '2026-03-11', title: '11 March 2026 - Commercial', lots: null,
-      url: 'https://www.allsop.co.uk/auction-calendar/',
-      location: 'Online', type: 'Commercial', status: 'upcoming',
-      catalogueReady: false,
-    },
-    {
-      house: 'SDL Auctions', houseSlug: 'sdl', logo: '⚡',
-      date: '2026-02-27', title: '27 February 2026 - National', lots: 150,
-      url: 'https://www.sdlauctions.co.uk/property-auctions/upcoming/',
-      location: 'Online', type: 'Residential & Commercial', status: 'upcoming',
-      catalogueReady: false,
-    },
-    {
-      house: 'SDL Auctions', houseSlug: 'sdl', logo: '⚡',
-      date: '2026-03-26', title: '26 March 2026 - National', lots: null,
-      url: 'https://www.sdlauctions.co.uk/property-auctions/upcoming/',
-      location: 'Online', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: false,
     },
     {
       house: 'Network Auctions', houseSlug: 'network', logo: '🌐',
-      date: '2026-03-05', title: '5 March 2026', lots: 80,
-      url: 'https://www.networkauctions.co.uk',
+      date: '2026-05-07', title: '7 May 2026', lots: null,
+      url: 'https://www.networkauctions.co.uk/auctions/',
       location: 'Online', type: 'Residential', status: 'upcoming',
       catalogueReady: false,
     },
     {
-      house: 'Auction House', houseSlug: 'auctionhouse', logo: '🏠',
-      date: '2026-02-26', title: '26 February 2026 - London', lots: 120,
-      url: 'https://www.auctionhouse.co.uk/auction/results',
-      location: 'London', type: 'Residential', status: 'upcoming',
+      house: 'Network Auctions', houseSlug: 'network', logo: '🌐',
+      date: '2026-06-18', title: '18 June 2026', lots: null,
+      url: 'https://www.networkauctions.co.uk/auctions/',
+      location: 'Online', type: 'Residential', status: 'upcoming',
+      catalogueReady: false,
+    },
+    // ── SDL AUCTIONS ──
+    {
+      house: 'SDL Auctions', houseSlug: 'sdl', logo: '⚡',
+      date: '2026-02-26', title: '26 February 2026 — National', lots: null,
+      url: 'https://www.sdlauctions.co.uk/property-auctions/upcoming-auctions/',
+      location: 'Online (Live Stream)', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: false,
+    },
+    // ── BOND WOLFE ──
+    {
+      house: 'Bond Wolfe', houseSlug: 'bondwolfe', logo: '🔶',
+      date: '2026-03-26', title: '26 March 2026', lots: null,
+      url: 'https://www.bondwolfe.com/property-auctions-west-midlands/upcoming-property-auctions/',
+      location: 'Online', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: false,
     },
     {
-      house: 'Auction House', houseSlug: 'auctionhouse', logo: '🏠',
-      date: '2026-03-12', title: '12 March 2026 - North West', lots: null,
-      url: 'https://www.auctionhouse.co.uk/auction/results',
-      location: 'Manchester', type: 'Residential', status: 'upcoming',
-      catalogueReady: false,
-    },
-    {
-      house: 'Barnard Marcus', houseSlug: 'barnardmarcus', logo: '🏘️',
-      date: '2026-03-03', title: '3 March 2026', lots: 90,
-      url: 'https://www.barnardmarcusauctions.co.uk',
-      location: 'London', type: 'Residential', status: 'upcoming',
-      catalogueReady: false,
-    },
-    {
-      house: 'Clive Emson', houseSlug: 'cliveemson', logo: '🔑',
-      date: '2026-03-18', title: '18 March 2026', lots: null,
-      url: 'https://www.cliveemson.co.uk',
-      location: 'South East', type: 'Residential & Land', status: 'upcoming',
-      catalogueReady: false,
-    },
-    {
-      house: 'Strettons', houseSlug: 'strettons', logo: '📋',
-      date: '2026-03-10', title: '10 March 2026', lots: null,
-      url: 'https://www.strettons.co.uk',
-      location: 'London', type: 'Residential & Commercial', status: 'upcoming',
-      catalogueReady: false,
-    },
-    {
-      house: 'Pugh', houseSlug: 'pugh', logo: '🏗️',
-      date: '2026-02-20', title: '20 February 2026', lots: 100,
-      url: 'https://www.pughauctions.com',
+      house: 'Bond Wolfe', houseSlug: 'bondwolfe', logo: '🔶',
+      date: '2026-05-14', title: '14 May 2026', lots: null,
+      url: 'https://www.bondwolfe.com/property-auctions-west-midlands/upcoming-property-auctions/',
       location: 'Online', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: false,
     },
@@ -254,8 +267,12 @@ app.post('/api/analyse', async (req, res) => {
 
   try {
     const house = detectAuctionHouse(url);
+    const rewritten = rewriteUrl(url, house);
+    const scrapeUrl = rewritten.baseUrl;
+    
+    console.log(`House: ${house}, URL: ${scrapeUrl}, isApi: ${rewritten.isApi}`);
 
-    // Validate URL first
+    // Validate URL first (use original URL for validation, rewritten for scraping)
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 10000);
@@ -271,7 +288,14 @@ app.post('/api/analyse', async (req, res) => {
       return res.status(400).json({ error: 'url_unreachable', message: "Couldn't reach that URL. Check it's a valid catalogue page." });
     }
 
-    const pages = await scrapeAllPages(url, house);
+    let pages;
+    if (rewritten.paginateAs === 'allsop_api') {
+      // Allsop API: paginate through JSON endpoint
+      pages = await scrapeAllsopApi(rewritten.baseUrl);
+    } else {
+      pages = await scrapeAllPages(scrapeUrl, house);
+    }
+    
     if (pages.length === 0) {
       return res.status(400).json({ error: 'no_content', message: "Couldn't find any content on that page." });
     }
@@ -279,15 +303,12 @@ app.post('/api/analyse', async (req, res) => {
     const client = new Anthropic({ apiKey });
     let rawLots = await extractLotsWithClaude(client, pages, house);
 
-    // ── Puppeteer fallback for JS-rendered sites ──
-    if (rawLots.length === 0) {
+    // ── Puppeteer fallback for JS-rendered sites (skip if we used API) ──
+    if (rawLots.length === 0 && !rewritten.isApi) {
       console.log(`No lots from static HTML, trying Puppeteer for ${house}...`);
       const puppeteerPages = await scrapeWithPuppeteer(url, house);
       if (puppeteerPages.length > 0) {
         console.log(`Puppeteer got ${puppeteerPages.length} page(s), sending to Claude...`);
-        const stripped = stripHtml(puppeteerPages[0].html);
-        console.log(`Stripped content length: ${stripped.length} chars`);
-        console.log(`Content preview: ${stripped.substring(0, 500)}`);
         rawLots = await extractLotsWithClaude(client, puppeteerPages, house);
         console.log(`Claude extracted ${rawLots.length} lots from Puppeteer content`);
       }
@@ -356,6 +377,38 @@ function detectAuctionHouse(url) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// URL REWRITING (map user-friendly URLs to data endpoints)
+// ═══════════════════════════════════════════════════════════════
+function rewriteUrl(url, house) {
+  const u = url.toLowerCase();
+
+  if (house === 'allsop') {
+    // Allsop: rewrite catalogue pages to their JSON API
+    if (u.includes('residential-auction') || u.includes('lot_type=residential')) {
+      return { 
+        baseUrl: 'https://www.allsop.co.uk/api/property-search?available_only=true&lot_type=residential&page=1&react',
+        isApi: true,
+        paginateAs: 'allsop_api'
+      };
+    }
+    if (u.includes('commercial-auction') || u.includes('lot_type=commercial')) {
+      return {
+        baseUrl: 'https://www.allsop.co.uk/api/property-search?available_only=true&lot_type=commercial&page=1&react',
+        isApi: true,
+        paginateAs: 'allsop_api'
+      };
+    }
+    // If it's the property-search API URL already, use it directly
+    if (u.includes('/api/property-search')) {
+      return { baseUrl: url, isApi: true, paginateAs: 'allsop_api' };
+    }
+  }
+
+  // No rewrite needed
+  return { baseUrl: url, isApi: false, paginateAs: null };
+}
+
+// ═══════════════════════════════════════════════════════════════
 // SCRAPING
 // ═══════════════════════════════════════════════════════════════
 async function fetchPage(url) {
@@ -383,6 +436,28 @@ async function scrapeAllPages(baseUrl, house) {
       else { break; }
       await new Promise(r => setTimeout(r, 300));
     } catch (e) { break; }
+  }
+  return pages;
+}
+
+// Allsop JSON API pagination
+async function scrapeAllsopApi(baseUrl) {
+  const pages = [];
+  for (let pg = 1; pg <= MAX_PAGES; pg++) {
+    const pageUrl = baseUrl.replace(/page=\d+/, `page=${pg}`);
+    try {
+      const html = await fetchPage(pageUrl);
+      if (html.length < 100 || html.includes('"data":[]') || html.includes('"template":"404"')) {
+        console.log(`Allsop API: page ${pg} empty, stopping`);
+        break;
+      }
+      pages.push({ page: pg, html });
+      console.log(`Allsop API: got ${html.length} chars from page ${pg}`);
+      await new Promise(r => setTimeout(r, 300));
+    } catch (e) {
+      console.log(`Allsop API: page ${pg} failed: ${e.message}`);
+      break;
+    }
   }
   return pages;
 }
