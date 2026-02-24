@@ -11,258 +11,336 @@
 <meta property="og:description" content="Free AI-powered tool to analyse any UK auction catalogue. Scores every lot, finds title splits, filters to your budget.">
 <meta property="og:url" content="https://bridgematch.co.uk">
 <meta property="og:type" content="website">
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#08080e;--surface:#101018;--surface2:#181824;--surface3:#222232;
-  --border:#2a2a3e;--text:#e6e6f2;--text2:#8a8aa6;--text3:#5a5a74;
-  --accent:#00e8b0;--accent2:#00c896;--accent-dim:rgba(0,232,176,.07);
-  --purple:#a78bfa;--purple-dim:rgba(167,139,250,.08);
-  --gold:#fbbf24;--gold-dim:rgba(251,191,36,.08);
-  --red:#f87171;--red-dim:rgba(248,113,113,.08);
-  --radius:12px;
+  --bg:#0c0f14;--surface:#141820;--surface2:#1a1f2a;--surface3:#222836;
+  --border:#262d3d;--border2:#323a4e;
+  --text:#e8e6e3;--text2:#9b978f;--text3:#6b6760;
+  --mint:#3ee8b5;--mint2:#2dd4a0;--mint-dim:rgba(62,232,181,.06);--mint-glow:rgba(62,232,181,.12);
+  --amber:#e8a63e;--amber-dim:rgba(232,166,62,.07);
+  --violet:#9b7ef0;--violet-dim:rgba(155,126,240,.06);
+  --red:#e85c5c;--red-dim:rgba(232,92,92,.06);
+  --warm:#f5f0e8;
+  --radius:14px;--radius-sm:10px;
 }
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;line-height:1.5}
-a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;line-height:1.6}
+a{color:var(--mint);text-decoration:none}a:hover{text-decoration:underline}
 
-/* Layout */
-.wrap{max-width:1080px;margin:0 auto;padding:0 20px}
+/* ── NAV ── */
+.nav{padding:16px 0;border-bottom:1px solid var(--border)}
+.nav-inner{max-width:1120px;margin:0 auto;padding:0 24px;display:flex;align-items:center;justify-content:space-between}
+.logo{font-family:'DM Serif Display',serif;font-size:1.4rem;color:var(--warm);letter-spacing:-.5px}
+.logo span{color:var(--mint)}
+.nav-links{display:flex;gap:6px}
+.nav-link{padding:7px 16px;border-radius:8px;font-size:.85rem;font-weight:600;color:var(--text2);cursor:pointer;transition:all .15s;border:none;background:none;font-family:inherit}
+.nav-link:hover{color:var(--text);background:var(--surface2)}
+.nav-link.active{color:var(--mint);background:var(--mint-dim)}
+.nav-cta{padding:7px 18px;border-radius:8px;font-size:.85rem;font-weight:700;color:#0c0f14;background:var(--mint);border:none;cursor:pointer;font-family:inherit;transition:all .15s}
+.nav-cta:hover{box-shadow:0 4px 20px rgba(62,232,181,.2);transform:translateY(-1px)}
 
-/* Hero */
-.hero{text-align:center;padding:56px 0 40px;position:relative;overflow:hidden}
-.hero::before{content:'';position:absolute;top:-120px;left:50%;transform:translateX(-50%);width:600px;height:600px;background:radial-gradient(circle,rgba(0,232,176,.06),transparent 70%);pointer-events:none}
-.hero h1{font-size:2.4rem;font-weight:800;letter-spacing:-1px;line-height:1.15;position:relative}
-.hero h1 .hl{background:linear-gradient(135deg,var(--accent),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-.hero p{color:var(--text2);font-size:1rem;margin-top:10px;max-width:560px;margin-left:auto;margin-right:auto;position:relative}
+/* ── WRAP ── */
+.wrap{max-width:1120px;margin:0 auto;padding:0 24px}
 
-/* Navigation tabs */
-.tabs{display:flex;gap:4px;margin-bottom:28px;border-bottom:1px solid var(--border);padding-bottom:0}
-.tab{padding:10px 20px;font-weight:600;font-size:.9rem;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;background:none;border-top:none;border-left:none;border-right:none;font-family:inherit}
-.tab:hover{color:var(--text)}
-.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+/* ── HERO ── */
+.hero{padding:64px 0 48px;text-align:center;position:relative}
+.hero::before{content:'';position:absolute;top:-80px;left:50%;transform:translateX(-50%);width:700px;height:500px;background:radial-gradient(ellipse,rgba(62,232,181,.04),transparent 70%);pointer-events:none}
+.hero-badge{display:inline-block;padding:5px 14px;border-radius:20px;font-size:.75rem;font-weight:600;color:var(--mint);background:var(--mint-dim);border:1px solid rgba(62,232,181,.1);margin-bottom:20px;letter-spacing:.3px}
+.hero h1{font-family:'DM Serif Display',serif;font-size:clamp(2rem,5vw,3.2rem);font-weight:400;color:var(--warm);line-height:1.15;letter-spacing:-.5px;position:relative}
+.hero h1 em{font-style:normal;color:var(--mint)}
+.hero-sub{color:var(--text2);font-size:1.05rem;margin-top:14px;max-width:580px;margin-left:auto;margin-right:auto;line-height:1.7}
+.hero-stats{display:flex;justify-content:center;gap:40px;margin-top:32px}
+.hero-stat{text-align:center}
+.hero-stat .n{font-family:'JetBrains Mono',monospace;font-size:1.6rem;font-weight:700;color:var(--mint)}
+.hero-stat .l{font-size:.78rem;color:var(--text3);margin-top:2px}
 
-/* Sections */
+/* ── SECTIONS ── */
 .section{display:none}.section.active{display:block}
 
-/* Panel */
-.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px;margin-bottom:14px}
-.panel-t{font-weight:600;font-size:.78rem;color:var(--text3);text-transform:uppercase;letter-spacing:1.3px;margin-bottom:10px}
+/* ── HOW IT WORKS ── */
+.how{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-bottom:48px}
+.how-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;text-align:center;transition:all .2s}
+.how-card:hover{border-color:var(--mint);transform:translateY(-2px)}
+.how-num{font-family:'JetBrains Mono',monospace;font-size:.7rem;font-weight:700;color:var(--mint);background:var(--mint-dim);width:28px;height:28px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;margin-bottom:12px}
+.how-card h3{font-family:'DM Serif Display',serif;font-size:1.05rem;color:var(--warm);margin-bottom:6px}
+.how-card p{font-size:.85rem;color:var(--text2);line-height:1.6}
 
-/* Auction calendar cards */
+/* ── SECTION HEADERS ── */
+.sh{margin-bottom:20px}
+.sh h2{font-family:'DM Serif Display',serif;font-size:1.5rem;color:var(--warm);letter-spacing:-.3px}
+.sh p{color:var(--text2);font-size:.9rem;margin-top:4px}
+
+/* ── AUCTION CALENDAR ── */
+.house-filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px}
+.hf{font-size:.8rem;padding:6px 14px;border-radius:20px;cursor:pointer;transition:all .15s;background:var(--surface);color:var(--text2);border:1px solid var(--border);font-family:inherit;font-weight:600}
+.hf:hover,.hf.active{background:var(--mint-dim);color:var(--mint);border-color:rgba(62,232,181,.15)}
+
 .cal-grid{display:grid;grid-template-columns:1fr;gap:10px}
-.cal-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;display:grid;grid-template-columns:56px 1fr auto;gap:16px;align-items:center;transition:all .15s}
-.cal-card:hover{border-color:var(--accent);transform:translateY(-1px)}
-.cal-date{text-align:center}
-.cal-date .day{font-size:1.5rem;font-weight:800;font-family:'JetBrains Mono',monospace;color:var(--accent);line-height:1}
-.cal-date .mon{font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text2);margin-top:2px}
-.cal-info h3{font-size:.95rem;font-weight:600;margin-bottom:2px}
-.cal-info .meta{font-size:.8rem;color:var(--text2)}
-.cal-info .meta span{margin-right:12px}
+.cal-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 24px;display:grid;grid-template-columns:60px 1fr auto;gap:20px;align-items:center;transition:all .2s}
+.cal-card:hover{border-color:var(--border2);transform:translateY(-1px);box-shadow:0 8px 32px rgba(0,0,0,.15)}
+.cal-date{text-align:center;background:var(--surface2);border-radius:var(--radius-sm);padding:10px 6px}
+.cal-date .day{font-family:'DM Serif Display',serif;font-size:1.6rem;color:var(--warm);line-height:1}
+.cal-date .mon{font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--mint);margin-top:3px}
+.cal-info h3{font-size:1rem;font-weight:700;margin-bottom:3px}
+.cal-info .meta{display:flex;gap:16px;font-size:.82rem;color:var(--text2)}
+.cal-info .meta .sep{color:var(--border2)}
 .cal-actions{display:flex;gap:8px;flex-shrink:0}
-.cal-pill{font-size:.75rem;font-weight:600;padding:6px 14px;border-radius:20px;cursor:pointer;transition:all .15s;border:none;font-family:inherit}
-.cal-pill.primary{background:var(--accent);color:#000}.cal-pill.primary:hover{box-shadow:0 4px 16px rgba(0,232,176,.25)}
-.cal-pill.ghost{background:var(--surface2);color:var(--text2);border:1px solid var(--border)}.cal-pill.ghost:hover{border-color:var(--accent);color:var(--text)}
+.cal-btn{font-size:.8rem;font-weight:700;padding:8px 18px;border-radius:8px;cursor:pointer;transition:all .15s;border:none;font-family:inherit}
+.cal-btn.primary{background:var(--mint);color:#0c0f14}.cal-btn.primary:hover{box-shadow:0 4px 16px rgba(62,232,181,.2)}
+.cal-btn.ghost{background:transparent;color:var(--text2);border:1px solid var(--border)}.cal-btn.ghost:hover{border-color:var(--text2);color:var(--text)}
 
-/* House filter pills */
-.house-filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
-.hf{font-size:.78rem;padding:5px 12px;border-radius:16px;cursor:pointer;transition:all .15s;background:var(--surface2);color:var(--text2);border:1px solid var(--border);font-family:inherit;font-weight:500}
-.hf:hover,.hf.active{background:var(--accent-dim);color:var(--accent);border-color:rgba(0,232,176,.2)}
+/* ── ANALYSER ── */
+.user-bar{font-size:.82rem;color:var(--text2);margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.user-bar .dot{width:7px;height:7px;border-radius:50%;background:var(--mint);display:inline-block}
+.user-bar a{cursor:pointer;color:var(--text3)}
 
-/* Analyser section */
+.analyser-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:28px;margin-bottom:16px}
+.analyser-box .label{font-weight:700;font-size:.78rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
 .url-row{display:flex;gap:10px}
-.url-row input{flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:13px 14px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:.86rem;outline:0;transition:border .2s}
-.url-row input:focus{border-color:var(--accent)}
-.btn{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#000;font-weight:700;font-size:.88rem;border:none;border-radius:10px;padding:13px 24px;cursor:pointer;transition:all .15s;white-space:nowrap;font-family:inherit}
-.btn:hover{transform:translateY(-1px);box-shadow:0 6px 24px rgba(0,232,176,.25)}
-.btn:disabled{opacity:.35;cursor:not-allowed;transform:none;box-shadow:none}
-.btn-sm{padding:8px 14px;font-size:.78rem;border-radius:8px}
-.btn-ghost{background:var(--surface2);color:var(--text);border:1px solid var(--border)}.btn-ghost:hover{border-color:var(--accent)}
+.url-row input{flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px 16px;color:var(--text);font-size:.92rem;outline:0;transition:border .2s;font-family:inherit}
+.url-row input:focus{border-color:var(--mint)}
+.url-row input::placeholder{color:var(--text3)}
+.btn-main{background:var(--mint);color:#0c0f14;font-weight:700;font-size:.92rem;border:none;border-radius:var(--radius-sm);padding:14px 28px;cursor:pointer;transition:all .15s;white-space:nowrap;font-family:inherit}
+.btn-main:hover{box-shadow:0 6px 24px rgba(62,232,181,.2);transform:translateY(-1px)}
+.btn-main:disabled{opacity:.3;cursor:not-allowed;transform:none;box-shadow:none}
 
-/* Budget */
-.budget-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-top:12px}
-.field label{display:block;font-size:.76rem;color:var(--text3);margin-bottom:4px;font-weight:500}
-.field input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:.86rem;outline:0}
-.field input:focus{border-color:var(--accent)}
-.budget-info{margin-top:8px;font-family:'JetBrains Mono',monospace;font-size:.8rem;color:var(--text3)}
-.budget-info b{color:var(--accent)}
+.budget-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-top:18px}
+.field label{display:block;font-size:.75rem;color:var(--text3);margin-bottom:5px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+.field input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:11px 14px;color:var(--mint);font-family:'JetBrains Mono',monospace;font-size:.88rem;outline:0}
+.field input:focus{border-color:var(--mint)}
+.budget-summary{margin-top:10px;font-size:.82rem;color:var(--text3)}
+.budget-summary b{color:var(--mint)}
 
-/* Progress */
+/* ── PROGRESS ── */
 #progressPanel{display:none}
-.p-track{background:var(--surface2);border-radius:6px;height:5px;overflow:hidden;margin:8px 0}
-.p-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--purple));border-radius:6px;transition:width .25s;width:0}
-.p-status{font-family:'JetBrains Mono',monospace;font-size:.8rem;color:var(--text2)}
-.log-box{max-height:160px;overflow-y:auto;margin-top:8px;padding:8px;background:var(--bg);border-radius:8px;font-family:'JetBrains Mono',monospace;font-size:.74rem;color:var(--text3)}
-.log-box div{padding:1px 0}.log-box .ok{color:var(--accent)}.log-box .warn{color:var(--gold)}.log-box .err{color:var(--red)}
+.prog-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px}
+.p-status{font-size:.85rem;font-weight:600;color:var(--text2);margin-bottom:6px}
+.p-track{background:var(--surface2);border-radius:6px;height:4px;overflow:hidden}
+.p-fill{height:100%;background:linear-gradient(90deg,var(--mint),var(--violet));border-radius:6px;transition:width .3s;width:0}
+.log-box{max-height:120px;overflow-y:auto;margin-top:10px;padding:10px 12px;background:var(--bg);border-radius:8px;font-family:'JetBrains Mono',monospace;font-size:.73rem;color:var(--text3)}
+.log-box div{padding:2px 0}.log-box .ok{color:var(--mint)}.log-box .warn{color:var(--amber)}.log-box .err{color:var(--red)}
 
-/* Results */
+/* ── RESULTS ── */
 #resultsPanel{display:none}
-.stats-row{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:18px}
-.stat{background:var(--surface2);border-radius:10px;padding:14px;text-align:center}
-.stat .v{font-size:1.5rem;font-weight:700;font-family:'JetBrains Mono',monospace}
-.stat .v.g{color:var(--accent)}.stat .v.y{color:var(--gold)}.stat .v.p{color:var(--purple)}
-.stat .l{color:var(--text3);font-size:.7rem;text-transform:uppercase;letter-spacing:1px;margin-top:2px}
+.stats-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:20px}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;text-align:center}
+.stat-card .v{font-family:'JetBrains Mono',monospace;font-size:1.6rem;font-weight:700}
+.stat-card .v.g{color:var(--mint)}.stat-card .v.y{color:var(--amber)}.stat-card .v.p{color:var(--violet)}
+.stat-card .l{color:var(--text3);font-size:.7rem;text-transform:uppercase;letter-spacing:1px;margin-top:3px}
 
-.dl-bar{display:flex;gap:8px;align-items:center;margin-bottom:18px}
-.dl-bar>span{color:var(--text2);font-size:.85rem;margin-right:auto}
+.toolbar{display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
+.toolbar .spacer{flex:1}
+.tb-btn{padding:7px 14px;font-size:.78rem;font-weight:600;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text2);cursor:pointer;font-family:inherit;transition:all .15s}
+.tb-btn:hover{border-color:var(--mint);color:var(--text)}
+.tb-select{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:7px 12px;color:var(--text);font-size:.82rem;outline:0;font-family:inherit;cursor:pointer}
+.tb-search{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:7px 12px;color:var(--text);font-size:.82rem;outline:0;font-family:inherit;width:160px}
 
-.filter-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
-.filter-bar select,.filter-bar input[type=text]{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:7px 10px;color:var(--text);font-size:.8rem;outline:0;font-family:inherit}
+/* ── LOT CARDS ── */
+.group-head{font-family:'DM Serif Display',serif;font-size:1.15rem;color:var(--warm);margin:28px 0 12px;display:flex;align-items:center;gap:10px}
+.badge{font-family:'Plus Jakarta Sans',sans-serif;font-size:.68rem;font-weight:700;padding:3px 10px;border-radius:12px}
+.badge-g{background:var(--mint-dim);color:var(--mint)}.badge-p{background:var(--violet-dim);color:var(--violet)}.badge-y{background:var(--amber-dim);color:var(--amber)}
 
-/* Lot cards */
-.sec-head{font-size:1.1rem;font-weight:700;margin:24px 0 10px;display:flex;align-items:center;gap:8px}
-.pill{font-size:.7rem;font-weight:700;padding:3px 9px;border-radius:14px}
-.pill-g{background:rgba(0,232,176,.1);color:var(--accent)}.pill-p{background:var(--purple-dim);color:var(--purple)}.pill-y{background:var(--gold-dim);color:var(--gold)}
+.lot{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:10px;transition:all .2s}
+.lot:hover{border-color:var(--border2);box-shadow:0 4px 24px rgba(0,0,0,.1)}
+.lot.ts{border-left:3px solid var(--violet)}
+.lot-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px}
+.lot-title{font-weight:700;font-size:.82rem;color:var(--text2)}
+.lot-score{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:.82rem;padding:4px 12px;border-radius:10px}
+.lot-score.high{background:var(--mint-dim);color:var(--mint)}.lot-score.mid{background:var(--amber-dim);color:var(--amber)}.lot-score.low{background:var(--surface2);color:var(--text3)}
+.lot-addr{font-family:'DM Serif Display',serif;font-size:1.05rem;color:var(--warm);margin-bottom:6px}
+.lot-details{display:flex;flex-wrap:wrap;gap:12px;font-size:.82rem;color:var(--text2);margin-bottom:8px}
+.lot-details .price{color:var(--mint);font-weight:700;font-family:'JetBrains Mono',monospace}
+.lot-details .dep{color:var(--amber);font-weight:600}
+.tags{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0}
+.tag{font-size:.7rem;padding:3px 8px;border-radius:6px;font-weight:600}
+.tag-o{background:var(--mint-dim);color:var(--mint);border:1px solid rgba(62,232,181,.1)}
+.tag-r{background:var(--red-dim);color:var(--red);border:1px solid rgba(232,92,92,.1)}
+.tag-t{background:var(--violet-dim);color:var(--violet);border:1px solid rgba(155,126,240,.12);font-weight:700}
+.lot-bullets{font-size:.82rem;color:var(--text2);margin-top:6px;list-style:none}
+.lot-bullets li{padding:2px 0 2px 14px;position:relative}
+.lot-bullets li::before{content:'›';position:absolute;left:0;color:var(--mint);font-weight:700}
+.lot-link{font-size:.72rem;margin-top:8px;word-break:break-all}.lot-link a{color:var(--text3)}.lot-link a:hover{color:var(--mint)}
 
-.lot{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:8px;transition:all .15s}
-.lot:hover{border-color:var(--accent);transform:translateY(-1px)}
-.lot.ts{border-left:3px solid var(--purple)}
-.lot-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px}
-.lot-num{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:.95rem}
-.lot-badge{font-family:'JetBrains Mono',monospace;font-weight:700;padding:3px 10px;border-radius:14px;font-size:.8rem}
-.lot-badge.high{background:rgba(0,232,176,.1);color:var(--accent)}
-.lot-badge.mid{background:var(--gold-dim);color:var(--gold)}
-.lot-badge.low{background:var(--surface2);color:var(--text3)}
-.lot-addr{font-weight:600;font-size:.92rem;margin-bottom:3px}
-.lot-meta{font-family:'JetBrains Mono',monospace;font-size:.78rem;color:var(--text2);margin-bottom:5px}
-.lot-meta .price{color:var(--accent);font-weight:600}
-.lot-meta .dep{color:var(--gold)}
-.tags{display:flex;flex-wrap:wrap;gap:4px;margin:5px 0}
-.tag{font-size:.7rem;padding:2px 6px;border-radius:5px;font-weight:500}
-.tag-o{background:var(--accent-dim);color:var(--accent);border:1px solid rgba(0,232,176,.12)}
-.tag-r{background:var(--red-dim);color:var(--red);border:1px solid rgba(248,113,113,.12)}
-.tag-t{background:var(--purple-dim);color:var(--purple);border:1px solid rgba(167,139,250,.15);font-weight:700}
-.lot-bul{font-size:.8rem;color:var(--text2);margin-top:3px;list-style:none}
-.lot-bul li{padding:1px 0 1px 12px;position:relative}
-.lot-bul li::before{content:'›';position:absolute;left:0;color:var(--accent)}
-.lot-link{font-family:'JetBrains Mono',monospace;font-size:.7rem;margin-top:5px;word-break:break-all}
-.lot-link a{color:var(--accent)}
-
-/* Signup modal */
-.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;align-items:center;justify-content:center}
+/* ── SIGNUP MODAL ── */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(4px);z-index:100;align-items:center;justify-content:center}
 .modal-bg.show{display:flex}
-.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:28px;max-width:400px;width:90%}
-.modal h2{font-size:1.1rem;margin-bottom:4px}
-.modal p{color:var(--text2);font-size:.85rem;margin-bottom:16px}
-.modal input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:11px 14px;color:var(--text);font-size:.9rem;outline:0;margin-bottom:10px;font-family:inherit}
-.modal input:focus{border-color:var(--accent)}
-.modal .btn{width:100%}
-.user-bar{font-size:.8rem;color:var(--text2);margin-bottom:12px;display:flex;align-items:center;gap:8px}
-.user-bar .dot{width:6px;height:6px;border-radius:50%;background:var(--accent);display:inline-block}
-.user-bar a{cursor:pointer}
-footer{text-align:center;padding:40px 0 24px;color:var(--text3);font-size:.8rem;border-top:1px solid var(--border);margin-top:40px}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:36px;max-width:420px;width:92%;text-align:center}
+.modal-icon{font-size:2rem;margin-bottom:12px}
+.modal h2{font-family:'DM Serif Display',serif;font-size:1.3rem;color:var(--warm);margin-bottom:6px}
+.modal p{color:var(--text2);font-size:.88rem;margin-bottom:20px;line-height:1.6}
+.modal input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:13px 16px;color:var(--text);font-size:.9rem;outline:0;margin-bottom:10px;font-family:inherit}
+.modal input:focus{border-color:var(--mint)}
+.modal input::placeholder{color:var(--text3)}
+.modal .btn-main{width:100%;padding:14px}
+.modal-note{font-size:.75rem;color:var(--text3);margin-top:12px}
 
-/* Responsive */
+/* ── FOOTER ── */
+footer{text-align:center;padding:48px 0 28px;color:var(--text3);font-size:.78rem;border-top:1px solid var(--border);margin-top:48px}
+footer .logo-sm{font-family:'DM Serif Display',serif;font-size:1rem;color:var(--text2);margin-bottom:6px}
+footer .logo-sm span{color:var(--mint)}
+
+/* ── RESPONSIVE ── */
 @media(max-width:768px){
-  .hero h1{font-size:1.6rem}
-  .stats-row{grid-template-columns:1fr 1fr}
-  .budget-grid{grid-template-columns:1fr}
+  .hero h1{font-size:1.8rem}
+  .hero-stats{gap:24px}
+  .how{grid-template-columns:1fr}
+  .stats-grid{grid-template-columns:1fr 1fr}
+  .budget-row{grid-template-columns:1fr}
   .url-row{flex-direction:column}
-  .cal-card{grid-template-columns:48px 1fr;gap:12px}
-  .cal-actions{grid-column:1/-1;justify-content:flex-start}
-  .filter-bar{flex-direction:column}
-  .tabs{overflow-x:auto;white-space:nowrap}
+  .cal-card{grid-template-columns:52px 1fr;gap:14px}
+  .cal-actions{grid-column:1/-1}
+  .toolbar{flex-direction:column;align-items:stretch}
+  .nav-links{display:none}
 }
+
+/* ── ANIMATIONS ── */
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.hero,.how-card,.cal-card,.lot{animation:fadeUp .4s ease both}
+.how-card:nth-child(2){animation-delay:.08s}.how-card:nth-child(3){animation-delay:.16s}
 </style>
 </head>
 <body>
 
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-inner">
+    <div class="logo">Bridge<span>match</span></div>
+    <div class="nav-links">
+      <button class="nav-link active" onclick="switchTab('calendar')">Auctions</button>
+      <button class="nav-link" onclick="switchTab('analyser')">Analyser</button>
+    </div>
+    <button class="nav-cta" id="navCta" onclick="requireSignup()">Sign up free</button>
+  </div>
+</nav>
+
 <div class="wrap">
+
+  <!-- HERO -->
   <header class="hero">
-    <h1><span class="hl">Bridgematch</span></h1>
-    <p>UK property auction directory & AI deal analyser. Upcoming dates from every major house. Analyse any catalogue — scores lots, finds title splits, filters to your budget.</p>
+    <div class="hero-badge">Free for property investors</div>
+    <h1>Every UK auction.<br>Every lot. <em>Analysed.</em></h1>
+    <p class="hero-sub">Bridgematch tracks upcoming property auctions across every major UK house. Our AI analyses each catalogue — scoring lots, finding title splits, and filtering to your budget.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="n">10+</div><div class="l">Auction houses</div></div>
+      <div class="hero-stat"><div class="n">280+</div><div class="l">Lots analysed</div></div>
+      <div class="hero-stat"><div class="n">Free</div><div class="l">To use</div></div>
+    </div>
   </header>
 
-  <div class="tabs">
-    <button class="tab active" onclick="switchTab('calendar')">Upcoming Auctions</button>
-    <button class="tab" onclick="switchTab('analyser')">Catalogue Analyser</button>
-  </div>
-
-  <!-- ═══════════════ CALENDAR SECTION ═══════════════ -->
+  <!-- HOW IT WORKS (only on calendar view) -->
   <div class="section active" id="sec-calendar">
+
+    <div class="how">
+      <div class="how-card">
+        <div class="how-num">1</div>
+        <h3>Browse auctions</h3>
+        <p>See upcoming dates from Savills, Allsop, SDL, and all the major UK auction houses in one place.</p>
+      </div>
+      <div class="how-card">
+        <div class="how-num">2</div>
+        <h3>Analyse the catalogue</h3>
+        <p>Our AI reads every lot, extracts the key details, and scores each one based on investment potential.</p>
+      </div>
+      <div class="how-card">
+        <div class="how-num">3</div>
+        <h3>Find your deals</h3>
+        <p>Filter by budget, deal type, and title splits. Download your shortlist as a spreadsheet.</p>
+      </div>
+    </div>
+
+    <div class="sh">
+      <h2>Upcoming auctions</h2>
+      <p>Click "Analyse" to score every lot in the catalogue, or "View" to browse on the auction house website.</p>
+    </div>
+
     <div class="house-filters" id="houseFilters">
-      <button class="hf active" data-house="all">All Houses</button>
+      <button class="hf active" data-house="all">All</button>
     </div>
     <div class="cal-grid" id="calGrid">
-      <div style="text-align:center;padding:40px;color:var(--text3)">Loading auction calendar...</div>
+      <div style="text-align:center;padding:40px;color:var(--text3)">Loading auctions...</div>
     </div>
   </div>
 
-  <!-- ═══════════════ SIGNUP MODAL ═══════════════ -->
+  <!-- SIGNUP MODAL -->
   <div class="modal-bg" id="signupModal">
     <div class="modal">
-      <h2>Sign up to analyse catalogues</h2>
-      <p>Free account — just an email to get started. We'll send you alerts when new catalogues drop.</p>
-      <input id="signupName" placeholder="Name (optional)">
+      <div class="modal-icon">🔑</div>
+      <h2>Unlock the analyser</h2>
+      <p>Enter your email to start analysing auction catalogues. It's free — and we'll alert you when new catalogues drop.</p>
+      <input id="signupName" placeholder="Your name (optional)">
       <input id="signupEmail" placeholder="Email address" type="email">
       <div id="signupError" style="color:var(--red);font-size:.8rem;margin-bottom:8px;display:none"></div>
-      <button class="btn" onclick="doSignup()">Get started</button>
+      <button class="btn-main" onclick="doSignup()">Get started — it's free</button>
+      <div class="modal-note">No spam. No card required. Just property insights.</div>
     </div>
   </div>
 
-  <!-- ═══════════════ ANALYSER SECTION ═══════════════ -->
+  <!-- ANALYSER SECTION -->
   <div class="section" id="sec-analyser">
     <div id="userBar" class="user-bar" style="display:none">
-      <span class="dot"></span> Signed in as <strong id="userEmail"></strong> &nbsp;|&nbsp; <a onclick="signOut()">sign out</a>
+      <span class="dot"></span> <span id="userEmail"></span> &nbsp;·&nbsp; <a onclick="signOut()">sign out</a>
     </div>
-    <div class="panel">
-      <div class="panel-t">Auction Catalogue URL</div>
+
+    <div class="sh"><h2>Catalogue analyser</h2><p>Paste an auction catalogue URL and we'll score every lot in seconds.</p></div>
+
+    <div class="analyser-box">
+      <div class="label">Catalogue URL</div>
       <div class="url-row">
-        <input id="urlInput" placeholder="Paste any auction catalogue URL...">
-        <button class="btn" id="goBtn" onclick="runAnalysis()">Analyse</button>
+        <input id="urlInput" placeholder="Paste a catalogue URL from any auction house...">
+        <button class="btn-main" id="goBtn" onclick="runAnalysis()">Analyse</button>
       </div>
-      <div class="panel-t" style="margin-top:16px">Budget</div>
-      <div class="budget-grid">
-        <div class="field"><label>Deposit (£)</label><input id="dep" type="number" value="150000"></div>
+
+      <div class="label" style="margin-top:20px">Your budget</div>
+      <div class="budget-row">
+        <div class="field"><label>Deposit</label><input id="dep" type="number" value="150000"></div>
         <div class="field"><label>Standard deposit %</label><input id="stdPct" type="number" value="25"></div>
         <div class="field"><label>Title split deposit %</label><input id="tsPct" type="number" value="10"></div>
       </div>
-      <div class="budget-info" id="budgetInfo"></div>
+      <div class="budget-summary" id="budgetInfo"></div>
     </div>
 
-    <div class="panel" id="progressPanel">
-      <div class="p-status" id="pStatus">Starting...</div>
-      <div class="p-track"><div class="p-fill" id="pBar"></div></div>
-      <div class="log-box" id="logBox"></div>
+    <div id="progressPanel">
+      <div class="prog-box">
+        <div class="p-status" id="pStatus">Starting...</div>
+        <div class="p-track"><div class="p-fill" id="pBar"></div></div>
+        <div class="log-box" id="logBox"></div>
+      </div>
     </div>
 
     <div id="resultsPanel">
-      <div class="stats-row" id="statsRow"></div>
-      <div class="dl-bar">
-        <span>Export</span>
-        <button class="btn-ghost btn-sm" onclick="dlCSV()">CSV</button>
-        <button class="btn-ghost btn-sm" onclick="dlJSON()">JSON</button>
-      </div>
-      <div class="filter-bar">
-        <select id="fType" onchange="renderLots()"><option value="">All types</option></select>
-        <select id="fDeal" onchange="renderLots()"><option value="">All deals</option></select>
-        <select id="fBudget" onchange="renderLots()"><option value="budget">In budget</option><option value="all">All lots</option></select>
-        <select id="fTS" onchange="renderLots()"><option value="">All</option><option value="ts">Title splits</option></select>
-        <input type="text" id="fSearch" placeholder="Search..." oninput="renderLots()">
+      <div class="stats-grid" id="statsRow"></div>
+      <div class="toolbar">
+        <select class="tb-select" id="fType" onchange="renderLots()"><option value="">All types</option></select>
+        <select class="tb-select" id="fDeal" onchange="renderLots()"><option value="">All deals</option></select>
+        <select class="tb-select" id="fBudget" onchange="renderLots()"><option value="budget">In budget</option><option value="all">All lots</option></select>
+        <select class="tb-select" id="fTS" onchange="renderLots()"><option value="">All lots</option><option value="ts">Title splits only</option></select>
+        <input class="tb-search" type="text" id="fSearch" placeholder="Search..." oninput="renderLots()">
+        <span class="spacer"></span>
+        <button class="tb-btn" onclick="dlCSV()">Export CSV</button>
+        <button class="tb-btn" onclick="dlJSON()">Export JSON</button>
       </div>
       <div id="lotsOut"></div>
     </div>
   </div>
 
   <footer>
-    <p>Bridgematch — UK Property Auction Directory & Deal Analyser. Data sourced from public auction house websites. Not financial advice.</p>
+    <div class="logo-sm">Bridge<span>match</span></div>
+    <p>UK Property Auction Directory & Deal Analyser. Data sourced from public auction house websites. Not financial advice.</p>
   </footer>
 </div>
 
 <script>
-// ═══════════════════════════════════════════════
-// UTILS
-// ═══════════════════════════════════════════════
 const $=id=>document.getElementById(id);
 let LOTS=[];
 
-// ═══════════════════════════════════════════════
-// TABS + URL ROUTING
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════
+// TABS + ROUTING
+// ═══════════════════════════════════════
 function switchTab(tab){
-  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.nav-link').forEach(t=>t.classList.remove('active'));
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
-  document.querySelector(`.tab[onclick*="${tab}"]`).classList.add('active');
+  document.querySelector(`.nav-link[onclick*="${tab}"]`).classList.add('active');
   $(`sec-${tab}`).classList.add('active');
   const path=tab==='calendar'?'/auctions':'/analyse';
   if(window.location.pathname!==path)history.pushState(null,'',path);
@@ -274,21 +352,21 @@ function routeFromURL(){
 }
 window.addEventListener('popstate',routeFromURL);
 
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════
 // BUDGET
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════
 function getBudget(){
   const d=+$('dep').value||0,sp=+$('stdPct').value||25,tp=+$('tsPct').value||10;
   const sm=Math.round(d/(sp/100)),tm=Math.round(d/(tp/100));
-  $('budgetInfo').innerHTML=`Standard max: <b>£${sm.toLocaleString()}</b> (${sp}%) | Title split max: <b>£${tm.toLocaleString()}</b> (${tp}%)`;
+  $('budgetInfo').innerHTML=`Max purchase: <b>£${sm.toLocaleString()}</b> standard · <b>£${tm.toLocaleString()}</b> title split`;
   return {d,sp,tp,sm,tm};
 }
 ['dep','stdPct','tsPct'].forEach(id=>$(id).addEventListener('input',getBudget));
 getBudget();
 
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════
 // CALENDAR
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════
 let calendarData=[];
 async function loadCalendar(){
   try{
@@ -298,7 +376,7 @@ async function loadCalendar(){
     buildHouseFilters();
     renderCalendar();
   }catch(e){
-    $('calGrid').innerHTML='<div style="padding:20px;color:var(--red)">Failed to load calendar. Refresh to retry.</div>';
+    $('calGrid').innerHTML='<div style="padding:20px;color:var(--red)">Failed to load. Refresh to retry.</div>';
   }
 }
 
@@ -318,23 +396,23 @@ function filterHouse(h){
 function renderCalendar(){
   let auctions=calendarData;
   if(activeHouse!=='all')auctions=auctions.filter(a=>a.house===activeHouse);
-  if(!auctions.length){$('calGrid').innerHTML='<div style="padding:20px;color:var(--text3)">No upcoming auctions found.</div>';return}
+  if(!auctions.length){$('calGrid').innerHTML='<div style="padding:20px;color:var(--text3)">No auctions found.</div>';return}
 
   $('calGrid').innerHTML=auctions.map(a=>{
     const d=new Date(a.date);
     const day=d.getDate();
-    const mon=d.toLocaleDateString('en-GB',{month:'short'});
-    const lotsText=a.lots?`${a.lots} lots`:'TBC';
-    const analyseBtn=a.catalogueReady?`<button class="cal-pill primary" onclick="analyseAuction('${a.url}')">Analyse</button>`:'';
+    const mon=d.toLocaleDateString('en-GB',{month:'short'}).toUpperCase();
+    const lotsText=a.lots?`${a.lots} lots`:'Lots TBC';
+    const analyseBtn=a.catalogueReady?`<button class="cal-btn primary" onclick="analyseAuction('${a.url}')">Analyse</button>`:'';
     return`<div class="cal-card">
       <div class="cal-date"><div class="day">${day}</div><div class="mon">${mon}</div></div>
       <div class="cal-info">
         <h3>${a.logo} ${a.house}</h3>
-        <div class="meta"><span>${a.type}</span><span>${a.location}</span><span>${lotsText}</span></div>
+        <div class="meta"><span>${a.type}</span><span class="sep">·</span><span>${a.location}</span><span class="sep">·</span><span>${lotsText}</span></div>
       </div>
       <div class="cal-actions">
         ${analyseBtn}
-        <a href="${a.url}" target="_blank" class="cal-pill ghost">View</a>
+        <a href="${a.url}" target="_blank" class="cal-btn ghost">View ↗</a>
       </div>
     </div>`;
   }).join('');
@@ -343,20 +421,23 @@ function renderCalendar(){
 function analyseAuction(url){
   $('urlInput').value=url;
   switchTab('analyser');
-  // Don't auto-run — let user review and adjust budget first
 }
 
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════
 // USER SIGNUP
-// ═══════════════════════════════════════════════
-let currentUser = JSON.parse(localStorage.getItem('bm_user') || 'null');
+// ═══════════════════════════════════════
+let currentUser=JSON.parse(localStorage.getItem('bm_user')||'null');
 
 function checkUser(){
   if(currentUser){
     $('userBar').style.display='flex';
     $('userEmail').textContent=currentUser.email;
+    $('navCta').textContent=currentUser.email.split('@')[0];
+    $('navCta').onclick=null;
   }else{
     $('userBar').style.display='none';
+    $('navCta').textContent='Sign up free';
+    $('navCta').onclick=()=>requireSignup();
   }
 }
 checkUser();
@@ -371,16 +452,16 @@ async function doSignup(){
   const email=$('signupEmail').value.trim();
   const name=$('signupName').value.trim();
   $('signupError').style.display='none';
-  if(!email||!email.includes('@')){$('signupError').textContent='Enter a valid email';$('signupError').style.display='block';return}
+  if(!email||!email.includes('@')){$('signupError').textContent='Please enter a valid email';$('signupError').style.display='block';return}
   try{
     const r=await fetch('/api/signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,name})});
     const d=await r.json();
-    if(!r.ok){$('signupError').textContent=d.error||'Signup failed';$('signupError').style.display='block';return}
+    if(!r.ok){$('signupError').textContent=d.error||'Something went wrong';$('signupError').style.display='block';return}
     currentUser=d.user;
     localStorage.setItem('bm_user',JSON.stringify(currentUser));
     $('signupModal').classList.remove('show');
     checkUser();
-  }catch(e){$('signupError').textContent='Connection error';$('signupError').style.display='block'}
+  }catch(e){$('signupError').textContent='Connection error — try again';$('signupError').style.display='block'}
 }
 
 function signOut(){
@@ -389,19 +470,18 @@ function signOut(){
   checkUser();
 }
 
-// Close modal on background click
 $('signupModal').addEventListener('click',e=>{if(e.target===$('signupModal'))$('signupModal').classList.remove('show')});
 
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════
 // ANALYSER
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════
 function log(m,c=''){const d=document.createElement('div');d.className=c;d.textContent=`[${new Date().toLocaleTimeString()}] ${m}`;$('logBox').appendChild(d);$('logBox').scrollTop=9e9}
 function prog(p,t){$('pBar').style.width=p+'%';if(t)$('pStatus').textContent=t}
 
 async function runAnalysis(){
   if(!requireSignup()) return;
   const url=$('urlInput').value.trim();
-  if(!url)return alert('Enter an auction URL');
+  if(!url)return alert('Please paste an auction catalogue URL');
   const b=getBudget();
 
   $('goBtn').disabled=true;
@@ -410,21 +490,17 @@ async function runAnalysis(){
   $('logBox').innerHTML='';
   LOTS=[];
 
-  log('Sending to server for analysis...');
-  prog(10,'Analysing...');
+  log('Sending catalogue for analysis...');
+  prog(10,'Analysing catalogue...');
 
   try{
-    log('Server is checking cache, then scraping if needed...');
+    log('Checking cache, then scraping if needed...');
     prog(30,'Working...');
 
     const resp=await fetch('/api/analyse',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        url,
-        email: currentUser?.email,
-        budget:{deposit:+$('dep').value,stdPct:+$('stdPct').value,tsPct:+$('tsPct').value}
-      })
+      body:JSON.stringify({url,email:currentUser?.email,budget:{deposit:+$('dep').value,stdPct:+$('stdPct').value,tsPct:+$('tsPct').value}})
     });
 
     const data=await resp.json();
@@ -436,15 +512,15 @@ async function runAnalysis(){
     }
 
     LOTS=data.lots||[];
-    const cacheNote=data.cached?' (cached — instant!)':'';
-    log(`Done! ${data.totalLots} lots analysed. ${data.titleSplits} title splits found.${cacheNote}`,'ok');
+    const cacheNote=data.cached?' (from cache — instant!)':'';
+    log(`Done! ${data.totalLots} lots analysed, ${data.titleSplits} title splits found.${cacheNote}`,'ok');
     prog(100,'Complete');
 
     buildLotFilters();
     renderLots();
     $('resultsPanel').style.display='block';
   }catch(e){
-    log(`Error: ${e.message}`,'err');
+    log(e.message,'err');
     prog(0,'Failed');
   }
   $('goBtn').disabled=false;
@@ -470,49 +546,54 @@ function renderLots(){
 
   const ts=lots.filter(l=>l.titleSplit),top=lots.filter(l=>l.score>=3);
   $('statsRow').innerHTML=`
-    <div class="stat"><div class="v g">${LOTS.length}</div><div class="l">Total</div></div>
-    <div class="stat"><div class="v y">${lots.length}</div><div class="l">Filtered</div></div>
-    <div class="stat"><div class="v p">${ts.length}</div><div class="l">Title Splits</div></div>
-    <div class="stat"><div class="v g">${top.length}</div><div class="l">Score 3+</div></div>
-    <div class="stat"><div class="v y">${LOTS.filter(l=>l.price).length}</div><div class="l">Priced</div></div>`;
+    <div class="stat-card"><div class="v g">${LOTS.length}</div><div class="l">Total lots</div></div>
+    <div class="stat-card"><div class="v y">${lots.length}</div><div class="l">Showing</div></div>
+    <div class="stat-card"><div class="v p">${ts.length}</div><div class="l">Title splits</div></div>
+    <div class="stat-card"><div class="v g">${top.length}</div><div class="l">Score 3+</div></div>
+    <div class="stat-card"><div class="v y">${LOTS.filter(l=>l.price).length}</div><div class="l">Priced</div></div>`;
 
   const out=$('lotsOut');out.innerHTML='';
 
   const tsL=lots.filter(l=>l.titleSplit&&l.score>=2);
-  if(tsL.length){out.innerHTML+=`<div class="sec-head">🏢 Title Splits <span class="pill pill-p">${tsL.length}</span></div>`;tsL.forEach(l=>out.innerHTML+=card(l,b))}
+  if(tsL.length){out.innerHTML+=`<div class="group-head">Title Splits <span class="badge badge-p">${tsL.length}</span></div>`;tsL.forEach(l=>out.innerHTML+=card(l,b))}
 
   const topL=lots.filter(l=>l.score>=3&&!l.titleSplit);
-  if(topL.length){out.innerHTML+=`<div class="sec-head">🔥 Top Picks <span class="pill pill-g">${topL.length}</span></div>`;topL.forEach(l=>out.innerHTML+=card(l,b))}
+  if(topL.length){out.innerHTML+=`<div class="group-head">Top Picks <span class="badge badge-g">${topL.length}</span></div>`;topL.forEach(l=>out.innerHTML+=card(l,b))}
 
   const midL=lots.filter(l=>l.score>=1.5&&l.score<3&&!(l.titleSplit&&l.score>=2));
-  if(midL.length){out.innerHTML+=`<div class="sec-head">👀 Worth a Look <span class="pill pill-y">${midL.length}</span></div>`;midL.forEach(l=>out.innerHTML+=card(l,b))}
+  if(midL.length){out.innerHTML+=`<div class="group-head">Worth a Look <span class="badge badge-y">${midL.length}</span></div>`;midL.forEach(l=>out.innerHTML+=card(l,b))}
 
   const rest=lots.filter(l=>l.score<1.5&&!(l.titleSplit&&l.score>=2));
-  if(rest.length){out.innerHTML+=`<div class="sec-head">📋 Other <span class="pill" style="background:var(--surface2);color:var(--text3)">${rest.length}</span></div>`;rest.forEach(l=>out.innerHTML+=card(l,b))}
+  if(rest.length){out.innerHTML+=`<div class="group-head">Other <span class="badge" style="background:var(--surface2);color:var(--text3)">${rest.length}</span></div>`;rest.forEach(l=>out.innerHTML+=card(l,b))}
 }
 
 function card(l,b){
   const dp=l.titleSplit?(b.tp/100):(b.sp/100);
   const depE=l.price?`£${Math.round(l.price*dp).toLocaleString()}`:'TBA';
   const sc=l.score>=3?'high':l.score>=1.5?'mid':'low';
-  let meta=[l.priceText||'TBA'];
-  if(l.propType)meta.push(l.propType);
-  if(l.beds!=null)meta.push(l.beds+' bed');
-  if(l.tenure)meta.push(l.tenure);
-  if(l.sqft)meta.push(l.sqft.toLocaleString()+' sqft');
+  let details=[];
+  if(l.priceText)details.push(`<span class="price">${l.priceText}</span>`);
+  if(l.propType)details.push(l.propType);
+  if(l.beds!=null)details.push(l.beds+' bed');
+  if(l.tenure)details.push(l.tenure);
+  if(l.sqft)details.push(l.sqft.toLocaleString()+' sqft');
+  details.push(`<span class="dep">Dep: ${depE}</span>`);
+  if(l.titleSplit&&l.price&&l.units)details.push(`£${Math.round(l.price/l.units).toLocaleString()}/unit`);
+
   let tags='';
-  if(l.titleSplit)tags+=`<span class="tag tag-t">🏢 TITLE SPLIT</span>`;
+  if(l.titleSplit)tags+=`<span class="tag tag-t">TITLE SPLIT</span>`;
   if(l.units)tags+=`<span class="tag tag-t">${l.units} units</span>`;
   (l.opps||[]).filter(o=>!o.startsWith('Title split')).forEach(o=>tags+=`<span class="tag tag-o">${o}</span>`);
   (l.risks||[]).forEach(r=>tags+=`<span class="tag tag-r">${r}</span>`);
   const bul=(l.bullets||[]).slice(0,4).map(b=>`<li>${b}</li>`).join('');
   const link=l.url?`<div class="lot-link"><a href="${l.url}" target="_blank">${l.url}</a></div>`:'';
-  const ppu=l.titleSplit&&l.price&&l.units?` | £${Math.round(l.price/l.units).toLocaleString()}/unit`:'';
+
   return`<div class="lot ${l.titleSplit?'ts':''}">
-    <div class="lot-top"><div><div class="lot-num">Lot ${l.lot} — ${l.dealType||''}</div><div class="lot-addr">${l.address||''}</div></div><div class="lot-badge ${sc}">${l.score}</div></div>
-    <div class="lot-meta"><span class="price">${l.priceText||'TBA'}</span> | ${meta.slice(1).join(' | ')} | <span class="dep">Dep: ${depE}</span>${ppu}</div>
+    <div class="lot-header"><div class="lot-title">Lot ${l.lot} · ${l.dealType||'Standard'}</div><div class="lot-score ${sc}">${l.score}</div></div>
+    <div class="lot-addr">${l.address||'Address not available'}</div>
+    <div class="lot-details">${details.join(' <span style="color:var(--border2)">·</span> ')}</div>
     <div class="tags">${tags}</div>
-    <ul class="lot-bul">${bul}</ul>${link}</div>`;
+    <ul class="lot-bullets">${bul}</ul>${link}</div>`;
 }
 
 // Downloads
