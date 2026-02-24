@@ -875,6 +875,8 @@ async function extractLotsWithClaude(client, pages, house) {
   for (let i = 0; i < pages.length; i += batchSize) {
     const batch = pages.slice(i, i + batchSize);
     const strippedBatch = batch.map(p => ({ page: p.page, content: stripHtml(p.html) }));
+    const totalStrippedLen = strippedBatch.reduce((sum, p) => sum + p.content.length, 0);
+    console.log(`Batch ${Math.floor(i/batchSize)+1}: ${strippedBatch.length} page(s), ${totalStrippedLen} chars after stripping`);
     const prompt = `You are extracting property auction lot data from a UK auction house catalogue (${house}).
 
 Below are ${strippedBatch.length} page(s) of catalogue content. Extract EVERY auction lot you find.
@@ -933,17 +935,29 @@ function stripHtml(html) {
     .replace(/<nav[\s\S]*?<\/nav>/gi, '')
     .replace(/<header[\s\S]*?<\/header>/gi, '')
     .replace(/<footer[\s\S]*?<\/footer>/gi, '')
+    .replace(/<aside[\s\S]*?<\/aside>/gi, '')
+    .replace(/<form[\s\S]*?<\/form>/gi, '')
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, '')
     .replace(/<img[^>]*>/gi, '')
     .replace(/<svg[\s\S]*?<\/svg>/gi, '')
+    .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
+    // Remove common noise sections by class/id patterns
+    .replace(/<div[^>]*class="[^"]*(?:testimonial|review|cookie|consent|modal|popup|newsletter|sidebar|social|share|footer|banner|advert)[^"]*"[\s\S]*?<\/div>/gi, '')
+    .replace(/<section[^>]*class="[^"]*(?:testimonial|review|cookie|consent|modal|popup|newsletter)[^"]*"[\s\S]*?<\/section>/gi, '')
     .replace(/<[^>]+>/g, '\n')
     .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&#\d+;/g, '')
+    // Remove repeated whitespace more aggressively
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n /g, '\n')
+    .replace(/ \n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
-  if (text.length > 60000) text = text.substring(0, 60000);
+  // Allow up to 120k for large catalogues (Claude can handle it)
+  if (text.length > 120000) text = text.substring(0, 120000);
   return text;
 }
 
