@@ -294,14 +294,14 @@ app.get('/api/auctions', (req, res) => {
     {
       house: 'Hollis Morgan', houseSlug: 'hollismorgan', logo: '🏘️',
       date: '2026-03-11', title: '11 March 2026', lots: null,
-      url: 'https://www.hollismorgan.co.uk/search-auction/',
+      url: 'https://www.hollismorgan.co.uk/search-auction/?bid=11&showstc=on&orderby=lot_no+asc',
       location: 'Online (Live Stream from Clifton, Bristol)', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: true,
     },
     {
       house: 'Hollis Morgan', houseSlug: 'hollismorgan', logo: '🏘️',
       date: '2026-04-01', title: 'April 2026', lots: null,
-      url: 'https://www.hollismorgan.co.uk/search-auction/',
+      url: 'https://www.hollismorgan.co.uk/search-auction/?bid=11&showstc=on&orderby=lot_no+asc',
       location: 'Online (Live Stream from Clifton, Bristol)', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: false,
     },
@@ -472,13 +472,49 @@ app.post('/api/analyse', async (req, res) => {
         rawLots = await extractLotsWithClaude(client, pages, house);
       }
     } else if (rewritten.preferPuppeteer) {
-      // JS-rendered sites: go straight to Puppeteer (skip static fetch)
+      // JS-rendered sites: go straight to Puppeteer
       console.log(`Using Puppeteer directly for ${house} (JS-rendered site)...`);
-      const puppeteerPages = await scrapeWithPuppeteer(scrapeUrl, house);
-      if (puppeteerPages.length > 0) {
-        console.log(`Puppeteer got ${puppeteerPages.length} page(s), sending to Claude...`);
-        rawLots = await extractLotsWithClaude(client, puppeteerPages, house);
-        console.log(`Claude extracted ${rawLots.length} lots from Puppeteer content`);
+      const browser = await getBrowser();
+      const page = await browser.newPage();
+      await page.setUserAgent(HEADERS['User-Agent']);
+      await page.setViewport({ width: 1280, height: 900 });
+      await page.setRequestInterception(true);
+      page.on('request', req => {
+        const type = req.resourceType();
+        if (['image', 'font', 'media'].includes(type)) req.abort();
+        else req.continue();
+      });
+
+      try {
+        console.log(`Puppeteer: loading ${scrapeUrl}`);
+        await page.goto(scrapeUrl, { waitUntil: 'networkidle2', timeout: 45000 });
+        await new Promise(r => setTimeout(r, 3000));
+
+        // Scroll to trigger lazy loading
+        await page.evaluate(async () => {
+          for (let i = 0; i < 10; i++) {
+            window.scrollBy(0, window.innerHeight);
+            await new Promise(r => setTimeout(r, 600));
+          }
+          window.scrollTo(0, 0);
+        });
+        await new Promise(r => setTimeout(r, 2000));
+
+        // Try DOM extractor first (precise, free, fast)
+        const domLots = await extractWithDOM(page, house);
+        if (domLots && domLots.length > 0) {
+          rawLots = domLots;
+          console.log(`Got ${rawLots.length} lots via DOM extraction for ${house} (no Claude needed)`);
+        } else {
+          // Fall back to Claude extraction from page HTML
+          const html = await page.content();
+          console.log(`Puppeteer: got ${html.length} chars, sending to Claude...`);
+          const puppeteerPages = [{ page: 1, html }];
+          rawLots = await extractLotsWithClaude(client, puppeteerPages, house);
+          console.log(`Claude extracted ${rawLots.length} lots from Puppeteer content`);
+        }
+      } finally {
+        await page.close();
       }
     } else {
       // Standard static HTML scraping
@@ -959,6 +995,218 @@ function stripHtml(html) {
   // Allow up to 120k for large catalogues (Claude can handle it)
   if (text.length > 120000) text = text.substring(0, 120000);
   return text;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DOM EXTRACTORS - Per-house JS that runs inside Puppeteer
+// Returns structured lot data directly, no Claude needed for extraction
+// ═══════════════════════════════════════════════════════════════
+
+const DOM_EXTRACTORS = {
+  hollismorgan: `
+    (() => {
+      const lots = [];
+      // Each lot card has h4 with "Lot X" and sibling links for address/price
+      const cards = document.querySelectorAll('.property-listing, .property-card, .search-result, [class*="property"]');
+      // Fallback: look for h4 elements containing "Lot"
+      const lotHeaders = document.querySelectorAll('h4');
+      for (const h4 of lotHeaders) {
+        const text = h4.textContent.trim();
+        const lotMatch = text.match(/Lot\\s+(\\d+)/i);
+        if (!lotMatch) continue;
+        const lotNum = parseInt(lotMatch[1]);
+        // Walk siblings/parent to find address and price
+        const parent = h4.closest('div, li, article, section') || h4.parentElement;
+        if (!parent) continue;
+        const links = parent.querySelectorAll('a');
+        let address = '', price = null, url = '';
+        const bullets = [];
+        for (const link of links) {
+          const href = link.getAttribute('href') || '';
+          const lt = link.textContent.trim();
+          // Price link
+          const priceMatch = lt.match(/£([\\d,]+)/);
+          if (priceMatch && lt.toLowerCase().includes('guide')) {
+            price = parseInt(priceMatch[1].replace(/,/g, ''));
+            if (!url && href.includes('property-details')) url = href;
+          }
+          // Address link (contains postcode pattern)
+          else if (lt.match(/[A-Z]{1,2}\\d[A-Z\\d]?\\s*\\d[A-Z]{2}/i)) {
+            address = lt;
+            if (!url && href.includes('property-details')) url = href;
+          }
+        }
+        // Also check plain text in parent for description/bullets
+        const allText = parent.textContent;
+        const descParts = allText.split('\\n').map(s => s.trim()).filter(s => s.length > 5 && s.length < 200 && !s.includes('Guide Price'));
+        if (descParts.length > 0) {
+          // First meaningful text chunk is usually the headline description
+          const headline = descParts.find(s => s.match(/modernisation|renovation|investment|flat|house|land|plot|commercial|development|updating|garage|maisonette|detached|terrace|semi/i));
+          if (headline) bullets.push(headline);
+        }
+        // Check for SOLD status
+        const soldEl = parent.querySelector('.sold, .stc, [class*="sold"]');
+        const isSold = soldEl || allText.match(/\\bSOLD\\b|\\bSTC\\b|\\bWithdrawn\\b/i);
+        if (isSold) bullets.push('SOLD/STC');
+        if (address && (price || address)) {
+          lots.push({ lot: lotNum, address, price, url, bullets });
+        }
+      }
+      return lots;
+    })()
+  `,
+
+  maggsandallen: `
+    (() => {
+      const lots = [];
+      const lotHeaders = document.querySelectorAll('h4, h3, .lot-number');
+      for (const h of lotHeaders) {
+        const text = h.textContent.trim();
+        const lotMatch = text.match(/Lot\\s+(\\d+)/i);
+        if (!lotMatch) continue;
+        const lotNum = parseInt(lotMatch[1]);
+        const parent = h.closest('div, li, article, section') || h.parentElement;
+        if (!parent) continue;
+        const links = parent.querySelectorAll('a');
+        let address = '', price = null, url = '';
+        const bullets = [];
+        for (const link of links) {
+          const href = link.getAttribute('href') || '';
+          const lt = link.textContent.trim();
+          const priceMatch = lt.match(/£([\\d,]+)/);
+          if (priceMatch) {
+            price = parseInt(priceMatch[1].replace(/,/g, ''));
+            if (!url && href.includes('property-details')) url = href;
+          } else if (lt.match(/[A-Z]{1,2}\\d[A-Z\\d]?\\s*\\d[A-Z]{2}/i)) {
+            address = lt;
+            if (!url && href.includes('property-details')) url = href;
+          }
+        }
+        const allText = parent.textContent;
+        const isSold = allText.match(/\\bSOLD\\b|\\bSTC\\b|\\bWithdrawn\\b/i);
+        if (isSold) bullets.push('SOLD/STC');
+        if (address || price) {
+          lots.push({ lot: lotNum, address, price, url, bullets });
+        }
+      }
+      return lots;
+    })()
+  `,
+
+  barnardmarcus: `
+    (() => {
+      const lots = [];
+      // Barnard Marcus uses lot cards with data attributes or structured divs
+      const lotEls = document.querySelectorAll('[class*="lot"], [class*="property"], [data-lot]');
+      const seen = new Set();
+      // Also try h4/h3 pattern
+      const headers = document.querySelectorAll('h2, h3, h4, h5');
+      for (const h of headers) {
+        const text = h.textContent.trim();
+        const lotMatch = text.match(/^\\s*(\\d{1,4})\\s*$/);  // Plain lot number
+        const lotMatch2 = text.match(/Lot\\s+(\\d+)/i);
+        const num = lotMatch ? parseInt(lotMatch[1]) : (lotMatch2 ? parseInt(lotMatch2[1]) : null);
+        if (!num || seen.has(num)) continue;
+        seen.add(num);
+        const parent = h.closest('.lot, .property, div[class*="lot"], div, li, article') || h.parentElement;
+        if (!parent) continue;
+        let address = '', price = null, url = '';
+        const bullets = [];
+        // Look for address - usually in a link or paragraph
+        const links = parent.querySelectorAll('a[href]');
+        for (const link of links) {
+          const lt = link.textContent.trim();
+          const href = link.getAttribute('href') || '';
+          if (lt.match(/[A-Z]{1,2}\\d[A-Z\\d]?\\s*\\d[A-Z]{2}/i) && !address) {
+            address = lt;
+            if (href && href !== '#') url = href;
+          }
+        }
+        // Price
+        const priceMatch = parent.textContent.match(/(?:Guide|Price|£)\\s*£?([\\d,]+(?:,\\d{3})*)/i);
+        if (priceMatch) price = parseInt(priceMatch[1].replace(/,/g, ''));
+        if (address || price) {
+          lots.push({ lot: num, address, price, url, bullets });
+        }
+      }
+      return lots;
+    })()
+  `,
+
+  auctionhouselondon: `
+    (() => {
+      const lots = [];
+      // AHL uses Next.js with lot cards containing LOT number, address, price
+      const cards = document.querySelectorAll('a[href*="/lot/"]');
+      const seen = new Set();
+      for (const card of cards) {
+        const text = card.textContent;
+        const lotMatch = text.match(/LOT\\s+(\\d+)/i);
+        if (!lotMatch) continue;
+        const num = parseInt(lotMatch[1]);
+        if (seen.has(num)) continue;
+        seen.add(num);
+        const href = card.getAttribute('href') || '';
+        const priceMatch = text.match(/£([\\d,]+)/);
+        const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
+        // Address is usually the main text minus lot number and price
+        let address = text.replace(/LOT\\s+\\d+/i, '').replace(/Guide Price[^£]*£[\\d,]+\\+?/i, '').replace(/£[\\d,]+\\+?/g, '').trim();
+        address = address.split('\\n').map(s=>s.trim()).filter(s=>s.length>5)[0] || '';
+        const bullets = [];
+        const desc = text.split('\\n').map(s=>s.trim()).filter(s=>s.length>10 && !s.match(/^LOT|^Guide|^£/i));
+        if (desc.length > 0) bullets.push(desc[0]);
+        lots.push({ lot: num, address, price, url: href, bullets });
+      }
+      return lots;
+    })()
+  `,
+
+  mchughandco: `
+    (() => {
+      const lots = [];
+      const cards = document.querySelectorAll('.lot-item, [class*="lot"], [class*="property"]');
+      const seen = new Set();
+      for (const card of cards) {
+        const text = card.textContent;
+        const lotMatch = text.match(/Lot\\s+(\\d+)/i);
+        if (!lotMatch) continue;
+        const num = parseInt(lotMatch[1]);
+        if (seen.has(num)) continue;
+        seen.add(num);
+        const link = card.querySelector('a[href]');
+        const url = link ? link.getAttribute('href') : '';
+        const priceMatch = text.match(/£([\\d,]+)/);
+        const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
+        let address = '';
+        const addrEl = card.querySelector('.address, [class*="address"]');
+        if (addrEl) address = addrEl.textContent.trim();
+        else {
+          const lines = text.split('\\n').map(s=>s.trim()).filter(s=>s.match(/[A-Z]{1,2}\\d[A-Z\\d]?\\s*\\d[A-Z]{2}/i));
+          if (lines.length) address = lines[0];
+        }
+        lots.push({ lot: num, address, price, url, bullets: [] });
+      }
+      return lots;
+    })()
+  `,
+};
+
+// Run DOM extractor inside Puppeteer page, returns structured lots or null
+async function extractWithDOM(page, house) {
+  const extractor = DOM_EXTRACTORS[house];
+  if (!extractor) return null;
+  try {
+    const lots = await page.evaluate(extractor);
+    if (Array.isArray(lots) && lots.length > 0) {
+      console.log(`DOM extractor for ${house}: found ${lots.length} lots directly`);
+      return lots;
+    }
+    console.log(`DOM extractor for ${house}: found 0 lots, falling back to Claude`);
+    return null;
+  } catch (err) {
+    console.log(`DOM extractor error for ${house}: ${err.message}, falling back to Claude`);
+    return null;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
