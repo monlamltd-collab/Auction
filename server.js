@@ -666,13 +666,13 @@ function rewriteUrl(url, house) {
   }
 
   if (house === 'hollismorgan') {
-    // Hollis Morgan: /search-auction/ — server-rendered
-    return { baseUrl: url, isApi: false, paginateAs: null };
+    // Hollis Morgan: /search-auction/ — needs JS/cookies, use Puppeteer
+    return { baseUrl: url, isApi: false, paginateAs: null, preferPuppeteer: true };
   }
 
   if (house === 'maggsandallen') {
-    // Maggs & Allen: /search-auction/ — server-rendered
-    return { baseUrl: url, isApi: false, paginateAs: null };
+    // Maggs & Allen: /search-auction/ — needs JS/cookies, use Puppeteer
+    return { baseUrl: url, isApi: false, paginateAs: null, preferPuppeteer: true };
   }
 
   if (house === 'mchughandco') {
