@@ -3,6 +3,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@supabase/supabase-js';
+import puppeteer from 'puppeteer';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -276,7 +277,16 @@ app.post('/api/analyse', async (req, res) => {
     }
 
     const client = new Anthropic({ apiKey });
-    const rawLots = await extractLotsWithClaude(client, pages, house);
+    let rawLots = await extractLotsWithClaude(client, pages, house);
+
+    // ── Puppeteer fallback for JS-rendered sites ──
+    if (rawLots.length === 0) {
+      console.log(`No lots from static HTML, trying Puppeteer for ${house}...`);
+      const puppeteerPages = await scrapeWithPuppeteer(url, house);
+      if (puppeteerPages.length > 0) {
+        rawLots = await extractLotsWithClaude(client, puppeteerPages, house);
+      }
+    }
 
     if (rawLots.length === 0) {
       return res.status(400).json({ error: 'no_lots', message: "Couldn't find any auction lots. Make sure you're linking to the catalogue page, not the auction house homepage." });
@@ -394,6 +404,101 @@ function buildPageUrl(baseUrl, page, house) {
       if (baseUrl.includes('/page-')) return `${clean}/page-${page}`;
       return clean.includes('?') ? `${clean}&page=${page}` : `${clean}?page=${page}`;
   }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PUPPETEER SCRAPING (for JS-rendered sites)
+// ═══════════════════════════════════════════════════════════════
+let browserInstance = null;
+
+async function getBrowser() {
+  if (browserInstance && browserInstance.isConnected()) return browserInstance;
+  browserInstance = await puppeteer.launch({
+    headless: 'new',
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--single-process',
+      '--no-zygote',
+    ],
+  });
+  return browserInstance;
+}
+
+async function scrapeWithPuppeteer(url, house) {
+  const pages = [];
+  let browser;
+  try {
+    browser = await getBrowser();
+    const page = await browser.newPage();
+    await page.setUserAgent(HEADERS['User-Agent']);
+    await page.setViewport({ width: 1280, height: 900 });
+
+    // Block images/fonts/media to speed up loading
+    await page.setRequestInterception(true);
+    page.on('request', req => {
+      const type = req.resourceType();
+      if (['image', 'font', 'media', 'stylesheet'].includes(type)) req.abort();
+      else req.continue();
+    });
+
+    console.log(`Puppeteer: loading ${url}`);
+    await page.goto(url, { waitUntil: 'networkidle2', timeout: 45000 });
+
+    // Wait a bit more for dynamic content to render
+    await new Promise(r => setTimeout(r, 3000));
+
+    // Scroll down to trigger lazy loading
+    await page.evaluate(async () => {
+      for (let i = 0; i < 5; i++) {
+        window.scrollBy(0, window.innerHeight);
+        await new Promise(r => setTimeout(r, 800));
+      }
+      window.scrollTo(0, 0);
+    });
+
+    await new Promise(r => setTimeout(r, 2000));
+
+    const html = await page.content();
+    pages.push({ page: 1, html });
+    console.log(`Puppeteer: got ${html.length} chars from page 1`);
+
+    // Check for pagination and scrape more pages
+    const totalPages = detectTotalPages(html, url, house);
+    for (let pg = 2; pg <= Math.min(totalPages, MAX_PAGES); pg++) {
+      try {
+        const pageUrl = buildPageUrl(url, pg, house);
+        await page.goto(pageUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+        await new Promise(r => setTimeout(r, 3000));
+
+        // Scroll to trigger lazy loading
+        await page.evaluate(async () => {
+          for (let i = 0; i < 3; i++) {
+            window.scrollBy(0, window.innerHeight);
+            await new Promise(r => setTimeout(r, 600));
+          }
+        });
+        await new Promise(r => setTimeout(r, 1500));
+
+        const pgHtml = await page.content();
+        if (pgHtml.length > 2000) {
+          pages.push({ page: pg, html: pgHtml });
+          console.log(`Puppeteer: got ${pgHtml.length} chars from page ${pg}`);
+        } else { break; }
+      } catch (e) {
+        console.log(`Puppeteer: page ${pg} failed: ${e.message}`);
+        break;
+      }
+    }
+
+    await page.close();
+  } catch (err) {
+    console.error(`Puppeteer scrape failed: ${err.message}`);
+  }
+  return pages;
 }
 
 // ═══════════════════════════════════════════════════════════════
