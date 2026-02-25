@@ -266,8 +266,18 @@ footer .logo-f span{color:var(--green)}
         <option value="">Any</option><option value="1">1+</option><option value="2">2+</option><option value="3">3+</option><option value="4">4+</option><option value="5">5+</option><option value="6">6+</option><option value="7">7+</option><option value="8">8+</option><option value="9">9+</option><option value="10">10+</option><option value="11">11+</option><option value="12">12+</option><option value="13">13+</option><option value="14">14+</option><option value="15">15+</option><option value="16">16+</option><option value="17">17+</option><option value="18">18+</option><option value="19">19+</option><option value="20">20+</option>
       </select></div>
       <div class="filter-field"><label>Property Type</label><select id="fType">
-        <option value="">All types</option>
+        <option value="">All types</option><option value="house">House</option><option value="flat">Flat / Apartment</option><option value="bungalow">Bungalow</option><option value="commercial">Commercial</option><option value="land">Land / Development</option><option value="garage">Garage / Parking</option><option value="other">Other</option>
       </select></div>
+    </div>
+    <div class="filters" style="margin-top:-8px">
+      <div class="filter-field"><label>Status</label><select id="fSoldTop" onchange="if($('fSold'))$('fSold').value=this.value;renderLots()">
+        <option value="hide">Hide sold / STC</option><option value="show">Show sold / STC</option>
+      </select></div>
+      <div class="filter-field"><label>Title Splits</label><select id="fTSTop" onchange="if($('fTS'))$('fTS').value=this.value;renderLots()">
+        <option value="">All lots</option><option value="ts">Title splits only</option>
+      </select></div>
+      <div class="filter-field"></div>
+      <div class="filter-field"></div>
     </div>
 
     <div class="filter-extras">
@@ -636,9 +646,7 @@ function showView(v) {
 // LOT RENDERING
 // ═══════════════════════════════
 function buildLotFilters(){
-  const types=new Set(LOTS.map(l=>l.propType).filter(Boolean));
   const deals=new Set(LOTS.map(l=>l.dealType).filter(Boolean));
-  $('fType').innerHTML='<option value="">All types</option>'+[...types].sort().map(t=>`<option>${t}</option>`).join('');
   $('fDeal').innerHTML='<option value="">All deals</option>'+[...deals].sort().map(d=>`<option>${d}</option>`).join('');
 }
 
@@ -652,7 +660,7 @@ function renderLots(){
   if(maxP) lots=lots.filter(l=>!l.price||l.price<=maxP);
   if(minBeds) lots=lots.filter(l=>!l.beds||l.beds>=minBeds);
 
-  const ft=$('fType').value,fd=$('fDeal').value,fb=$('fBudget').value,fts=$('fTS').value,fsold=$('fSold').value,fs=$('fSearch').value.toLowerCase();
+  const ft=$('fType').value,fd=$('fDeal').value,fb=$('fBudget').value,fts=$('fTS')?.value||$('fTSTop').value,fsold=$('fSold')?.value||$('fSoldTop').value,fs=$('fSearch').value.toLowerCase();
   if(ft)lots=lots.filter(l=>l.propType===ft);
   if(fd)lots=lots.filter(l=>l.dealType===fd);
   if(fb==='budget')lots=lots.filter(l=>{if(!l.price)return true;return l.price<=(l.titleSplit?b.tm:b.sm)});

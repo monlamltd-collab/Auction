@@ -2355,4 +2355,191 @@ app.listen(PORT, () => {
   if (!process.env.SUPABASE_URL) console.warn('⚠️  SUPABASE_URL not set');
   if (!process.env.SUPABASE_SERVICE_KEY) console.warn('⚠️  SUPABASE_SERVICE_KEY not set');
   if (!process.env.ANTHROPIC_API_KEY) console.warn('⚠️  ANTHROPIC_API_KEY not set');
+
+  // ── Auto-analyse all catalogue-ready auctions ──
+  // Run 30s after startup (let everything initialise), then every 6 hours
+  setTimeout(() => autoAnalyseAll(), 30000);
+  setInterval(() => autoAnalyseAll(), 6 * 60 * 60 * 1000);
 });
+
+// ═══════════════════════════════════════════════════════════════
+// AUTO-ANALYSIS: Pre-analyse all catalogue-ready auctions
+// ═══════════════════════════════════════════════════════════════
+async function autoAnalyseAll() {
+  console.log('\n═══ AUTO-ANALYSIS: checking all catalogue-ready auctions ═══');
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) { console.log('AUTO: No API key, skipping'); return; }
+
+  // Get all catalogue-ready auctions from the calendar
+  const allAuctions = getCalendarAuctions();
+  const ready = allAuctions.filter(a => a.catalogueReady);
+  console.log(`AUTO: ${ready.length} catalogue-ready auctions to check`);
+
+  let analysed = 0, skipped = 0, failed = 0;
+
+  for (const auction of ready) {
+    try {
+      const normalisedUrl = auction.url.trim().replace(/\/+$/, '').toLowerCase();
+
+      // Check if we already have a fresh cache
+      const { data: cached } = await supabase
+        .from('cached_analyses')
+        .select('url, total_lots, created_at')
+        .eq('url', normalisedUrl)
+        .gt('expires_at', new Date().toISOString())
+        .single();
+
+      if (cached && cached.total_lots > 0) {
+        console.log(`AUTO: ✓ ${auction.house} already cached (${cached.total_lots} lots)`);
+        skipped++;
+        continue;
+      }
+
+      console.log(`AUTO: Analysing ${auction.house} — ${auction.url}`);
+      await autoAnalyseOne(auction.url, apiKey);
+      analysed++;
+
+      // Pause between analyses to be kind to servers and our resources
+      await new Promise(r => setTimeout(r, 5000));
+
+    } catch (e) {
+      console.error(`AUTO: ✗ ${auction.house} failed: ${e.message}`);
+      failed++;
+    }
+  }
+
+  console.log(`═══ AUTO-ANALYSIS COMPLETE: ${analysed} analysed, ${skipped} cached, ${failed} failed ═══\n`);
+}
+
+async function autoAnalyseOne(url, apiKey) {
+  const house = detectAuctionHouse(url);
+  const rewritten = rewriteUrl(url, house);
+  const scrapeUrl = rewritten.baseUrl;
+  const client = new Anthropic({ apiKey });
+  let rawLots = [];
+
+  if (rewritten.paginateAs === 'allsop_api') {
+    const pages = await scrapeAllsopApi(rewritten.baseUrl);
+    if (pages.length > 0) rawLots = await extractLotsWithClaude(client, pages, house);
+
+  } else if (rewritten.preferPuppeteer) {
+    const browser = await getBrowser();
+    const page = await browser.newPage();
+    await page.setUserAgent(HEADERS['User-Agent']);
+    await page.setViewport({ width: 1280, height: 900 });
+    await page.setRequestInterception(true);
+    page.on('request', req => {
+      const type = req.resourceType();
+      if (['image', 'font', 'media'].includes(type)) req.abort();
+      else req.continue();
+    });
+
+    try {
+      if (rewritten.paginateAs === 'savills_pages') {
+        await page.goto(scrapeUrl, { waitUntil: 'networkidle2', timeout: 45000 });
+        await new Promise(r => setTimeout(r, 2000));
+        const totalPages = await page.evaluate(() => {
+          const pageLinks = document.querySelectorAll('a[href*="/page-"]');
+          let max = 1;
+          for (const a of pageLinks) {
+            const m = a.textContent.trim().match(/^(\d+)$/);
+            if (m) max = Math.max(max, parseInt(m[1]));
+          }
+          return max;
+        });
+        const firstPageLots = await extractWithDOM(page, house);
+        if (firstPageLots && firstPageLots.length > 0) rawLots.push(...firstPageLots);
+        const maxPages = Math.min(totalPages, 50);
+        for (let p = 2; p <= maxPages; p++) {
+          try {
+            await page.goto(`${scrapeUrl}/page-${p}`, { waitUntil: 'networkidle2', timeout: 30000 });
+            await new Promise(r => setTimeout(r, 1500));
+            const pageLots = await extractWithDOM(page, house);
+            if (pageLots && pageLots.length > 0) rawLots.push(...pageLots);
+          } catch (e) { console.log(`AUTO: Page ${p} failed: ${e.message}`); }
+        }
+        console.log(`AUTO: Savills total: ${rawLots.length} lots from ${maxPages} pages`);
+      } else {
+        await page.goto(scrapeUrl, { waitUntil: 'networkidle2', timeout: 45000 });
+        await new Promise(r => setTimeout(r, 3000));
+        await page.evaluate(async () => {
+          for (let i = 0; i < 10; i++) { window.scrollBy(0, window.innerHeight); await new Promise(r => setTimeout(r, 600)); }
+          window.scrollTo(0, 0);
+        });
+        await new Promise(r => setTimeout(r, 2000));
+
+        const domLots = await extractWithDOM(page, house);
+        if (domLots && domLots.length >= 3) {
+          rawLots = domLots;
+          console.log(`AUTO: ${house}: ${rawLots.length} lots via DOM extraction`);
+        } else {
+          const html = await page.content();
+          const puppeteerPages = [{ page: 1, html }];
+          rawLots = await extractLotsWithClaude(client, puppeteerPages, house);
+          console.log(`AUTO: ${house}: ${rawLots.length} lots via Claude fallback`);
+        }
+      }
+    } finally {
+      await page.close();
+    }
+
+  } else {
+    const pages = await scrapeAllPages(scrapeUrl, house);
+    if (pages && pages.length > 0) rawLots = await extractLotsWithClaude(client, pages, house);
+    if (rawLots.length === 0) {
+      const puppeteerPages = await scrapeWithPuppeteer(url, house);
+      if (puppeteerPages.length > 0) rawLots = await extractLotsWithClaude(client, puppeteerPages, house);
+    }
+  }
+
+  if (rawLots.length === 0) {
+    console.log(`AUTO: ${house}: 0 lots found, skipping cache`);
+    return;
+  }
+
+  const lots = rawLots.map(lot => analyseLot(lot)).sort((a, b) => b.score - a.score);
+  await enrichLots(lots, house, url);
+
+  const normalisedUrl = url.trim().replace(/\/+$/, '').toLowerCase();
+  const expiresAt = new Date(Date.now() + CACHE_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  await supabase.from('cached_analyses').upsert({
+    url: normalisedUrl,
+    house,
+    total_lots: lots.length,
+    title_splits: lots.filter(l => l.titleSplit).length,
+    top_picks: lots.filter(l => l.score >= 3).length,
+    lots,
+    created_at: new Date().toISOString(),
+    expires_at: expiresAt,
+  }, { onConflict: 'url' });
+
+  console.log(`AUTO: ✓ ${house}: ${lots.length} lots cached (${lots.filter(l => l.titleSplit).length} title splits, ${lots.filter(l => l.score >= 3).length} top picks)`);
+}
+
+// Helper: get calendar auctions array (used by both /api/auctions and auto-analyse)
+function getCalendarAuctions() {
+  const auctions = [
+    { house: 'Savills', url: 'https://auctions.savills.co.uk/auctions/24--25-february-2026-218', catalogueReady: true },
+    { house: 'Allsop', url: 'https://www.allsop.co.uk/residential-auction-view', catalogueReady: true },
+    { house: 'Allsop', url: 'https://www.allsop.co.uk/commercial-auction-view', catalogueReady: true },
+    { house: 'Network Auctions', url: 'https://www.networkauctions.co.uk/auctions/next-auction/', catalogueReady: true },
+    { house: 'SDL Auctions', url: 'https://www.sdlauctions.co.uk/auction/1310/multi-lot-timed-auction-2026-02-24/', catalogueReady: true },
+    { house: 'SDL Auctions', url: 'https://www.sdlauctions.co.uk/auction/1292/live-streamed-auction-2026-02-26/', catalogueReady: true },
+    { house: 'SDL Auctions', url: 'https://www.sdlauctions.co.uk/auction/1311/multi-lot-timed-auction-2026-03-24/', catalogueReady: true },
+    { house: 'SDL Auctions', url: 'https://www.sdlauctions.co.uk/auction/1297/live-streamed-auction-2026-03-26/', catalogueReady: true },
+    { house: 'SDL Auctions', url: 'https://www.sdlauctions.co.uk/auction/1312/multi-lot-timed-auction-2026-04-28/', catalogueReady: true },
+    { house: 'SDL Auctions', url: 'https://www.sdlauctions.co.uk/auction/1298/live-streamed-auction-2026-04-30/', catalogueReady: true },
+    { house: 'Bond Wolfe', url: 'https://www.bondwolfe.com/auction/3448/', catalogueReady: true },
+    { house: 'Barnard Marcus', url: 'https://www.barnardmarcusauctions.co.uk/auctions/current/', catalogueReady: true },
+    { house: 'Auction House London', url: 'https://auctionhouselondon.co.uk/current-auction', catalogueReady: true },
+    { house: 'Auction House London', url: 'https://auctionhouselondon.co.uk/auction/march-18-19-2026', catalogueReady: true },
+    { house: 'Clive Emson', url: 'https://www.cliveemson.co.uk/search/', catalogueReady: true },
+    { house: 'Strettons', url: 'https://www.strettons.co.uk/auctions/current-catalogue/', catalogueReady: true },
+    { house: 'Acuitus', url: 'https://www.acuitus.co.uk/find-a-property/', catalogueReady: true },
+    { house: 'Hollis Morgan', url: 'https://www.hollismorgan.co.uk/search-auction/?bid=11&showstc=on&orderby=lot_no+asc', catalogueReady: true },
+    { house: 'Maggs & Allen', url: 'https://www.maggsandallen.co.uk/search-auction/', catalogueReady: true },
+    { house: 'McHugh & Co', url: 'https://www.mchughandco.com/pages/auctions', catalogueReady: true },
+    { house: 'Auction House UK', url: 'https://www.auctionhouse.co.uk/online/auction/2026/3/10', catalogueReady: true },
+  ];
+  return auctions.filter(a => a.catalogueReady);
+}
