@@ -702,13 +702,13 @@ function rewriteUrl(url, house) {
   }
 
   if (house === 'hollismorgan') {
-    // Hollis Morgan: /search-auction/ — needs JS/cookies, use Puppeteer
-    return { baseUrl: url, isApi: false, paginateAs: null, preferPuppeteer: true };
+    // Always rewrite to the current lots view with proper params
+    return { baseUrl: 'https://www.hollismorgan.co.uk/search-auction/?bid=11&showstc=on&orderby=lot_no+asc', isApi: false, paginateAs: null, preferPuppeteer: true };
   }
 
   if (house === 'maggsandallen') {
-    // Maggs & Allen: /search-auction/ — needs JS/cookies, use Puppeteer
-    return { baseUrl: url, isApi: false, paginateAs: null, preferPuppeteer: true };
+    // Always rewrite to the current auction lots
+    return { baseUrl: 'https://www.maggsandallen.co.uk/search-auction/?auction=1&orderby=lot_no&n=0', isApi: false, paginateAs: null, preferPuppeteer: true };
   }
 
   if (house === 'mchughandco') {
@@ -1006,51 +1006,53 @@ const DOM_EXTRACTORS = {
   hollismorgan: `
     (() => {
       const lots = [];
-      // Each lot card has h4 with "Lot X" and sibling links for address/price
-      const cards = document.querySelectorAll('.property-listing, .property-card, .search-result, [class*="property"]');
-      // Fallback: look for h4 elements containing "Lot"
-      const lotHeaders = document.querySelectorAll('h4');
-      for (const h4 of lotHeaders) {
-        const text = h4.textContent.trim();
-        const lotMatch = text.match(/Lot\\s+(\\d+)/i);
-        if (!lotMatch) continue;
-        const lotNum = parseInt(lotMatch[1]);
-        // Walk siblings/parent to find address and price
-        const parent = h4.closest('div, li, article, section') || h4.parentElement;
-        if (!parent) continue;
-        const links = parent.querySelectorAll('a');
-        let address = '', price = null, url = '';
+      // Anchor on "SHOW ME MORE" links - each lot has one
+      const detailLinks = document.querySelectorAll('a[href*="property-details"]');
+      let lotIndex = 1;
+      for (const link of detailLinks) {
+        const url = link.getAttribute('href') || '';
+        if (!url || link.textContent.trim() === '') continue;
+        // Walk up to the card container
+        let card = link.parentElement;
+        for (let i = 0; i < 5 && card; i++) {
+          // Look for a container that has h3 (address) and h4 elements
+          if (card.querySelector('h3') && card.querySelector('h4')) break;
+          card = card.parentElement;
+        }
+        if (!card) continue;
+        // Address is in h3
+        const h3 = card.querySelector('h3');
+        const address = h3 ? h3.textContent.trim() : '';
+        if (!address) continue;
+        // Price is in h4 with £ sign (not the "Lot TBC" h4)
+        let price = null;
+        const h4s = card.querySelectorAll('h4');
+        for (const h4 of h4s) {
+          const t = h4.textContent.trim();
+          const pm = t.match(/£([\\d,]+)/);
+          if (pm) { price = parseInt(pm[1].replace(/,/g, '')); break; }
+        }
+        // Lot number from h4 containing "Lot"
+        let lotNum = lotIndex;
+        for (const h4 of h4s) {
+          const t = h4.textContent.trim();
+          const lm = t.match(/Lot\\s+(\\d+)/i);
+          if (lm) { lotNum = parseInt(lm[1]); break; }
+        }
+        // Bullets from li elements
         const bullets = [];
-        for (const link of links) {
-          const href = link.getAttribute('href') || '';
-          const lt = link.textContent.trim();
-          // Price link
-          const priceMatch = lt.match(/£([\\d,]+)/);
-          if (priceMatch && lt.toLowerCase().includes('guide')) {
-            price = parseInt(priceMatch[1].replace(/,/g, ''));
-            if (!url && href.includes('property-details')) url = href;
-          }
-          // Address link (contains postcode pattern)
-          else if (lt.match(/[A-Z]{1,2}\\d[A-Z\\d]?\\s*\\d[A-Z]{2}/i)) {
-            address = lt;
-            if (!url && href.includes('property-details')) url = href;
-          }
+        const lis = card.querySelectorAll('li');
+        for (const li of lis) {
+          const t = li.textContent.trim();
+          if (t.length > 3 && t.length < 200) bullets.push(t);
         }
-        // Also check plain text in parent for description/bullets
-        const allText = parent.textContent;
-        const descParts = allText.split('\\n').map(s => s.trim()).filter(s => s.length > 5 && s.length < 200 && !s.includes('Guide Price'));
-        if (descParts.length > 0) {
-          // First meaningful text chunk is usually the headline description
-          const headline = descParts.find(s => s.match(/modernisation|renovation|investment|flat|house|land|plot|commercial|development|updating|garage|maisonette|detached|terrace|semi/i));
-          if (headline) bullets.push(headline);
+        // Detect SOLD/STC status from overlays or text
+        const cardText = card.textContent;
+        if (cardText.match(/\\bSOLD\\b|\\bSALEAGREED\\b|\\bSALE AGREED\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) {
+          if (!bullets.some(b => b.match(/SOLD|STC|WITHDRAWN|SALE AGREED/i))) bullets.push('SOLD/STC');
         }
-        // Check for SOLD status
-        const soldEl = parent.querySelector('.sold, .stc, [class*="sold"]');
-        const isSold = soldEl || allText.match(/\\bSOLD\\b|\\bSTC\\b|\\bWithdrawn\\b/i);
-        if (isSold) bullets.push('SOLD/STC');
-        if (address && (price || address)) {
-          lots.push({ lot: lotNum, address, price, url, bullets });
-        }
+        lots.push({ lot: lotNum, address, price, url, bullets });
+        lotIndex++;
       }
       return lots;
     })()
