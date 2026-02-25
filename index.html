@@ -81,6 +81,7 @@ a{color:var(--green);text-decoration:none}a:hover{text-decoration:underline}
 .view-results .hero{display:none}
 .view-results #calendarSection{display:none}
 .view-results .back-bar{display:block}
+.view-results .search-panel{display:none}
 
 /* ── RESULTS PANEL ── */
 #resultsPanel{display:none;margin-bottom:32px}
@@ -274,7 +275,7 @@ footer .logo-f span{color:var(--green)}
         <option value="hide">Hide sold / STC</option><option value="show">Show sold / STC</option>
       </select></div>
       <div class="filter-field"><label>Title Splits</label><select id="fTSTop" onchange="if($('fTS'))$('fTS').value=this.value;renderLots()">
-        <option value="">All lots</option><option value="ts">Title splits only</option>
+        <option value="">All lots</option><option value="ts">Title split opportunities</option>
       </select></div>
       <div class="filter-field"></div>
       <div class="filter-field"></div>
@@ -284,7 +285,7 @@ footer .logo-f span{color:var(--green)}
       <div class="example-prompts">
         <span class="ex-label">Try:</span>
         <button class="ex-btn" onclick="setQ('Properties under £150k needing heavy refurbishment')">Heavy refurb under £150k</button>
-        <button class="ex-btn" onclick="setQ('Freehold multi-unit blocks for title splitting')">Title splits</button>
+        <button class="ex-btn" onclick="setQ('Freehold multi-unit blocks for title splitting')">Title split opportunities</button>
         <button class="ex-btn" onclick="setQ('High yield investments over 8%')">High yield 8%+</button>
         <button class="ex-btn" onclick="setQ('Development land with planning')">Dev land</button>
       </div>
@@ -337,7 +338,7 @@ footer .logo-f span{color:var(--green)}
       <div class="toolbar">
         <select class="tb-select" id="fDeal" onchange="renderLots()"><option value="">All deals</option></select>
         <select class="tb-select" id="fBudget" onchange="renderLots()"><option value="budget">In budget</option><option value="all">All lots</option></select>
-        <select class="tb-select" id="fTS" onchange="renderLots()"><option value="">All lots</option><option value="ts">Title splits only</option></select>
+        <select class="tb-select" id="fTS" onchange="renderLots()"><option value="">All lots</option><option value="ts">Title split opportunities</option></select>
         <select class="tb-select" id="fSold" onchange="renderLots()"><option value="hide">Hide sold/STC</option><option value="show">Show sold/STC</option></select>
         <input class="tb-search" type="text" id="fSearch" placeholder="Search..." oninput="renderLots()">
       </div>
@@ -625,7 +626,7 @@ async function runSmartSearch(query) {
     $('statsRow').innerHTML = `
       <div class="stat-card"><div class="v g">${data.totalSearched||0}</div><div class="l">Lots searched</div></div>
       <div class="stat-card"><div class="v y">${LOTS.length}</div><div class="l">Matches</div></div>
-      <div class="stat-card"><div class="v p">${LOTS.filter(l=>l.titleSplit).length}</div><div class="l">Title splits</div></div>
+      <div class="stat-card"><div class="v p">${LOTS.filter(l=>l.titleSplit).length}</div><div class="l">Title split opportunities</div></div>
       <div class="stat-card"><div class="v g">${LOTS.filter(l=>(l.score||0)>=3).length}</div><div class="l">Score 3+</div></div>
       <div class="stat-card"><div class="v y">${data.sources?.length||0}</div><div class="l">Catalogues</div></div>`;
   } catch (e) {
@@ -672,7 +673,7 @@ function renderLots(){
   $('statsRow').innerHTML=`
     <div class="stat-card"><div class="v g">${LOTS.length}</div><div class="l">Total lots</div></div>
     <div class="stat-card"><div class="v y">${lots.length}</div><div class="l">Showing</div></div>
-    <div class="stat-card"><div class="v p">${ts.length}</div><div class="l">Title splits</div></div>
+    <div class="stat-card"><div class="v p">${ts.length}</div><div class="l">Title split opportunities</div></div>
     <div class="stat-card"><div class="v g">${top.length}</div><div class="l">Score 3+</div></div>
     <div class="stat-card"><div class="v y">${LOTS.filter(l=>l.price).length}</div><div class="l">Priced</div></div>`;
 
