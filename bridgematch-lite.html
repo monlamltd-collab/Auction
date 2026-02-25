@@ -282,6 +282,18 @@ select{padding-left:14px;cursor:pointer;appearance:none;
         <input type="text" id="cash" placeholder="100,000" oninput="formatCurrency(this)">
       </div>
     </div>
+    <div class="field">
+      <label>Expected Loan Term</label>
+      <div class="input-wrap">
+        <select id="loanTerm" style="width:100%;padding:14px 16px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;font-size:0.95rem;background:#fff;color:var(--text1)">
+          <option value="6">6 months</option>
+          <option value="9">9 months</option>
+          <option value="12" selected>12 months (typical)</option>
+          <option value="18">18 months</option>
+          <option value="24">24 months</option>
+        </select>
+      </div>
+    </div>
 
     <!-- Additional security: appears in results if deal is tight -->
 
@@ -368,14 +380,16 @@ function runMatch(){
   document.getElementById('runBtn').disabled=true;
 
   setTimeout(()=>{
-    const results=matchLenders(price,cash,propType,isRefurb,works,gdv,addlVal,addlMort);
+    const loanTerm=parseInt(document.getElementById('loanTerm').value)||12;
+    const results=matchLenders(price,cash,propType,isRefurb,works,gdv,addlVal,addlMort,loanTerm);
     renderResults(results);
     document.getElementById('loading').classList.remove('visible');
     document.getElementById('runBtn').disabled=false;
   },800);
 }
 
-function matchLenders(price,cash,propType,isRefurb,works,gdv,addlVal,addlMort){
+function matchLenders(price,cash,propType,isRefurb,works,gdv,addlVal,addlMort,loanTermMonths){
+  if(!loanTermMonths)loanTermMonths=12;
   // Day-1 loan calculation: pure purchase price minus cash deposit
   // SDLT, legal fees, works costs are the investor's responsibility — not factored into loan requirement
   const loanNeeded=Math.max(0,price-cash);
@@ -402,9 +416,10 @@ function matchLenders(price,cash,propType,isRefurb,works,gdv,addlVal,addlMort){
     else intensity='vheavy';
   }
 
-  // LTGDV calc for refurb (total project cost vs end value)
-  const totalProject=price+works;
-  const ltgdv=gdv>0?(totalProject/gdv)*100:0;
+  // LTGDV is now calculated per-lender inside the matching loop
+  // because it depends on each lender's day-1 advance, rate, and works funding model
+  const totalProject=price+works; // kept for display purposes only
+  let ltgdv=0; // will be set to a representative value for display
 
   const eligible=[];
   const excluded=[];
@@ -466,9 +481,20 @@ function matchLenders(price,cash,propType,isRefurb,works,gdv,addlVal,addlMort){
         }else if(d1Field&&l[d1Field]){
           refurbDay1=parseLTV(l[d1Field]);
           refurbLTGDV=parseLTGDV(l[lgField]);
-          // Check LTGDV constraint
-          if(refurbLTGDV>0&&ltgdv>refurbLTGDV+3){
-            reasons.push(`LTGDV ${ltgdv.toFixed(0)}% > max ${refurbLTGDV.toFixed(0)}%`);
+
+          // Calculate per-lender LTGDV based on total debt exposure
+          // LTGDV = (day-1 loan + rolled-up interest + lender-funded works) / GDV
+          if(refurbLTGDV>0&&gdv>0){
+            const day1Pct=refurbDay1.pct/100;
+            const day1Loan=price*day1Pct;
+            const lenderRate=parseRate(l.r)/100; // monthly rate
+            const rolledInterest=day1Loan*lenderRate*loanTermMonths;
+            const lenderWorks=(fundingModel==='self-fund')?0:works;
+            const totalDebt=day1Loan+rolledInterest+lenderWorks;
+            const lenderLTGDV=(totalDebt/gdv)*100;
+            if(lenderLTGDV>refurbLTGDV+3){
+              reasons.push(`LTGDV ${lenderLTGDV.toFixed(0)}% > max ${refurbLTGDV.toFixed(0)}%`);
+            }
           }
         }else if(fundingModel==='self-fund'){
           // Self-fund lender: no special day-1 fields, just uses standard LTV
@@ -488,7 +514,17 @@ function matchLenders(price,cash,propType,isRefurb,works,gdv,addlVal,addlMort){
     }
 
     if(reasons.length===0){
-      eligible.push({...l,_ltv:ltv,_maxLTV:maxLTV,_rate:parseRate(l.r),_refurbDay1:refurbDay1,_refurbLTGDV:refurbLTGDV,_fundingModel:fundingModel,_addlSecUsed:addlEquity>0&&combinedLTV<ltv});
+      // Calculate this lender's actual LTGDV for display
+      let lenderLTGDV=0;
+      if(isRefurb&&gdv>0&&refurbDay1&&refurbDay1.pct>0){
+        const d1Pct=refurbDay1.pct/100;
+        const d1Loan=price*d1Pct;
+        const lRate=parseRate(l.r)/100;
+        const rInt=d1Loan*lRate*loanTermMonths;
+        const lWorks=(fundingModel==='self-fund')?0:works;
+        lenderLTGDV=((d1Loan+rInt+lWorks)/gdv)*100;
+      }
+      eligible.push({...l,_ltv:ltv,_maxLTV:maxLTV,_rate:parseRate(l.r),_refurbDay1:refurbDay1,_refurbLTGDV:refurbLTGDV,_lenderLTGDV:lenderLTGDV,_fundingModel:fundingModel,_addlSecUsed:addlEquity>0&&combinedLTV<ltv});
     }else{
       excluded.push({name:l.n,reasons});
     }
@@ -497,8 +533,21 @@ function matchLenders(price,cash,propType,isRefurb,works,gdv,addlVal,addlMort){
   // Sort eligible: lower rate first, then higher LTV
   eligible.sort((a,b)=>a._rate-b._rate||(b._maxLTV.pct-a._maxLTV.pct));
 
+  // Compute representative LTGDV for summary display (average of eligible lenders with LTGDV > 0)
+  if(isRefurb&&eligible.length>0){
+    const withLTGDV=eligible.filter(l=>l._lenderLTGDV>0);
+    if(withLTGDV.length>0) ltgdv=withLTGDV.reduce((s,l)=>s+l._lenderLTGDV,0)/withLTGDV.length;
+    else if(gdv>0) ltgdv=(totalProject/gdv)*100; // fallback for self-fund only results
+  }else if(isRefurb&&gdv>0){
+    // No eligible lenders — show a typical LTGDV estimate for context
+    const typicalDay1Pct=0.75;
+    const typicalRate=0.00875;
+    const d1=price*typicalDay1Pct;
+    ltgdv=((d1+d1*typicalRate*loanTermMonths+works)/gdv)*100;
+  }
+
   return{eligible,excluded,ltv,loanNeeded,stampDuty,estCosts,totalCashNeeded,cashForDeposit,
-    isRefurb,works,gdv,worksRatio,intensity,ltgdv,addlEquity,combinedLTV,price,cash,totalProject:price+works};
+    isRefurb,works,gdv,worksRatio,intensity,ltgdv,addlEquity,combinedLTV,price,cash,totalProject:price+works,loanTermMonths};
 }
 
 function renderResults(r){
@@ -542,7 +591,7 @@ function renderResults(r){
     const tagClass=r.intensity==='light'?'tag-light':r.intensity==='medium'?'tag-medium':r.intensity==='heavy'?'tag-heavy':'tag-dev';
     html+=`<div class="insight-box">
       <strong>Refurb Analysis:</strong> Works ratio ${r.worksRatio.toFixed(0)}% = <span class="tag ${tagClass}">${r.intensity.charAt(0).toUpperCase()+r.intensity.slice(1)} refurb</span> &nbsp;|&nbsp;
-      LTGDV: ${r.ltgdv.toFixed(1)}% &nbsp;|&nbsp; Total project: ${fmtCurrency(r.price+r.works)} → ${fmtCurrency(r.gdv)} GDV
+      Avg LTGDV: ${r.ltgdv.toFixed(1)}% (${r.loanTermMonths}mo term) &nbsp;|&nbsp; Total project: ${fmtCurrency(r.price+r.works)} → ${fmtCurrency(r.gdv)} GDV
     </div>`;
     
     // Count funding model types among eligible lenders
@@ -615,6 +664,7 @@ function renderResults(r){
         const day1Pct=l._refurbDay1.pct/100;
         const day1Amt=r.price*day1Pct;
         const fm=l._fundingModel;
+        const ltgdvStr=l._lenderLTGDV>0?` · LTGDV: ${l._lenderLTGDV.toFixed(1)}%`:'';
         if(fm==='self-fund'){
           // Self-fund: lender gives higher day-1 but you pay ALL works
           facilityLine=`<br><span style="font-size:0.72rem;color:var(--text3)">Day-1 advance ~${fmtK(day1Amt)} · You fund all works (${fmtK(r.works)}) from own cash</span>`;
@@ -622,11 +672,11 @@ function renderResults(r){
           // Staged: lender releases works in tranches after QS sign-off
           const totalFacility=day1Amt+r.works;
           const firstTranche=Math.round(r.works*0.25);
-          facilityLine=`<br><span style="font-size:0.72rem;color:var(--text3)">Day-1 ~${fmtK(day1Amt)} + works ${fmtK(r.works)} (staged) = facility ~${fmtK(totalFacility)} · You front ~${fmtK(firstTranche)} for 1st tranche</span>`;
+          facilityLine=`<br><span style="font-size:0.72rem;color:var(--text3)">Day-1 ~${fmtK(day1Amt)} + works ${fmtK(r.works)} (staged) = facility ~${fmtK(totalFacility)}${ltgdvStr} · You front ~${fmtK(firstTranche)} for 1st tranche</span>`;
         }else if(fm==='upfront'){
           // Upfront: higher day-1 includes works money
           const totalFacility=day1Amt+r.works;
-          facilityLine=`<br><span style="font-size:0.72rem;color:var(--text3)">Day-1 ~${fmtK(day1Amt)} + works ${fmtK(r.works)} (upfront) = facility ~${fmtK(totalFacility)}</span>`;
+          facilityLine=`<br><span style="font-size:0.72rem;color:var(--text3)">Day-1 ~${fmtK(day1Amt)} + works ${fmtK(r.works)} (upfront) = facility ~${fmtK(totalFacility)}${ltgdvStr}</span>`;
         }
       }
 
