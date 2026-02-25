@@ -653,17 +653,35 @@ function renderResults(r){
   el.scrollIntoView({behavior:'smooth',block:'start'});
 }
 
-// Pre-fill from URL params (e.g. /check?price=125000&address=123+High+St)
+// Pre-fill from URL params (e.g. /check?price=125000&address=123+High+St&type=flat)
 (function(){
   const params=new URLSearchParams(window.location.search);
   const price=params.get('price');
   const address=params.get('address');
+  const type=params.get('type');
   if(price){
     const p=document.getElementById('price');
     if(p){p.value=parseInt(price).toLocaleString('en-GB');formatCurrency(p);}
   }
+  if(type){
+    // Map auction analyser property types to BridgeMatch categories
+    const typeMap={
+      'house':'resi','flat':'resi','bungalow':'resi',
+      'commercial':'comm','land':'comm',
+      'garage':'comm','other':'semi',
+      'semi-commercial':'semi','semi commercial':'semi',
+      'mixed':'semi','mixed use':'semi',
+      'hmo':'resi','development':'comm',
+      'retail':'comm','office':'comm','industrial':'comm',
+      'warehouse':'comm','pub':'comm','hotel':'comm',
+      'care home':'comm','student':'semi',
+    };
+    const t=type.toLowerCase().trim();
+    const mapped=typeMap[t]||'resi';
+    const sel=document.getElementById('propType');
+    if(sel) sel.value=mapped;
+  }
   if(address){
-    // Show the address as context above the form
     const hdr=document.querySelector('.header');
     if(hdr){
       const ctx=document.createElement('div');

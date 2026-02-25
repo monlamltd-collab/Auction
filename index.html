@@ -749,7 +749,7 @@ function card(l,b){
   }
 
   const link=l.url?`<div class="lot-link"><a href="${l.url}" target="_blank">View listing ↗</a></div>`:'';
-  const bmLink=l.price?`<a href="/check?price=${l.price}${l.address?'&address='+encodeURIComponent(l.address):''}" class="bm-btn" target="_blank" title="Check bridging finance feasibility">🧩 BridgeMatch It</a>`:'';
+  const bmLink=l.price?`<a href="/check?price=${l.price}${l.address?'&address='+encodeURIComponent(l.address):''}${l.propType?'&type='+encodeURIComponent(l.propType):''}" class="bm-btn" target="_blank" title="Check bridging finance feasibility">🧩 BridgeMatch It</a>`:'';
 
   return`<div class="lot ${l.titleSplit?'ts':''}">
     <div class="lot-header"><div class="lot-title">Lot ${l.lot} · ${l.dealType||'Standard'}</div><div class="lot-score ${sc}">${l.score}</div></div>
