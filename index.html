@@ -610,7 +610,7 @@ async function runSmartSearch(query) {
     prog(100, 'Complete');
 
     // Show results with report toggle
-    $('resultsTitle').textContent = `Search results — ${LOTS.length} matches`;
+    $('resultsTitle').textContent = `"${query}" — ${LOTS.length} matches`;
     $('viewToggle').style.display = 'flex';
 
     // Report
