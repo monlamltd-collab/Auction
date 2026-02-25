@@ -4,13 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bridgematch — UK Property Auction Directory & Deal Analyser</title>
-<meta name="description" content="Free UK property auction directory by Bridgematch. Upcoming dates from Savills, Allsop, SDL, Network Auctions and more. AI-powered catalogue analyser scores every lot, finds title splits, filters to your budget.">
-<meta name="keywords" content="UK property auctions, auction directory, Savills auctions, Allsop auctions, SDL auctions, property investment, auction analysis, title split, freehold flats, bridgematch, bridging finance">
+<meta name="description" content="Free UK property auction directory by Bridgematch. AI-powered catalogue analyser scores every lot, finds title splits, filters to your budget.">
 <link rel="canonical" href="https://bridgematch.co.uk">
-<meta property="og:title" content="Bridgematch — UK Property Auction Directory & Deal Analyser">
-<meta property="og:description" content="Free AI-powered tool to analyse any UK auction catalogue. Scores every lot, finds title splits, filters to your budget.">
-<meta property="og:url" content="https://bridgematch.co.uk">
-<meta property="og:type" content="website">
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@400;600;700&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -32,253 +27,187 @@ a{color:var(--green);text-decoration:none}a:hover{text-decoration:underline}
 
 /* ── NAV ── */
 .nav{background:var(--white);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:50}
-.nav-inner{max-width:1100px;margin:0 auto;padding:0 24px;height:60px;display:flex;align-items:center;justify-content:space-between}
+.nav-inner{max-width:1100px;margin:0 auto;padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between}
 .logo{font-family:'Source Serif 4',serif;font-size:1.35rem;font-weight:700;color:var(--navy)}
 .logo span{color:var(--green)}
-.nav-mid{display:flex;gap:2px}
-.nav-link{padding:8px 16px;border-radius:var(--radius-sm);font-size:.88rem;font-weight:600;color:var(--text2);cursor:pointer;transition:all .12s;border:none;background:none;font-family:inherit}
-.nav-link:hover{color:var(--text);background:var(--cream)}
-.nav-link.active{color:var(--green);background:var(--green-light)}
 .nav-right{display:flex;align-items:center;gap:10px}
 .nav-cta{padding:8px 20px;border-radius:var(--radius-sm);font-size:.85rem;font-weight:700;color:var(--white);background:var(--green);border:none;cursor:pointer;font-family:inherit;transition:all .15s}
-.nav-cta:hover{background:var(--green2);box-shadow:0 2px 12px rgba(15,138,95,.2)}
+.nav-cta:hover{background:var(--green2)}
 
 /* ── WRAP ── */
 .wrap{max-width:1100px;margin:0 auto;padding:0 24px}
 
 /* ── HERO ── */
-.hero{padding:56px 0 40px;text-align:center}
-.hero-eyebrow{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:20px;font-size:.77rem;font-weight:600;color:var(--green);background:var(--green-light);margin-bottom:18px}
-.hero-eyebrow .pulse{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-.hero h1{font-family:'Source Serif 4',serif;font-size:clamp(2rem,5vw,3rem);font-weight:700;color:var(--navy);line-height:1.2;letter-spacing:-.5px}
+.hero{padding:48px 0 32px;text-align:center}
+.hero h1{font-family:'Source Serif 4',serif;font-size:2.5rem;font-weight:700;color:var(--navy);line-height:1.15;margin-bottom:12px}
 .hero h1 em{font-style:normal;color:var(--green)}
-.hero-sub{color:var(--text2);font-size:1.02rem;margin-top:12px;max-width:560px;margin-left:auto;margin-right:auto;line-height:1.7}
+.hero-sub{color:var(--text2);max-width:600px;margin:0 auto 28px;font-size:.95rem;line-height:1.7}
 
-/* Hero stats — tech sprinkle */
-.hero-stats{display:inline-flex;gap:1px;margin-top:28px;background:var(--border);border-radius:var(--radius);overflow:hidden;border:1px solid var(--border)}
-.hero-stat{background:var(--white);padding:14px 28px;text-align:center}
-.hero-stat .n{font-family:'JetBrains Mono',monospace;font-size:1.3rem;font-weight:600;color:var(--navy)}
-.hero-stat .l{font-size:.72rem;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-top:2px}
+/* ── SEARCH PANEL ── */
+.search-panel{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:28px;margin-bottom:28px;box-shadow:0 1px 3px rgba(0,0,0,.03)}
+.search-row{display:flex;gap:10px;margin-bottom:18px}
+.search-input{flex:1;padding:13px 18px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:.93rem;font-family:inherit;outline:0;transition:border-color .15s}
+.search-input:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(15,138,95,.08)}
+.search-input::placeholder{color:var(--text4)}
+.btn-main{padding:13px 28px;border-radius:var(--radius-sm);font-size:.9rem;font-weight:700;color:var(--white);background:var(--green);border:none;cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap}
+.btn-main:hover{background:var(--green2)}
+.btn-main:disabled{opacity:.5;cursor:not-allowed}
 
-/* ── SECTIONS ── */
-.section{display:none}.section.active{display:block}
+/* ── FILTERS ── */
+.filters{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-bottom:16px}
+.filter-field label{display:block;font-size:.75rem;font-weight:600;color:var(--text3);margin-bottom:4px;text-transform:uppercase;letter-spacing:.03em}
+.filter-field select,.filter-field input{width:100%;padding:10px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:.85rem;font-family:inherit;outline:0}
+.filter-field select:focus,.filter-field input:focus{border-color:var(--green)}
 
-/* ── HOW IT WORKS ── */
-.how{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:44px}
-.how-card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:28px 24px;transition:all .2s}
-.how-card:hover{border-color:var(--green);box-shadow:0 4px 20px rgba(15,138,95,.06)}
-.how-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.1rem;margin-bottom:14px}
-.how-card:nth-child(1) .how-icon{background:var(--green-light);color:var(--green)}
-.how-card:nth-child(2) .how-icon{background:var(--violet-light);color:var(--violet)}
-.how-card:nth-child(3) .how-icon{background:var(--amber-light);color:var(--amber)}
-.how-card h3{font-family:'Source Serif 4',serif;font-size:1.05rem;font-weight:700;color:var(--navy);margin-bottom:6px}
-.how-card p{font-size:.88rem;color:var(--text2);line-height:1.6}
+.filter-extras{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+.example-prompts{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.ex-label{font-size:.75rem;color:var(--text4)}
+.ex-btn{font-size:.73rem;padding:4px 10px;border-radius:16px;border:1px solid var(--border);background:var(--white);color:var(--text3);cursor:pointer;font-family:inherit;transition:all .15s}
+.ex-btn:hover{background:var(--green-light);color:var(--green);border-color:var(--green)}
+.adv-toggle{font-size:.8rem;color:var(--text3);cursor:pointer;border:none;background:none;font-family:inherit;text-decoration:underline;text-underline-offset:2px}
+.adv-toggle:hover{color:var(--green)}
 
-/* ── SECTION HEADERS ── */
-.sh{margin-bottom:18px;display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px}
-.sh h2{font-family:'Source Serif 4',serif;font-size:1.4rem;font-weight:700;color:var(--navy)}
-.sh p{color:var(--text3);font-size:.88rem}
+/* ── ADVANCED SETTINGS ── */
+.advanced{display:none;margin-top:16px;padding-top:16px;border-top:1px solid var(--border)}
+.advanced.show{display:block}
+.budget-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.budget-summary{font-size:.82rem;color:var(--text3);margin-top:8px}
+.budget-summary b{color:var(--green)}
 
-/* ── HOUSE FILTERS ── */
-.house-filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
-.hf{font-size:.82rem;padding:6px 14px;border-radius:20px;cursor:pointer;transition:all .12s;background:var(--white);color:var(--text2);border:1px solid var(--border);font-family:inherit;font-weight:600}
-.hf:hover{border-color:var(--green);color:var(--green)}
-.hf.active{background:var(--green);color:var(--white);border-color:var(--green)}
+/* ── RESULTS PANEL ── */
+#resultsPanel{display:none;margin-bottom:32px}
+.result-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px}
+.result-header h2{font-family:'Source Serif 4',serif;font-size:1.2rem;font-weight:700;color:var(--navy)}
+.view-toggle{display:flex;gap:3px;background:var(--cream);padding:3px;border-radius:var(--radius-sm)}
+.vtog{padding:7px 16px;border-radius:6px;border:none;background:transparent;font-size:.82rem;font-weight:600;cursor:pointer;font-family:inherit;color:var(--text3);transition:all .15s}
+.vtog.active{background:var(--white);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.06)}
 
-/* ── CALENDAR CARDS ── */
-.cal-grid{display:grid;grid-template-columns:1fr;gap:8px;margin-bottom:32px}
-.cal-card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:18px 22px;display:grid;grid-template-columns:56px 1fr auto;gap:18px;align-items:center;transition:all .15s}
-.cal-card:hover{border-color:var(--border2);box-shadow:0 2px 12px rgba(0,0,0,.04)}
-.cal-date{text-align:center}
-.cal-date .day{font-family:'Source Serif 4',serif;font-size:1.7rem;font-weight:700;color:var(--navy);line-height:1}
-.cal-date .mon{font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--green);margin-top:2px}
-.cal-info h3{font-size:.95rem;font-weight:700;color:var(--text);margin-bottom:2px}
-.cal-info .meta{display:flex;flex-wrap:wrap;gap:4px;font-size:.82rem;color:var(--text3)}
-.cal-info .meta span:not(:last-child)::after{content:'·';margin-left:4px;color:var(--border2)}
-.cal-actions{display:flex;gap:8px;flex-shrink:0}
-.cal-btn{font-size:.82rem;font-weight:700;padding:8px 18px;border-radius:var(--radius-sm);cursor:pointer;transition:all .12s;border:none;font-family:inherit}
-.cal-btn.primary{background:var(--green);color:var(--white)}.cal-btn.primary:hover{background:var(--green2);box-shadow:0 2px 10px rgba(15,138,95,.15)}
-.cal-btn.ghost{background:var(--surface2);color:var(--text2);border:1px solid var(--border)}.cal-btn.ghost:hover{border-color:var(--text3);color:var(--text)}
+/* Stats row */
+.stats-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:20px}
+.stat-card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;text-align:center}
+.stat-card .v{font-family:'JetBrains Mono',monospace;font-size:1.4rem;font-weight:700}
+.stat-card .l{font-size:.72rem;color:var(--text3);text-transform:uppercase;letter-spacing:.03em;margin-top:2px}
+.v.g{color:var(--green)}.v.y{color:var(--amber)}.v.p{color:var(--violet)}
 
-/* ── ANALYSER ── */
-.user-bar{font-size:.82rem;color:var(--text3);margin-bottom:12px;display:flex;align-items:center;gap:8px}
-.user-bar .dot{width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block}
-.user-bar a{cursor:pointer;color:var(--text3);text-decoration:underline}
+/* Report view */
+.report-view{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:24px;line-height:1.8;font-size:.9rem}
+.report-view p{margin-bottom:10px}
+.report-view .sources{margin-top:14px;padding-top:12px;border-top:1px solid var(--border);font-size:.76rem;color:var(--text3)}
 
-.analyser-box{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:28px;margin-bottom:16px}
-.analyser-box .label{font-weight:700;font-size:.76rem;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px}
-.url-row{display:flex;gap:10px}
-.url-row input{flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px 16px;color:var(--text);font-size:.92rem;outline:0;transition:border .15s;font-family:inherit}
-.url-row input:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(15,138,95,.08)}
-.url-row input::placeholder{color:var(--text4)}
-.btn-main{background:var(--green);color:var(--white);font-weight:700;font-size:.92rem;border:none;border-radius:var(--radius-sm);padding:14px 28px;cursor:pointer;transition:all .15s;white-space:nowrap;font-family:inherit}
-.btn-main:hover{background:var(--green2);box-shadow:0 4px 16px rgba(15,138,95,.15)}
-.btn-main:disabled{opacity:.4;cursor:not-allowed;box-shadow:none}
-
-.budget-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-top:18px}
-.field label{display:block;font-size:.74rem;color:var(--text3);margin-bottom:5px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
-.field input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:11px 14px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:.88rem;outline:0}
-.field input:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(15,138,95,.08)}
-.budget-summary{margin-top:10px;font-size:.82rem;color:var(--text3)}
-.budget-summary b{color:var(--green);font-family:'JetBrains Mono',monospace;font-weight:600}
-
-/* ── PROGRESS — tech sprinkle ── */
-#progressPanel{display:none}
-.prog-box{background:var(--navy);border-radius:var(--radius);padding:20px;margin-bottom:16px;color:#c8d6e5}
-.p-status{font-size:.84rem;font-weight:600;color:#e2e8f0;margin-bottom:8px}
-.p-track{background:rgba(255,255,255,.1);border-radius:6px;height:4px;overflow:hidden}
-.p-fill{height:100%;background:linear-gradient(90deg,#3ee8b5,#6e56cf);border-radius:6px;transition:width .3s;width:0}
-.log-box{max-height:120px;overflow-y:auto;margin-top:10px;padding:10px 12px;background:rgba(0,0,0,.2);border-radius:8px;font-family:'JetBrains Mono',monospace;font-size:.72rem;color:#8899aa}
-.log-box div{padding:2px 0}.log-box .ok{color:#3ee8b5}.log-box .warn{color:#e8a63e}.log-box .err{color:#e85c5c}
-
-/* ── RESULTS ── */
-#resultsPanel{display:none}
-
-/* Stats — tech sprinkle */
-.stats-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:20px}
-.stat-card{background:var(--navy);border-radius:var(--radius-sm);padding:16px;text-align:center;color:#e2e8f0}
-.stat-card .v{font-family:'JetBrains Mono',monospace;font-size:1.5rem;font-weight:700}
-.stat-card .v.g{color:#3ee8b5}.stat-card .v.y{color:#e8a63e}.stat-card .v.p{color:#a78bfa}
-.stat-card .l{color:#6b7f96;font-size:.68rem;text-transform:uppercase;letter-spacing:1px;margin-top:3px}
-
-.toolbar{display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
-.toolbar .spacer{flex:1}
-.tb-btn{padding:7px 16px;font-size:.8rem;font-weight:600;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--white);color:var(--text2);cursor:pointer;font-family:inherit;transition:all .12s}
-.tb-btn:hover{border-color:var(--green);color:var(--green)}
-.tb-select{background:var(--white);border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 12px;color:var(--text);font-size:.82rem;outline:0;font-family:inherit;cursor:pointer}
-.tb-search{background:var(--white);border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 12px;color:var(--text);font-size:.82rem;outline:0;font-family:inherit;width:160px}
+/* Toolbar */
+.toolbar{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center}
+.tb-select{padding:8px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--white);font-size:.82rem;color:var(--text);font-family:inherit;cursor:pointer}
+.tb-search{padding:8px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--white);font-size:.82rem;color:var(--text);font-family:inherit;outline:0;flex:1;min-width:120px}
+.tb-search:focus{border-color:var(--green)}
+.spacer{flex:1}
+.tb-btn{padding:7px 14px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--white);font-size:.8rem;color:var(--text2);cursor:pointer;font-family:inherit;font-weight:600}
+.tb-btn:hover{background:var(--green-light);color:var(--green);border-color:var(--green)}
 
 /* ── LOT CARDS ── */
-.group-head{font-family:'Source Serif 4',serif;font-size:1.1rem;font-weight:700;color:var(--navy);margin:28px 0 10px;display:flex;align-items:center;gap:10px}
-.badge{font-family:'DM Sans',sans-serif;font-size:.68rem;font-weight:700;padding:3px 10px;border-radius:12px}
+.group-head{font-family:'Source Serif 4',serif;font-size:1rem;font-weight:700;color:var(--navy);padding:18px 0 10px;display:flex;align-items:center;gap:8px}
+.badge{display:inline-flex;align-items:center;justify-content:center;min-width:24px;padding:2px 8px;border-radius:12px;font-size:.72rem;font-weight:700;font-family:'JetBrains Mono',monospace}
 .badge-g{background:var(--green-light);color:var(--green)}.badge-p{background:var(--violet-light);color:var(--violet)}.badge-y{background:var(--amber-light);color:var(--amber)}
 
-.lot{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:8px;transition:all .15s}
-.lot:hover{border-color:var(--border2);box-shadow:0 2px 12px rgba(0,0,0,.04)}
+.lot{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:10px;transition:border-color .15s}
+.lot:hover{border-color:var(--border2)}
 .lot.ts{border-left:3px solid var(--violet)}
+.lot-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.lot-title{font-size:.78rem;color:var(--text3);font-weight:600}
+.lot-score{font-family:'JetBrains Mono',monospace;font-size:.85rem;font-weight:700;padding:3px 10px;border-radius:var(--radius-sm)}
+.lot-score.high{background:var(--green-light);color:var(--green)}
+.lot-score.mid{background:var(--amber-light);color:var(--amber)}
+.lot-score.low{background:var(--cream);color:var(--text4)}
+.lot-addr{font-weight:600;font-size:.95rem;margin-bottom:4px}
+.lot-details{font-size:.82rem;color:var(--text2);margin-bottom:8px}.lot-details .sep{color:var(--border2);margin:0 2px}
+.price{color:var(--green);font-weight:700}.dep{color:var(--text3)}
+.tags{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px}
+.tag{font-size:.7rem;padding:3px 8px;border-radius:12px;font-weight:600}
+.tag-t{background:var(--violet-light);color:var(--violet)}.tag-o{background:var(--green-light);color:var(--green2)}.tag-r{background:var(--red-light);color:var(--red)}
+.lot-bullets{list-style:none;padding:0;margin:0}.lot-bullets li{font-size:.82rem;color:var(--text2);padding:2px 0 2px 14px;position:relative}
+.lot-bullets li::before{content:'›';position:absolute;left:0;color:var(--text4)}
+.lot-link{margin-top:8px}.lot-link a{font-size:.82rem;color:var(--green);font-weight:600}
 
-.lot-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px}
-.lot-title{font-size:.78rem;font-weight:600;color:var(--text3)}
-
-/* Score badge — tech sprinkle */
-.lot-score{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:.78rem;padding:4px 12px;border-radius:8px}
-.lot-score.high{background:var(--green-light);color:var(--green)}.lot-score.mid{background:var(--amber-light);color:var(--amber)}.lot-score.low{background:var(--cream);color:var(--text4)}
-
-.lot-addr{font-family:'Source Serif 4',serif;font-size:1.02rem;font-weight:600;color:var(--navy);margin-bottom:6px}
-.lot-details{display:flex;flex-wrap:wrap;gap:8px;font-size:.82rem;color:var(--text2);margin-bottom:8px;align-items:center}
-.lot-details .sep{color:var(--border2);font-size:.7rem}
-.lot-details .price{font-family:'JetBrains Mono',monospace;font-weight:600;color:var(--green)}
-.lot-details .dep{font-weight:600;color:var(--amber)}
-
-.tags{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0}
-.tag{font-size:.7rem;padding:3px 8px;border-radius:6px;font-weight:600}
-.tag-o{background:var(--green-pale);color:var(--green);border:1px solid rgba(15,138,95,.1)}
-.tag-r{background:var(--red-light);color:var(--red);border:1px solid rgba(196,57,42,.08)}
-.tag-t{background:var(--violet-light);color:var(--violet);border:1px solid rgba(110,86,207,.1);font-weight:700}
-
-.lot-bullets{font-size:.84rem;color:var(--text2);margin-top:6px;list-style:none}
-.lot-bullets li{padding:2px 0 2px 14px;position:relative}
-.lot-bullets li::before{content:'›';position:absolute;left:0;color:var(--green);font-weight:700}
-.lot-link{font-size:.82rem;margin-top:8px}.lot-link a{color:var(--green);text-decoration:none;font-weight:500}.lot-link a:hover{text-decoration:underline}
-.enrich-panel{margin-top:10px;padding:10px 12px;background:var(--surface2);border-radius:var(--radius-sm);border:1px solid var(--border)}
-.enrich-item{display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:.84rem}
-.enrich-label{color:var(--text3);font-size:.78rem}.enrich-value{font-weight:600;color:var(--text)}
-.enrich-good{color:var(--green);font-weight:700}.enrich-warn{color:var(--red);font-weight:600}.enrich-neutral{color:var(--amber);font-weight:600}
+/* Enrich panel */
+.enrich-panel{margin-top:10px;padding:10px 14px;background:var(--surface2);border-radius:var(--radius-sm);font-size:.82rem}
+.enrich-item{display:flex;justify-content:space-between;align-items:center;padding:3px 0}
+.enrich-label{color:var(--text3);font-size:.78rem}.enrich-value{font-weight:600}
+.enrich-good{color:var(--green)}.enrich-warn{color:var(--red)}.enrich-neutral{color:var(--text2)}
 .street-sales{margin-top:6px;font-size:.78rem}
-.street-sales summary{cursor:pointer;color:var(--text3);font-size:.76rem;padding:2px 0}
-.street-sales summary:hover{color:var(--green)}
-.ss-list{margin-top:4px}.ss-row{display:flex;gap:8px;padding:3px 0;border-bottom:1px solid var(--border);font-size:.76rem;align-items:center}
-.ss-addr{flex:1;color:var(--text2);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ss-price{font-weight:600;color:var(--text);white-space:nowrap}.ss-date{color:var(--text4);white-space:nowrap}.ss-type{color:var(--text4);font-size:.72rem;white-space:nowrap}
+.street-sales summary{cursor:pointer;color:var(--text3);font-weight:500}
+.ss-list{margin-top:4px}.ss-row{display:flex;gap:8px;padding:2px 0;color:var(--text2)}
+.ss-addr{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ss-price{font-weight:600;color:var(--text)}.ss-date{color:var(--text4)}.ss-type{color:var(--text4);font-size:.72rem}
+
+/* ── PROGRESS ── */
+#progressPanel{display:none;margin-bottom:20px}
+.prog-box{background:var(--tech);border-radius:var(--radius);padding:18px;color:rgba(255,255,255,.9)}
+.p-status{font-weight:700;font-size:.9rem;margin-bottom:10px}
+.p-track{height:4px;background:rgba(255,255,255,.1);border-radius:2px;overflow:hidden;margin-bottom:12px}
+.p-fill{height:100%;background:var(--green);border-radius:2px;width:0;transition:width .4s}
+.log-box{font-family:'JetBrains Mono',monospace;font-size:.72rem;color:rgba(255,255,255,.5);max-height:100px;overflow-y:auto}
+.log-box .ok{color:var(--green)}.log-box .err{color:var(--red)}
+
+/* ── SECTION HEADERS ── */
+.sh{margin:32px 0 16px}.sh h2{font-family:'Source Serif 4',serif;font-size:1.3rem;font-weight:700;color:var(--navy);margin-bottom:4px}
+.sh p{color:var(--text2);font-size:.88rem}
+
+/* ── CALENDAR ── */
+.house-filters{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:16px}
+.hf{padding:6px 14px;border-radius:20px;border:1px solid var(--border);background:var(--white);font-size:.78rem;font-weight:600;color:var(--text3);cursor:pointer;font-family:inherit;transition:all .12s}
+.hf:hover{border-color:var(--green);color:var(--green)}.hf.active{background:var(--green);color:var(--white);border-color:var(--green)}
+.cal-grid{display:flex;flex-direction:column;gap:8px}
+.cal-card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:16px;display:grid;grid-template-columns:56px 1fr auto;gap:16px;align-items:center;transition:border-color .15s}
+.cal-card:hover{border-color:var(--border2)}
+.cal-date{text-align:center}.cal-date .day{font-family:'JetBrains Mono',monospace;font-size:1.5rem;font-weight:700;color:var(--navy);line-height:1}.cal-date .mon{font-size:.7rem;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;font-weight:700}
+.cal-info h3{font-size:.92rem;font-weight:700;margin-bottom:2px}
+.cal-info .meta{font-size:.78rem;color:var(--text3);display:flex;flex-wrap:wrap;gap:8px}.cal-info .meta span::before{content:'·';margin-right:8px;color:var(--border2)}.cal-info .meta span:first-child::before{display:none}
+.cal-actions{display:flex;gap:6px;flex-wrap:wrap}
+.cal-btn{padding:7px 16px;border-radius:var(--radius-sm);font-size:.8rem;font-weight:700;cursor:pointer;font-family:inherit;border:none;transition:all .12s}
+.cal-btn.primary{background:var(--green);color:var(--white)}.cal-btn.primary:hover{background:var(--green2)}
+.cal-btn.ghost{background:var(--surface2);color:var(--text2);border:1px solid var(--border)}.cal-btn.ghost:hover{border-color:var(--green);color:var(--green)}
 
 /* ── SIGNUP MODAL ── */
-.modal-bg{display:none;position:fixed;inset:0;background:rgba(26,23,20,.6);backdrop-filter:blur(4px);z-index:100;align-items:center;justify-content:center}
-.modal-bg.show{display:flex}
-.modal{background:var(--white);border:1px solid var(--border);border-radius:16px;padding:36px;max-width:420px;width:92%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.12)}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:100;display:flex;align-items:center;justify-content:center;opacity:0;visibility:hidden;transition:all .2s}.modal-bg.show{opacity:1;visibility:visible}
+.modal{background:var(--white);border-radius:var(--radius);padding:32px;max-width:400px;width:90%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.12)}
 .modal-icon{font-size:2rem;margin-bottom:10px}
 .modal h2{font-family:'Source Serif 4',serif;font-size:1.3rem;font-weight:700;color:var(--navy);margin-bottom:6px}
-.modal p{color:var(--text2);font-size:.88rem;margin-bottom:20px;line-height:1.6}
+.modal p{color:var(--text2);font-size:.88rem;margin-bottom:20px}
 .modal input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:13px 16px;color:var(--text);font-size:.9rem;outline:0;margin-bottom:10px;font-family:inherit}
-.modal input:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(15,138,95,.08)}
+.modal input:focus{border-color:var(--green)}
 .modal input::placeholder{color:var(--text4)}
-.modal .btn-main{width:100%;padding:14px}
 .modal-note{font-size:.75rem;color:var(--text4);margin-top:12px}
 
+/* ── USER BAR ── */
+.user-bar{display:flex;align-items:center;gap:6px;font-size:.82rem;color:var(--text3);margin-bottom:16px}
+.user-bar .dot{width:6px;height:6px;border-radius:50%;background:var(--green)}
+.user-bar a{cursor:pointer}
+
 /* ── FOOTER ── */
-footer{text-align:center;padding:44px 0 24px;color:var(--text4);font-size:.78rem;border-top:1px solid var(--border);margin-top:44px}
+footer{text-align:center;padding:40px 0 24px;color:var(--text4);font-size:.78rem;border-top:1px solid var(--border);margin-top:44px}
 footer .logo-f{font-family:'Source Serif 4',serif;font-size:1rem;font-weight:700;color:var(--text3);margin-bottom:4px}
 footer .logo-f span{color:var(--green)}
 
 /* ── RESPONSIVE ── */
 @media(max-width:768px){
   .hero h1{font-size:1.8rem}
-  .hero-stats{flex-direction:column;gap:0;border-radius:var(--radius)}
-  .hero-stat{padding:10px 24px}
-  .how{grid-template-columns:1fr}
+  .filters{grid-template-columns:1fr 1fr}
+  .search-row{flex-direction:column}
   .stats-grid{grid-template-columns:1fr 1fr}
   .budget-row{grid-template-columns:1fr}
-  .url-row{flex-direction:column}
   .cal-card{grid-template-columns:48px 1fr;gap:12px}
   .cal-actions{grid-column:1/-1}
   .toolbar{flex-direction:column;align-items:stretch}
-  .nav-mid{display:none}
+  .result-header{flex-direction:column;align-items:flex-start}
 }
 
-/* ── SUBTLE ANIMATIONS ── */
 @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 .hero{animation:fadeUp .5s ease both}
-.how-card{animation:fadeUp .4s ease both}
-.how-card:nth-child(2){animation-delay:.06s}.how-card:nth-child(3){animation-delay:.12s}
-
-/* ── SMART SEARCH ── */
-.smart-search-box{background:linear-gradient(135deg,var(--navy) 0%,#2a3d52 100%);border-radius:var(--radius);padding:32px;margin-bottom:28px;color:var(--white)}
-.sh-title{font-family:'Source Serif 4',serif;font-size:1.3rem;font-weight:700;color:var(--white);margin-bottom:4px}
-.sh-sub{color:rgba(255,255,255,.65);font-size:.88rem;margin-bottom:18px}
-.smart-row{display:flex;gap:10px}
-.smart-input{flex:1;padding:14px 18px;border-radius:var(--radius-sm);border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.08);color:var(--white);font-size:.95rem;font-family:inherit;outline:0;backdrop-filter:blur(4px)}
-.smart-input::placeholder{color:rgba(255,255,255,.35)}
-.smart-input:focus{border-color:var(--green);background:rgba(255,255,255,.12)}
-.smart-examples{margin-top:14px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-.ex-label{font-size:.78rem;color:rgba(255,255,255,.5);margin-right:4px}
-.ex-btn{font-size:.75rem;padding:5px 12px;border-radius:20px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.06);color:rgba(255,255,255,.7);cursor:pointer;font-family:inherit;transition:all .15s}
-.ex-btn:hover{background:rgba(255,255,255,.12);color:var(--white);border-color:rgba(255,255,255,.3)}
-
-/* ── REPORT TOGGLE ── */
-.report-toggle{display:flex;gap:4px;margin-bottom:20px;background:var(--cream);padding:4px;border-radius:var(--radius-sm);width:fit-content}
-.tog{padding:8px 20px;border-radius:6px;border:none;background:transparent;font-size:.85rem;font-weight:600;cursor:pointer;font-family:inherit;color:var(--text3);transition:all .15s}
-.tog.active{background:var(--white);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.06)}
-.smart-report{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:28px;line-height:1.8;font-size:.92rem;color:var(--text)}
-.smart-report h3{font-family:'Source Serif 4',serif;font-size:1.1rem;margin:18px 0 8px;color:var(--navy)}
-.smart-report p{margin-bottom:12px}
-.smart-report .sources{margin-top:16px;padding-top:12px;border-top:1px solid var(--border);font-size:.78rem;color:var(--text3)}
-
-/* ── DIVIDER ── */
-.divider{display:flex;align-items:center;gap:16px;margin:28px 0;color:var(--text4);font-size:.82rem}
-.divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--border)}
-
-/* ── BUDGET TOGGLE ── */
-.budget-toggle{margin-top:16px;border:none}
-.budget-toggle summary{cursor:pointer;font-size:.85rem;color:var(--text3);font-weight:500;padding:8px 0;list-style:none}
-.budget-toggle summary::-webkit-details-marker{display:none}
-.budget-toggle[open] summary{margin-bottom:12px}
-
-@media(max-width:768px){
-  .smart-row{flex-direction:column}
-  .smart-examples{flex-direction:column;align-items:flex-start}
-}
 </style>
 </head>
 <body>
 
-<!-- NAV -->
 <nav class="nav">
   <div class="nav-inner">
     <div class="logo">Bridge<span>match</span></div>
-    <div class="nav-mid">
-      <button class="nav-link active" onclick="switchTab('calendar')">Auctions</button>
-      <button class="nav-link" onclick="switchTab('analyser')">Analyser</button>
-    </div>
     <div class="nav-right">
       <button class="nav-cta" id="navCta" onclick="requireSignup()">Sign up free</button>
     </div>
@@ -287,142 +216,116 @@ footer .logo-f span{color:var(--green)}
 
 <div class="wrap">
 
-  <!-- HERO -->
   <header class="hero">
-    <div class="hero-eyebrow"><span class="pulse"></span> Live auction data</div>
     <h1>Find your next property deal<br>at <em>auction</em></h1>
-    <p class="hero-sub">Bridgematch tracks every major UK auction house and analyses entire catalogues with AI — scoring lots, spotting title splits, and filtering to your budget. All free.</p>
-    <div class="hero-stats">
-      <div class="hero-stat"><div class="n">10+</div><div class="l">Auction Houses</div></div>
-      <div class="hero-stat"><div class="n">280</div><div class="l">Lots Analysed</div></div>
-      <div class="hero-stat"><div class="n">Free</div><div class="l">To Use</div></div>
-    </div>
+    <p class="hero-sub">Search across every major UK auction house at once. AI-powered analysis scores every lot, spots title splits, and finds hidden opportunities.</p>
   </header>
-
-  <!-- ═══════ CALENDAR ═══════ -->
-  <div class="section active" id="sec-calendar">
-
-    <div class="how">
-      <div class="how-card">
-        <div class="how-icon">📅</div>
-        <h3>Browse upcoming auctions</h3>
-        <p>Every major UK house in one calendar. Savills, Allsop, SDL, Barnard Marcus, Auction House London, Auction House UK, Clive Emson, Network, Bond Wolfe, Strettons, Acuitus, Hollis Morgan, Maggs & Allen, McHugh & Co, Butters John Bee.</p>
-      </div>
-      <div class="how-card">
-        <div class="how-icon">🤖</div>
-        <h3>AI analyses the catalogue</h3>
-        <p>Our AI reads every lot, extracts key details, and scores each one on investment potential. Takes seconds, not hours.</p>
-      </div>
-      <div class="how-card">
-        <div class="how-icon">🎯</div>
-        <h3>Filter and find deals</h3>
-        <p>Set your budget, filter by deal type and title splits, then download your shortlist as a spreadsheet.</p>
-      </div>
-    </div>
-
-    <div class="sh">
-      <h2>Upcoming auctions</h2>
-      <p>Click Analyse to AI-score every lot, or View to browse the catalogue yourself.</p>
-    </div>
-
-    <div class="house-filters" id="houseFilters"><button class="hf active" data-house="all">All</button></div>
-    <div class="cal-grid" id="calGrid">
-      <div style="text-align:center;padding:40px;color:var(--text4)">Loading auctions...</div>
-    </div>
-  </div>
 
   <!-- ═══════ SIGNUP MODAL ═══════ -->
   <div class="modal-bg" id="signupModal">
     <div class="modal">
       <div class="modal-icon">🔓</div>
-      <h2>Unlock the analyser</h2>
-      <p>Free to use — just enter your email. We'll also let you know when new catalogues are published.</p>
+      <h2>Unlock Bridgematch</h2>
+      <p>Free to use — just enter your email. We'll also let you know when new catalogues drop.</p>
       <input id="signupName" placeholder="Your name (optional)">
       <input id="signupEmail" placeholder="Email address" type="email">
       <div id="signupError" style="color:var(--red);font-size:.82rem;margin-bottom:8px;display:none"></div>
-      <button class="btn-main" onclick="doSignup()">Get started — it's free</button>
+      <button class="btn-main" style="width:100%" onclick="doSignup()">Get started — it's free</button>
       <div class="modal-note">No card required · No spam · Unsubscribe anytime</div>
     </div>
   </div>
 
-  <!-- ═══════ ANALYSER ═══════ -->
-  <div class="section" id="sec-analyser">
-    <div id="userBar" class="user-bar" style="display:none">
-      <span class="dot"></span> <span id="userEmail"></span> &nbsp;·&nbsp; <a onclick="signOut()">sign out</a>
+  <!-- USER BAR -->
+  <div id="userBar" class="user-bar" style="display:none">
+    <span class="dot"></span> <span id="userEmail"></span> &nbsp;·&nbsp; <a onclick="signOut()">sign out</a>
+  </div>
+
+  <!-- ═══════ SEARCH PANEL ═══════ -->
+  <div class="search-panel">
+    <div class="search-row">
+      <input id="smartQuery" class="search-input" placeholder="Describe what you're looking for, or paste an auction catalogue URL...">
+      <button class="btn-main" id="mainBtn" onclick="handleSearch()">Search</button>
     </div>
 
-    <!-- SMART SEARCH -->
-    <div class="smart-search-box">
-      <h2 class="sh-title">🔍 Search across all auctions</h2>
-      <p class="sh-sub">Describe what you're looking for and we'll search all analysed catalogues at once.</p>
-      <div class="smart-row">
-        <input id="smartQuery" placeholder="e.g. Freehold blocks under £200k in the South West that need heavy refurb" class="smart-input">
-        <button class="btn-main" id="smartBtn" onclick="runSmartSearch()">Search</button>
-      </div>
-      <div class="smart-examples">
+    <div class="filters">
+      <div class="filter-field"><label>Min Price</label><select id="fMinPrice">
+        <option value="">No min</option><option value="25000">£25,000</option><option value="50000">£50,000</option><option value="75000">£75,000</option><option value="100000">£100,000</option><option value="150000">£150,000</option><option value="200000">£200,000</option><option value="300000">£300,000</option><option value="500000">£500,000</option>
+      </select></div>
+      <div class="filter-field"><label>Max Price</label><select id="fMaxPrice">
+        <option value="">No max</option><option value="50000">£50,000</option><option value="100000">£100,000</option><option value="150000">£150,000</option><option value="200000">£200,000</option><option value="300000">£300,000</option><option value="500000">£500,000</option><option value="750000">£750,000</option><option value="1000000">£1,000,000</option>
+      </select></div>
+      <div class="filter-field"><label>Bedrooms</label><select id="fBeds">
+        <option value="">Any</option><option value="1">1+</option><option value="2">2+</option><option value="3">3+</option><option value="4">4+</option><option value="5">5+</option>
+      </select></div>
+      <div class="filter-field"><label>Property Type</label><select id="fType">
+        <option value="">All types</option>
+      </select></div>
+    </div>
+
+    <div class="filter-extras">
+      <div class="example-prompts">
         <span class="ex-label">Try:</span>
-        <button class="ex-btn" onclick="setSmartQuery('Properties under £150k requiring heavy refurbishment')">Heavy refurb under £150k</button>
-        <button class="ex-btn" onclick="setSmartQuery('Freehold multi-unit blocks suitable for title splitting')">Title split opportunities</button>
-        <button class="ex-btn" onclick="setSmartQuery('High yield investments over 8% in the Midlands or North')">High yield 8%+</button>
-        <button class="ex-btn" onclick="setSmartQuery('Development land or plots with planning permission')">Dev land with planning</button>
+        <button class="ex-btn" onclick="setQ('Properties under £150k needing heavy refurbishment')">Heavy refurb under £150k</button>
+        <button class="ex-btn" onclick="setQ('Freehold multi-unit blocks for title splitting')">Title splits</button>
+        <button class="ex-btn" onclick="setQ('High yield investments over 8%')">High yield 8%+</button>
+        <button class="ex-btn" onclick="setQ('Development land with planning')">Dev land</button>
       </div>
+      <button class="adv-toggle" onclick="toggleAdvanced()">⚙️ Budget & deposit</button>
     </div>
 
-    <!-- SMART SEARCH RESULTS -->
-    <div id="smartResultsPanel" style="display:none">
-      <div class="report-toggle">
-        <button class="tog active" id="togReport" onclick="showSmartView('report')">📝 Report</button>
-        <button class="tog" id="togCards" onclick="showSmartView('cards')">🃏 Cards</button>
+    <div class="advanced" id="advancedPanel">
+      <div class="budget-row">
+        <div class="filter-field"><label>Your Deposit (£)</label><input id="dep" type="number" value="150000"></div>
+        <div class="filter-field"><label>Standard Deposit %</label><input id="stdPct" type="number" value="25"></div>
+        <div class="filter-field"><label>Title Split Deposit %</label><input id="tsPct" type="number" value="10"></div>
       </div>
-      <div id="smartReport" class="smart-report"></div>
-      <div id="smartCards" style="display:none"></div>
+      <div class="budget-summary" id="budgetInfo"></div>
     </div>
+  </div>
 
-    <div class="divider"><span>or analyse a specific catalogue</span></div>
+  <!-- ═══════ PROGRESS ═══════ -->
+  <div id="progressPanel">
+    <div class="prog-box">
+      <div class="p-status" id="pStatus">Starting...</div>
+      <div class="p-track"><div class="p-fill" id="pBar"></div></div>
+      <div class="log-box" id="logBox"></div>
+    </div>
+  </div>
 
-    <!-- CATALOGUE ANALYSER -->
-    <div class="sh"><h2>Catalogue analyser</h2><p>Paste a catalogue URL and our AI will score every lot in seconds.</p></div>
-
-    <div class="analyser-box">
-      <div class="label">Auction catalogue URL</div>
-      <div class="url-row">
-        <input id="urlInput" placeholder="https://auctions.savills.co.uk/auctions/...">
-        <button class="btn-main" id="goBtn" onclick="runAnalysis()">Analyse</button>
-      </div>
-
-      <details class="budget-toggle">
-        <summary>⚙️ Budget & deposit settings</summary>
-        <div class="budget-row">
-          <div class="field"><label>Deposit (£)</label><input id="dep" type="number" value="150000"></div>
-          <div class="field"><label>Standard deposit %</label><input id="stdPct" type="number" value="25"></div>
-          <div class="field"><label>Title split deposit %</label><input id="tsPct" type="number" value="10"></div>
+  <!-- ═══════ RESULTS ═══════ -->
+  <div id="resultsPanel">
+    <div class="result-header">
+      <h2 id="resultsTitle">Results</h2>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div class="view-toggle" id="viewToggle" style="display:none">
+          <button class="vtog active" onclick="showView('report')">📝 Report</button>
+          <button class="vtog" onclick="showView('cards')">🃏 Cards</button>
         </div>
-        <div class="budget-summary" id="budgetInfo"></div>
-      </details>
-    </div>
-
-    <div id="progressPanel">
-      <div class="prog-box">
-        <div class="p-status" id="pStatus">Starting...</div>
-        <div class="p-track"><div class="p-fill" id="pBar"></div></div>
-        <div class="log-box" id="logBox"></div>
+        <button class="tb-btn" onclick="dlCSV()">↓ CSV</button>
+        <button class="tb-btn" onclick="dlJSON()">↓ JSON</button>
       </div>
     </div>
 
-    <div id="resultsPanel">
-      <div class="stats-grid" id="statsRow"></div>
+    <div class="stats-grid" id="statsRow"></div>
+
+    <div id="reportView" class="report-view" style="display:none"></div>
+
+    <div id="cardsView">
       <div class="toolbar">
-        <select class="tb-select" id="fType" onchange="renderLots()"><option value="">All types</option></select>
         <select class="tb-select" id="fDeal" onchange="renderLots()"><option value="">All deals</option></select>
         <select class="tb-select" id="fBudget" onchange="renderLots()"><option value="budget">In budget</option><option value="all">All lots</option></select>
         <select class="tb-select" id="fTS" onchange="renderLots()"><option value="">All lots</option><option value="ts">Title splits only</option></select>
         <input class="tb-search" type="text" id="fSearch" placeholder="Search..." oninput="renderLots()">
-        <span class="spacer"></span>
-        <button class="tb-btn" onclick="dlCSV()">↓ CSV</button>
-        <button class="tb-btn" onclick="dlJSON()">↓ JSON</button>
       </div>
       <div id="lotsOut"></div>
     </div>
+  </div>
+
+  <!-- ═══════ UPCOMING AUCTIONS ═══════ -->
+  <div class="sh"><h2>Upcoming auctions</h2><p>Click Analyse to AI-score every lot, or View to browse the catalogue yourself.</p></div>
+  <div class="house-filters" id="houseFilters"><button class="hf active" data-house="all">All</button></div>
+  <div class="cal-grid" id="calGrid">
+    <div style="text-align:center;padding:40px;color:var(--text4)">Loading auctions...</div>
   </div>
 
   <footer>
@@ -433,25 +336,24 @@ footer .logo-f span{color:var(--green)}
 
 <script>
 const $=id=>document.getElementById(id);
-let LOTS=[];
+let LOTS=[], SMART_RESULTS=null;
 
 // ═══════════════════════════════
-// TABS + ROUTING
+// SMART DETECTION: URL or search query?
 // ═══════════════════════════════
-function switchTab(tab){
-  document.querySelectorAll('.nav-link').forEach(t=>t.classList.remove('active'));
-  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
-  const link=document.querySelector(`.nav-link[onclick*="${tab}"]`);
-  if(link)link.classList.add('active');
-  $(`sec-${tab}`).classList.add('active');
-  const path=tab==='calendar'?'/auctions':'/analyse';
-  if(window.location.pathname!==path)history.pushState(null,'',path);
+function isUrl(s){ return s.match(/^https?:\/\//) || s.match(/\.(co\.uk|com|org)\//i); }
+
+function handleSearch(){
+  const q = $('smartQuery').value.trim();
+  if(!q) return alert('Describe what you\'re looking for, or paste a catalogue URL');
+  if(isUrl(q)){
+    runAnalysis(q);
+  } else {
+    runSmartSearch(q);
+  }
 }
-function routeFromURL(){
-  if(window.location.pathname==='/analyse')switchTab('analyser');
-  else switchTab('calendar');
-}
-window.addEventListener('popstate',routeFromURL);
+
+function setQ(q){ $('smartQuery').value = q; }
 
 // ═══════════════════════════════
 // BUDGET
@@ -462,8 +364,12 @@ function getBudget(){
   $('budgetInfo').innerHTML=`Max purchase: <b>£${sm.toLocaleString()}</b> standard · <b>£${tm.toLocaleString()}</b> title split`;
   return {d,sp,tp,sm,tm};
 }
-['dep','stdPct','tsPct'].forEach(id=>$(id).addEventListener('input',getBudget));
+['dep','stdPct','tsPct'].forEach(id=>$(id)?.addEventListener('input',getBudget));
 getBudget();
+
+function toggleAdvanced(){
+  $('advancedPanel').classList.toggle('show');
+}
 
 // ═══════════════════════════════
 // CALENDAR
@@ -498,13 +404,12 @@ function renderCalendar(){
   let auctions=calendarData;
   if(activeHouse!=='all')auctions=auctions.filter(a=>a.house===activeHouse);
   if(!auctions.length){$('calGrid').innerHTML='<div style="padding:20px;color:var(--text4)">No auctions found.</div>';return}
-
   $('calGrid').innerHTML=auctions.map(a=>{
     const d=new Date(a.date);
     const day=d.getDate();
     const mon=d.toLocaleDateString('en-GB',{month:'short'}).toUpperCase();
     const lotsText=a.lots?`${a.lots} lots`:'Lots TBC';
-    const analyseBtn=a.catalogueReady?`<button class="cal-btn primary" onclick="analyseAuction('${a.url}')">Analyse</button>`:'';
+    const analyseBtn=a.catalogueReady?`<button class="cal-btn primary" onclick="analyseFromCal('${a.url}')">Analyse</button>`:'';
     return`<div class="cal-card">
       <div class="cal-date"><div class="day">${day}</div><div class="mon">${mon}</div></div>
       <div class="cal-info">
@@ -519,9 +424,10 @@ function renderCalendar(){
   }).join('');
 }
 
-function analyseAuction(url){
-  $('urlInput').value=url;
-  switchTab('analyser');
+function analyseFromCal(url){
+  $('smartQuery').value = url;
+  window.scrollTo({top:0,behavior:'smooth'});
+  setTimeout(()=>runAnalysis(url), 300);
 }
 
 // ═══════════════════════════════
@@ -574,18 +480,17 @@ function signOut(){
 $('signupModal').addEventListener('click',e=>{if(e.target===$('signupModal'))$('signupModal').classList.remove('show')});
 
 // ═══════════════════════════════
-// ANALYSER
+// CATALOGUE ANALYSIS
 // ═══════════════════════════════
 function log(m,c=''){const d=document.createElement('div');d.className=c;d.textContent=`[${new Date().toLocaleTimeString()}] ${m}`;$('logBox').appendChild(d);$('logBox').scrollTop=9e9}
 function prog(p,t){$('pBar').style.width=p+'%';if(t)$('pStatus').textContent=t}
 
-async function runAnalysis(){
+async function runAnalysis(url){
   if(!requireSignup()) return;
-  const url=$('urlInput').value.trim();
+  if(!url) url=$('smartQuery').value.trim();
   if(!url)return alert('Please paste an auction catalogue URL');
-  const b=getBudget();
 
-  $('goBtn').disabled=true;
+  $('mainBtn').disabled=true;
   $('progressPanel').style.display='block';
   $('resultsPanel').style.display='none';
   $('logBox').innerHTML='';
@@ -617,6 +522,10 @@ async function runAnalysis(){
     log(`Done! ${data.totalLots} lots analysed, ${data.titleSplits} title splits found.${cacheNote}`,'ok');
     prog(100,'Complete');
 
+    $('resultsTitle').textContent = `${data.house || 'Auction'} — ${LOTS.length} lots`;
+    $('viewToggle').style.display='none';
+    $('reportView').style.display='none';
+    $('cardsView').style.display='block';
     buildLotFilters();
     renderLots();
     $('resultsPanel').style.display='block';
@@ -624,9 +533,76 @@ async function runAnalysis(){
     log(e.message,'err');
     prog(0,'Failed');
   }
-  $('goBtn').disabled=false;
+  $('mainBtn').disabled=false;
 }
 
+// ═══════════════════════════════
+// SMART SEARCH
+// ═══════════════════════════════
+async function runSmartSearch(query) {
+  if (!requireSignup()) return;
+  $('mainBtn').disabled = true;
+  $('mainBtn').textContent = 'Searching...';
+  $('progressPanel').style.display = 'block';
+  $('resultsPanel').style.display = 'none';
+  $('logBox').innerHTML = '';
+  log('Searching across all analysed catalogues...');
+  prog(30, 'AI is searching...');
+
+  try {
+    const resp = await fetch('/api/smart-search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, email: currentUser?.email })
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      if (data.error === 'signup_required') { requireSignup(); throw new Error('Please sign up first'); }
+      throw new Error(data.error || 'Search failed');
+    }
+
+    LOTS = data.results || [];
+    SMART_RESULTS = data;
+    log(`Found ${LOTS.length} matching lots across ${data.sources?.length || 0} catalogues`, 'ok');
+    prog(100, 'Complete');
+
+    // Show results with report toggle
+    $('resultsTitle').textContent = `Search results — ${LOTS.length} matches`;
+    $('viewToggle').style.display = 'flex';
+
+    // Report
+    let rh = '';
+    if (data.report) rh += `<p>${data.report.replace(/\n/g, '</p><p>')}</p>`;
+    if (data.sources?.length) rh += `<div class="sources">Searched ${data.totalSearched||0} lots across ${data.sources.length} catalogues: ${data.sources.map(s=>`${s.house} (${s.count})`).join(', ')}</div>`;
+    $('reportView').innerHTML = rh;
+
+    showView('report');
+    buildLotFilters();
+    renderLots();
+    $('resultsPanel').style.display = 'block';
+    $('statsRow').innerHTML = `
+      <div class="stat-card"><div class="v g">${data.totalSearched||0}</div><div class="l">Lots searched</div></div>
+      <div class="stat-card"><div class="v y">${LOTS.length}</div><div class="l">Matches</div></div>
+      <div class="stat-card"><div class="v p">${LOTS.filter(l=>l.titleSplit).length}</div><div class="l">Title splits</div></div>
+      <div class="stat-card"><div class="v g">${LOTS.filter(l=>(l.score||0)>=3).length}</div><div class="l">Score 3+</div></div>
+      <div class="stat-card"><div class="v y">${data.sources?.length||0}</div><div class="l">Catalogues</div></div>`;
+  } catch (e) {
+    log(e.message, 'err');
+    prog(0, 'Failed');
+  }
+  $('mainBtn').disabled = false;
+  $('mainBtn').textContent = 'Search';
+}
+
+function showView(v) {
+  document.querySelectorAll('.vtog').forEach((b,i) => b.classList.toggle('active', i===(v==='report'?0:1)));
+  $('reportView').style.display = v === 'report' ? 'block' : 'none';
+  $('cardsView').style.display = v === 'cards' ? 'block' : 'none';
+}
+
+// ═══════════════════════════════
+// LOT RENDERING
+// ═══════════════════════════════
 function buildLotFilters(){
   const types=new Set(LOTS.map(l=>l.propType).filter(Boolean));
   const deals=new Set(LOTS.map(l=>l.dealType).filter(Boolean));
@@ -637,6 +613,12 @@ function buildLotFilters(){
 function renderLots(){
   const b=getBudget();
   let lots=LOTS.slice();
+
+  // Apply standard filters
+  const minP=+$('fMinPrice').value, maxP=+$('fMaxPrice').value, minBeds=+$('fBeds').value;
+  if(minP) lots=lots.filter(l=>!l.price||l.price>=minP);
+  if(maxP) lots=lots.filter(l=>!l.price||l.price<=maxP);
+  if(minBeds) lots=lots.filter(l=>!l.beds||l.beds>=minBeds);
 
   const ft=$('fType').value,fd=$('fDeal').value,fb=$('fBudget').value,fts=$('fTS').value,fs=$('fSearch').value.toLowerCase();
   if(ft)lots=lots.filter(l=>l.propType===ft);
@@ -681,14 +663,16 @@ function card(l,b){
   details.push(`<span class="dep">Dep: ${depE}</span>`);
   if(l.titleSplit&&l.price&&l.units)details.push(`£${Math.round(l.price/l.units).toLocaleString()}/unit`);
 
-  let tags='';
+  // Show source house for smart search results
+  const houseTag = l._house ? `<span class="tag" style="background:var(--cream);color:var(--text3)">${l._house}</span>` : '';
+
+  let tags=houseTag;
   if(l.titleSplit)tags+=`<span class="tag tag-t">TITLE SPLIT</span>`;
   if(l.units)tags+=`<span class="tag tag-t">${l.units} units</span>`;
   (l.opps||[]).filter(o=>!o.startsWith('Title split')).forEach(o=>tags+=`<span class="tag tag-o">${o}</span>`);
   (l.risks||[]).forEach(r=>tags+=`<span class="tag tag-r">${r}</span>`);
   const bul=(l.bullets||[]).slice(0,4).map(b=>`<li>${b}</li>`).join('');
 
-  // Land Registry + Yield enrichment panel
   let enrichHtml='';
   const hasLR=l.streetAvg||l.streetSalesCount>0;
   const hasYield=l.estGrossYield;
@@ -697,30 +681,20 @@ function card(l,b){
     if(l.streetAvg){
       const diffClass=l.belowMarket>10?'enrich-good':l.belowMarket<-10?'enrich-warn':'enrich-neutral';
       const diffText=l.belowMarket>0?`${l.belowMarket}% below`:`${Math.abs(l.belowMarket||0)}% above`;
-      enrichHtml+=`<div class="enrich-item">
-        <div class="enrich-label">🏘️ Street avg (${l.streetSalesCount} sales, 3yr)</div>
-        <div class="enrich-value">£${l.streetAvg.toLocaleString()} <span class="${diffClass}">${l.price?diffText:'—'}</span></div>
-      </div>`;
+      enrichHtml+=`<div class="enrich-item"><div class="enrich-label">🏘️ Street avg (${l.streetSalesCount} sales, 3yr)</div><div class="enrich-value">£${l.streetAvg.toLocaleString()} <span class="${diffClass}">${l.price?diffText:'—'}</span></div></div>`;
     }
     if(hasYield){
       const yClass=l.estGrossYield>=7?'enrich-good':l.estGrossYield>=5?'enrich-neutral':'enrich-warn';
-      enrichHtml+=`<div class="enrich-item">
-        <div class="enrich-label">📊 Est. gross yield</div>
-        <div class="enrich-value"><span class="${yClass}">${l.estGrossYield}%</span> (£${l.estMonthlyRent}/mo est.)</div>
-      </div>`;
+      enrichHtml+=`<div class="enrich-item"><div class="enrich-label">📊 Est. gross yield</div><div class="enrich-value"><span class="${yClass}">${l.estGrossYield}%</span> (£${l.estMonthlyRent}/mo est.)</div></div>`;
     }
-    // Expandable street sales
     if(l.streetSales&&l.streetSales.length>0){
       enrichHtml+=`<details class="street-sales"><summary>View ${l.streetSales.length} recent street sales</summary><div class="ss-list">`;
-      l.streetSales.forEach(s=>{
-        enrichHtml+=`<div class="ss-row"><span class="ss-addr">${s.address}</span><span class="ss-price">£${s.price.toLocaleString()}</span><span class="ss-date">${s.date.slice(0,10)}</span><span class="ss-type">${s.type||''}</span></div>`;
-      });
+      l.streetSales.forEach(s=>{enrichHtml+=`<div class="ss-row"><span class="ss-addr">${s.address}</span><span class="ss-price">£${s.price.toLocaleString()}</span><span class="ss-date">${s.date.slice(0,10)}</span><span class="ss-type">${s.type||''}</span></div>`;});
       enrichHtml+=`</div></details>`;
     }
     enrichHtml+='</div>';
   }
 
-  // Lot link
   const link=l.url?`<div class="lot-link"><a href="${l.url}" target="_blank">View listing ↗</a></div>`:'';
 
   return`<div class="lot ${l.titleSplit?'ts':''}">
@@ -744,72 +718,7 @@ function dl(c,n,t){const b=new Blob([c],{type:t}),a=document.createElement('a');
 
 // Init
 loadCalendar();
-routeFromURL();
-
-// ═══════════════════════════════
-// SMART SEARCH
-// ═══════════════════════════════
-function setSmartQuery(q){ $('smartQuery').value = q; }
-
-async function runSmartSearch() {
-  if (!requireSignup()) return;
-  const query = $('smartQuery').value.trim();
-  if (!query) return alert('Please describe what you\'re looking for');
-
-  $('smartBtn').disabled = true;
-  $('smartBtn').textContent = 'Searching...';
-  $('smartResultsPanel').style.display = 'none';
-
-  try {
-    const resp = await fetch('/api/smart-search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, email: currentUser?.email })
-    });
-    const data = await resp.json();
-    if (!resp.ok) {
-      if (data.error === 'signup_required') { requireSignup(); throw new Error('Please sign up first'); }
-      throw new Error(data.error || 'Search failed');
-    }
-
-    // Show results
-    $('smartResultsPanel').style.display = 'block';
-
-    // Report view
-    let reportHtml = '';
-    if (data.report) {
-      reportHtml += `<p>${data.report.replace(/\n/g, '</p><p>')}</p>`;
-    }
-    if (data.sources && data.sources.length > 0) {
-      reportHtml += `<div class="sources">Searched ${data.totalSearched || 0} lots across ${data.sources.length} catalogues: ${data.sources.map(s => `${s.house} (${s.count} lots)`).join(', ')}</div>`;
-    }
-    if (data.results && data.results.length === 0) {
-      reportHtml += '<p style="color:var(--text3);margin-top:12px">No matching lots found. Try analysing more auction catalogues first, or broaden your search.</p>';
-    }
-    $('smartReport').innerHTML = reportHtml;
-
-    // Cards view
-    if (data.results && data.results.length > 0) {
-      const b = getBudget();
-      $('smartCards').innerHTML = data.results.map(l => card(l, b)).join('');
-    } else {
-      $('smartCards').innerHTML = '<div style="padding:20px;color:var(--text4);text-align:center">No matching lots to display.</div>';
-    }
-
-    showSmartView('report');
-  } catch (e) {
-    alert(e.message);
-  }
-  $('smartBtn').disabled = false;
-  $('smartBtn').textContent = 'Search';
-}
-
-function showSmartView(view) {
-  $('togReport').classList.toggle('active', view === 'report');
-  $('togCards').classList.toggle('active', view === 'cards');
-  $('smartReport').style.display = view === 'report' ? 'block' : 'none';
-  $('smartCards').style.display = view === 'cards' ? 'block' : 'none';
-}
+checkUser();
 </script>
 </body>
 </html>

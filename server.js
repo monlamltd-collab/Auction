@@ -342,14 +342,6 @@ app.get('/api/auctions', (req, res) => {
       location: 'Online', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: false,
     },
-    // ── BUTTERS JOHN BEE ──
-    {
-      house: 'Butters John Bee', houseSlug: 'buttersjohnbee', logo: '🐝',
-      date: '2026-03-09', title: '9 March 2026', lots: null,
-      url: 'https://www.buttersjohnbee.com/auctions/auction-catalogues',
-      location: 'Stoke-on-Trent (Live Stream)', type: 'Residential & Commercial', status: 'upcoming',
-      catalogueReady: true,
-    },
     // ── AUCTION HOUSE UK (National franchise) ──
     {
       house: 'Auction House UK', houseSlug: 'auctionhouse', logo: '🏛️',
@@ -751,7 +743,7 @@ function detectAuctionHouse(url) {
   if (u.includes('hollismorgan')) return 'hollismorgan';
   if (u.includes('maggsandallen')) return 'maggsandallen';
   if (u.includes('mchughandco')) return 'mchughandco';
-  if (u.includes('buttersjohnbee')) return 'buttersjohnbee';
+  // buttersjohnbee — PDF-only catalogues, not supported for DOM extraction
   if (u.includes('auctionhouselondon')) return 'auctionhouselondon';
   if (u.includes('auctionhouse.co.uk')) return 'auctionhouse';
   if (u.includes('pughauctions') || u.includes('pugh')) return 'sdl';
@@ -869,10 +861,7 @@ function rewriteUrl(url, house) {
     return { baseUrl: url, isApi: false, paginateAs: null, preferPuppeteer: true };
   }
 
-  if (house === 'buttersjohnbee') {
-    // Butters John Bee: /auctions/auction-catalogues — may need Puppeteer
-    return { baseUrl: url, isApi: false, paginateAs: null, preferPuppeteer: true };
-  }
+  // buttersjohnbee removed — PDF-only catalogues
 
   // No rewrite needed
   return { baseUrl: url, isApi: false, paginateAs: null };
@@ -1734,40 +1723,6 @@ const DOM_EXTRACTORS = {
     })()
   `,
 
-  // ─── BUTTERS JOHN BEE ─────────────────────────────────────
-  buttersjohnbee: `
-    (() => {
-      const lots = [];
-      const seen = new Set();
-      const cards = document.querySelectorAll('[class*="lot"], [class*="property"], article, .search-result');
-      for (const card of cards) {
-        const text = card.textContent || '';
-        const lotMatch = text.match(/Lot\\s+(\\d+)/i);
-        if (!lotMatch) continue;
-        const num = parseInt(lotMatch[1]);
-        if (seen.has(num)) continue;
-        seen.add(num);
-        const link = card.querySelector('a[href]');
-        const url = link ? link.getAttribute('href') : '';
-        const priceMatch = text.match(/(?:Guide|Price)[^£]*£([\\d,]+)/i) || text.match(/£([\\d,]+)/);
-        const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
-        let address = '';
-        const heading = card.querySelector('h2, h3, h4, .address, .title');
-        if (heading) address = heading.textContent.trim();
-        if (!address) continue;
-        const bullets = [];
-        card.querySelectorAll('li').forEach(li => {
-          const t = li.textContent.trim();
-          if (t.length > 5 && t.length < 200) bullets.push(t);
-        });
-        if (text.match(/\\bSOLD\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) {
-          if (!bullets.some(b => b.match(/SOLD|STC|WITHDRAWN/i))) bullets.push('SOLD/STC');
-        }
-        lots.push({ lot: num, address, price, url, bullets });
-      }
-      return lots;
-    })()
-  `,
 };
 
 // Universal DOM extractor — works on any auction site by detecting common patterns
@@ -2300,11 +2255,6 @@ function buildLotUrl(lot, house, sourceUrl) {
     case 'mchughandco':
       if (lot.url && lot.url.startsWith('/')) {
         return `https://www.mchughandco.com${lot.url}`;
-      }
-      break;
-    case 'buttersjohnbee':
-      if (lot.url && lot.url.startsWith('/')) {
-        return `https://www.buttersjohnbee.com${lot.url}`;
       }
       break;
   }
