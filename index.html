@@ -146,6 +146,24 @@ a{color:var(--green);text-decoration:none}a:hover{text-decoration:underline}
 .enrich-item{display:flex;justify-content:space-between;align-items:center;padding:3px 0}
 .enrich-label{color:var(--text3);font-size:.78rem}.enrich-value{font-weight:600}
 .enrich-good{color:var(--green)}.enrich-warn{color:var(--red)}.enrich-neutral{color:var(--text2)}
+
+/* Deal Analysis toggle */
+.tb-toggle{display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.82rem;white-space:nowrap;padding:6px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--white);transition:all .15s}
+.tb-toggle:has(input:checked){background:var(--green-light);border-color:var(--green)}
+.tb-toggle input{display:none}
+.tb-toggle-label{font-weight:600;color:var(--text2)}
+.tb-toggle:has(input:checked) .tb-toggle-label{color:var(--green)}
+
+/* Deal Analysis panel */
+.deal-panel{margin-top:10px;padding:14px 16px;background:linear-gradient(135deg,var(--green-pale),var(--surface2));border:1px solid var(--border);border-radius:var(--radius-sm)}
+.deal-header{font-size:.8rem;font-weight:700;color:var(--navy);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.deal-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.deal-item{padding:8px 10px;background:var(--white);border-radius:6px;border:1px solid var(--border)}
+.deal-item .dl{font-size:.7rem;color:var(--text3);text-transform:uppercase;letter-spacing:.03em}
+.deal-item .dv{font-family:'JetBrains Mono',monospace;font-size:.92rem;font-weight:700;margin-top:2px}
+.deal-item .dv.pos{color:var(--green)}.deal-item .dv.neg{color:var(--red)}.deal-item .dv.neu{color:var(--text2)}
+.deal-note{font-size:.75rem;color:var(--text3);margin-top:8px;font-style:italic}
+.deal-full{grid-column:1/-1}
 .street-sales{margin-top:6px;font-size:.78rem}
 .street-sales summary{cursor:pointer;color:var(--text3);font-weight:500}
 .ss-list{margin-top:4px}.ss-row{display:flex;gap:8px;padding:2px 0;color:var(--text2)}
@@ -346,6 +364,7 @@ footer .logo-f span{color:var(--green)}
         <select class="tb-select" id="fBudget" onchange="renderLots()"><option value="budget">In budget</option><option value="all">All lots</option></select>
         <select class="tb-select" id="fTS" onchange="renderLots()"><option value="">All lots</option><option value="ts">Title split opportunities</option></select>
         <select class="tb-select" id="fSold" onchange="renderLots()"><option value="hide">Hide sold/STC</option><option value="show">Show sold/STC</option></select>
+        <label class="tb-toggle"><input type="checkbox" id="showROI" onchange="renderLots()"><span class="tb-toggle-label">📊 Deal Analysis</span></label>
         <input class="tb-search" type="text" id="fSearch" placeholder="Search..." oninput="renderLots()">
       </div>
       <div id="lotsOut"></div>
@@ -626,7 +645,7 @@ async function runSmartSearch(query) {
     if (data.sources?.length) rh += `<div class="sources">Searched ${data.totalSearched||0} lots across ${data.sources.length} catalogues: ${data.sources.map(s=>`${s.house} (${s.count})`).join(', ')}</div>`;
     $('reportView').innerHTML = rh;
 
-    showView('report');
+    showView('cards');
     buildLotFilters();
     renderLots();
     $('resultsPanel').style.display = 'block';
@@ -748,6 +767,31 @@ function card(l,b){
     enrichHtml+='</div>';
   }
 
+  // Deal Analysis panel (shown when toggle is on)
+  let dealHtml='';
+  const showROI=$('showROI')&&$('showROI').checked;
+  if(showROI&&l.price&&l.streetAvg){
+    const da=calcDealAnalysis(l.price,l.streetAvg,l.estGrossYield,l.estMonthlyRent);
+    dealHtml=`<div class="deal-panel">
+      <div class="deal-header">📊 Deal Analysis (estimated)</div>
+      <div class="deal-grid">
+        <div class="deal-item"><div class="dl">Guide Price</div><div class="dv neu">£${l.price.toLocaleString()}</div></div>
+        <div class="deal-item"><div class="dl">Comparable Value</div><div class="dv neu">£${l.streetAvg.toLocaleString()}</div></div>
+        <div class="deal-item"><div class="dl">Potential Uplift</div><div class="dv ${da.uplift>0?'pos':'neg'}">£${Math.abs(da.uplift).toLocaleString()} (${da.upliftPct>0?'+':''}${da.upliftPct}%)</div></div>
+        <div class="deal-item"><div class="dl">SDLT (investor)</div><div class="dv neu">£${da.sdlt.toLocaleString()}</div></div>
+        <div class="deal-item"><div class="dl">Est. Bridging (12mo)</div><div class="dv neu">£${da.bridgingCost.toLocaleString()}</div></div>
+        <div class="deal-item"><div class="dl">Legal/Survey/Fees</div><div class="dv neu">£${da.otherCosts.toLocaleString()}</div></div>
+        <div class="deal-item"><div class="dl">Total Cost In</div><div class="dv neu">£${da.totalCostIn.toLocaleString()}</div></div>
+        <div class="deal-item"><div class="dl">Est. Net Profit (flip)</div><div class="dv ${da.netProfit>0?'pos':'neg'}">£${Math.abs(da.netProfit).toLocaleString()}</div></div>
+        <div class="deal-item deal-full"><div class="dl">ROI on Cash Invested (${dp*100}% deposit)</div><div class="dv ${da.roi>0?'pos':da.roi<0?'neg':'neu'}">${da.roi>0?'+':''}${da.roi}%</div></div>
+        ${da.grossYield?`<div class="deal-item deal-full"><div class="dl">Gross Yield (hold)</div><div class="dv ${da.grossYield>=7?'pos':da.grossYield>=5?'neu':'neg'}">${da.grossYield}% (£${da.monthlyRent.toLocaleString()}/mo)</div></div>`:''}
+      </div>
+      <div class="deal-note">⚠️ Estimates only — based on comparable sales avg, standard bridging assumptions (0.75%/mo, 75% LTV), and investor SDLT rates. Not financial advice.</div>
+    </div>`;
+  } else if(showROI&&l.price&&!l.streetAvg){
+    dealHtml=`<div class="deal-panel"><div class="deal-header">📊 Deal Analysis</div><div class="deal-note">No comparable data available for this lot — ROI cannot be estimated.</div></div>`;
+  }
+
   const link=l.url?`<div class="lot-link"><a href="${l.url}" target="_blank">View listing ↗</a></div>`:'';
   const bmLink=l.price?`<a href="/check?price=${l.price}${l.address?'&address='+encodeURIComponent(l.address):''}${l.propType?'&type='+encodeURIComponent(l.propType):''}" class="bm-btn" target="_blank" title="Check bridging finance feasibility">🧩 BridgeMatch It</a>`:'';
 
@@ -756,8 +800,34 @@ function card(l,b){
     <div class="lot-addr">${l.address||'Address not available'}</div>
     <div class="lot-details">${details.join(' <span class="sep">·</span> ')}</div>
     <div class="tags">${tags}</div>
-    <ul class="lot-bullets">${bul}</ul>${enrichHtml}
+    <ul class="lot-bullets">${bul}</ul>${enrichHtml}${dealHtml}
     <div class="lot-actions">${link}${bmLink}</div></div>`;
+}
+
+// SDLT calculator (investor rates 2025/26 — includes 5% surcharge)
+function calcSDLT(price){
+  if(price<=250000) return Math.round(price*0.05);
+  let sdlt=250000*0.05;
+  if(price<=925000) sdlt+=(price-250000)*0.1;
+  else{sdlt+=(925000-250000)*0.1;sdlt+=(Math.min(price,1500000)-925000)*0.15;}
+  if(price>1500000) sdlt+=(price-1500000)*0.17;
+  return Math.round(sdlt);
+}
+
+// Deal analysis calculator
+function calcDealAnalysis(guidePrice,streetAvg,grossYield,monthlyRent){
+  const uplift=streetAvg-guidePrice;
+  const upliftPct=guidePrice>0?Math.round((uplift/guidePrice)*100):0;
+  const sdlt=calcSDLT(guidePrice);
+  const loanAmt=guidePrice*0.75; // assume 75% LTV
+  const bridgingCost=Math.round(loanAmt*0.0075*12); // 0.75%/mo for 12 months
+  const otherCosts=Math.round(guidePrice*0.04); // legal, survey, arrangement ~4%
+  const totalCostIn=guidePrice+sdlt+bridgingCost+otherCosts;
+  const netProfit=streetAvg-totalCostIn;
+  const cashIn=guidePrice-loanAmt+sdlt+otherCosts; // deposit + costs
+  const roi=cashIn>0?Math.round((netProfit/cashIn)*100):0;
+  return{uplift,upliftPct,sdlt,bridgingCost,otherCosts,totalCostIn,netProfit,roi,
+    grossYield:grossYield||0,monthlyRent:monthlyRent||0};
 }
 
 // Downloads
