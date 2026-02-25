@@ -138,6 +138,7 @@ select{padding-left:14px;cursor:pointer;appearance:none;
   display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;transition:border-color 0.2s}
 .lender-item:hover{border-color:var(--green)}
 .lender-name{font-weight:700;font-size:0.92rem;color:var(--navy)}
+.lender-blur{filter:blur(3px);opacity:.5;user-select:none;pointer-events:none}
 .lender-detail{font-size:0.78rem;color:var(--text2);margin-top:3px;line-height:1.4}
 .lender-badge{font-size:0.68rem;font-weight:700;padding:4px 10px;border-radius:20px;white-space:nowrap;text-align:center}
 .badge-green{background:var(--green-light);color:var(--green)}
@@ -620,8 +621,11 @@ function renderResults(r){
       else if(headroom>2){badgeClass='badge-amber';badgeText='Workable'}
       else{badgeClass='badge-blue';badgeText='Tight'}
 
+      // Mask lender name completely — just show numbered label
+      const lenderNum = i + 1;
+
       html+=`<div class="lender-item">
-        <div><div class="lender-name">${l.n}${fundTag}</div><div class="lender-detail">${detail}${facilityLine}</div></div>
+        <div><div class="lender-name">Lender ${lenderNum}${fundTag}</div><div class="lender-detail">${detail}${facilityLine}</div></div>
         <div class="lender-badge ${badgeClass}">${badgeText}</div>
       </div>`;
     }
@@ -638,7 +642,7 @@ function renderResults(r){
   // CTA
   html+=`<div class="cta-card">
     <h3>Ready to make this deal happen?</h3>
-    <p>BridgeMatch shows you what's possible. A specialist broker finds you the <strong>best rate, fastest completion, and highest net advance</strong> from our panel of 68 lenders.</p>
+    <p>BridgeMatch shows you what's possible — <strong>lender names are revealed when you speak to a broker</strong>. They'll find you the best rate, fastest completion, and highest net advance from our panel of 68 lenders.</p>
     <a href="mailto:hello@bridge-match.co.uk?subject=BridgeMatch%20Enquiry%20-%20${encodeURIComponent(fmtCurrency(r.price))}%20property&body=Hi%2C%0A%0AI%20used%20BridgeMatch%20and%20found%20${count}%20potential%20lenders%20for%20a%20${encodeURIComponent(fmtCurrency(r.price))}%20property.%0A%0AMy%20details%3A%0ALoan%20needed%3A%20${encodeURIComponent(fmtCurrency(r.loanNeeded))}%0ALTV%3A%20${r.ltv.toFixed(1)}%25%0A${r.isRefurb?'Refurb%3A%20Yes%20-%20'+encodeURIComponent(fmtCurrency(r.works))+'%20works':''}%0A%0APlease%20get%20in%20touch.%0A" class="cta-btn">
       📞 Speak to a Broker
     </a>

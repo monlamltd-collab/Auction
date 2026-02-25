@@ -732,6 +732,13 @@ Only return lots that genuinely match the query. If nothing matches well, say so
 // CATCH-ALL
 // ═══════════════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════════════
+// SOCIAL LANDING PAGE
+// ═══════════════════════════════════════════════════════════════
+app.get('/welcome', (req, res) => {
+  res.sendFile(join(__dirname, 'welcome.html'));
+});
+
+// ═══════════════════════════════════════════════════════════════
 // BRIDGEMATCH LITE
 // ═══════════════════════════════════════════════════════════════
 app.get('/check', (req, res) => {
