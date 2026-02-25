@@ -698,6 +698,8 @@ function card(l,b){
   const sc=l.score>=3?'high':l.score>=1.5?'mid':'low';
   let details=[];
   if(l.priceText)details.push(`<span class="price">${l.priceText}</span>`);
+  else if(l.price)details.push(`<span class="price">Guide £${l.price.toLocaleString()}</span>`);
+  else details.push(`<span class="price">POA</span>`);
   if(l.propType)details.push(l.propType);
   if(l.beds!=null)details.push(l.beds+' bed');
   if(l.tenure)details.push(l.tenure);
