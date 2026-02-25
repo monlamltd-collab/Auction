@@ -260,10 +260,10 @@ footer .logo-f span{color:var(--green)}
         <option value="">No min</option><option value="25000">£25,000</option><option value="50000">£50,000</option><option value="75000">£75,000</option><option value="100000">£100,000</option><option value="150000">£150,000</option><option value="200000">£200,000</option><option value="300000">£300,000</option><option value="500000">£500,000</option>
       </select></div>
       <div class="filter-field"><label>Max Price</label><select id="fMaxPrice">
-        <option value="">No max</option><option value="50000">£50,000</option><option value="100000">£100,000</option><option value="150000">£150,000</option><option value="200000">£200,000</option><option value="300000">£300,000</option><option value="500000">£500,000</option><option value="750000">£750,000</option><option value="1000000">£1,000,000</option>
+        <option value="">No max</option><option value="50000">£50,000</option><option value="100000">£100,000</option><option value="150000">£150,000</option><option value="200000">£200,000</option><option value="300000">£300,000</option><option value="500000">£500,000</option><option value="750000">£750,000</option><option value="1000000">£1,000,000</option><option value="1500000">£1,500,000</option><option value="2000000">£2,000,000</option><option value="3000000">£3,000,000</option><option value="5000000">£5,000,000</option><option value="10000000">£10,000,000</option>
       </select></div>
       <div class="filter-field"><label>Bedrooms</label><select id="fBeds">
-        <option value="">Any</option><option value="1">1+</option><option value="2">2+</option><option value="3">3+</option><option value="4">4+</option><option value="5">5+</option>
+        <option value="">Any</option><option value="1">1+</option><option value="2">2+</option><option value="3">3+</option><option value="4">4+</option><option value="5">5+</option><option value="6">6+</option><option value="7">7+</option><option value="8">8+</option><option value="9">9+</option><option value="10">10+</option><option value="11">11+</option><option value="12">12+</option><option value="13">13+</option><option value="14">14+</option><option value="15">15+</option><option value="16">16+</option><option value="17">17+</option><option value="18">18+</option><option value="19">19+</option><option value="20">20+</option>
       </select></div>
       <div class="filter-field"><label>Property Type</label><select id="fType">
         <option value="">All types</option>
@@ -328,6 +328,7 @@ footer .logo-f span{color:var(--green)}
         <select class="tb-select" id="fDeal" onchange="renderLots()"><option value="">All deals</option></select>
         <select class="tb-select" id="fBudget" onchange="renderLots()"><option value="budget">In budget</option><option value="all">All lots</option></select>
         <select class="tb-select" id="fTS" onchange="renderLots()"><option value="">All lots</option><option value="ts">Title splits only</option></select>
+        <select class="tb-select" id="fSold" onchange="renderLots()"><option value="hide">Hide sold/STC</option><option value="show">Show sold/STC</option></select>
         <input class="tb-search" type="text" id="fSearch" placeholder="Search..." oninput="renderLots()">
       </div>
       <div id="lotsOut"></div>
@@ -651,11 +652,12 @@ function renderLots(){
   if(maxP) lots=lots.filter(l=>!l.price||l.price<=maxP);
   if(minBeds) lots=lots.filter(l=>!l.beds||l.beds>=minBeds);
 
-  const ft=$('fType').value,fd=$('fDeal').value,fb=$('fBudget').value,fts=$('fTS').value,fs=$('fSearch').value.toLowerCase();
+  const ft=$('fType').value,fd=$('fDeal').value,fb=$('fBudget').value,fts=$('fTS').value,fsold=$('fSold').value,fs=$('fSearch').value.toLowerCase();
   if(ft)lots=lots.filter(l=>l.propType===ft);
   if(fd)lots=lots.filter(l=>l.dealType===fd);
   if(fb==='budget')lots=lots.filter(l=>{if(!l.price)return true;return l.price<=(l.titleSplit?b.tm:b.sm)});
   if(fts==='ts')lots=lots.filter(l=>l.titleSplit);
+  if(fsold==='hide')lots=lots.filter(l=>!(l.bullets||[]).some(b=>/\bSOLD\b|\bSTC\b|\bSALE.?AGREED\b|\bWITHDRAWN\b/i.test(b)));
   if(fs)lots=lots.filter(l=>(l.address||'').toLowerCase().includes(fs)||(l.bullets||[]).join(' ').toLowerCase().includes(fs));
 
   const ts=lots.filter(l=>l.titleSplit),top=lots.filter(l=>l.score>=3);
