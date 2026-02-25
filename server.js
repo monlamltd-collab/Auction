@@ -731,6 +731,13 @@ Only return lots that genuinely match the query. If nothing matches well, say so
 // ═══════════════════════════════════════════════════════════════
 // CATCH-ALL
 // ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// BRIDGEMATCH LITE
+// ═══════════════════════════════════════════════════════════════
+app.get('/check', (req, res) => {
+  res.sendFile(join(__dirname, 'bridgematch-lite.html'));
+});
+
 app.get('*', (req, res) => {
   res.sendFile(join(__dirname, 'index.html'));
 });
