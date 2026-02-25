@@ -543,11 +543,14 @@ app.post('/api/analyse', async (req, res) => {
 
           // Try DOM extractor first (precise, free, fast)
           const domLots = await extractWithDOM(page, house);
-          if (domLots && domLots.length > 0) {
+          if (domLots && domLots.length >= 3) {
             rawLots = domLots;
             console.log(`Got ${rawLots.length} lots via DOM extraction for ${house} (no Claude needed)`);
           } else {
             // Fall back to Claude extraction from page HTML
+            if (domLots && domLots.length > 0) {
+              console.log(`DOM extractor found only ${domLots.length} lots for ${house} (below threshold of 3), falling back to Claude`);
+            }
             const html = await page.content();
             console.log(`Puppeteer: got ${html.length} chars, sending to Claude...`);
             const puppeteerPages = [{ page: 1, html }];
@@ -1333,63 +1336,77 @@ const DOM_EXTRACTORS = {
   `,
 
   // ─── SDL / BTG EDDISONS ────────────────────────────────────
-  // sdlauctions.co.uk — WordPress + EIG. Lot cards are JS-rendered divs
-  // Each has: lot number, address, guide price, property type, image, link
+  // sdlauctions.co.uk — WordPress + EIG. Lot cards are div.auction-card
+  // Each has: data-id, auction-card--content, content-title, auction-meta,
+  // content-list with "Find out more" link, content-image-container with href
   sdl: `
     (() => {
       const lots = [];
       const seen = new Set();
-      // SDL renders lot cards with class containing "property" or "lot"
-      // Try multiple selectors
-      const cards = document.querySelectorAll('.property-card, .lot-card, [class*="property-listing"], article[class*="lot"], .property-item, .search-result');
+      const cards = document.querySelectorAll('.auction-card, div[class*="auction-card"]');
+      let lotIndex = 1;
       for (const card of cards) {
+        const dataId = card.getAttribute('data-id') || '';
+        if (seen.has(dataId) && dataId) continue;
+        if (dataId) seen.add(dataId);
         const text = card.textContent || '';
-        const lotMatch = text.match(/Lot\\s+(\\d+)/i);
-        const lotNum = lotMatch ? parseInt(lotMatch[1]) : null;
-        // Need at least an address with postcode
-        const pcMatch = text.match(/[A-Z]{1,2}\\d[A-Z\\d]?\\s*\\d[A-Z]{2}/i);
-        if (!pcMatch && !lotNum) continue;
-        if (lotNum && seen.has(lotNum)) continue;
-        if (lotNum) seen.add(lotNum);
-        const link = card.querySelector('a[href*="/property/"], a[href*="/lot/"], a[href*="/properties/"]');
-        const url = link ? link.getAttribute('href') : '';
-        const priceMatch = text.match(/(?:Guide|Price|Starting bid)[^£]*£([\\d,]+)/i) || text.match(/£([\\d,]+)/);
-        const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
-        // Address: look for heading or link with location text
+        // URL from image container link or "Find out more" link
+        let url = '';
+        const imgLink = card.querySelector('a.auction-card--content-image-container, a[href*="/property/"]');
+        if (imgLink) url = imgLink.getAttribute('href') || '';
+        const findMore = card.querySelector('a.btn, a[href*="/property/"]');
+        if (!url && findMore) url = findMore.getAttribute('href') || '';
+        // Address: look for content-title and address text
         let address = '';
-        const heading = card.querySelector('h2, h3, h4, .property-title, .address');
-        if (heading) address = heading.textContent.trim();
-        if (!address && link) address = link.textContent.trim();
+        const titleEl = card.querySelector('.auction-card--content-title, p[class*="content-title"]');
+        // Full address is usually below title in plain text with postcode
+        const contentEl = card.querySelector('.auction-card--content, div[class*="auction-card--content"]');
+        if (contentEl) {
+          // Get all text lines that look like address parts
+          const lines = contentEl.innerText.split('\\n').map(s => s.trim()).filter(s => s.length > 0);
+          // Find the line with a postcode
+          for (const line of lines) {
+            if (line.match(/[A-Z]{1,2}\\d[A-Z\\d]?\\s*\\d[A-Z]{2}/i)) {
+              address = line;
+              break;
+            }
+          }
+          // If no postcode line, use title + next lines
+          if (!address && titleEl) {
+            address = titleEl.textContent.trim();
+            // Append subsequent address lines
+            const addrLines = lines.filter(l => l.length > 5 && l.length < 100 && !l.match(/Guide|Price|Auction|Find out|plus fees|Withdrawn|Sold/i));
+            if (addrLines.length > 1) address = addrLines.slice(0, 3).join(', ');
+          }
+        }
+        if (!address && titleEl) address = titleEl.textContent.trim();
         if (!address) continue;
+        // Price
+        let price = null;
+        const priceMatch = text.match(/(?:Guide price|Price)[^£]*£([\\d,]+)/i) || text.match(/£([\\d,]+)/);
+        if (priceMatch) price = parseInt(priceMatch[1].replace(/,/g, ''));
+        // Lot number from text or sequential
+        let lotNum = lotIndex;
+        const lotMatch = text.match(/Lot\\s+(\\d+)/i);
+        if (lotMatch) lotNum = parseInt(lotMatch[1]);
+        // Bullets from auction-meta list items and property type
         const bullets = [];
-        card.querySelectorAll('li, .feature, .tag, .type').forEach(el => {
+        card.querySelectorAll('.auction-meta li, .property-type, li').forEach(el => {
           const t = el.textContent.trim();
-          if (t.length > 3 && t.length < 200) bullets.push(t);
+          if (t.length > 1 && t.length < 200) bullets.push(t);
         });
-        if (text.match(/\\bSOLD\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) {
-          if (!bullets.some(b => b.match(/SOLD|STC|WITHDRAWN/i))) bullets.push('SOLD/STC');
+        // Property type
+        const typeEl = card.querySelector('.property-type');
+        if (typeEl) {
+          const pt = typeEl.textContent.trim();
+          if (pt && !bullets.includes(pt)) bullets.unshift(pt);
         }
-        lots.push({ lot: lotNum || lots.length + 1, address, price, url, bullets });
-      }
-      // Fallback: if no cards found, try anchor-based approach
-      if (lots.length === 0) {
-        const links = document.querySelectorAll('a[href*="/property/"], a[href*="/lot/"]');
-        let idx = 1;
-        const seenHrefs = new Set();
-        for (const a of links) {
-          const href = a.getAttribute('href') || '';
-          if (seenHrefs.has(href)) continue;
-          seenHrefs.add(href);
-          const text = a.textContent || '';
-          if (text.length < 10) continue;
-          const pcMatch = text.match(/[A-Z]{1,2}\\d[A-Z\\d]?\\s*\\d[A-Z]{2}/i);
-          if (!pcMatch) continue;
-          const priceMatch = text.match(/£([\\d,]+)/);
-          const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
-          const lotMatch = text.match(/Lot\\s+(\\d+)/i);
-          lots.push({ lot: lotMatch ? parseInt(lotMatch[1]) : idx, address: text.substring(0, 200).trim(), price, url: href, bullets: [] });
-          idx++;
+        // Detect status
+        if (text.match(/\\bWithdrawn\\b|\\bSOLD\\b|\\bSTC\\b|\\bSale Agreed\\b/i)) {
+          if (!bullets.some(b => b.match(/SOLD|STC|WITHDRAWN|SALE AGREED/i))) bullets.push('SOLD/STC');
         }
+        lots.push({ lot: lotNum, address, price, url, bullets });
+        lotIndex++;
       }
       return lots;
     })()
