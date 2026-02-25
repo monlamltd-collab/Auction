@@ -692,11 +692,24 @@ Only return lots that genuinely match the query. If nothing matches well, say so
     const responseText = msg.content[0]?.text || '';
     let parsed;
     try {
-      // Extract JSON from response (may be wrapped in markdown)
-      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-      parsed = JSON.parse(jsonMatch ? jsonMatch[0] : responseText);
-    } catch {
-      parsed = { indices: [], report: responseText };
+      // Strip markdown code fences if present
+      let cleaned = responseText.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+      // Extract JSON object from response
+      const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        parsed = JSON.parse(jsonMatch[0]);
+      } else {
+        parsed = JSON.parse(cleaned);
+      }
+    } catch (e) {
+      console.log('Smart search JSON parse failed:', e.message, 'Raw:', responseText.substring(0, 200));
+      // Try to extract report text even if JSON parsing fails
+      const reportMatch = responseText.match(/"report"\s*:\s*"([\s\S]*?)(?:"\s*[,}])/);
+      const indicesMatch = responseText.match(/"indices"\s*:\s*\[([\d,\s]*)\]/);
+      parsed = {
+        indices: indicesMatch ? indicesMatch[1].split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n)) : [],
+        report: reportMatch ? reportMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"') : responseText.replace(/\{[\s\S]*\}/, '').trim() || 'Search completed but could not parse results.'
+      };
     }
 
     const matchingLots = (parsed.indices || [])
