@@ -296,7 +296,7 @@ footer .logo-f span{color:var(--green)}
     </div>
     <div class="filters" style="margin-top:-8px">
       <div class="filter-field"><label>Status</label><select id="fSoldTop" onchange="if($('fSold'))$('fSold').value=this.value;renderLots()">
-        <option value="hide">Hide sold / STC</option><option value="show">Show sold / STC</option>
+        <option value="show">Show sold / STC</option><option value="hide">Hide sold / STC</option>
       </select></div>
       <div class="filter-field"><label>Title Splits</label><select id="fTSTop" onchange="if($('fTS'))$('fTS').value=this.value;renderLots()">
         <option value="">All lots</option><option value="ts">Title split opportunities</option>
@@ -318,7 +318,7 @@ footer .logo-f span{color:var(--green)}
 
     <div class="advanced" id="advancedPanel">
       <div class="budget-row">
-        <div class="filter-field"><label>Your Deposit (£)</label><input id="dep" type="number" value="150000"></div>
+        <div class="filter-field"><label>Your Deposit (£)</label><input id="dep" type="number" value="0" placeholder="No limit"></div>
         <div class="filter-field"><label>Standard Deposit %</label><input id="stdPct" type="number" value="25"></div>
         <div class="filter-field"><label>Title Split Deposit %</label><input id="tsPct" type="number" value="10"></div>
       </div>
@@ -361,9 +361,9 @@ footer .logo-f span{color:var(--green)}
     <div id="cardsView">
       <div class="toolbar">
         <select class="tb-select" id="fDeal" onchange="renderLots()"><option value="">All deals</option></select>
-        <select class="tb-select" id="fBudget" onchange="renderLots()"><option value="budget">In budget</option><option value="all">All lots</option></select>
+        <select class="tb-select" id="fBudget" onchange="renderLots()"><option value="all">All lots</option><option value="budget">In budget</option></select>
         <select class="tb-select" id="fTS" onchange="renderLots()"><option value="">All lots</option><option value="ts">Title split opportunities</option></select>
-        <select class="tb-select" id="fSold" onchange="renderLots()"><option value="hide">Hide sold/STC</option><option value="show">Show sold/STC</option></select>
+        <select class="tb-select" id="fSold" onchange="renderLots()"><option value="show">Show sold/STC</option><option value="hide">Hide sold/STC</option></select>
         <label class="tb-toggle"><input type="checkbox" id="showROI" onchange="renderLots()"><span class="tb-toggle-label">📊 Deal Analysis</span></label>
         <input class="tb-search" type="text" id="fSearch" placeholder="Search..." oninput="renderLots()">
       </div>
@@ -427,8 +427,8 @@ function backToAuctions(){
 // ═══════════════════════════════
 function getBudget(){
   const d=+$('dep').value||0,sp=+$('stdPct').value||25,tp=+$('tsPct').value||10;
-  const sm=Math.round(d/(sp/100)),tm=Math.round(d/(tp/100));
-  $('budgetInfo').innerHTML=`Max purchase: <b>£${sm.toLocaleString()}</b> standard · <b>£${tm.toLocaleString()}</b> title split`;
+  const sm=d?Math.round(d/(sp/100)):0,tm=d?Math.round(d/(tp/100)):0;
+  $('budgetInfo').innerHTML=d?`Max purchase: <b>£${sm.toLocaleString()}</b> standard · <b>£${tm.toLocaleString()}</b> title split`:`<span style="color:var(--text4)">No budget limit set — showing all lots</span>`;
   return {d,sp,tp,sm,tm};
 }
 ['dep','stdPct','tsPct'].forEach(id=>$(id)?.addEventListener('input',getBudget));
@@ -690,7 +690,7 @@ function renderLots(){
   const ft=$('fType').value,fd=$('fDeal').value,fb=$('fBudget').value,fts=$('fTS')?.value||$('fTSTop').value,fsold=$('fSold')?.value||$('fSoldTop').value,fs=$('fSearch').value.toLowerCase();
   if(ft)lots=lots.filter(l=>l.propType===ft);
   if(fd)lots=lots.filter(l=>l.dealType===fd);
-  if(fb==='budget')lots=lots.filter(l=>{if(!l.price)return true;return l.price<=(l.titleSplit?b.tm:b.sm)});
+  if(fb==='budget'&&b.sm>0)lots=lots.filter(l=>{if(!l.price)return true;return l.price<=(l.titleSplit?b.tm:b.sm)});
   if(fts==='ts')lots=lots.filter(l=>l.titleSplit);
   if(fsold==='hide')lots=lots.filter(l=>!(l.bullets||[]).some(b=>/\bSOLD\b|\bSTC\b|\bSALE.?AGREED\b|\bWITHDRAWN\b/i.test(b)));
   if(fs)lots=lots.filter(l=>(l.address||'').toLowerCase().includes(fs)||(l.bullets||[]).join(' ').toLowerCase().includes(fs));

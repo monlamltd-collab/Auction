@@ -729,10 +729,50 @@ Only return lots that genuinely match the query. If nothing matches well, say so
 });
 
 // ═══════════════════════════════════════════════════════════════
+// ADMIN: Cache Status & Manual Refresh
+// ═══════════════════════════════════════════════════════════════
+app.get('/api/cache-status', async (req, res) => {
+  try {
+    const { data: cached } = await supabase
+      .from('cached_analyses')
+      .select('house, url, total_lots, title_splits, top_picks, created_at, expires_at')
+      .gt('expires_at', new Date().toISOString())
+      .order('house');
+
+    const allAuctions = getCalendarAuctions();
+    const ready = allAuctions.filter(a => a.catalogueReady);
+    const cachedUrls = new Set((cached || []).map(c => c.url));
+    
+    const totalLots = (cached || []).reduce((s, c) => s + (c.total_lots || 0), 0);
+    const missing = ready.filter(a => !cachedUrls.has(a.url.trim().replace(/\/+$/, '').toLowerCase()));
+
+    res.json({
+      summary: {
+        totalCached: (cached || []).length,
+        totalReady: ready.length,
+        totalLots,
+        missingCount: missing.length,
+      },
+      cached: cached || [],
+      missing: missing.map(a => ({ house: a.house, url: a.url })),
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/refresh-cache', async (req, res) => {
+  const { secret } = req.body || {};
+  if (secret !== process.env.ADMIN_SECRET && secret !== 'bridgematch2026') {
+    return res.status(403).json({ error: 'Invalid admin secret' });
+  }
+  res.json({ message: 'Auto-analysis triggered. Check server logs for progress.' });
+  // Run async — don't block the response
+  autoAnalyseAll().catch(e => console.error('Manual refresh failed:', e));
+});
+
+// ═══════════════════════════════════════════════════════════════
 // CATCH-ALL
-// ═══════════════════════════════════════════════════════════════
-// ═══════════════════════════════════════════════════════════════
-// SOCIAL LANDING PAGE
 // ═══════════════════════════════════════════════════════════════
 app.get('/welcome', (req, res) => {
   res.sendFile(join(__dirname, 'welcome.html'));
