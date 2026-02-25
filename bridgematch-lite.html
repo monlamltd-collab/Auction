@@ -450,21 +450,23 @@ function matchLenders(price,cash,propType,isRefurb,works,gdv,addlVal,addlMort,lo
     let refurbOK=true;
     let refurbDay1=null;
     let refurbLTGDV=null;
-    let fundingModel='none'; // 'self-fund', 'upfront', 'staged', 'none'
+    let fundingModel='none'; // 'self-fund', 'upfront', 'arrears', 'none'
     if(isRefurb){
       const rf=(l.rf||'').toLowerCase();
       if(rf.includes('no -')||rf.includes("don't lend")){reasons.push('No refurb');refurbOK=false}
       else if(rf.includes('standard only')||rf.includes("don't provide enhanced")){
         // Lender lends on refurb properties but borrower must self-fund ALL works
         fundingModel='self-fund';
-      }else if(rf.includes('multiple model')){
-        fundingModel='upfront+staged'; // offers both upfront and staged
-      }else if(rf.includes('arrears')||rf.includes('staged')){
-        fundingModel='staged';
-      }else if(rf.includes('upfront')||rf.includes('enhanced')){
+      }else if(rf.includes('multiple model')||rf.includes('upfront')||rf.includes('enhanced')){
+        // "Multiple models" = flexible lender, can do upfront or arrears
+        // "Upfront" = funds works upfront in the Day-1 advance
+        // Both are the best outcome for borrower cash flow, so treat as upfront
         fundingModel='upfront';
+      }else if(rf.includes('arrears')||rf.includes('staged')){
+        // Works funded in arrears — lender reimburses after QS sign-off per tranche
+        fundingModel='arrears';
       }else if(rf.includes('yes')){
-        fundingModel='staged'; // default if they say yes but don't specify
+        fundingModel='arrears'; // default if they say yes but don't specify
       }
 
       if(refurbOK&&intensity!=='none'){
@@ -595,15 +597,15 @@ function renderResults(r){
     </div>`;
     
     // Count funding model types among eligible lenders
-    const staged=r.eligible.filter(l=>l._fundingModel==='staged'||l._fundingModel==='upfront+staged').length;
-    const upfront=r.eligible.filter(l=>l._fundingModel==='upfront'||l._fundingModel==='upfront+staged').length;
+    const arrears=r.eligible.filter(l=>l._fundingModel==='arrears').length;
+    const upfront=r.eligible.filter(l=>l._fundingModel==='upfront').length;
     const selfFund=r.eligible.filter(l=>l._fundingModel==='self-fund').length;
     
     let fundingExplainer='<strong>How works get funded:</strong><br>';
-    if(staged>0) fundingExplainer+=`<span class="tag tag-light">Staged/arrears</span> <strong>${staged}</strong> lender${staged>1?'s':''} — lender releases works money in tranches after QS inspection. You need cash between drawdowns but the lender funds the works overall.<br>`;
-    if(upfront>0) fundingExplainer+=`<span class="tag" style="background:rgba(59,130,246,0.15);color:var(--blue)">Upfront</span> <strong>${upfront}</strong> lender${upfront>1?'s':''} — higher Day-1 advance includes works money upfront. Best for cash flow.<br>`;
-    if(selfFund>0) fundingExplainer+=`<span class="tag tag-medium">Self-fund</span> <strong>${selfFund}</strong> lender${selfFund>1?'s':''} — lender will lend on the property but <em>you</em> fund 100% of works from your own cash (${fmtCurrency(r.works)}).<br>`;
-    if(staged>0||upfront>0) fundingExplainer+=`<span style="font-size:0.78rem;color:var(--text3)">With staged funding, your total facility = Day-1 loan + works funded by lender, all secured against the GDV.</span>`;
+    if(upfront>0) fundingExplainer+=`<span class="tag" style="background:rgba(59,130,246,0.15);color:var(--blue)">Upfront</span> <strong>${upfront}</strong> lender${upfront>1?'s':''} — works money included in Day-1 advance. Best for cash flow.<br>`;
+    if(arrears>0) fundingExplainer+=`<span class="tag tag-light">In arrears</span> <strong>${arrears}</strong> lender${arrears>1?'s':''} — lender releases works in tranches after QS sign-off. You front each tranche then get reimbursed.<br>`;
+    if(selfFund>0) fundingExplainer+=`<span class="tag tag-medium">Self-fund</span> <strong>${selfFund}</strong> lender${selfFund>1?'s':''} — lender finances the purchase but <em>you</em> fund 100% of works from your own cash (${fmtCurrency(r.works)}).<br>`;
+    if(arrears>0||upfront>0) fundingExplainer+=`<span style="font-size:0.78rem;color:var(--text3)">Total facility = Day-1 loan + lender-funded works, all secured against the GDV.</span>`;
     
     html+=`<div class="insight-box">${fundingExplainer}</div>`;
   }
@@ -652,9 +654,8 @@ function renderResults(r){
       let fundTag='';
       if(r.isRefurb){
         const fm=l._fundingModel;
-        if(fm==='staged')fundTag='<span style="display:inline-block;padding:2px 7px;border-radius:4px;font-size:0.68rem;font-weight:600;background:rgba(16,185,129,0.15);color:var(--green);margin-left:4px">Funds works (staged)</span>';
-        else if(fm==='upfront')fundTag='<span style="display:inline-block;padding:2px 7px;border-radius:4px;font-size:0.68rem;font-weight:600;background:rgba(59,130,246,0.15);color:var(--blue);margin-left:4px">Upfront works</span>';
-        else if(fm==='upfront+staged')fundTag='<span style="display:inline-block;padding:2px 7px;border-radius:4px;font-size:0.68rem;font-weight:600;background:rgba(16,185,129,0.15);color:var(--green);margin-left:4px">Upfront + staged</span>';
+        if(fm==='arrears')fundTag='<span style="display:inline-block;padding:2px 7px;border-radius:4px;font-size:0.68rem;font-weight:600;background:rgba(16,185,129,0.15);color:var(--green);margin-left:4px">Funds works (arrears)</span>';
+        else if(fm==='upfront')fundTag='<span style="display:inline-block;padding:2px 7px;border-radius:4px;font-size:0.68rem;font-weight:600;background:rgba(59,130,246,0.15);color:var(--blue);margin-left:4px">Funds works (upfront)</span>';
         else if(fm==='self-fund')fundTag='<span style="display:inline-block;padding:2px 7px;border-radius:4px;font-size:0.68rem;font-weight:600;background:rgba(245,158,11,0.15);color:var(--amber);margin-left:4px">Self-fund works</span>';
       }
 
@@ -666,15 +667,12 @@ function renderResults(r){
         const fm=l._fundingModel;
         const ltgdvStr=l._lenderLTGDV>0?` · LTGDV: ${l._lenderLTGDV.toFixed(1)}%`:'';
         if(fm==='self-fund'){
-          // Self-fund: lender gives higher day-1 but you pay ALL works
           facilityLine=`<br><span style="font-size:0.72rem;color:var(--text3)">Day-1 advance ~${fmtK(day1Amt)} · You fund all works (${fmtK(r.works)}) from own cash</span>`;
-        }else if(fm==='staged'||fm==='upfront+staged'){
-          // Staged: lender releases works in tranches after QS sign-off
+        }else if(fm==='arrears'){
           const totalFacility=day1Amt+r.works;
           const firstTranche=Math.round(r.works*0.25);
-          facilityLine=`<br><span style="font-size:0.72rem;color:var(--text3)">Day-1 ~${fmtK(day1Amt)} + works ${fmtK(r.works)} (staged) = facility ~${fmtK(totalFacility)}${ltgdvStr} · You front ~${fmtK(firstTranche)} for 1st tranche</span>`;
+          facilityLine=`<br><span style="font-size:0.72rem;color:var(--text3)">Day-1 ~${fmtK(day1Amt)} + works ${fmtK(r.works)} (in arrears) = facility ~${fmtK(totalFacility)}${ltgdvStr} · You front ~${fmtK(firstTranche)} per tranche</span>`;
         }else if(fm==='upfront'){
-          // Upfront: higher day-1 includes works money
           const totalFacility=day1Amt+r.works;
           facilityLine=`<br><span style="font-size:0.72rem;color:var(--text3)">Day-1 ~${fmtK(day1Amt)} + works ${fmtK(r.works)} (upfront) = facility ~${fmtK(totalFacility)}${ltgdvStr}</span>`;
         }
