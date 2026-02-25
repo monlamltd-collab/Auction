@@ -376,13 +376,14 @@ function runMatch(){
 }
 
 function matchLenders(price,cash,propType,isRefurb,works,gdv,addlVal,addlMort){
-  // Calculate what borrower needs
+  // Day-1 loan calculation: pure purchase price minus cash deposit
+  // SDLT, legal fees, works costs are the investor's responsibility — not factored into loan requirement
+  const loanNeeded=Math.max(0,price-cash);
+  const ltv=price>0?(loanNeeded/price)*100:0;
+  const cashForDeposit=Math.min(cash,price);
   const stampDuty=price<=250000?0:price<=925000?(price-250000)*0.05:(price-250000)*0.05+(price>925000?(price-925000)*0.05:0);
-  const estCosts=price*0.04; // ~4% for legal, survey, arrangement fees
+  const estCosts=price*0.04;
   const totalCashNeeded=stampDuty+estCosts;
-  const cashForDeposit=Math.max(0,cash-totalCashNeeded-(isRefurb?works*0.3:0)); // keep some cash for works if refurb
-  const loanNeeded=price-cashForDeposit;
-  const ltv=(loanNeeded/price)*100;
 
   // Additional security calcs
   const addlEquity=addlVal>0?addlVal-addlMort:0;
@@ -393,7 +394,7 @@ function matchLenders(price,cash,propType,isRefurb,works,gdv,addlVal,addlMort){
   // Works intensity
   let intensity='none';
   let worksRatio=0;
-  if(isRefurb&&price>0){
+  if(isRefurb&&price>0&&works>0){
     worksRatio=(works/price)*100;
     if(worksRatio<30)intensity='light';
     else if(worksRatio<50)intensity='medium';
@@ -401,8 +402,9 @@ function matchLenders(price,cash,propType,isRefurb,works,gdv,addlVal,addlMort){
     else intensity='vheavy';
   }
 
-  // LTGDV calc for refurb
-  const ltgdv=gdv>0?((loanNeeded+works)/gdv)*100:0;
+  // LTGDV calc for refurb (total project cost vs end value)
+  const totalProject=price+works;
+  const ltgdv=gdv>0?(totalProject/gdv)*100:0;
 
   const eligible=[];
   const excluded=[];
@@ -496,7 +498,7 @@ function matchLenders(price,cash,propType,isRefurb,works,gdv,addlVal,addlMort){
   eligible.sort((a,b)=>a._rate-b._rate||(b._maxLTV.pct-a._maxLTV.pct));
 
   return{eligible,excluded,ltv,loanNeeded,stampDuty,estCosts,totalCashNeeded,cashForDeposit,
-    isRefurb,works,gdv,worksRatio,intensity,ltgdv,addlEquity,combinedLTV,price,cash};
+    isRefurb,works,gdv,worksRatio,intensity,ltgdv,addlEquity,combinedLTV,price,cash,totalProject:price+works};
 }
 
 function renderResults(r){
@@ -588,7 +590,8 @@ function renderResults(r){
     const show=r.eligible.slice(0,10);
     html+=`<div class="lender-count">${count>10?`Showing top 10 of ${count} matches`:`${count} matching lender${count>1?'s':''}`}</div>`;
     html+=`<div class="lender-list">`;
-    for(const l of show){
+    for(let i=0;i<show.length;i++){
+      const l=show[i];
       const rateStr=l.r||'';
       const isNet=l._maxLTV.net;
       let detail=`Rate: ${rateStr} &nbsp;·&nbsp; Max LTV: ${l._maxLTV.pct}% ${isNet?'net':'gross'}`;
@@ -606,13 +609,25 @@ function renderResults(r){
         else if(fm==='self-fund')fundTag='<span style="display:inline-block;padding:2px 7px;border-radius:4px;font-size:0.68rem;font-weight:600;background:rgba(245,158,11,0.15);color:var(--amber);margin-left:4px">Self-fund works</span>';
       }
 
-      // Calculate indicative total facility for refurb deals
+      // Calculate indicative facility and cash required for refurb deals
       let facilityLine='';
-      if(r.isRefurb&&l._refurbDay1&&l._fundingModel!=='self-fund'&&l._fundingModel!=='none'){
+      if(r.isRefurb&&l._refurbDay1){
         const day1Pct=l._refurbDay1.pct/100;
         const day1Amt=r.price*day1Pct;
-        const totalFacility=day1Amt+r.works;
-        facilityLine=`<br><span style="font-size:0.72rem;color:var(--text3)">Indicative: Day-1 ~${fmtK(day1Amt)} + works ${fmtK(r.works)} = total facility ~${fmtK(totalFacility)}</span>`;
+        const fm=l._fundingModel;
+        if(fm==='self-fund'){
+          // Self-fund: lender gives higher day-1 but you pay ALL works
+          facilityLine=`<br><span style="font-size:0.72rem;color:var(--text3)">Day-1 advance ~${fmtK(day1Amt)} · You fund all works (${fmtK(r.works)}) from own cash</span>`;
+        }else if(fm==='staged'||fm==='upfront+staged'){
+          // Staged: lender releases works in tranches after QS sign-off
+          const totalFacility=day1Amt+r.works;
+          const firstTranche=Math.round(r.works*0.25);
+          facilityLine=`<br><span style="font-size:0.72rem;color:var(--text3)">Day-1 ~${fmtK(day1Amt)} + works ${fmtK(r.works)} (staged) = facility ~${fmtK(totalFacility)} · You front ~${fmtK(firstTranche)} for 1st tranche</span>`;
+        }else if(fm==='upfront'){
+          // Upfront: higher day-1 includes works money
+          const totalFacility=day1Amt+r.works;
+          facilityLine=`<br><span style="font-size:0.72rem;color:var(--text3)">Day-1 ~${fmtK(day1Amt)} + works ${fmtK(r.works)} (upfront) = facility ~${fmtK(totalFacility)}</span>`;
+        }
       }
 
       const headroom=l._maxLTV.pct-r.ltv;
@@ -632,11 +647,12 @@ function renderResults(r){
     html+=`</div>`;
   }
 
-  // Cash breakdown
+  // Other costs note
   html+=`<div class="insight-box" style="margin-top:8px">
-    <strong>Cash Breakdown Estimate:</strong><br>
-    Stamp Duty: ~${fmtCurrency(r.stampDuty)} &nbsp;·&nbsp; Legal/Survey/Fees: ~${fmtCurrency(r.estCosts)} &nbsp;·&nbsp; Available for deposit: ~${fmtCurrency(r.cashForDeposit)}
-    ${r.isRefurb?`<br>Works budget: ${fmtCurrency(r.works)} (you may need cash between lender drawdowns)`:''}
+    <strong>Other costs to budget for:</strong><br>
+    Stamp Duty (SDLT): ~${fmtCurrency(r.stampDuty)} &nbsp;·&nbsp; Legal/Survey/Fees: ~${fmtCurrency(r.estCosts)}
+    ${r.isRefurb?`<br>Works budget: ${fmtCurrency(r.works)} — how this is funded depends on the lender (see above)`:''}
+    <br><span style="font-size:0.78rem;color:var(--text3)">These costs are separate from your deposit and loan. A broker can advise on exact figures for your deal.</span>
   </div>`;
 
   // CTA
