@@ -74,6 +74,14 @@ a{color:var(--green);text-decoration:none}a:hover{text-decoration:underline}
 .budget-summary{font-size:.82rem;color:var(--text3);margin-top:8px}
 .budget-summary b{color:var(--green)}
 
+/* ── BACK BUTTON ── */
+.back-bar{margin-bottom:16px;display:none}
+.back-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--white);font-size:.85rem;font-weight:600;color:var(--text2);cursor:pointer;font-family:inherit;transition:all .15s}
+.back-btn:hover{border-color:var(--green);color:var(--green);background:var(--green-light)}
+.view-results .hero{display:none}
+.view-results #calendarSection{display:none}
+.view-results .back-bar{display:block}
+
 /* ── RESULTS PANEL ── */
 #resultsPanel{display:none;margin-bottom:32px}
 .result-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px}
@@ -283,6 +291,11 @@ footer .logo-f span{color:var(--green)}
     </div>
   </div>
 
+  <!-- ═══════ BACK BUTTON (visible in results view) ═══════ -->
+  <div class="back-bar" id="backBar">
+    <button class="back-btn" onclick="backToAuctions()">← Back to auctions</button>
+  </div>
+
   <!-- ═══════ PROGRESS ═══════ -->
   <div id="progressPanel">
     <div class="prog-box">
@@ -321,11 +334,13 @@ footer .logo-f span{color:var(--green)}
     </div>
   </div>
 
-  <!-- ═══════ UPCOMING AUCTIONS ═══════ -->
-  <div class="sh"><h2>Upcoming auctions</h2><p>Click Analyse to AI-score every lot, or View to browse the catalogue yourself.</p></div>
-  <div class="house-filters" id="houseFilters"><button class="hf active" data-house="all">All</button></div>
-  <div class="cal-grid" id="calGrid">
-    <div style="text-align:center;padding:40px;color:var(--text4)">Loading auctions...</div>
+  <!-- ═══════ UPCOMING AUCTIONS (hidden when results showing) ═══════ -->
+  <div id="calendarSection">
+    <div class="sh"><h2>Upcoming auctions</h2><p>Click Analyse to AI-score every lot, or View to browse the catalogue yourself.</p></div>
+    <div class="house-filters" id="houseFilters"><button class="hf active" data-house="all">All</button></div>
+    <div class="cal-grid" id="calGrid">
+      <div style="text-align:center;padding:40px;color:var(--text4)">Loading auctions...</div>
+    </div>
   </div>
 
   <footer>
@@ -354,6 +369,21 @@ function handleSearch(){
 }
 
 function setQ(q){ $('smartQuery').value = q; }
+
+// ═══════════════════════════════
+// VIEW SWITCHING
+// ═══════════════════════════════
+function showResultsView(){
+  document.body.classList.add('view-results');
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function backToAuctions(){
+  document.body.classList.remove('view-results');
+  $('progressPanel').style.display='none';
+  $('resultsPanel').style.display='none';
+  window.scrollTo({top:0,behavior:'smooth'});
+}
 
 // ═══════════════════════════════
 // BUDGET
@@ -426,8 +456,7 @@ function renderCalendar(){
 
 function analyseFromCal(url){
   $('smartQuery').value = url;
-  window.scrollTo({top:0,behavior:'smooth'});
-  setTimeout(()=>runAnalysis(url), 300);
+  runAnalysis(url);
 }
 
 // ═══════════════════════════════
@@ -495,6 +524,7 @@ async function runAnalysis(url){
   $('resultsPanel').style.display='none';
   $('logBox').innerHTML='';
   LOTS=[];
+  showResultsView();
 
   log('Sending catalogue for analysis...');
   prog(10,'Analysing catalogue...');
@@ -546,6 +576,7 @@ async function runSmartSearch(query) {
   $('progressPanel').style.display = 'block';
   $('resultsPanel').style.display = 'none';
   $('logBox').innerHTML = '';
+  showResultsView();
   log('Searching across all analysed catalogues...');
   prog(30, 'AI is searching...');
 
