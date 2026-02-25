@@ -536,6 +536,7 @@ async function runAnalysis(url){
   $('resultsPanel').style.display='none';
   $('logBox').innerHTML='';
   LOTS=[];
+  SMART_RESULTS=null;
   showResultsView();
 
   log('Sending catalogue for analysis...');
@@ -679,16 +680,18 @@ function renderLots(){
 
   const out=$('lotsOut');out.innerHTML='';
 
+  // Only show Title Splits group for catalogue analyses or when user searched for them
+  const showTSGroup = !SMART_RESULTS || /title.?split|multi.?unit|freehold.?block/i.test($('smartQuery')?.value||'');
   const tsL=lots.filter(l=>l.titleSplit&&l.score>=2);
-  if(tsL.length){out.innerHTML+=`<div class="group-head">🏢 Title Splits <span class="badge badge-p">${tsL.length}</span></div>`;tsL.forEach(l=>out.innerHTML+=card(l,b))}
+  if(tsL.length && showTSGroup){out.innerHTML+=`<div class="group-head">🏢 Title Split Opportunities <span class="badge badge-p">${tsL.length}</span></div>`;tsL.forEach(l=>out.innerHTML+=card(l,b))}
 
-  const topL=lots.filter(l=>l.score>=3&&!l.titleSplit);
+  const topL=lots.filter(l=>l.score>=3&&!(showTSGroup&&l.titleSplit&&l.score>=2));
   if(topL.length){out.innerHTML+=`<div class="group-head">🔥 Top Picks <span class="badge badge-g">${topL.length}</span></div>`;topL.forEach(l=>out.innerHTML+=card(l,b))}
 
-  const midL=lots.filter(l=>l.score>=1.5&&l.score<3&&!(l.titleSplit&&l.score>=2));
+  const midL=lots.filter(l=>l.score>=1.5&&l.score<3&&!(showTSGroup&&l.titleSplit&&l.score>=2));
   if(midL.length){out.innerHTML+=`<div class="group-head">👀 Worth a Look <span class="badge badge-y">${midL.length}</span></div>`;midL.forEach(l=>out.innerHTML+=card(l,b))}
 
-  const rest=lots.filter(l=>l.score<1.5&&!(l.titleSplit&&l.score>=2));
+  const rest=lots.filter(l=>l.score<1.5&&!(showTSGroup&&l.titleSplit&&l.score>=2));
   if(rest.length){out.innerHTML+=`<div class="group-head">Other <span class="badge" style="background:var(--cream);color:var(--text4)">${rest.length}</span></div>`;rest.forEach(l=>out.innerHTML+=card(l,b))}
 }
 
