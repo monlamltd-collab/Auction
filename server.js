@@ -517,6 +517,70 @@ app.post('/api/analyse', async (req, res) => {
             }
           }
           console.log(`Savills total: ${rawLots.length} lots from ${maxPages} pages via DOM extraction`);
+
+        } else if (rewritten.paginateAs === 'sdl_pages') {
+          // ── SDL / BTG Eddisons: paginated with ?page=N ──
+          console.log(`Puppeteer: loading paginated SDL catalogue...`);
+          await page.goto(scrapeUrl, { waitUntil: 'networkidle2', timeout: 45000 });
+          await new Promise(r => setTimeout(r, 3000));
+          // Scroll to load lazy content on first page
+          await page.evaluate(async () => {
+            for (let i = 0; i < 15; i++) { window.scrollBy(0, window.innerHeight); await new Promise(r => setTimeout(r, 500)); }
+            window.scrollTo(0, 0);
+          });
+          await new Promise(r => setTimeout(r, 2000));
+
+          // Detect total pages from pagination
+          const sdlTotalPages = await page.evaluate(() => {
+            const pageLinks = document.querySelectorAll('a[href*="page="], .pagination a, nav a');
+            let max = 1;
+            for (const a of pageLinks) {
+              const href = a.getAttribute('href') || '';
+              const pm = href.match(/page=(\d+)/);
+              if (pm) max = Math.max(max, parseInt(pm[1]));
+              const tm = a.textContent.trim().match(/^(\d+)$/);
+              if (tm) max = Math.max(max, parseInt(tm[1]));
+            }
+            const bodyText = document.body.innerText;
+            const ofMatch = bodyText.match(/page\s+\d+\s+of\s+(\d+)/i) || bodyText.match(/(\d+)\s+pages/i);
+            if (ofMatch) max = Math.max(max, parseInt(ofMatch[1]));
+            return max;
+          });
+          console.log(`SDL: detected ${sdlTotalPages} pages`);
+
+          // Extract from first page
+          const sdlFirstLots = await extractWithDOM(page, house);
+          if (sdlFirstLots && sdlFirstLots.length > 0) rawLots.push(...sdlFirstLots);
+          console.log(`SDL Page 1: ${sdlFirstLots ? sdlFirstLots.length : 0} lots`);
+
+          // Load remaining pages
+          const sdlMaxPages = Math.min(sdlTotalPages, 20);
+          for (let p = 2; p <= sdlMaxPages; p++) {
+            const sep = scrapeUrl.includes('?') ? '&' : '?';
+            const pageUrl = `${scrapeUrl}${sep}page=${p}`;
+            try {
+              await page.goto(pageUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+              await new Promise(r => setTimeout(r, 2000));
+              await page.evaluate(async () => {
+                for (let i = 0; i < 10; i++) { window.scrollBy(0, window.innerHeight); await new Promise(r => setTimeout(r, 400)); }
+                window.scrollTo(0, 0);
+              });
+              await new Promise(r => setTimeout(r, 1500));
+              const pageLots = await extractWithDOM(page, house);
+              if (pageLots && pageLots.length > 0) {
+                rawLots.push(...pageLots);
+                console.log(`SDL Page ${p}: ${pageLots.length} lots`);
+              } else {
+                console.log(`SDL Page ${p}: 0 lots — stopping pagination`);
+                break;
+              }
+            } catch (e) {
+              console.log(`SDL Page ${p} failed: ${e.message}`);
+              break;
+            }
+          }
+          console.log(`SDL total: ${rawLots.length} lots via DOM extraction`);
+
         } else {
           // Single-page Puppeteer extraction
           console.log(`Puppeteer: loading ${scrapeUrl}`);
@@ -857,20 +921,15 @@ function rewriteUrl(url, house) {
   }
 
   if (house === 'sdl') {
-    // SDL / BTG Eddisons: specific auction pages have lot listings loaded via JS
-    // /auction/1292/live-streamed-auction-2026-02-26/ → needs Puppeteer
-    // /property-auctions/upcoming-auctions/ → not a catalogue, redirect to specific auction
-    // BTG Eddisons: /properties → needs Puppeteer
-    // These all need Puppeteer, so no URL rewriting needed — just pass through
-    // But ensure we use the specific auction page, not the generic upcoming page
+    // SDL / BTG Eddisons: JS-rendered with pagination (?page=2, ?page=3 etc)
     if (u.includes('btgeddisonspropertyauctions.com/properties')) {
-      return { baseUrl: url, isApi: false, paginateAs: null, preferPuppeteer: true };
+      return { baseUrl: url, isApi: false, paginateAs: 'sdl_pages', preferPuppeteer: true };
     }
     if (u.includes('/auction/')) {
-      return { baseUrl: url, isApi: false, paginateAs: null, preferPuppeteer: true };
+      return { baseUrl: url, isApi: false, paginateAs: 'sdl_pages', preferPuppeteer: true };
     }
     if (u.includes('/search')) {
-      return { baseUrl: url, isApi: false, paginateAs: null, preferPuppeteer: true };
+      return { baseUrl: url, isApi: false, paginateAs: 'sdl_pages', preferPuppeteer: true };
     }
   }
 
@@ -2526,6 +2585,58 @@ async function autoAnalyseOne(url, apiKey) {
           } catch (e) { console.log(`AUTO: Page ${p} failed: ${e.message}`); }
         }
         console.log(`AUTO: Savills total: ${rawLots.length} lots from ${maxPages} pages`);
+
+      } else if (rewritten.paginateAs === 'sdl_pages') {
+        await page.goto(scrapeUrl, { waitUntil: 'networkidle2', timeout: 45000 });
+        await new Promise(r => setTimeout(r, 3000));
+        await page.evaluate(async () => {
+          for (let i = 0; i < 15; i++) { window.scrollBy(0, window.innerHeight); await new Promise(r => setTimeout(r, 500)); }
+          window.scrollTo(0, 0);
+        });
+        await new Promise(r => setTimeout(r, 2000));
+        const sdlTotalPages = await page.evaluate(() => {
+          const pageLinks = document.querySelectorAll('a[href*="page="], .pagination a, nav a');
+          let max = 1;
+          for (const a of pageLinks) {
+            const href = a.getAttribute('href') || '';
+            const pm = href.match(/page=(\d+)/);
+            if (pm) max = Math.max(max, parseInt(pm[1]));
+            const tm = a.textContent.trim().match(/^(\d+)$/);
+            if (tm) max = Math.max(max, parseInt(tm[1]));
+          }
+          const bodyText = document.body.innerText;
+          const ofMatch = bodyText.match(/page\s+\d+\s+of\s+(\d+)/i) || bodyText.match(/(\d+)\s+pages/i);
+          if (ofMatch) max = Math.max(max, parseInt(ofMatch[1]));
+          return max;
+        });
+        console.log(`AUTO: SDL detected ${sdlTotalPages} pages`);
+        const firstLots = await extractWithDOM(page, house);
+        if (firstLots && firstLots.length > 0) rawLots.push(...firstLots);
+        console.log(`AUTO: SDL Page 1: ${firstLots ? firstLots.length : 0} lots`);
+        const sdlMaxPages = Math.min(sdlTotalPages, 20);
+        for (let p = 2; p <= sdlMaxPages; p++) {
+          const sep = scrapeUrl.includes('?') ? '&' : '?';
+          const pageUrl = `${scrapeUrl}${sep}page=${p}`;
+          try {
+            await page.goto(pageUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+            await new Promise(r => setTimeout(r, 2000));
+            await page.evaluate(async () => {
+              for (let i = 0; i < 10; i++) { window.scrollBy(0, window.innerHeight); await new Promise(r => setTimeout(r, 400)); }
+              window.scrollTo(0, 0);
+            });
+            await new Promise(r => setTimeout(r, 1500));
+            const pageLots = await extractWithDOM(page, house);
+            if (pageLots && pageLots.length > 0) {
+              rawLots.push(...pageLots);
+              console.log(`AUTO: SDL Page ${p}: ${pageLots.length} lots`);
+            } else {
+              console.log(`AUTO: SDL Page ${p}: 0 lots — stopping`);
+              break;
+            }
+          } catch (e) { console.log(`AUTO: SDL Page ${p} failed: ${e.message}`); break; }
+        }
+        console.log(`AUTO: SDL total: ${rawLots.length} lots`);
+
       } else {
         await page.goto(scrapeUrl, { waitUntil: 'networkidle2', timeout: 45000 });
         await new Promise(r => setTimeout(r, 3000));
