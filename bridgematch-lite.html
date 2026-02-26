@@ -707,7 +707,7 @@ function renderResults(r){
   html+=`<div class="cta-card">
     <h3>Ready to make this deal happen?</h3>
     <p>BridgeMatch shows you what's possible — <strong>lender names are revealed when you speak to a broker</strong>. They'll find you the best rate, fastest completion, and highest net advance from our panel of 68 lenders.</p>
-    <a href="mailto:hello@bridge-match.co.uk?subject=BridgeMatch%20Enquiry%20-%20${encodeURIComponent(fmtCurrency(r.price))}%20property&body=Hi%2C%0A%0AI%20used%20BridgeMatch%20and%20found%20${count}%20potential%20lenders%20for%20a%20${encodeURIComponent(fmtCurrency(r.price))}%20property.%0A%0AMy%20details%3A%0ALoan%20needed%3A%20${encodeURIComponent(fmtCurrency(r.loanNeeded))}%0ALTV%3A%20${r.ltv.toFixed(1)}%25%0A${r.isRefurb?'Refurb%3A%20Yes%20-%20'+encodeURIComponent(fmtCurrency(r.works))+'%20works':''}%0A%0APlease%20get%20in%20touch.%0A" class="cta-btn">
+    <a href="mailto:hello@bridgematch.co.uk?subject=BridgeMatch%20Enquiry%20-%20${encodeURIComponent(fmtCurrency(r.price))}%20property&body=Hi%2C%0A%0AI%20used%20BridgeMatch%20and%20found%20${count}%20potential%20lenders%20for%20a%20${encodeURIComponent(fmtCurrency(r.price))}%20property.%0A%0AMy%20details%3A%0ALoan%20needed%3A%20${encodeURIComponent(fmtCurrency(r.loanNeeded))}%0ALTV%3A%20${r.ltv.toFixed(1)}%25%0A${r.isRefurb?'Refurb%3A%20Yes%20-%20'+encodeURIComponent(fmtCurrency(r.works))+'%20works':''}%0A%0APlease%20get%20in%20touch.%0A" class="cta-btn">
       📞 Speak to a Broker
     </a>
   </div>`;
