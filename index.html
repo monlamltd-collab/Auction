@@ -33,8 +33,6 @@ a{color:var(--green);text-decoration:none}a:hover{text-decoration:underline}
 .nav-right{display:flex;align-items:center;gap:10px}
 .nav-cta{padding:8px 20px;border-radius:var(--radius-sm);font-size:.85rem;font-weight:700;color:var(--white);background:var(--green);border:none;cursor:pointer;font-family:inherit;transition:all .15s}
 .nav-cta:hover{background:var(--green2)}
-.nav-link-bm{font-size:.82rem;font-weight:600;color:var(--green);padding:8px 14px;border-radius:var(--radius-sm);border:1px solid var(--green);transition:all .15s;text-decoration:none!important}
-.nav-link-bm:hover{background:var(--green-light);text-decoration:none!important}
 
 /* ── WRAP ── */
 .wrap{max-width:1100px;margin:0 auto;padding:0 24px}
@@ -136,34 +134,13 @@ a{color:var(--green);text-decoration:none}a:hover{text-decoration:underline}
 .tag-t{background:var(--violet-light);color:var(--violet)}.tag-o{background:var(--green-light);color:var(--green2)}.tag-r{background:var(--red-light);color:var(--red)}
 .lot-bullets{list-style:none;padding:0;margin:0}.lot-bullets li{font-size:.82rem;color:var(--text2);padding:2px 0 2px 14px;position:relative}
 .lot-bullets li::before{content:'›';position:absolute;left:0;color:var(--text4)}
-.lot-link{margin-top:0}.lot-link a{font-size:.82rem;color:var(--green);font-weight:600}
-.lot-actions{display:flex;align-items:center;gap:12px;margin-top:10px;flex-wrap:wrap}
-.bm-btn{display:inline-flex;align-items:center;gap:4px;font-size:.78rem;font-weight:700;color:var(--white);background:var(--green);padding:6px 14px;border-radius:var(--radius-sm);text-decoration:none!important;transition:all .15s;white-space:nowrap}
-.bm-btn:hover{background:var(--green2);text-decoration:none!important;transform:translateY(-1px);box-shadow:0 2px 6px rgba(15,138,95,.2)}
+.lot-link{margin-top:8px}.lot-link a{font-size:.82rem;color:var(--green);font-weight:600}
 
 /* Enrich panel */
 .enrich-panel{margin-top:10px;padding:10px 14px;background:var(--surface2);border-radius:var(--radius-sm);font-size:.82rem}
 .enrich-item{display:flex;justify-content:space-between;align-items:center;padding:3px 0}
 .enrich-label{color:var(--text3);font-size:.78rem}.enrich-value{font-weight:600}
 .enrich-good{color:var(--green)}.enrich-warn{color:var(--red)}.enrich-neutral{color:var(--text2)}
-
-/* Deal Analysis toggle */
-.tb-toggle{display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.82rem;white-space:nowrap;padding:6px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--white);transition:all .15s}
-.tb-toggle:has(input:checked){background:var(--green-light);border-color:var(--green)}
-.tb-toggle input{display:none}
-.tb-toggle-label{font-weight:600;color:var(--text2)}
-.tb-toggle:has(input:checked) .tb-toggle-label{color:var(--green)}
-
-/* Deal Analysis panel */
-.deal-panel{margin-top:10px;padding:14px 16px;background:linear-gradient(135deg,var(--green-pale),var(--surface2));border:1px solid var(--border);border-radius:var(--radius-sm)}
-.deal-header{font-size:.8rem;font-weight:700;color:var(--navy);margin-bottom:10px;display:flex;align-items:center;gap:6px}
-.deal-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.deal-item{padding:8px 10px;background:var(--white);border-radius:6px;border:1px solid var(--border)}
-.deal-item .dl{font-size:.7rem;color:var(--text3);text-transform:uppercase;letter-spacing:.03em}
-.deal-item .dv{font-family:'JetBrains Mono',monospace;font-size:.92rem;font-weight:700;margin-top:2px}
-.deal-item .dv.pos{color:var(--green)}.deal-item .dv.neg{color:var(--red)}.deal-item .dv.neu{color:var(--text2)}
-.deal-note{font-size:.75rem;color:var(--text3);margin-top:8px;font-style:italic}
-.deal-full{grid-column:1/-1}
 .street-sales{margin-top:6px;font-size:.78rem}
 .street-sales summary{cursor:pointer;color:var(--text3);font-weight:500}
 .ss-list{margin-top:4px}.ss-row{display:flex;gap:8px;padding:2px 0;color:var(--text2)}
@@ -241,7 +218,6 @@ footer .logo-f span{color:var(--green)}
   <div class="nav-inner">
     <div class="logo">Bridge<span>match</span></div>
     <div class="nav-right">
-      <a href="/check" class="nav-link-bm" title="Check if you can finance a deal">🧩 BridgeMatch</a>
       <button class="nav-cta" id="navCta" onclick="requireSignup()">Sign up free</button>
     </div>
   </div>
@@ -296,7 +272,7 @@ footer .logo-f span{color:var(--green)}
     </div>
     <div class="filters" style="margin-top:-8px">
       <div class="filter-field"><label>Status</label><select id="fSoldTop" onchange="if($('fSold'))$('fSold').value=this.value;renderLots()">
-        <option value="show">Show sold / STC</option><option value="hide">Hide sold / STC</option>
+        <option value="hide">Hide sold / STC</option><option value="show">Show sold / STC</option>
       </select></div>
       <div class="filter-field"><label>Title Splits</label><select id="fTSTop" onchange="if($('fTS'))$('fTS').value=this.value;renderLots()">
         <option value="">All lots</option><option value="ts">Title split opportunities</option>
@@ -318,7 +294,7 @@ footer .logo-f span{color:var(--green)}
 
     <div class="advanced" id="advancedPanel">
       <div class="budget-row">
-        <div class="filter-field"><label>Your Deposit (£)</label><input id="dep" type="number" value="0" placeholder="No limit"></div>
+        <div class="filter-field"><label>Your Deposit (£)</label><input id="dep" type="number" value="150000"></div>
         <div class="filter-field"><label>Standard Deposit %</label><input id="stdPct" type="number" value="25"></div>
         <div class="filter-field"><label>Title Split Deposit %</label><input id="tsPct" type="number" value="10"></div>
       </div>
@@ -361,10 +337,9 @@ footer .logo-f span{color:var(--green)}
     <div id="cardsView">
       <div class="toolbar">
         <select class="tb-select" id="fDeal" onchange="renderLots()"><option value="">All deals</option></select>
-        <select class="tb-select" id="fBudget" onchange="renderLots()"><option value="all">All lots</option><option value="budget">In budget</option></select>
+        <select class="tb-select" id="fBudget" onchange="renderLots()"><option value="budget">In budget</option><option value="all">All lots</option></select>
         <select class="tb-select" id="fTS" onchange="renderLots()"><option value="">All lots</option><option value="ts">Title split opportunities</option></select>
-        <select class="tb-select" id="fSold" onchange="renderLots()"><option value="show">Show sold/STC</option><option value="hide">Hide sold/STC</option></select>
-        <label class="tb-toggle"><input type="checkbox" id="showROI" onchange="renderLots()"><span class="tb-toggle-label">📊 Deal Analysis</span></label>
+        <select class="tb-select" id="fSold" onchange="renderLots()"><option value="hide">Hide sold/STC</option><option value="show">Show sold/STC</option></select>
         <input class="tb-search" type="text" id="fSearch" placeholder="Search..." oninput="renderLots()">
       </div>
       <div id="lotsOut"></div>
@@ -427,8 +402,8 @@ function backToAuctions(){
 // ═══════════════════════════════
 function getBudget(){
   const d=+$('dep').value||0,sp=+$('stdPct').value||25,tp=+$('tsPct').value||10;
-  const sm=d?Math.round(d/(sp/100)):0,tm=d?Math.round(d/(tp/100)):0;
-  $('budgetInfo').innerHTML=d?`Max purchase: <b>£${sm.toLocaleString()}</b> standard · <b>£${tm.toLocaleString()}</b> title split`:`<span style="color:var(--text4)">No budget limit set — showing all lots</span>`;
+  const sm=Math.round(d/(sp/100)),tm=Math.round(d/(tp/100));
+  $('budgetInfo').innerHTML=`Max purchase: <b>£${sm.toLocaleString()}</b> standard · <b>£${tm.toLocaleString()}</b> title split`;
   return {d,sp,tp,sm,tm};
 }
 ['dep','stdPct','tsPct'].forEach(id=>$(id)?.addEventListener('input',getBudget));
@@ -645,7 +620,7 @@ async function runSmartSearch(query) {
     if (data.sources?.length) rh += `<div class="sources">Searched ${data.totalSearched||0} lots across ${data.sources.length} catalogues: ${data.sources.map(s=>`${s.house} (${s.count})`).join(', ')}</div>`;
     $('reportView').innerHTML = rh;
 
-    showView('cards');
+    showView('report');
     buildLotFilters();
     renderLots();
     $('resultsPanel').style.display = 'block';
@@ -690,7 +665,7 @@ function renderLots(){
   const ft=$('fType').value,fd=$('fDeal').value,fb=$('fBudget').value,fts=$('fTS')?.value||$('fTSTop').value,fsold=$('fSold')?.value||$('fSoldTop').value,fs=$('fSearch').value.toLowerCase();
   if(ft)lots=lots.filter(l=>l.propType===ft);
   if(fd)lots=lots.filter(l=>l.dealType===fd);
-  if(fb==='budget'&&b.sm>0)lots=lots.filter(l=>{if(!l.price)return true;return l.price<=(l.titleSplit?b.tm:b.sm)});
+  if(fb==='budget')lots=lots.filter(l=>{if(!l.price)return true;return l.price<=(l.titleSplit?b.tm:b.sm)});
   if(fts==='ts')lots=lots.filter(l=>l.titleSplit);
   if(fsold==='hide')lots=lots.filter(l=>!(l.bullets||[]).some(b=>/\bSOLD\b|\bSTC\b|\bSALE.?AGREED\b|\bWITHDRAWN\b/i.test(b)));
   if(fs)lots=lots.filter(l=>(l.address||'').toLowerCase().includes(fs)||(l.bullets||[]).join(' ').toLowerCase().includes(fs));
@@ -767,67 +742,14 @@ function card(l,b){
     enrichHtml+='</div>';
   }
 
-  // Deal Analysis panel (shown when toggle is on)
-  let dealHtml='';
-  const showROI=$('showROI')&&$('showROI').checked;
-  if(showROI&&l.price&&l.streetAvg){
-    const da=calcDealAnalysis(l.price,l.streetAvg,l.estGrossYield,l.estMonthlyRent);
-    dealHtml=`<div class="deal-panel">
-      <div class="deal-header">📊 Deal Analysis (estimated)</div>
-      <div class="deal-grid">
-        <div class="deal-item"><div class="dl">Guide Price</div><div class="dv neu">£${l.price.toLocaleString()}</div></div>
-        <div class="deal-item"><div class="dl">Comparable Value</div><div class="dv neu">£${l.streetAvg.toLocaleString()}</div></div>
-        <div class="deal-item"><div class="dl">Potential Uplift</div><div class="dv ${da.uplift>0?'pos':'neg'}">£${Math.abs(da.uplift).toLocaleString()} (${da.upliftPct>0?'+':''}${da.upliftPct}%)</div></div>
-        <div class="deal-item"><div class="dl">SDLT (investor)</div><div class="dv neu">£${da.sdlt.toLocaleString()}</div></div>
-        <div class="deal-item"><div class="dl">Est. Bridging (12mo)</div><div class="dv neu">£${da.bridgingCost.toLocaleString()}</div></div>
-        <div class="deal-item"><div class="dl">Legal/Survey/Fees</div><div class="dv neu">£${da.otherCosts.toLocaleString()}</div></div>
-        <div class="deal-item"><div class="dl">Total Cost In</div><div class="dv neu">£${da.totalCostIn.toLocaleString()}</div></div>
-        <div class="deal-item"><div class="dl">Est. Net Profit (flip)</div><div class="dv ${da.netProfit>0?'pos':'neg'}">£${Math.abs(da.netProfit).toLocaleString()}</div></div>
-        <div class="deal-item deal-full"><div class="dl">ROI on Cash Invested (${dp*100}% deposit)</div><div class="dv ${da.roi>0?'pos':da.roi<0?'neg':'neu'}">${da.roi>0?'+':''}${da.roi}%</div></div>
-        ${da.grossYield?`<div class="deal-item deal-full"><div class="dl">Gross Yield (hold)</div><div class="dv ${da.grossYield>=7?'pos':da.grossYield>=5?'neu':'neg'}">${da.grossYield}% (£${da.monthlyRent.toLocaleString()}/mo)</div></div>`:''}
-      </div>
-      <div class="deal-note">⚠️ Estimates only — based on comparable sales avg, standard bridging assumptions (0.75%/mo, 75% LTV), and investor SDLT rates. Not financial advice.</div>
-    </div>`;
-  } else if(showROI&&l.price&&!l.streetAvg){
-    dealHtml=`<div class="deal-panel"><div class="deal-header">📊 Deal Analysis</div><div class="deal-note">No comparable data available for this lot — ROI cannot be estimated.</div></div>`;
-  }
-
   const link=l.url?`<div class="lot-link"><a href="${l.url}" target="_blank">View listing ↗</a></div>`:'';
-  const bmLink=l.price?`<a href="/check?price=${l.price}${l.address?'&address='+encodeURIComponent(l.address):''}${l.propType?'&type='+encodeURIComponent(l.propType):''}" class="bm-btn" target="_blank" title="Check bridging finance feasibility">🧩 BridgeMatch It</a>`:'';
 
   return`<div class="lot ${l.titleSplit?'ts':''}">
     <div class="lot-header"><div class="lot-title">Lot ${l.lot} · ${l.dealType||'Standard'}</div><div class="lot-score ${sc}">${l.score}</div></div>
     <div class="lot-addr">${l.address||'Address not available'}</div>
     <div class="lot-details">${details.join(' <span class="sep">·</span> ')}</div>
     <div class="tags">${tags}</div>
-    <ul class="lot-bullets">${bul}</ul>${enrichHtml}${dealHtml}
-    <div class="lot-actions">${link}${bmLink}</div></div>`;
-}
-
-// SDLT calculator (investor rates 2025/26 — includes 5% surcharge)
-function calcSDLT(price){
-  if(price<=250000) return Math.round(price*0.05);
-  let sdlt=250000*0.05;
-  if(price<=925000) sdlt+=(price-250000)*0.1;
-  else{sdlt+=(925000-250000)*0.1;sdlt+=(Math.min(price,1500000)-925000)*0.15;}
-  if(price>1500000) sdlt+=(price-1500000)*0.17;
-  return Math.round(sdlt);
-}
-
-// Deal analysis calculator
-function calcDealAnalysis(guidePrice,streetAvg,grossYield,monthlyRent){
-  const uplift=streetAvg-guidePrice;
-  const upliftPct=guidePrice>0?Math.round((uplift/guidePrice)*100):0;
-  const sdlt=calcSDLT(guidePrice);
-  const loanAmt=guidePrice*0.75; // assume 75% LTV
-  const bridgingCost=Math.round(loanAmt*0.0075*12); // 0.75%/mo for 12 months
-  const otherCosts=Math.round(guidePrice*0.04); // legal, survey, arrangement ~4%
-  const totalCostIn=guidePrice+sdlt+bridgingCost+otherCosts;
-  const netProfit=streetAvg-totalCostIn;
-  const cashIn=guidePrice-loanAmt+sdlt+otherCosts; // deposit + costs
-  const roi=cashIn>0?Math.round((netProfit/cashIn)*100):0;
-  return{uplift,upliftPct,sdlt,bridgingCost,otherCosts,totalCostIn,netProfit,roi,
-    grossYield:grossYield||0,monthlyRent:monthlyRent||0};
+    <ul class="lot-bullets">${bul}</ul>${enrichHtml}${link}</div>`;
 }
 
 // Downloads
