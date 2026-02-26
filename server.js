@@ -582,26 +582,98 @@ app.post('/api/analyse', async (req, res) => {
           console.log(`SDL total: ${rawLots.length} lots via DOM extraction`);
 
         } else {
-          // Single-page Puppeteer extraction
-          console.log(`Puppeteer: loading ${scrapeUrl}`);
+          // ── Generic Puppeteer extraction with auto-pagination ──
+          console.log(`Puppeteer: loading ${scrapeUrl} for ${house}`);
           await page.goto(scrapeUrl, { waitUntil: 'networkidle2', timeout: 45000 });
           await new Promise(r => setTimeout(r, 3000));
 
           // Scroll to trigger lazy loading
           await page.evaluate(async () => {
-            for (let i = 0; i < 10; i++) {
+            for (let i = 0; i < 15; i++) {
               window.scrollBy(0, window.innerHeight);
-              await new Promise(r => setTimeout(r, 600));
+              await new Promise(r => setTimeout(r, 500));
             }
             window.scrollTo(0, 0);
           });
           await new Promise(r => setTimeout(r, 2000));
 
-          // Try DOM extractor first (precise, free, fast)
+          // Extract page 1
           const domLots = await extractWithDOM(page, house);
           if (domLots && domLots.length >= 3) {
-            rawLots = domLots;
-            console.log(`Got ${rawLots.length} lots via DOM extraction for ${house} (no Claude needed)`);
+            rawLots.push(...domLots);
+            console.log(`${house} Page 1: ${domLots.length} lots via DOM extraction`);
+
+            // ── Auto-detect pagination and follow it ──
+            const detectedPages = await page.evaluate(() => {
+              let max = 1;
+              // Strategy 1: ?page=N or &page=N links
+              document.querySelectorAll('a[href*="page="], a[href*="page-"], a[href*="/page/"]').forEach(a => {
+                const href = a.getAttribute('href') || '';
+                const m = href.match(/page[=/](\d+)/) || href.match(/page-(\d+)/);
+                if (m) max = Math.max(max, parseInt(m[1]));
+              });
+              // Strategy 2: pagination nav with numbered links
+              document.querySelectorAll('.pagination a, nav.pagination a, .paging a, .page-numbers a, [class*="pagination"] a, [class*="pager"] a').forEach(a => {
+                const t = a.textContent.trim();
+                if (t.match(/^\d+$/)) max = Math.max(max, parseInt(t));
+              });
+              // Strategy 3: "Page X of Y" text
+              const bodyText = document.body.innerText;
+              const ofMatch = bodyText.match(/page\s+\d+\s+of\s+(\d+)/i) || bodyText.match(/(\d+)\s+pages/i);
+              if (ofMatch) max = Math.max(max, parseInt(ofMatch[1]));
+              // Strategy 4: "Showing 1-20 of 345" — calculate pages
+              const showMatch = bodyText.match(/showing\s+\d+[\s-]+\d+\s+of\s+(\d+)/i) || bodyText.match(/(\d+)\s+results?\s+found/i) || bodyText.match(/(\d+)\s+(?:lots?|properties)/i);
+              if (showMatch) {
+                const total = parseInt(showMatch[1]);
+                if (total > 50) max = Math.max(max, Math.ceil(total / 20)); // assume ~20 per page
+              }
+              // Detect the pagination URL pattern
+              let pattern = 'query'; // default: ?page=N
+              const pageLink = document.querySelector('a[href*="page-"]');
+              if (pageLink) pattern = 'path-dash'; // /page-2
+              const pageSlash = document.querySelector('a[href*="/page/"]');
+              if (pageSlash) pattern = 'path-slash'; // /page/2
+              return { max, pattern };
+            });
+
+            if (detectedPages.max > 1) {
+              const maxPages = Math.min(detectedPages.max, 25);
+              console.log(`${house}: detected ${detectedPages.max} pages (pattern: ${detectedPages.pattern}), loading up to ${maxPages}`);
+
+              for (let p = 2; p <= maxPages; p++) {
+                let pageUrl;
+                if (detectedPages.pattern === 'path-dash') {
+                  pageUrl = scrapeUrl.replace(/\/page-\d+/, '') + `/page-${p}`;
+                } else if (detectedPages.pattern === 'path-slash') {
+                  pageUrl = scrapeUrl.replace(/\/page\/\d+/, '') + `/page/${p}`;
+                } else {
+                  const sep = scrapeUrl.includes('?') ? '&' : '?';
+                  pageUrl = `${scrapeUrl}${sep}page=${p}`;
+                }
+
+                try {
+                  await page.goto(pageUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+                  await new Promise(r => setTimeout(r, 2000));
+                  await page.evaluate(async () => {
+                    for (let i = 0; i < 10; i++) { window.scrollBy(0, window.innerHeight); await new Promise(r => setTimeout(r, 400)); }
+                    window.scrollTo(0, 0);
+                  });
+                  await new Promise(r => setTimeout(r, 1500));
+                  const pageLots = await extractWithDOM(page, house);
+                  if (pageLots && pageLots.length > 0) {
+                    rawLots.push(...pageLots);
+                    console.log(`${house} Page ${p}: ${pageLots.length} lots`);
+                  } else {
+                    console.log(`${house} Page ${p}: 0 lots — stopping pagination`);
+                    break;
+                  }
+                } catch (e) {
+                  console.log(`${house} Page ${p} failed: ${e.message}`);
+                  break;
+                }
+              }
+            }
+            console.log(`${house} total: ${rawLots.length} lots via DOM extraction (no Claude needed)`);
           } else {
             // Fall back to Claude extraction from page HTML
             if (domLots && domLots.length > 0) {
@@ -2638,18 +2710,63 @@ async function autoAnalyseOne(url, apiKey) {
         console.log(`AUTO: SDL total: ${rawLots.length} lots`);
 
       } else {
+        // ── Generic auto-paginating Puppeteer extraction ──
         await page.goto(scrapeUrl, { waitUntil: 'networkidle2', timeout: 45000 });
         await new Promise(r => setTimeout(r, 3000));
         await page.evaluate(async () => {
-          for (let i = 0; i < 10; i++) { window.scrollBy(0, window.innerHeight); await new Promise(r => setTimeout(r, 600)); }
+          for (let i = 0; i < 15; i++) { window.scrollBy(0, window.innerHeight); await new Promise(r => setTimeout(r, 500)); }
           window.scrollTo(0, 0);
         });
         await new Promise(r => setTimeout(r, 2000));
 
         const domLots = await extractWithDOM(page, house);
         if (domLots && domLots.length >= 3) {
-          rawLots = domLots;
-          console.log(`AUTO: ${house}: ${rawLots.length} lots via DOM extraction`);
+          rawLots.push(...domLots);
+          console.log(`AUTO: ${house} Page 1: ${domLots.length} lots`);
+
+          // Auto-detect pagination
+          const detectedPages = await page.evaluate(() => {
+            let max = 1;
+            document.querySelectorAll('a[href*="page="], a[href*="page-"], a[href*="/page/"]').forEach(a => {
+              const href = a.getAttribute('href') || '';
+              const m = href.match(/page[=/](\d+)/) || href.match(/page-(\d+)/);
+              if (m) max = Math.max(max, parseInt(m[1]));
+            });
+            document.querySelectorAll('.pagination a, nav.pagination a, .paging a, .page-numbers a, [class*="pagination"] a, [class*="pager"] a').forEach(a => {
+              const t = a.textContent.trim();
+              if (t.match(/^\d+$/)) max = Math.max(max, parseInt(t));
+            });
+            const bodyText = document.body.innerText;
+            const ofMatch = bodyText.match(/page\s+\d+\s+of\s+(\d+)/i) || bodyText.match(/(\d+)\s+pages/i);
+            if (ofMatch) max = Math.max(max, parseInt(ofMatch[1]));
+            const showMatch = bodyText.match(/showing\s+\d+[\s-]+\d+\s+of\s+(\d+)/i) || bodyText.match(/(\d+)\s+results?\s+found/i) || bodyText.match(/(\d+)\s+(?:lots?|properties)/i);
+            if (showMatch) { const total = parseInt(showMatch[1]); if (total > 50) max = Math.max(max, Math.ceil(total / 20)); }
+            let pattern = 'query';
+            if (document.querySelector('a[href*="page-"]')) pattern = 'path-dash';
+            if (document.querySelector('a[href*="/page/"]')) pattern = 'path-slash';
+            return { max, pattern };
+          });
+
+          if (detectedPages.max > 1) {
+            const maxPages = Math.min(detectedPages.max, 25);
+            console.log(`AUTO: ${house}: detected ${detectedPages.max} pages (${detectedPages.pattern}), loading up to ${maxPages}`);
+            for (let p = 2; p <= maxPages; p++) {
+              let pageUrl;
+              if (detectedPages.pattern === 'path-dash') pageUrl = scrapeUrl.replace(/\/page-\d+/, '') + `/page-${p}`;
+              else if (detectedPages.pattern === 'path-slash') pageUrl = scrapeUrl.replace(/\/page\/\d+/, '') + `/page/${p}`;
+              else { const sep = scrapeUrl.includes('?') ? '&' : '?'; pageUrl = `${scrapeUrl}${sep}page=${p}`; }
+              try {
+                await page.goto(pageUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+                await new Promise(r => setTimeout(r, 2000));
+                await page.evaluate(async () => { for (let i = 0; i < 10; i++) { window.scrollBy(0, window.innerHeight); await new Promise(r => setTimeout(r, 400)); } window.scrollTo(0, 0); });
+                await new Promise(r => setTimeout(r, 1500));
+                const pageLots = await extractWithDOM(page, house);
+                if (pageLots && pageLots.length > 0) { rawLots.push(...pageLots); console.log(`AUTO: ${house} Page ${p}: ${pageLots.length} lots`); }
+                else { console.log(`AUTO: ${house} Page ${p}: 0 lots — stopping`); break; }
+              } catch (e) { console.log(`AUTO: ${house} Page ${p} failed: ${e.message}`); break; }
+            }
+          }
+          console.log(`AUTO: ${house} total: ${rawLots.length} lots`);
         } else {
           const html = await page.content();
           const puppeteerPages = [{ page: 1, html }];
