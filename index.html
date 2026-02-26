@@ -233,6 +233,37 @@ footer .logo-f span{color:var(--green)}
 
 @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 .hero{animation:fadeUp .5s ease both}
+
+/* ── OWN CATALOGUE ── */
+.own-catalogue{margin-bottom:24px}
+.oc-inner{background:var(--white);border:2px dashed var(--border);border-radius:var(--radius);padding:20px 24px;display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.oc-icon{font-size:1.6rem}
+.oc-text{flex:1;min-width:200px}.oc-text strong{display:block;font-size:.9rem;color:var(--navy)}.oc-text span{font-size:.82rem;color:var(--text3)}
+.oc-input-row{display:flex;gap:8px;width:100%}
+.view-results .own-catalogue{display:none}
+
+/* ── SCANNING ANIMATION ── */
+@keyframes scanPulse{0%,100%{opacity:.6}50%{opacity:1}}
+@keyframes scanSlide{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+.scan-animation{background:var(--navy);border-radius:var(--radius);padding:28px;color:var(--white);text-align:center;margin-bottom:20px;overflow:hidden;position:relative}
+.scan-animation::after{content:'';position:absolute;top:0;left:0;right:0;bottom:0;background:linear-gradient(90deg,transparent,rgba(15,138,95,.15),transparent);animation:scanSlide 2s ease-in-out infinite}
+.scan-title{font-family:'Source Serif 4',serif;font-size:1.2rem;font-weight:700;margin-bottom:16px}
+.scan-steps{display:flex;justify-content:center;gap:24px;flex-wrap:wrap;margin-bottom:16px}
+.scan-step{display:flex;align-items:center;gap:6px;font-size:.82rem;color:rgba(255,255,255,.7)}
+.scan-step.active{color:var(--green);font-weight:600}
+.scan-step.done{color:var(--green)}
+.scan-step .check{display:none}.scan-step.done .check{display:inline}.scan-step.done .spinner{display:none}
+.scan-step .spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.2);border-top-color:var(--green);border-radius:50%;animation:spin .8s linear infinite}
+.scan-step.waiting .spinner{display:none}
+.scan-step.waiting::before{content:'○';margin-right:2px;opacity:.4}
+@keyframes spin{to{transform:rotate(360deg)}}
+.scan-count{font-family:'JetBrains Mono',monospace;font-size:2rem;font-weight:700;color:var(--green);animation:scanPulse 1.5s ease infinite}
+.scan-label{font-size:.78rem;color:rgba(255,255,255,.5);margin-top:4px}
+
+/* ── CACHED CALENDAR BUTTON ── */
+.cal-btn.cached{background:var(--green-light);color:var(--green);border:1px solid var(--green)}
+.cal-btn.cached:hover{background:var(--green);color:var(--white)}
+.cal-lots-badge{font-family:'JetBrains Mono',monospace;font-size:.72rem;background:var(--green-light);color:var(--green);padding:2px 8px;border-radius:10px;font-weight:700}
 </style>
 </head>
 <body>
@@ -276,7 +307,7 @@ footer .logo-f span{color:var(--green)}
   <!-- ═══════ SEARCH PANEL ═══════ -->
   <div class="search-panel">
     <div class="search-row">
-      <input id="smartQuery" class="search-input" placeholder="Describe what you're looking for, or paste an auction catalogue URL...">
+      <input id="smartQuery" class="search-input" placeholder="e.g. 'Refurb opportunities under £200k' or 'Title splits in Bristol'">
       <button class="btn-main" id="mainBtn" onclick="handleSearch()">Search</button>
     </div>
 
@@ -323,6 +354,21 @@ footer .logo-f span{color:var(--green)}
         <div class="filter-field"><label>Title Split Deposit %</label><input id="tsPct" type="number" value="10"></div>
       </div>
       <div class="budget-summary" id="budgetInfo"></div>
+    </div>
+  </div>
+
+  <!-- ═══════ OWN CATALOGUE CTA ═══════ -->
+  <div class="own-catalogue" id="ownCatSection">
+    <div class="oc-inner">
+      <span class="oc-icon">🔗</span>
+      <div class="oc-text">
+        <strong>Got a catalogue from another auction house?</strong>
+        <span>Paste the URL below and we'll AI-score every lot for you — free.</span>
+      </div>
+      <div class="oc-input-row">
+        <input id="ownUrl" class="search-input" placeholder="Paste auction catalogue URL here..." style="flex:1;margin:0">
+        <button class="btn-main" onclick="runAnalysis($('ownUrl').value.trim())">Analyse</button>
+      </div>
     </div>
   </div>
 
@@ -373,7 +419,10 @@ footer .logo-f span{color:var(--green)}
 
   <!-- ═══════ UPCOMING AUCTIONS (hidden when results showing) ═══════ -->
   <div id="calendarSection">
-    <div class="sh"><h2>Upcoming auctions</h2><p>Click Analyse to AI-score every lot, or View to browse the catalogue yourself.</p></div>
+    <div class="sh" style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:12px">
+      <div><h2>Upcoming auctions</h2><p>Click Analyse to AI-score every lot, or View to browse the catalogue yourself.</p></div>
+      <button class="btn-main" id="analyseAllBtn" onclick="analyseAll()" style="white-space:nowrap;margin-bottom:4px">🚀 Analyse all auctions</button>
+    </div>
     <div class="house-filters" id="houseFilters"><button class="hf active" data-house="all">All</button></div>
     <div class="cal-grid" id="calGrid">
       <div style="text-align:center;padding:40px;color:var(--text4)">Loading auctions...</div>
@@ -442,11 +491,20 @@ function toggleAdvanced(){
 // CALENDAR
 // ═══════════════════════════════
 let calendarData=[];
+let cacheStatus={};
+
 async function loadCalendar(){
   try{
-    const r=await fetch('/api/auctions');
-    const d=await r.json();
+    const [calR, cacheR]=await Promise.all([
+      fetch('/api/auctions'),
+      fetch('/api/cache-status').catch(()=>({ok:false}))
+    ]);
+    const d=await calR.json();
     calendarData=d.auctions||[];
+    if(cacheR.ok){
+      const cs=await cacheR.json();
+      (cs.cached||[]).forEach(c=>{ cacheStatus[c.url]=c; });
+    }
     buildHouseFilters();
     renderCalendar();
   }catch(e){
@@ -475,17 +533,26 @@ function renderCalendar(){
     const d=new Date(a.date);
     const day=d.getDate();
     const mon=d.toLocaleDateString('en-GB',{month:'short'}).toUpperCase();
-    const lotsText=a.lots?`${a.lots} lots`:'Lots TBC';
-    const analyseBtn=a.catalogueReady?`<button class="cal-btn primary" onclick="analyseFromCal('${a.url}')">Analyse</button>`:'';
+    const normUrl=a.url.trim().replace(/\/+$/,'').toLowerCase();
+    const cached=cacheStatus[normUrl];
+    const lotsText=cached?`${cached.total_lots} lots scored`:a.lots?`${a.lots} lots`:'Lots TBC';
+    let actionBtn='';
+    if(cached && cached.total_lots>0){
+      actionBtn=`<button class="cal-btn cached" onclick="analyseFromCal('${a.url}')">✓ View ${cached.total_lots} results</button>`;
+    } else if(a.catalogueReady){
+      actionBtn=`<button class="cal-btn primary" onclick="analyseFromCal('${a.url}')">Analyse</button>`;
+    }
+    const lotsBadge=cached?`<span class="cal-lots-badge">${cached.title_splits} title splits · ${cached.top_picks} top picks</span>`:'';
     return`<div class="cal-card">
       <div class="cal-date"><div class="day">${day}</div><div class="mon">${mon}</div></div>
       <div class="cal-info">
         <h3>${a.logo} ${a.house}</h3>
         <div class="meta"><span>${a.type}</span><span>${a.location}</span><span>${lotsText}</span></div>
+        ${lotsBadge}
       </div>
       <div class="cal-actions">
-        ${analyseBtn}
-        <a href="${a.url}" target="_blank" class="cal-btn ghost">View ↗</a>
+        ${actionBtn}
+        <a href="${a.url}" target="_blank" class="cal-btn ghost">Catalogue ↗</a>
       </div>
     </div>`;
   }).join('');
@@ -494,6 +561,39 @@ function renderCalendar(){
 function analyseFromCal(url){
   $('smartQuery').value = url;
   runAnalysis(url);
+}
+
+async function analyseAll(){
+  if(!requireSignup()) return;
+  const btn=$('analyseAllBtn');
+  btn.disabled=true;
+  btn.textContent='⏳ Analysing all...';
+
+  try{
+    const r=await fetch('/api/analyse-all',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({email:currentUser?.email})
+    });
+    const d=await r.json();
+    if(!r.ok) throw new Error(d.error||'Failed');
+
+    // Show progress updates
+    btn.textContent=`✓ ${d.analysed} analysed, ${d.skipped} cached, ${d.failed} failed`;
+    setTimeout(()=>{
+      btn.disabled=false;
+      btn.textContent='🚀 Analyse all auctions';
+    }, 5000);
+
+    // Refresh calendar to show updated status
+    loadCalendar();
+  }catch(e){
+    btn.textContent='✗ '+e.message;
+    setTimeout(()=>{
+      btn.disabled=false;
+      btn.textContent='🚀 Analyse all auctions';
+    }, 3000);
+  }
 }
 
 // ═══════════════════════════════
@@ -557,20 +657,39 @@ async function runAnalysis(url){
   if(!url)return alert('Please paste an auction catalogue URL');
 
   $('mainBtn').disabled=true;
-  $('progressPanel').style.display='block';
   $('resultsPanel').style.display='none';
   $('logBox').innerHTML='';
   LOTS=[];
   SMART_RESULTS=null;
   showResultsView();
 
-  log('Sending catalogue for analysis...');
-  prog(10,'Analysing catalogue...');
+  // Show scanning animation
+  $('progressPanel').style.display='block';
+  $('progressPanel').innerHTML=`<div class="scan-animation">
+    <div class="scan-title">🧠 AI is scanning this catalogue</div>
+    <div class="scan-steps">
+      <div class="scan-step active" id="ss1"><span class="spinner"></span><span class="check">✓</span> Loading catalogue</div>
+      <div class="scan-step waiting" id="ss2"><span class="spinner"></span><span class="check">✓</span> Extracting lots</div>
+      <div class="scan-step waiting" id="ss3"><span class="spinner"></span><span class="check">✓</span> Scoring deals</div>
+      <div class="scan-step waiting" id="ss4"><span class="spinner"></span><span class="check">✓</span> Land Registry check</div>
+      <div class="scan-step waiting" id="ss5"><span class="spinner"></span><span class="check">✓</span> Yield estimates</div>
+    </div>
+    <div class="scan-count" id="scanCount">—</div>
+    <div class="scan-label" id="scanLabel">lots found so far</div>
+  </div>`;
+
+  // Animate steps
+  const stepTimings = [1500, 3000, 5000, 7000];
+  stepTimings.forEach((t, i) => {
+    setTimeout(() => {
+      const prev = $('ss'+(i+1));
+      const next = $('ss'+(i+2));
+      if(prev){prev.classList.remove('active');prev.classList.add('done')}
+      if(next){next.classList.remove('waiting');next.classList.add('active')}
+    }, t);
+  });
 
   try{
-    log('Checking cache, then scraping if needed...');
-    prog(30,'Working...');
-
     const resp=await fetch('/api/analyse',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
@@ -586,10 +705,16 @@ async function runAnalysis(url){
     }
 
     LOTS=data.lots||[];
-    const cacheNote=data.cached?' (from cache — instant!)':'';
-    log(`Done! ${data.totalLots} lots analysed, ${data.titleSplits} title splits found.${cacheNote}`,'ok');
-    prog(100,'Complete');
 
+    // Complete all steps
+    for(let i=1;i<=5;i++){const s=$('ss'+i);if(s){s.classList.remove('active','waiting');s.classList.add('done')}}
+    if($('scanCount'))$('scanCount').textContent=LOTS.length;
+    if($('scanLabel'))$('scanLabel').textContent=`lots scored · ${data.titleSplits} title splits · ${data.topPicks} top picks`;
+
+    // Brief pause to let user see the final count
+    await new Promise(r=>setTimeout(r,data.cached?500:1500));
+
+    $('progressPanel').style.display='none';
     $('resultsTitle').textContent = `${data.house || 'Auction'} — ${LOTS.length} lots`;
     $('viewToggle').style.display='none';
     $('reportView').style.display='none';
@@ -598,8 +723,10 @@ async function runAnalysis(url){
     renderLots();
     $('resultsPanel').style.display='block';
   }catch(e){
-    log(e.message,'err');
-    prog(0,'Failed');
+    $('progressPanel').innerHTML=`<div class="scan-animation" style="background:var(--red)">
+      <div class="scan-title">✗ ${e.message}</div>
+      <div class="scan-label"><a href="#" onclick="backToAuctions();return false" style="color:white;text-decoration:underline">← Back to auctions</a></div>
+    </div>`;
   }
   $('mainBtn').disabled=false;
 }

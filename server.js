@@ -907,6 +907,27 @@ app.post('/api/refresh-cache', async (req, res) => {
   autoAnalyseAll().catch(e => console.error('Manual refresh failed:', e));
 });
 
+// User-facing: analyse all catalogue-ready auctions
+app.post('/api/analyse-all', async (req, res) => {
+  const { email } = req.body || {};
+  if (!email) return res.status(401).json({ error: 'signup_required' });
+
+  const { data: user } = await supabase
+    .from('users')
+    .select('id')
+    .eq('email', email.toLowerCase().trim())
+    .single();
+  if (!user) return res.status(401).json({ error: 'signup_required' });
+
+  // Trigger auto-analysis and wait for it to complete
+  try {
+    const result = await autoAnalyseAll();
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ═══════════════════════════════════════════════════════════════
 // CATCH-ALL
 // ═══════════════════════════════════════════════════════════════
@@ -2607,6 +2628,7 @@ async function autoAnalyseAll() {
   }
 
   console.log(`═══ AUTO-ANALYSIS COMPLETE: ${analysed} analysed, ${skipped} cached, ${failed} failed ═══\n`);
+  return { analysed, skipped, failed, total: ready.length };
 }
 
 async function autoAnalyseOne(url, apiKey) {
