@@ -342,6 +342,22 @@ footer .logo-f span{color:var(--green)}
       </select></div>
     </div>
     <div class="filters" style="margin-top:-8px">
+      <div class="filter-field"><label>Location</label><select id="fLocation" onchange="applyFilters()">
+        <option value="">Anywhere</option>
+        <optgroup label="Regions">
+          <option value="london">London</option>
+          <option value="south east">South East</option>
+          <option value="south west">South West</option>
+          <option value="east">East of England</option>
+          <option value="west midlands">West Midlands</option>
+          <option value="east midlands">East Midlands</option>
+          <option value="north west">North West</option>
+          <option value="north east">North East</option>
+          <option value="yorkshire">Yorkshire</option>
+          <option value="wales">Wales</option>
+          <option value="scotland">Scotland</option>
+        </optgroup>
+      </select></div>
       <div class="filter-field"><label>Status</label><select id="fSoldTop" onchange="applyFilters()">
         <option value="hide">Hide sold / STC</option><option value="show">Show sold / STC</option>
       </select></div>
@@ -351,6 +367,9 @@ footer .logo-f span{color:var(--green)}
       <div class="filter-field"><label>Condition</label><select id="fCondition" onchange="applyFilters()">
         <option value="">Any</option><option value="needs work">Needs work</option><option value="good">Good / modernised</option><option value="vacant">Vacant</option><option value="tenanted">Tenanted</option>
       </select></div>
+    </div>
+    <div class="filters" style="margin-top:-8px">
+      <div class="filter-field" style="flex:2"><label>Postcode (e.g. SW1, B15, CF10)</label><input id="fPostcode" placeholder="Any postcode area" oninput="applyFilters()" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:.88rem"></div>
       <div class="filter-field"><label>Auction House</label><select id="fHouse" onchange="applyFilters()">
         <option value="">All houses</option>
       </select></div>
@@ -490,6 +509,58 @@ async function loadAllLots(){
   }
 }
 
+// Region → postcode prefix mapping for location filter
+const REGION_POSTCODES={
+  london:['E','EC','N','NW','SE','SW','W','WC','EN','HA','IG','KT','TW','UB','BR','CR','DA','SM','RM'],
+  'south east':['BN','CT','GU','ME','MK','OX','PO','RG','RH','SL','SO','TN','HP'],
+  'south west':['BA','BH','BS','DT','EX','GL','PL','SN','SP','TA','TQ','TR'],
+  east:['AL','CB','CM','CO','IP','LU','NR','PE','SG','SS','WD'],
+  'west midlands':['B','CV','DY','HR','ST','TF','WR','WS','WV'],
+  'east midlands':['DE','DN','LE','LN','NG','NN'],
+  'north west':['BB','BL','CA','CH','CW','FY','L','LA','M','OL','PR','SK','WA','WN'],
+  'north east':['DH','DL','HG','NE','SR','TS'],
+  yorkshire:['BD','DN','HD','HG','HU','HX','LS','S','WF','YO'],
+  wales:['CF','LD','LL','NP','SA','SY'],
+  scotland:['AB','DD','DG','EH','FK','G','HS','IV','KA','KW','KY','ML','PA','PH','TD','ZE']
+};
+
+const REGION_TOWNS={
+  london:['london','hackney','islington','camden','westminster','greenwich','lewisham','southwark','lambeth','wandsworth','hammersmith','kensington','chelsea','tower hamlets','newham','barking','redbridge','walthamstow','tottenham','brixton','peckham','croydon','bromley','sutton','kingston','richmond','ealing','hounslow','brent','harrow','barnet','enfield','haringey','eltham','woolwich','deptford','stratford','ilford','romford','dagenham'],
+  'south east':['brighton','hove','canterbury','guildford','maidstone','milton keynes','oxford','portsmouth','reading','slough','southampton','tunbridge','crawley','hastings','eastbourne','chichester','basingstoke','aylesbury','margate','dover','folkestone','ashford','woking','winchester','horsham','worthing','bognor','isle of wight','epsom','reigate','sevenoaks','tonbridge','chatham','rochester','gillingham','dartford','gravesend','thanet'],
+  'south west':['bath','bournemouth','bristol','exeter','gloucester','plymouth','swindon','taunton','torquay','truro','cheltenham','poole','weymouth','barnstaple','tiverton','yeovil','bridgwater','salisbury','chippenham','weston-super-mare','stroud','penzance','newquay','falmouth','dorchester','bideford'],
+  east:['cambridge','chelmsford','colchester','ipswich','norwich','peterborough','luton','southend','st albans','stevenage','watford','harlow','basildon','braintree','bury st edmunds','great yarmouth','kings lynn','lowestoft','bedford','hertford','welwyn','hatfield','hemel hempstead'],
+  'west midlands':['birmingham','coventry','dudley','hereford','stoke','telford','worcester','wolverhampton','walsall','solihull','west bromwich','smethwick','sutton coldfield','redditch','bromsgrove','kidderminster','stafford','tamworth','nuneaton','rugby','leamington','warwick','stratford-upon-avon','shrewsbury'],
+  'east midlands':['derby','leicester','lincoln','nottingham','northampton','mansfield','loughborough','grantham','corby','kettering','wellingborough','chesterfield','buxton','matlock','hinckley','melton','newark','worksop','retford','boston','spalding','stamford','oakham'],
+  'north west':['blackburn','bolton','carlisle','chester','crewe','blackpool','lancaster','liverpool','manchester','oldham','preston','stockport','warrington','wigan','salford','rochdale','burnley','accrington','kendal','barrow','macclesfield','congleton','nantwich','runcorn','widnes','st helens','southport','chorley','leyland','morecambe','fleetwood','lytham'],
+  'north east':['durham','darlington','hartlepool','newcastle','sunderland','middlesbrough','stockton','gateshead','south shields','washington','bishop auckland','consett','redcar','whitby','scarborough','northallerton','thirsk','ripon'],
+  yorkshire:['bradford','doncaster','harrogate','hull','halifax','huddersfield','leeds','sheffield','wakefield','york','barnsley','rotherham','dewsbury','batley','keighley','skipton','selby','goole','beverley','bridlington','scunthorpe','grimsby','pontefract','castleford','wetherby'],
+  wales:['cardiff','llandudno','newport','swansea','aberystwyth','carmarthen','wrexham','bangor','rhyl','colwyn bay','barry','caerphilly','pontypridd','merthyr','bridgend','neath','port talbot','llanelli','haverfordwest','pembroke','tenby','brecon','newtown','welshpool','holyhead'],
+  scotland:['aberdeen','dundee','dumfries','edinburgh','falkirk','glasgow','inverness','kilmarnock','kirkcaldy','motherwell','paisley','perth','stirling','ayr','livingston','dunfermline','greenock','hamilton','coatbridge','cumbernauld','east kilbride','elgin','fort william','oban','wick','lerwick','stornoway']
+};
+
+function getPostcodePrefix(addr){
+  if(!addr) return '';
+  const m=addr.match(/\b([A-Z]{1,2})\d/i);
+  return m?m[1].toUpperCase():'';
+}
+
+function matchesRegion(addr, region){
+  if(!addr || !region) return false;
+  const addrUpper=addr.toUpperCase();
+  const addrLower=addr.toLowerCase();
+
+  // Try postcode prefix first
+  const pc=getPostcodePrefix(addr);
+  if(pc && (REGION_POSTCODES[region]||[]).includes(pc)) return true;
+
+  // Fallback: match town/city names in address
+  const towns=REGION_TOWNS[region]||[];
+  for(const town of towns){
+    if(addrLower.includes(town)) return true;
+  }
+  return false;
+}
+
 function applyFilters(){
   if(ALL_LOTS.length===0){
     $('filterCount').style.display='none';
@@ -503,6 +574,8 @@ function applyFilters(){
   const tenure=$('fTenure').value;
   const condition=$('fCondition').value;
   const house=$('fHouse').value;
+  const location=$('fLocation').value;
+  const postcode=$('fPostcode').value.trim().toUpperCase();
 
   FILTERED_INDICES=[];
   let topPicks=0;
@@ -519,6 +592,18 @@ function applyFilters(){
     if(condition==='vacant' && !l.vacant) return;
     if(condition==='tenanted' && l.vacant!==false) return;
     if(house && l._house!==house) return;
+
+    // Location filter - match by postcode prefix OR town/city name
+    if(location){
+      if(!matchesRegion(l.address, location)) return;
+    }
+
+    // Postcode filter - freetext match against address
+    if(postcode){
+      const addr=(l.address||'').toUpperCase();
+      if(!addr.includes(postcode)) return;
+    }
+
     FILTERED_INDICES.push(i);
     if((l.score||0)>=3) topPicks++;
   });
