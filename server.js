@@ -605,6 +605,8 @@ app.post('/api/analyse', async (req, res) => {
           let resolvedUrl = scrapeUrl;
           if (rewritten.needsUrlResolve === 'barnardmarcus') {
             resolvedUrl = await resolveBarnardMarcusUrl(browser, scrapeUrl);
+          } else if (rewritten.needsUrlResolve === 'mchughandco') {
+            resolvedUrl = await resolveMcHughUrl(browser, scrapeUrl);
           }
           console.log(`Puppeteer: loading ${resolvedUrl} for ${house}`);
           await page.goto(resolvedUrl, { waitUntil: 'networkidle2', timeout: 45000 });
@@ -1108,8 +1110,8 @@ function rewriteUrl(url, house) {
   }
 
   if (house === 'mchughandco') {
-    // McHugh & Co: /pages/auctions or /Auctions/LotList.aspx — may need Puppeteer
-    return { baseUrl: url, isApi: false, paginateAs: null, preferPuppeteer: true };
+    // McHugh & Co: resolve /pages/auctions to /future-auctions/{id}
+    return { baseUrl: url, isApi: false, paginateAs: null, preferPuppeteer: true, needsUrlResolve: 'mchughandco' };
   }
 
   // buttersjohnbee removed — PDF-only catalogues
@@ -1267,6 +1269,48 @@ async function resolveBarnardMarcusUrl(browser, inputUrl) {
 
   } catch (err) {
     console.error('BM: URL resolution failed:', err.message);
+    return inputUrl;
+  } finally {
+    if (page) await page.close().catch(() => {});
+  }
+}
+
+/**
+ * Resolves McHugh & Co /pages/auctions → /future-auctions/{id}
+ * Scrapes the overview page to find the auction ID from registration links.
+ */
+async function resolveMcHughUrl(browser, inputUrl) {
+  // If already a future-auctions or current-auction URL, use as-is
+  if (inputUrl.match(/\/(future-auctions|current-auction)\//)) return inputUrl;
+
+  console.log('McHugh: Resolving auction catalogue URL...');
+  let page;
+  try {
+    page = await browser.newPage();
+    await page.setUserAgent(HEADERS['User-Agent']);
+    await page.goto('https://www.mchughandco.com/pages/auctions', { waitUntil: 'domcontentloaded', timeout: 15000 });
+
+    const auctionId = await page.evaluate(() => {
+      // Look for links like /auction/details/75431 or /future-auctions/75431
+      const links = [...document.querySelectorAll('a[href]')];
+      for (const a of links) {
+        const m = a.href.match(/\/(auction\/details|future-auctions)\/(\d+)/);
+        if (m) return m[2];
+      }
+      return null;
+    });
+
+    if (!auctionId) {
+      console.log('McHugh: Could not find auction ID, falling back to input URL');
+      return inputUrl;
+    }
+
+    const resolvedUrl = `https://www.mchughandco.com/future-auctions/${auctionId}`;
+    console.log(`McHugh: Resolved to ${resolvedUrl}`);
+    return resolvedUrl;
+
+  } catch (err) {
+    console.error('McHugh: URL resolution failed:', err.message);
     return inputUrl;
   } finally {
     if (page) await page.close().catch(() => {});
@@ -2958,11 +3002,12 @@ async function autoAnalyseOne(url, apiKey) {
         console.log(`AUTO: SDL total: ${rawLots.length} lots`);
 
       } else {
-        // ── Generic auto-paginating Puppeteer extraction ──
-        // Resolve Barnard Marcus URL if needed
+        // Resolve auction house URLs if needed
         let resolvedUrl = scrapeUrl;
         if (rewritten.needsUrlResolve === 'barnardmarcus') {
           resolvedUrl = await resolveBarnardMarcusUrl(browser, scrapeUrl);
+        } else if (rewritten.needsUrlResolve === 'mchughandco') {
+          resolvedUrl = await resolveMcHughUrl(browser, scrapeUrl);
         }
         await page.goto(resolvedUrl, { waitUntil: 'networkidle2', timeout: 45000 });
         await new Promise(r => setTimeout(r, 3000));
