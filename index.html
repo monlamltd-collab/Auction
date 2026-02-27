@@ -438,11 +438,26 @@ function toggleAdvanced(){
 // CALENDAR
 // ═══════════════════════════════
 let calendarData=[];
+let cacheData={}; // url → {total_lots, title_splits, top_picks}
+
 async function loadCalendar(){
   try{
-    const r=await fetch('/api/auctions');
-    const d=await r.json();
+    const [auctionRes, cacheRes] = await Promise.all([
+      fetch('/api/auctions'),
+      fetch('/api/cache-status').catch(() => null)
+    ]);
+    const d=await auctionRes.json();
     calendarData=d.auctions||[];
+
+    // Build cache lookup by normalised URL
+    if(cacheRes && cacheRes.ok){
+      const c=await cacheRes.json();
+      (c.cached||[]).forEach(entry=>{
+        const normUrl=entry.url?.trim().replace(/\/+$/,'').toLowerCase();
+        if(normUrl) cacheData[normUrl]={total_lots:entry.total_lots,title_splits:entry.title_splits,top_picks:entry.top_picks};
+      });
+    }
+
     buildHouseFilters();
     renderCalendar();
   }catch(e){
@@ -471,17 +486,37 @@ function renderCalendar(){
     const d=new Date(a.date);
     const day=d.getDate();
     const mon=d.toLocaleDateString('en-GB',{month:'short'}).toUpperCase();
-    const lotsText=a.lots?`${a.lots} lots`:'Lots TBC';
-    const analyseBtn=a.catalogueReady?`<button class="cal-btn primary" onclick="analyseFromCal('${a.url}')">Analyse</button>`:'';
+
+    // Check if this auction has cached results
+    const normUrl=a.url?.trim().replace(/\/+$/,'').toLowerCase();
+    const cached=cacheData[normUrl];
+    const scored=cached?.total_lots||0;
+    const splits=cached?.title_splits||0;
+
+    const lotsText=scored>0?`${scored} lots scored`:a.lots?`${a.lots} lots`:'Lots TBC';
+
+    let actionBtn='';
+    if(scored>0){
+      // Cached: show "✓ View X results" which loads cached lots
+      actionBtn=`<button class="cal-btn primary" onclick="analyseFromCal('${a.url}')" style="background:var(--white);color:var(--green);border:1.5px solid var(--green)">✓ View ${scored} results</button>`;
+    }else if(a.catalogueReady){
+      // Not cached but catalogue ready: show Analyse
+      actionBtn=`<button class="cal-btn primary" onclick="analyseFromCal('${a.url}')">Analyse</button>`;
+    }
+
+    // Stats badge for cached auctions
+    const statsBadge=scored>0?`<div style="font-size:.72rem;color:var(--green);margin-top:4px">${splits} title splits · ${cached.top_picks||0} top picks</div>`:'';
+
     return`<div class="cal-card">
       <div class="cal-date"><div class="day">${day}</div><div class="mon">${mon}</div></div>
       <div class="cal-info">
         <h3>${a.logo} ${a.house}</h3>
         <div class="meta"><span>${a.type}</span><span>${a.location}</span><span>${lotsText}</span></div>
+        ${statsBadge}
       </div>
       <div class="cal-actions">
-        ${analyseBtn}
-        <a href="${a.url}" target="_blank" class="cal-btn ghost">View ↗</a>
+        ${actionBtn}
+        <a href="${a.url}" target="_blank" class="cal-btn ghost">Catalogue ↗</a>
       </div>
     </div>`;
   }).join('');
