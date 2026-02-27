@@ -835,7 +835,11 @@ app.post('/api/analyse', async (req, res) => {
         rawLots = await extractLotsWithClaude(client, pages, house);
       }
       // Puppeteer fallback if static scraping found nothing
-      if (rawLots.length === 0) {
+      // Skip for houses where Puppeteer wastes memory (blocked, empty, or JS-only)
+      const SKIP_PUPPETEER = ['pattinson','knightfrank','paulfosh','cottons','dedmangray',
+        'barnettross','bradleyhall','connectuk','auctionestates','landwood','loveitts','hunters',
+        'philliparnold','network'];
+      if (rawLots.length === 0 && !SKIP_PUPPETEER.includes(house)) {
         console.log(`No lots from static HTML, trying Puppeteer for ${house}...`);
         const puppeteerPages = await scrapeWithPuppeteer(url, house);
         if (puppeteerPages.length > 0) {
@@ -3234,7 +3238,11 @@ async function autoAnalyseOne(url, apiKey) {
   } else {
     const pages = await scrapeAllPages(scrapeUrl, house);
     if (pages && pages.length > 0) rawLots = await extractLotsWithClaude(client, pages, house);
-    if (rawLots.length === 0) {
+    // Skip Puppeteer fallback for houses where it wastes memory (blocked, empty, or JS-only)
+    const SKIP_PUPPETEER = ['pattinson','knightfrank','paulfosh','cottons','dedmangray',
+      'barnettross','bradleyhall','connectuk','auctionestates','landwood','loveitts','hunters',
+      'philliparnold','network'];
+    if (rawLots.length === 0 && !SKIP_PUPPETEER.includes(house)) {
       const puppeteerPages = await scrapeWithPuppeteer(url, house);
       if (puppeteerPages.length > 0) rawLots = await extractLotsWithClaude(client, puppeteerPages, house);
     }
