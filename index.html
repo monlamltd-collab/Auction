@@ -22,19 +22,19 @@
   --radius:12px;--radius-sm:8px;
 }
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;line-height:1.6}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;line-height:1.6;overflow-x:hidden}
 a{color:var(--green);text-decoration:none}a:hover{text-decoration:underline}
 
 /* ── NAV ── */
 .nav{background:var(--white);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:50}
-.nav-inner{max-width:1100px;margin:0 auto;padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between}
-.logo{font-family:'Source Serif 4',serif;font-size:1.35rem;font-weight:700;color:var(--navy)}
+.nav-inner{max-width:1100px;margin:0 auto;padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;overflow:hidden}
+.logo{font-family:'Source Serif 4',serif;font-size:1.35rem;font-weight:700;color:var(--navy);flex-shrink:0}
 .logo span{color:var(--green)}
-.nav-right{display:flex;align-items:center;gap:10px}
-.nav-cta{padding:8px 20px;border-radius:var(--radius-sm);font-size:.85rem;font-weight:700;color:var(--white);background:var(--green);border:none;cursor:pointer;font-family:inherit;transition:all .15s}
+.nav-right{display:flex;align-items:center;gap:10px;min-width:0}
+.nav-cta{padding:8px 20px;border-radius:var(--radius-sm);font-size:.85rem;font-weight:700;color:var(--white);background:var(--green);border:none;cursor:pointer;font-family:inherit;transition:all .15s;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nav-cta:hover{background:var(--green2)}
-.nav-link-bm{font-size:.82rem;font-weight:600;color:var(--green);padding:8px 14px;border-radius:var(--radius-sm);border:1px solid var(--green);transition:all .15s;text-decoration:none!important}
-.nav-link-bm:hover{background:var(--green-light);text-decoration:none!important}
+.nav-cta.logged-in{background:var(--surface2);color:var(--text2);border:1px solid var(--border);font-weight:600}
+.nav-cta.logged-in:hover{background:var(--green-light);color:var(--green);border-color:var(--green)}
 
 /* ── WRAP ── */
 .wrap{max-width:1100px;margin:0 auto;padding:0 24px}
@@ -136,34 +136,13 @@ a{color:var(--green);text-decoration:none}a:hover{text-decoration:underline}
 .tag-t{background:var(--violet-light);color:var(--violet)}.tag-o{background:var(--green-light);color:var(--green2)}.tag-r{background:var(--red-light);color:var(--red)}
 .lot-bullets{list-style:none;padding:0;margin:0}.lot-bullets li{font-size:.82rem;color:var(--text2);padding:2px 0 2px 14px;position:relative}
 .lot-bullets li::before{content:'›';position:absolute;left:0;color:var(--text4)}
-.lot-link{margin-top:0}.lot-link a{font-size:.82rem;color:var(--green);font-weight:600}
-.lot-actions{display:flex;align-items:center;gap:12px;margin-top:10px;flex-wrap:wrap}
-.bm-btn{display:inline-flex;align-items:center;gap:4px;font-size:.78rem;font-weight:700;color:var(--white);background:var(--green);padding:6px 14px;border-radius:var(--radius-sm);text-decoration:none!important;transition:all .15s;white-space:nowrap}
-.bm-btn:hover{background:var(--green2);text-decoration:none!important;transform:translateY(-1px);box-shadow:0 2px 6px rgba(15,138,95,.2)}
+.lot-link{margin-top:8px}.lot-link a{font-size:.82rem;color:var(--green);font-weight:600}
 
 /* Enrich panel */
 .enrich-panel{margin-top:10px;padding:10px 14px;background:var(--surface2);border-radius:var(--radius-sm);font-size:.82rem}
 .enrich-item{display:flex;justify-content:space-between;align-items:center;padding:3px 0}
 .enrich-label{color:var(--text3);font-size:.78rem}.enrich-value{font-weight:600}
 .enrich-good{color:var(--green)}.enrich-warn{color:var(--red)}.enrich-neutral{color:var(--text2)}
-
-/* Deal Analysis toggle */
-.tb-toggle{display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.82rem;white-space:nowrap;padding:6px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--white);transition:all .15s}
-.tb-toggle:has(input:checked){background:var(--green-light);border-color:var(--green)}
-.tb-toggle input{display:none}
-.tb-toggle-label{font-weight:600;color:var(--text2)}
-.tb-toggle:has(input:checked) .tb-toggle-label{color:var(--green)}
-
-/* Deal Analysis panel */
-.deal-panel{margin-top:10px;padding:14px 16px;background:linear-gradient(135deg,var(--green-pale),var(--surface2));border:1px solid var(--border);border-radius:var(--radius-sm)}
-.deal-header{font-size:.8rem;font-weight:700;color:var(--navy);margin-bottom:10px;display:flex;align-items:center;gap:6px}
-.deal-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.deal-item{padding:8px 10px;background:var(--white);border-radius:6px;border:1px solid var(--border)}
-.deal-item .dl{font-size:.7rem;color:var(--text3);text-transform:uppercase;letter-spacing:.03em}
-.deal-item .dv{font-family:'JetBrains Mono',monospace;font-size:.92rem;font-weight:700;margin-top:2px}
-.deal-item .dv.pos{color:var(--green)}.deal-item .dv.neg{color:var(--red)}.deal-item .dv.neu{color:var(--text2)}
-.deal-note{font-size:.75rem;color:var(--text3);margin-top:8px;font-style:italic}
-.deal-full{grid-column:1/-1}
 .street-sales{margin-top:6px;font-size:.78rem}
 .street-sales summary{cursor:pointer;color:var(--text3);font-weight:500}
 .ss-list{margin-top:4px}.ss-row{display:flex;gap:8px;padding:2px 0;color:var(--text2)}
@@ -230,40 +209,28 @@ footer .logo-f span{color:var(--green)}
   .toolbar{flex-direction:column;align-items:stretch}
   .result-header{flex-direction:column;align-items:flex-start}
 }
+@media(max-width:480px){
+  .wrap{padding:0 14px}
+  .nav-inner{padding:0 14px}
+  .nav-cta{padding:6px 12px;font-size:.78rem;max-width:140px}
+  .hero{padding:32px 0 24px}
+  .hero h1{font-size:1.5rem}
+  .hero-sub{font-size:.88rem;margin-bottom:20px}
+  .search-panel{padding:18px 14px}
+  .search-input{padding:11px 14px;font-size:.88rem}
+  .filters{grid-template-columns:1fr 1fr;gap:8px}
+  .filter-field select,.filter-field input{padding:9px 10px;font-size:.82rem}
+  .stats-grid{grid-template-columns:repeat(3,1fr);gap:6px}
+  .stat-card{padding:10px 6px}
+  .stat-card .v{font-size:1.1rem}
+  .cal-card{grid-template-columns:1fr;gap:8px;padding:14px}
+  .cal-date{display:flex;align-items:center;gap:8px}
+  .cal-date .day{font-size:1.2rem}
+  .modal{padding:24px 18px}
+}
 
 @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 .hero{animation:fadeUp .5s ease both}
-
-/* ── OWN CATALOGUE ── */
-.own-catalogue{margin-bottom:24px}
-.oc-inner{background:var(--white);border:2px dashed var(--border);border-radius:var(--radius);padding:20px 24px;display:flex;flex-wrap:wrap;gap:12px;align-items:center}
-.oc-icon{font-size:1.6rem}
-.oc-text{flex:1;min-width:200px}.oc-text strong{display:block;font-size:.9rem;color:var(--navy)}.oc-text span{font-size:.82rem;color:var(--text3)}
-.oc-input-row{display:flex;gap:8px;width:100%}
-.view-results .own-catalogue{display:none}
-
-/* ── SCANNING ANIMATION ── */
-@keyframes scanPulse{0%,100%{opacity:.6}50%{opacity:1}}
-@keyframes scanSlide{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
-.scan-animation{background:var(--navy);border-radius:var(--radius);padding:28px;color:var(--white);text-align:center;margin-bottom:20px;overflow:hidden;position:relative}
-.scan-animation::after{content:'';position:absolute;top:0;left:0;right:0;bottom:0;background:linear-gradient(90deg,transparent,rgba(15,138,95,.15),transparent);animation:scanSlide 2s ease-in-out infinite}
-.scan-title{font-family:'Source Serif 4',serif;font-size:1.2rem;font-weight:700;margin-bottom:16px}
-.scan-steps{display:flex;justify-content:center;gap:24px;flex-wrap:wrap;margin-bottom:16px}
-.scan-step{display:flex;align-items:center;gap:6px;font-size:.82rem;color:rgba(255,255,255,.7)}
-.scan-step.active{color:var(--green);font-weight:600}
-.scan-step.done{color:var(--green)}
-.scan-step .check{display:none}.scan-step.done .check{display:inline}.scan-step.done .spinner{display:none}
-.scan-step .spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.2);border-top-color:var(--green);border-radius:50%;animation:spin .8s linear infinite}
-.scan-step.waiting .spinner{display:none}
-.scan-step.waiting::before{content:'○';margin-right:2px;opacity:.4}
-@keyframes spin{to{transform:rotate(360deg)}}
-.scan-count{font-family:'JetBrains Mono',monospace;font-size:2rem;font-weight:700;color:var(--green);animation:scanPulse 1.5s ease infinite}
-.scan-label{font-size:.78rem;color:rgba(255,255,255,.5);margin-top:4px}
-
-/* ── CACHED CALENDAR BUTTON ── */
-.cal-btn.cached{background:var(--green-light);color:var(--green);border:1px solid var(--green)}
-.cal-btn.cached:hover{background:var(--green);color:var(--white)}
-.cal-lots-badge{font-family:'JetBrains Mono',monospace;font-size:.72rem;background:var(--green-light);color:var(--green);padding:2px 8px;border-radius:10px;font-weight:700}
 </style>
 </head>
 <body>
@@ -272,7 +239,6 @@ footer .logo-f span{color:var(--green)}
   <div class="nav-inner">
     <div class="logo">Bridge<span>match</span></div>
     <div class="nav-right">
-      <a href="/check" class="nav-link-bm" title="Check if you can finance a deal">🧩 BridgeMatch</a>
       <button class="nav-cta" id="navCta" onclick="requireSignup()">Sign up free</button>
     </div>
   </div>
@@ -307,7 +273,7 @@ footer .logo-f span{color:var(--green)}
   <!-- ═══════ SEARCH PANEL ═══════ -->
   <div class="search-panel">
     <div class="search-row">
-      <input id="smartQuery" class="search-input" placeholder="e.g. 'Refurb opportunities under £200k' or 'Title splits in Bristol'">
+      <input id="smartQuery" class="search-input" placeholder="Describe what you're looking for, or paste an auction catalogue URL...">
       <button class="btn-main" id="mainBtn" onclick="handleSearch()">Search</button>
     </div>
 
@@ -327,7 +293,7 @@ footer .logo-f span{color:var(--green)}
     </div>
     <div class="filters" style="margin-top:-8px">
       <div class="filter-field"><label>Status</label><select id="fSoldTop" onchange="if($('fSold'))$('fSold').value=this.value;renderLots()">
-        <option value="show">Show sold / STC</option><option value="hide">Hide sold / STC</option>
+        <option value="hide">Hide sold / STC</option><option value="show">Show sold / STC</option>
       </select></div>
       <div class="filter-field"><label>Title Splits</label><select id="fTSTop" onchange="if($('fTS'))$('fTS').value=this.value;renderLots()">
         <option value="">All lots</option><option value="ts">Title split opportunities</option>
@@ -349,26 +315,11 @@ footer .logo-f span{color:var(--green)}
 
     <div class="advanced" id="advancedPanel">
       <div class="budget-row">
-        <div class="filter-field"><label>Your Deposit (£)</label><input id="dep" type="number" value="0" placeholder="No limit"></div>
+        <div class="filter-field"><label>Your Deposit (£)</label><input id="dep" type="number" value="150000"></div>
         <div class="filter-field"><label>Standard Deposit %</label><input id="stdPct" type="number" value="25"></div>
         <div class="filter-field"><label>Title Split Deposit %</label><input id="tsPct" type="number" value="10"></div>
       </div>
       <div class="budget-summary" id="budgetInfo"></div>
-    </div>
-  </div>
-
-  <!-- ═══════ OWN CATALOGUE CTA ═══════ -->
-  <div class="own-catalogue" id="ownCatSection">
-    <div class="oc-inner">
-      <span class="oc-icon">🔗</span>
-      <div class="oc-text">
-        <strong>Got a catalogue from another auction house?</strong>
-        <span>Paste the URL below and we'll AI-score every lot for you — free.</span>
-      </div>
-      <div class="oc-input-row">
-        <input id="ownUrl" class="search-input" placeholder="Paste auction catalogue URL here..." style="flex:1;margin:0">
-        <button class="btn-main" onclick="runAnalysis($('ownUrl').value.trim())">Analyse</button>
-      </div>
     </div>
   </div>
 
@@ -407,10 +358,9 @@ footer .logo-f span{color:var(--green)}
     <div id="cardsView">
       <div class="toolbar">
         <select class="tb-select" id="fDeal" onchange="renderLots()"><option value="">All deals</option></select>
-        <select class="tb-select" id="fBudget" onchange="renderLots()"><option value="all">All lots</option><option value="budget">In budget</option></select>
+        <select class="tb-select" id="fBudget" onchange="renderLots()"><option value="budget">In budget</option><option value="all">All lots</option></select>
         <select class="tb-select" id="fTS" onchange="renderLots()"><option value="">All lots</option><option value="ts">Title split opportunities</option></select>
-        <select class="tb-select" id="fSold" onchange="renderLots()"><option value="show">Show sold/STC</option><option value="hide">Hide sold/STC</option></select>
-        <label class="tb-toggle"><input type="checkbox" id="showROI" onchange="renderLots()"><span class="tb-toggle-label">📊 Deal Analysis</span></label>
+        <select class="tb-select" id="fSold" onchange="renderLots()"><option value="hide">Hide sold/STC</option><option value="show">Show sold/STC</option></select>
         <input class="tb-search" type="text" id="fSearch" placeholder="Search..." oninput="renderLots()">
       </div>
       <div id="lotsOut"></div>
@@ -419,10 +369,7 @@ footer .logo-f span{color:var(--green)}
 
   <!-- ═══════ UPCOMING AUCTIONS (hidden when results showing) ═══════ -->
   <div id="calendarSection">
-    <div class="sh" style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:12px">
-      <div><h2>Upcoming auctions</h2><p>Click Analyse to AI-score every lot, or View to browse the catalogue yourself.</p></div>
-      <button class="btn-main" id="analyseAllBtn" onclick="analyseAll()" style="white-space:nowrap;margin-bottom:4px">🚀 Analyse all auctions</button>
-    </div>
+    <div class="sh"><h2>Upcoming auctions</h2><p>Click Analyse to AI-score every lot, or View to browse the catalogue yourself.</p></div>
     <div class="house-filters" id="houseFilters"><button class="hf active" data-house="all">All</button></div>
     <div class="cal-grid" id="calGrid">
       <div style="text-align:center;padding:40px;color:var(--text4)">Loading auctions...</div>
@@ -476,8 +423,8 @@ function backToAuctions(){
 // ═══════════════════════════════
 function getBudget(){
   const d=+$('dep').value||0,sp=+$('stdPct').value||25,tp=+$('tsPct').value||10;
-  const sm=d?Math.round(d/(sp/100)):0,tm=d?Math.round(d/(tp/100)):0;
-  $('budgetInfo').innerHTML=d?`Max purchase: <b>£${sm.toLocaleString()}</b> standard · <b>£${tm.toLocaleString()}</b> title split`:`<span style="color:var(--text4)">No budget limit set — showing all lots</span>`;
+  const sm=Math.round(d/(sp/100)),tm=Math.round(d/(tp/100));
+  $('budgetInfo').innerHTML=`Max purchase: <b>£${sm.toLocaleString()}</b> standard · <b>£${tm.toLocaleString()}</b> title split`;
   return {d,sp,tp,sm,tm};
 }
 ['dep','stdPct','tsPct'].forEach(id=>$(id)?.addEventListener('input',getBudget));
@@ -491,20 +438,11 @@ function toggleAdvanced(){
 // CALENDAR
 // ═══════════════════════════════
 let calendarData=[];
-let cacheStatus={};
-
 async function loadCalendar(){
   try{
-    const [calR, cacheR]=await Promise.all([
-      fetch('/api/auctions'),
-      fetch('/api/cache-status').catch(()=>({ok:false}))
-    ]);
-    const d=await calR.json();
+    const r=await fetch('/api/auctions');
+    const d=await r.json();
     calendarData=d.auctions||[];
-    if(cacheR.ok){
-      const cs=await cacheR.json();
-      (cs.cached||[]).forEach(c=>{ cacheStatus[c.url]=c; });
-    }
     buildHouseFilters();
     renderCalendar();
   }catch(e){
@@ -533,26 +471,17 @@ function renderCalendar(){
     const d=new Date(a.date);
     const day=d.getDate();
     const mon=d.toLocaleDateString('en-GB',{month:'short'}).toUpperCase();
-    const normUrl=a.url.trim().replace(/\/+$/,'').toLowerCase();
-    const cached=cacheStatus[normUrl];
-    const lotsText=cached?`${cached.total_lots} lots scored`:a.lots?`${a.lots} lots`:'Lots TBC';
-    let actionBtn='';
-    if(cached && cached.total_lots>0){
-      actionBtn=`<button class="cal-btn cached" onclick="analyseFromCal('${a.url}')">✓ View ${cached.total_lots} results</button>`;
-    } else if(a.catalogueReady){
-      actionBtn=`<button class="cal-btn primary" onclick="analyseFromCal('${a.url}')">Analyse</button>`;
-    }
-    const lotsBadge=cached?`<span class="cal-lots-badge">${cached.title_splits} title splits · ${cached.top_picks} top picks</span>`:'';
+    const lotsText=a.lots?`${a.lots} lots`:'Lots TBC';
+    const analyseBtn=a.catalogueReady?`<button class="cal-btn primary" onclick="analyseFromCal('${a.url}')">Analyse</button>`:'';
     return`<div class="cal-card">
       <div class="cal-date"><div class="day">${day}</div><div class="mon">${mon}</div></div>
       <div class="cal-info">
         <h3>${a.logo} ${a.house}</h3>
         <div class="meta"><span>${a.type}</span><span>${a.location}</span><span>${lotsText}</span></div>
-        ${lotsBadge}
       </div>
       <div class="cal-actions">
-        ${actionBtn}
-        <a href="${a.url}" target="_blank" class="cal-btn ghost">Catalogue ↗</a>
+        ${analyseBtn}
+        <a href="${a.url}" target="_blank" class="cal-btn ghost">View ↗</a>
       </div>
     </div>`;
   }).join('');
@@ -561,39 +490,6 @@ function renderCalendar(){
 function analyseFromCal(url){
   $('smartQuery').value = url;
   runAnalysis(url);
-}
-
-async function analyseAll(){
-  if(!requireSignup()) return;
-  const btn=$('analyseAllBtn');
-  btn.disabled=true;
-  btn.textContent='⏳ Analysing all...';
-
-  try{
-    const r=await fetch('/api/analyse-all',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({email:currentUser?.email})
-    });
-    const d=await r.json();
-    if(!r.ok) throw new Error(d.error||'Failed');
-
-    // Show progress updates
-    btn.textContent=`✓ ${d.analysed} analysed, ${d.skipped} cached, ${d.failed} failed`;
-    setTimeout(()=>{
-      btn.disabled=false;
-      btn.textContent='🚀 Analyse all auctions';
-    }, 5000);
-
-    // Refresh calendar to show updated status
-    loadCalendar();
-  }catch(e){
-    btn.textContent='✗ '+e.message;
-    setTimeout(()=>{
-      btn.disabled=false;
-      btn.textContent='🚀 Analyse all auctions';
-    }, 3000);
-  }
 }
 
 // ═══════════════════════════════
@@ -606,10 +502,12 @@ function checkUser(){
     $('userBar').style.display='flex';
     $('userEmail').textContent=currentUser.email;
     $('navCta').textContent=currentUser.email.split('@')[0];
+    $('navCta').classList.add('logged-in');
     $('navCta').onclick=null;
   }else{
     $('userBar').style.display='none';
     $('navCta').textContent='Sign up free';
+    $('navCta').classList.remove('logged-in');
     $('navCta').onclick=()=>requireSignup();
   }
 }
@@ -657,39 +555,20 @@ async function runAnalysis(url){
   if(!url)return alert('Please paste an auction catalogue URL');
 
   $('mainBtn').disabled=true;
+  $('progressPanel').style.display='block';
   $('resultsPanel').style.display='none';
   $('logBox').innerHTML='';
   LOTS=[];
   SMART_RESULTS=null;
   showResultsView();
 
-  // Show scanning animation
-  $('progressPanel').style.display='block';
-  $('progressPanel').innerHTML=`<div class="scan-animation">
-    <div class="scan-title">🧠 AI is scanning this catalogue</div>
-    <div class="scan-steps">
-      <div class="scan-step active" id="ss1"><span class="spinner"></span><span class="check">✓</span> Loading catalogue</div>
-      <div class="scan-step waiting" id="ss2"><span class="spinner"></span><span class="check">✓</span> Extracting lots</div>
-      <div class="scan-step waiting" id="ss3"><span class="spinner"></span><span class="check">✓</span> Scoring deals</div>
-      <div class="scan-step waiting" id="ss4"><span class="spinner"></span><span class="check">✓</span> Land Registry check</div>
-      <div class="scan-step waiting" id="ss5"><span class="spinner"></span><span class="check">✓</span> Yield estimates</div>
-    </div>
-    <div class="scan-count" id="scanCount">—</div>
-    <div class="scan-label" id="scanLabel">lots found so far</div>
-  </div>`;
-
-  // Animate steps
-  const stepTimings = [1500, 3000, 5000, 7000];
-  stepTimings.forEach((t, i) => {
-    setTimeout(() => {
-      const prev = $('ss'+(i+1));
-      const next = $('ss'+(i+2));
-      if(prev){prev.classList.remove('active');prev.classList.add('done')}
-      if(next){next.classList.remove('waiting');next.classList.add('active')}
-    }, t);
-  });
+  log('Sending catalogue for analysis...');
+  prog(10,'Analysing catalogue...');
 
   try{
+    log('Checking cache, then scraping if needed...');
+    prog(30,'Working...');
+
     const resp=await fetch('/api/analyse',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
@@ -705,16 +584,10 @@ async function runAnalysis(url){
     }
 
     LOTS=data.lots||[];
+    const cacheNote=data.cached?' (from cache — instant!)':'';
+    log(`Done! ${data.totalLots} lots analysed, ${data.titleSplits} title splits found.${cacheNote}`,'ok');
+    prog(100,'Complete');
 
-    // Complete all steps
-    for(let i=1;i<=5;i++){const s=$('ss'+i);if(s){s.classList.remove('active','waiting');s.classList.add('done')}}
-    if($('scanCount'))$('scanCount').textContent=LOTS.length;
-    if($('scanLabel'))$('scanLabel').textContent=`lots scored · ${data.titleSplits} title splits · ${data.topPicks} top picks`;
-
-    // Brief pause to let user see the final count
-    await new Promise(r=>setTimeout(r,data.cached?500:1500));
-
-    $('progressPanel').style.display='none';
     $('resultsTitle').textContent = `${data.house || 'Auction'} — ${LOTS.length} lots`;
     $('viewToggle').style.display='none';
     $('reportView').style.display='none';
@@ -723,10 +596,8 @@ async function runAnalysis(url){
     renderLots();
     $('resultsPanel').style.display='block';
   }catch(e){
-    $('progressPanel').innerHTML=`<div class="scan-animation" style="background:var(--red)">
-      <div class="scan-title">✗ ${e.message}</div>
-      <div class="scan-label"><a href="#" onclick="backToAuctions();return false" style="color:white;text-decoration:underline">← Back to auctions</a></div>
-    </div>`;
+    log(e.message,'err');
+    prog(0,'Failed');
   }
   $('mainBtn').disabled=false;
 }
@@ -772,7 +643,7 @@ async function runSmartSearch(query) {
     if (data.sources?.length) rh += `<div class="sources">Searched ${data.totalSearched||0} lots across ${data.sources.length} catalogues: ${data.sources.map(s=>`${s.house} (${s.count})`).join(', ')}</div>`;
     $('reportView').innerHTML = rh;
 
-    showView('cards');
+    showView('report');
     buildLotFilters();
     renderLots();
     $('resultsPanel').style.display = 'block';
@@ -817,7 +688,7 @@ function renderLots(){
   const ft=$('fType').value,fd=$('fDeal').value,fb=$('fBudget').value,fts=$('fTS')?.value||$('fTSTop').value,fsold=$('fSold')?.value||$('fSoldTop').value,fs=$('fSearch').value.toLowerCase();
   if(ft)lots=lots.filter(l=>l.propType===ft);
   if(fd)lots=lots.filter(l=>l.dealType===fd);
-  if(fb==='budget'&&b.sm>0)lots=lots.filter(l=>{if(!l.price)return true;return l.price<=(l.titleSplit?b.tm:b.sm)});
+  if(fb==='budget')lots=lots.filter(l=>{if(!l.price)return true;return l.price<=(l.titleSplit?b.tm:b.sm)});
   if(fts==='ts')lots=lots.filter(l=>l.titleSplit);
   if(fsold==='hide')lots=lots.filter(l=>!(l.bullets||[]).some(b=>/\bSOLD\b|\bSTC\b|\bSALE.?AGREED\b|\bWITHDRAWN\b/i.test(b)));
   if(fs)lots=lots.filter(l=>(l.address||'').toLowerCase().includes(fs)||(l.bullets||[]).join(' ').toLowerCase().includes(fs));
@@ -894,67 +765,14 @@ function card(l,b){
     enrichHtml+='</div>';
   }
 
-  // Deal Analysis panel (shown when toggle is on)
-  let dealHtml='';
-  const showROI=$('showROI')&&$('showROI').checked;
-  if(showROI&&l.price&&l.streetAvg){
-    const da=calcDealAnalysis(l.price,l.streetAvg,l.estGrossYield,l.estMonthlyRent);
-    dealHtml=`<div class="deal-panel">
-      <div class="deal-header">📊 Deal Analysis (estimated)</div>
-      <div class="deal-grid">
-        <div class="deal-item"><div class="dl">Guide Price</div><div class="dv neu">£${l.price.toLocaleString()}</div></div>
-        <div class="deal-item"><div class="dl">Comparable Value</div><div class="dv neu">£${l.streetAvg.toLocaleString()}</div></div>
-        <div class="deal-item"><div class="dl">Potential Uplift</div><div class="dv ${da.uplift>0?'pos':'neg'}">£${Math.abs(da.uplift).toLocaleString()} (${da.upliftPct>0?'+':''}${da.upliftPct}%)</div></div>
-        <div class="deal-item"><div class="dl">SDLT (investor)</div><div class="dv neu">£${da.sdlt.toLocaleString()}</div></div>
-        <div class="deal-item"><div class="dl">Est. Bridging (12mo)</div><div class="dv neu">£${da.bridgingCost.toLocaleString()}</div></div>
-        <div class="deal-item"><div class="dl">Legal/Survey/Fees</div><div class="dv neu">£${da.otherCosts.toLocaleString()}</div></div>
-        <div class="deal-item"><div class="dl">Total Cost In</div><div class="dv neu">£${da.totalCostIn.toLocaleString()}</div></div>
-        <div class="deal-item"><div class="dl">Est. Net Profit (flip)</div><div class="dv ${da.netProfit>0?'pos':'neg'}">£${Math.abs(da.netProfit).toLocaleString()}</div></div>
-        <div class="deal-item deal-full"><div class="dl">ROI on Cash Invested (${dp*100}% deposit)</div><div class="dv ${da.roi>0?'pos':da.roi<0?'neg':'neu'}">${da.roi>0?'+':''}${da.roi}%</div></div>
-        ${da.grossYield?`<div class="deal-item deal-full"><div class="dl">Gross Yield (hold)</div><div class="dv ${da.grossYield>=7?'pos':da.grossYield>=5?'neu':'neg'}">${da.grossYield}% (£${da.monthlyRent.toLocaleString()}/mo)</div></div>`:''}
-      </div>
-      <div class="deal-note">⚠️ Estimates only — based on comparable sales avg, standard bridging assumptions (0.75%/mo, 75% LTV), and investor SDLT rates. Not financial advice.</div>
-    </div>`;
-  } else if(showROI&&l.price&&!l.streetAvg){
-    dealHtml=`<div class="deal-panel"><div class="deal-header">📊 Deal Analysis</div><div class="deal-note">No comparable data available for this lot — ROI cannot be estimated.</div></div>`;
-  }
-
   const link=l.url?`<div class="lot-link"><a href="${l.url}" target="_blank">View listing ↗</a></div>`:'';
-  const bmLink=l.price?`<a href="/check?price=${l.price}${l.address?'&address='+encodeURIComponent(l.address):''}${l.propType?'&type='+encodeURIComponent(l.propType):''}" class="bm-btn" target="_blank" title="Check bridging finance feasibility">🧩 BridgeMatch It</a>`:'';
 
   return`<div class="lot ${l.titleSplit?'ts':''}">
     <div class="lot-header"><div class="lot-title">Lot ${l.lot} · ${l.dealType||'Standard'}</div><div class="lot-score ${sc}">${l.score}</div></div>
     <div class="lot-addr">${l.address||'Address not available'}</div>
     <div class="lot-details">${details.join(' <span class="sep">·</span> ')}</div>
     <div class="tags">${tags}</div>
-    <ul class="lot-bullets">${bul}</ul>${enrichHtml}${dealHtml}
-    <div class="lot-actions">${link}${bmLink}</div></div>`;
-}
-
-// SDLT calculator (investor rates 2025/26 — includes 5% surcharge)
-function calcSDLT(price){
-  if(price<=250000) return Math.round(price*0.05);
-  let sdlt=250000*0.05;
-  if(price<=925000) sdlt+=(price-250000)*0.1;
-  else{sdlt+=(925000-250000)*0.1;sdlt+=(Math.min(price,1500000)-925000)*0.15;}
-  if(price>1500000) sdlt+=(price-1500000)*0.17;
-  return Math.round(sdlt);
-}
-
-// Deal analysis calculator
-function calcDealAnalysis(guidePrice,streetAvg,grossYield,monthlyRent){
-  const uplift=streetAvg-guidePrice;
-  const upliftPct=guidePrice>0?Math.round((uplift/guidePrice)*100):0;
-  const sdlt=calcSDLT(guidePrice);
-  const loanAmt=guidePrice*0.75; // assume 75% LTV
-  const bridgingCost=Math.round(loanAmt*0.0075*12); // 0.75%/mo for 12 months
-  const otherCosts=Math.round(guidePrice*0.04); // legal, survey, arrangement ~4%
-  const totalCostIn=guidePrice+sdlt+bridgingCost+otherCosts;
-  const netProfit=streetAvg-totalCostIn;
-  const cashIn=guidePrice-loanAmt+sdlt+otherCosts; // deposit + costs
-  const roi=cashIn>0?Math.round((netProfit/cashIn)*100):0;
-  return{uplift,upliftPct,sdlt,bridgingCost,otherCosts,totalCostIn,netProfit,roi,
-    grossYield:grossYield||0,monthlyRent:monthlyRent||0};
+    <ul class="lot-bullets">${bul}</ul>${enrichHtml}${link}</div>`;
 }
 
 // Downloads
