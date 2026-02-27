@@ -166,6 +166,41 @@ select{padding-left:14px;cursor:pointer;appearance:none;
   background:var(--green);color:#fff;font-family:inherit;font-size:0.9rem;font-weight:700;cursor:pointer;
   box-shadow:0 2px 8px rgba(15,138,95,.2);transition:transform 0.15s,box-shadow 0.15s,background 0.15s;text-decoration:none}
 .cta-btn:hover{background:var(--green2);transform:translateY(-1px);box-shadow:0 4px 16px rgba(15,138,95,.25)}
+.cta-btn:disabled{opacity:.6;cursor:not-allowed;transform:none}
+
+/* Occupancy toggle */
+.occupancy-toggle{display:flex;gap:8px;margin:12px 0;justify-content:center}
+.occ-btn{flex:1;max-width:200px;padding:10px 16px;border-radius:var(--radius-sm);border:1.5px solid var(--border);
+  background:var(--white);font-family:inherit;font-size:.82rem;font-weight:600;cursor:pointer;
+  color:var(--text2);transition:all .15s;text-align:center}
+.occ-btn:hover{border-color:var(--green);color:var(--green)}
+.occ-btn.active{border-color:var(--green);background:var(--green-light);color:var(--green)}
+.occ-btn.active-reg{border-color:var(--amber);background:var(--amber-light);color:var(--amber)}
+
+/* Regulatory notice */
+.reg-notice{background:var(--amber-light);border:1px solid rgba(196,122,21,.2);border-radius:var(--radius-sm);
+  padding:14px 16px;margin:12px 0;text-align:left;font-size:.82rem;line-height:1.5;color:var(--text);display:none}
+.reg-notice strong{color:var(--amber)}
+.reg-notice .fca-num{font-weight:700;color:var(--text)}
+
+/* Consent checkbox */
+.consent-row{display:flex;align-items:flex-start;gap:8px;margin:12px 0;text-align:left}
+.consent-row input[type="checkbox"]{margin-top:3px;accent-color:var(--green);width:16px;height:16px;flex-shrink:0}
+.consent-row label{font-size:.78rem;color:var(--text2);line-height:1.4;cursor:pointer}
+
+/* Deposit & experience selects */
+.lead-select{padding:10px 14px;border-radius:var(--radius-sm);border:1px solid var(--border);
+  font-family:inherit;font-size:.85rem;background:var(--bg);color:var(--text);width:100%;appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238a847a' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 12px center}
+
+/* Success state */
+.lead-success{background:var(--green-light);border:1px solid rgba(15,138,95,.2);border-radius:var(--radius);
+  padding:24px;text-align:center;margin-bottom:16px}
+.lead-success h3{font-family:'Source Serif 4',serif;font-size:1.1rem;font-weight:700;color:var(--green);margin-bottom:6px}
+.lead-success p{font-size:.84rem;color:var(--text2);line-height:1.5}
+.lead-success.regulated{background:var(--amber-light);border-color:rgba(196,122,21,.2)}
+.lead-success.regulated h3{color:var(--amber)}
 
 .disclaimer{text-align:center;font-size:0.7rem;color:var(--text3);line-height:1.5;padding:16px 0}
 
@@ -704,23 +739,61 @@ function renderResults(r){
   </div>`;
 
   // CTA
-  html+=`<div class="cta-card">
+  html+=`<div class="cta-card" id="leadForm">
     <h3>Ready to make this deal happen?</h3>
     <p>BridgeMatch shows you what's possible — <strong>lender names are revealed when you speak to a broker</strong>. They'll find you the best rate, fastest completion, and highest net advance from our panel of 68 lenders.</p>
+    
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
       <input type="text" id="leadName" placeholder="Your name *" style="flex:1;min-width:120px;padding:12px 16px;border-radius:var(--radius-sm);border:1px solid var(--border);font-family:inherit;font-size:.9rem;background:var(--bg)">
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
       <input type="email" id="leadEmail" placeholder="Email address *" style="flex:1;min-width:150px;padding:12px 16px;border-radius:var(--radius-sm);border:1px solid var(--border);font-family:inherit;font-size:.9rem;background:var(--bg)">
-      <input type="tel" id="leadPhone" placeholder="Phone number (optional)" style="flex:1;min-width:150px;padding:12px 16px;border-radius:var(--radius-sm);border:1px solid var(--border);font-family:inherit;font-size:.9rem;background:var(--bg)">
+      <input type="tel" id="leadPhone" placeholder="Phone number *" style="flex:1;min-width:150px;padding:12px 16px;border-radius:var(--radius-sm);border:1px solid var(--border);font-family:inherit;font-size:.9rem;background:var(--bg)">
     </div>
-    <div style="margin-top:10px;display:flex;gap:12px;align-items:center">
+
+    <div style="margin-top:14px;text-align:left">
+      <div style="font-size:.82rem;font-weight:600;color:var(--text2);margin-bottom:6px">Will you or a family member live in this property?</div>
+      <div class="occupancy-toggle">
+        <button type="button" class="occ-btn active" id="occInvestment" onclick="setOccupancy('investment')">🏗️ No — Investment</button>
+        <button type="button" class="occ-btn" id="occOwner" onclick="setOccupancy('owner')">🏠 Yes — I'll live there</button>
+      </div>
+    </div>
+
+    <div class="reg-notice" id="regNotice">
+      <strong>⚠️ Regulated Mortgage Enquiry</strong><br>
+      As you or a family member will occupy this property, this enquiry involves a regulated mortgage. In order to comply with FCA regulations, your enquiry will be referred to <strong>Mortgage Style</strong>, who are authorised and regulated by the Financial Conduct Authority.<br>
+      <span class="fca-num">Mortgage Style — FCA Registration Number: [XXXXXX]</span>
+    </div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+      <select class="lead-select" id="leadDeposit" style="flex:1;min-width:140px">
+        <option value="">Deposit available (optional)</option>
+        <option value="<25k">Less than £25,000</option>
+        <option value="25-50k">£25,000 – £50,000</option>
+        <option value="50-100k">£50,000 – £100,000</option>
+        <option value="100k+">£100,000+</option>
+      </select>
+      <select class="lead-select" id="leadExperience" style="flex:1;min-width:140px">
+        <option value="">Property experience (optional)</option>
+        <option value="first_time">First-time investor</option>
+        <option value="1_to_3">1–3 previous projects</option>
+        <option value="4_plus">4+ previous projects</option>
+      </select>
+    </div>
+
+    <div style="margin-top:10px;display:flex;gap:12px;align-items:center;justify-content:center">
       <span style="font-size:.85rem;color:var(--text2)">Preferred contact:</span>
       <label style="font-size:.85rem;cursor:pointer;display:flex;align-items:center;gap:4px"><input type="radio" name="contactPref" value="call" id="prefCall"> 📞 Call me</label>
       <label style="font-size:.85rem;cursor:pointer;display:flex;align-items:center;gap:4px"><input type="radio" name="contactPref" value="email" id="prefEmail" checked> 📧 Email me</label>
     </div>
+
+    <div class="consent-row">
+      <input type="checkbox" id="leadConsent" checked>
+      <label for="leadConsent">I consent to BridgeMatch sharing my contact details and deal information with a bridging finance specialist who will contact me about this enquiry.</label>
+    </div>
+
     <div id="leadError" style="color:var(--red);font-size:.82rem;margin-top:6px;display:none"></div>
-    <button class="cta-btn" style="margin-top:12px;width:100%;justify-content:center;border:none;cursor:pointer" onclick="submitLead('${encodeURIComponent(fmtCurrency(r.price))}','${encodeURIComponent(fmtCurrency(r.loanNeeded))}','${r.ltv.toFixed(1)}','${r.isRefurb?encodeURIComponent(fmtCurrency(r.works)):''}','${count}')">
+    <button class="cta-btn" id="leadSubmitBtn" style="margin-top:12px;width:100%;justify-content:center;border:none;cursor:pointer" onclick="submitLead('${encodeURIComponent(fmtCurrency(r.price))}','${encodeURIComponent(fmtCurrency(r.loanNeeded))}','${r.ltv.toFixed(1)}','${r.isRefurb?encodeURIComponent(fmtCurrency(r.works)):''}','${count}','${r.propType||''}')">
       📞 Speak to a Broker
     </button>
     <div style="font-size:.75rem;color:var(--text3);margin-top:8px;text-align:center">No obligation · A broker will be in touch to discuss your deal</div>
@@ -731,13 +804,43 @@ function renderResults(r){
   el.scrollIntoView({behavior:'smooth',block:'start'});
 }
 
-function submitLead(price, loan, ltv, works, count) {
+// Occupancy toggle (regulated/unregulated)
+let currentOccupancy = 'investment';
+function setOccupancy(type) {
+  currentOccupancy = type;
+  const invBtn = document.getElementById('occInvestment');
+  const ownBtn = document.getElementById('occOwner');
+  const notice = document.getElementById('regNotice');
+  
+  if (type === 'owner') {
+    ownBtn.classList.add('active-reg');
+    ownBtn.classList.remove('occ-btn');
+    ownBtn.classList.add('occ-btn');
+    ownBtn.classList.add('active-reg');
+    invBtn.classList.remove('active');
+    ownBtn.classList.add('active-reg');
+    invBtn.className = 'occ-btn';
+    ownBtn.className = 'occ-btn active-reg';
+    if (notice) notice.style.display = 'block';
+  } else {
+    invBtn.className = 'occ-btn active';
+    ownBtn.className = 'occ-btn';
+    if (notice) notice.style.display = 'none';
+  }
+}
+
+function submitLead(price, loan, ltv, works, count, propType) {
   const name = document.getElementById('leadName').value.trim();
   const email = document.getElementById('leadEmail').value.trim();
   const phone = document.getElementById('leadPhone').value.trim();
   const pref = document.querySelector('input[name="contactPref"]:checked')?.value || 'email';
+  const consent = document.getElementById('leadConsent')?.checked;
+  const deposit = document.getElementById('leadDeposit')?.value || null;
+  const experience = document.getElementById('leadExperience')?.value || null;
   const errEl = document.getElementById('leadError');
+  const submitBtn = document.getElementById('leadSubmitBtn');
   
+  // Validation
   if (!name) {
     errEl.textContent = 'Please enter your name';
     errEl.style.display = 'block';
@@ -750,34 +853,88 @@ function submitLead(price, loan, ltv, works, count) {
     document.getElementById('leadEmail').focus();
     return;
   }
-  if (pref === 'call' && (!phone || phone.length < 10)) {
-    errEl.textContent = 'Please enter your phone number for a callback';
+  if (!phone || phone.length < 10) {
+    errEl.textContent = 'Please enter your phone number';
     errEl.style.display = 'block';
     document.getElementById('leadPhone').focus();
     return;
   }
+  if (!consent) {
+    errEl.textContent = 'Please tick the consent checkbox to continue';
+    errEl.style.display = 'block';
+    return;
+  }
   errEl.style.display = 'none';
 
-  const subject = 'BridgeMatch Lead - ' + decodeURIComponent(price) + ' property';
-  const body = [
-    'New BridgeMatch lead:',
-    '',
-    'Name: ' + name,
-    'Email: ' + email,
-    phone ? 'Phone: ' + phone : '',
-    'Preferred contact: ' + (pref === 'call' ? '📞 Call' : '📧 Email'),
-    '',
-    'Deal details:',
-    'Property price: ' + decodeURIComponent(price),
-    'Loan needed: ' + decodeURIComponent(loan),
-    'LTV: ' + ltv + '%',
-    works ? 'Refurb works: ' + decodeURIComponent(works) : '',
-    'Matching lenders: ' + count,
-    '',
-    'Source: BridgeMatch tool'
-  ].filter(Boolean).join('%0A');
+  // Disable button while submitting
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Submitting...';
 
-  window.location.href = 'mailto:hello@bridgematch.co.uk?subject=' + encodeURIComponent(subject) + '&body=' + body;
+  const isRegulated = currentOccupancy === 'owner';
+
+  // Get address from URL params if available
+  const params = new URLSearchParams(window.location.search);
+  const address = params.get('address') ? decodeURIComponent(params.get('address')) : null;
+
+  const payload = {
+    name,
+    email,
+    phone,
+    contactPref: pref,
+    isRegulated,
+    occupancy: currentOccupancy,
+    propertyPrice: decodeURIComponent(price),
+    loanAmount: decodeURIComponent(loan),
+    ltvPercent: ltv,
+    worksBudget: works ? decodeURIComponent(works) : null,
+    matchingLenders: count,
+    propertyType: propType || null,
+    propertyAddress: address,
+    depositRange: deposit,
+    experienceLevel: experience,
+    auctionUrl: window.location.href,
+    dealData: {
+      price: decodeURIComponent(price),
+      loan: decodeURIComponent(loan),
+      ltv,
+      works: works ? decodeURIComponent(works) : null,
+      matchingLenders: count,
+      submittedAt: new Date().toISOString()
+    }
+  };
+
+  fetch('/api/leads', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+  .then(res => {
+    if (!res.ok) return res.json().then(d => { throw new Error(d.error || 'Submission failed'); });
+    return res.json();
+  })
+  .then(data => {
+    // Replace form with success message
+    const formEl = document.getElementById('leadForm');
+    if (data.isRegulated) {
+      formEl.outerHTML = `<div class="lead-success regulated">
+        <h3>⚠️ Regulated Enquiry Received</h3>
+        <p>Thank you, ${name}. As this involves a regulated mortgage, your enquiry will be handled by <strong>Mortgage Style</strong>, authorised and regulated by the Financial Conduct Authority (FCA No: [XXXXXX]).</p>
+        <p style="margin-top:8px">A specialist advisor will be in touch within 24 hours to discuss your deal.</p>
+      </div>`;
+    } else {
+      formEl.outerHTML = `<div class="lead-success">
+        <h3>✅ Enquiry Submitted</h3>
+        <p>Thank you, ${name}. A bridging finance specialist will review your enquiry and be in touch within 24 hours.</p>
+        <p style="margin-top:8px;font-size:.82rem;color:var(--text3)">Your deal analysis has been included so they can give you an informed response straight away.</p>
+      </div>`;
+    }
+  })
+  .catch(err => {
+    errEl.textContent = err.message || 'Something went wrong. Please try again.';
+    errEl.style.display = 'block';
+    submitBtn.disabled = false;
+    submitBtn.textContent = '📞 Speak to a Broker';
+  });
 }
 
 // Pre-fill from URL params (e.g. /check?price=125000&address=123+High+St&type=flat)
