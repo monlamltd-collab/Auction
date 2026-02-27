@@ -345,11 +345,11 @@ footer .logo-f span{color:var(--green)}
       <div class="filter-field"><label>Status</label><select id="fSoldTop" onchange="applyFilters()">
         <option value="hide">Hide sold / STC</option><option value="show">Show sold / STC</option>
       </select></div>
-      <div class="filter-field"><label>Title Splits</label><select id="fTSTop" onchange="applyFilters()">
-        <option value="">All lots</option><option value="ts">Title split opportunities only</option>
-      </select></div>
       <div class="filter-field"><label>Tenure</label><select id="fTenure" onchange="applyFilters()">
         <option value="">Any</option><option value="Freehold">Freehold</option><option value="Leasehold">Leasehold</option><option value="Share of Freehold">Share of Freehold</option>
+      </select></div>
+      <div class="filter-field"><label>Condition</label><select id="fCondition" onchange="applyFilters()">
+        <option value="">Any</option><option value="needs work">Needs work</option><option value="good">Good / modernised</option><option value="vacant">Vacant</option><option value="tenanted">Tenanted</option>
       </select></div>
       <div class="filter-field"><label>Auction House</label><select id="fHouse" onchange="applyFilters()">
         <option value="">All houses</option>
@@ -383,8 +383,7 @@ footer .logo-f span{color:var(--green)}
     <div class="advanced" id="advancedPanel">
       <div class="budget-row">
         <div class="filter-field"><label>Your Deposit (£)</label><input id="dep" type="number" value="0" placeholder="No limit"></div>
-        <div class="filter-field"><label>Standard Deposit %</label><input id="stdPct" type="number" value="25"></div>
-        <div class="filter-field"><label>Title Split Deposit %</label><input id="tsPct" type="number" value="10"></div>
+        <div class="filter-field"><label>Deposit %</label><input id="stdPct" type="number" value="25"></div>
       </div>
       <div class="budget-summary" id="budgetInfo"></div>
     </div>
@@ -501,12 +500,12 @@ function applyFilters(){
   const beds=+$('fBeds').value||0;
   const type=$('fType').value;
   const sold=$('fSoldTop').value;
-  const ts=$('fTSTop').value;
   const tenure=$('fTenure').value;
+  const condition=$('fCondition').value;
   const house=$('fHouse').value;
 
   FILTERED_INDICES=[];
-  let tsCount=0, houseCount=0, topPicks=0;
+  let topPicks=0;
 
   ALL_LOTS.forEach((l,i)=>{
     if(l.price && l.price<minP) return;
@@ -514,17 +513,18 @@ function applyFilters(){
     if(beds && (l.beds||0)<beds) return;
     if(type && l.propType!==type) return;
     if(sold==='hide' && (l.bullets||[]).some(b=>/SOLD|STC|WITHDRAWN/i.test(b))) return;
-    if(ts==='ts' && !l.titleSplit) return;
     if(tenure && l.tenure!==tenure) return;
+    if(condition==='needs work' && l.condition!=='needs work') return;
+    if(condition==='good' && l.condition==='needs work') return;
+    if(condition==='vacant' && !l.vacant) return;
+    if(condition==='tenanted' && l.vacant!==false) return;
     if(house && l._house!==house) return;
     FILTERED_INDICES.push(i);
-    if(l.titleSplit) tsCount++;
-    if(l.propType==='house') houseCount++;
     if((l.score||0)>=3) topPicks++;
   });
 
   $('filterCount').style.display='block';
-  $('filterCountText').innerHTML=`<strong style="color:var(--green);font-size:1.1rem">${FILTERED_INDICES.length.toLocaleString()}</strong> lots match your filters out of <strong>${ALL_LOTS.length.toLocaleString()}</strong> total · ${tsCount} title splits · ${topPicks} scored 3+`;
+  $('filterCountText').innerHTML=`<strong style="color:var(--green);font-size:1.1rem">${FILTERED_INDICES.length.toLocaleString()}</strong> lots match your filters out of <strong>${ALL_LOTS.length.toLocaleString()}</strong> total · ${topPicks} scored 3+`;
 }
 
 // ═══════════════════════════════
@@ -549,9 +549,9 @@ function handleSearch(){
     $('resultsPanel').style.display='block';
     $('statsRow').innerHTML=`
       <div class="stat-card"><div class="v g">${LOTS.length}</div><div class="l">Lots</div></div>
-      <div class="stat-card"><div class="v p">${LOTS.filter(l=>l.titleSplit).length}</div><div class="l">Title splits</div></div>
       <div class="stat-card"><div class="v g">${LOTS.filter(l=>(l.score||0)>=3).length}</div><div class="l">Score 3+</div></div>
-      <div class="stat-card"><div class="v y">${[...new Set(LOTS.map(l=>l._house))].length}</div><div class="l">Catalogues</div></div>`;
+      <div class="stat-card"><div class="v y">${[...new Set(LOTS.map(l=>l._house))].length}</div><div class="l">Catalogues</div></div>
+      <div class="stat-card"><div class="v p">${LOTS.filter(l=>l.vacant).length}</div><div class="l">Vacant</div></div>`;
     return;
   }
   if(isUrl(q)){
@@ -582,12 +582,12 @@ function backToAuctions(){
 // BUDGET
 // ═══════════════════════════════
 function getBudget(){
-  const d=+$('dep').value||0,sp=+$('stdPct').value||25,tp=+$('tsPct').value||10;
-  const sm=d?Math.round(d/(sp/100)):0,tm=d?Math.round(d/(tp/100)):0;
-  $('budgetInfo').innerHTML=d?`Max purchase: <b>£${sm.toLocaleString()}</b> standard · <b>£${tm.toLocaleString()}</b> title split`:`<span style="color:var(--text4)">No budget limit set — showing all lots</span>`;
-  return {d,sp,tp,sm,tm};
+  const d=+$('dep').value||0,sp=+$('stdPct').value||25;
+  const sm=d?Math.round(d/(sp/100)):0;
+  $('budgetInfo').innerHTML=d?`Max purchase price: <b>£${sm.toLocaleString()}</b>`:`<span style="color:var(--text4)">No budget limit set — showing all lots</span>`;
+  return {d,sp,sm};
 }
-['dep','stdPct','tsPct'].forEach(id=>$(id)?.addEventListener('input',getBudget));
+['dep','stdPct'].forEach(id=>$(id)?.addEventListener('input',getBudget));
 getBudget();
 
 function toggleAdvanced(){
@@ -915,8 +915,8 @@ async function runSmartSearch(query) {
     $('statsRow').innerHTML = `
       <div class="stat-card"><div class="v g">${data.totalSearched||0}</div><div class="l">Lots searched</div></div>
       <div class="stat-card"><div class="v y">${LOTS.length}</div><div class="l">Matches</div></div>
-      <div class="stat-card"><div class="v p">${LOTS.filter(l=>l.titleSplit).length}</div><div class="l">Title split opportunities</div></div>
       <div class="stat-card"><div class="v g">${LOTS.filter(l=>(l.score||0)>=3).length}</div><div class="l">Score 3+</div></div>
+      <div class="stat-card"><div class="v p">${LOTS.filter(l=>l.vacant).length}</div><div class="l">Vacant</div></div>
       <div class="stat-card"><div class="v y">${data.sources?.length||0}</div><div class="l">Catalogues</div></div>`;
   } catch (e) {
     $('progressPanel').innerHTML=`<div class="scan-animation" style="background:var(--red)">
@@ -955,17 +955,17 @@ function renderLots(){
   const ft=$('fType').value,fd=$('fDeal').value,fb=$('fBudget').value,fts=$('fTS')?.value||$('fTSTop').value,fsold=$('fSold')?.value||$('fSoldTop').value,fs=$('fSearch').value.toLowerCase();
   if(ft)lots=lots.filter(l=>l.propType===ft);
   if(fd)lots=lots.filter(l=>l.dealType===fd);
-  if(fb==='budget'&&b.sm>0)lots=lots.filter(l=>{if(!l.price)return true;return l.price<=(l.titleSplit?b.tm:b.sm)});
+  if(fb==='budget'&&b.sm>0)lots=lots.filter(l=>{if(!l.price)return true;return l.price<=b.sm});
   if(fts==='ts')lots=lots.filter(l=>l.titleSplit);
   if(fsold==='hide')lots=lots.filter(l=>!(l.bullets||[]).some(b=>/\bSOLD\b|\bSTC\b|\bSALE.?AGREED\b|\bWITHDRAWN\b/i.test(b)));
   if(fs)lots=lots.filter(l=>(l.address||'').toLowerCase().includes(fs)||(l.bullets||[]).join(' ').toLowerCase().includes(fs));
 
-  const ts=lots.filter(l=>l.titleSplit),top=lots.filter(l=>l.score>=3);
+  const top=lots.filter(l=>l.score>=3);
   $('statsRow').innerHTML=`
     <div class="stat-card"><div class="v g">${LOTS.length}</div><div class="l">Total lots</div></div>
     <div class="stat-card"><div class="v y">${lots.length}</div><div class="l">Showing</div></div>
-    <div class="stat-card"><div class="v p">${ts.length}</div><div class="l">Title split opportunities</div></div>
     <div class="stat-card"><div class="v g">${top.length}</div><div class="l">Score 3+</div></div>
+    <div class="stat-card"><div class="v p">${lots.filter(l=>l.vacant).length}</div><div class="l">Vacant</div></div>
     <div class="stat-card"><div class="v y">${LOTS.filter(l=>l.price).length}</div><div class="l">Priced</div></div>`;
 
   const out=$('lotsOut');out.innerHTML='';
@@ -986,7 +986,7 @@ function renderLots(){
 }
 
 function card(l,b){
-  const dp=l.titleSplit?(b.tp/100):(b.sp/100);
+  const dp=b.sp/100;
   const depE=l.price?`£${Math.round(l.price*dp).toLocaleString()}`:'TBA';
   const sc=l.score>=3?'high':l.score>=1.5?'mid':'low';
   let details=[];
@@ -1099,7 +1099,7 @@ function calcDealAnalysis(guidePrice,streetAvg,grossYield,monthlyRent){
 function dlCSV(){
   const b=getBudget();
   const rows=[['Rank','Lot','Score','Deal','TitleSplit','Units','Address','Guide','Deposit','Type','Beds','Tenure','Condition','Sqft','StreetAvg','BelowMkt%','EstYield%','EstRent/mo','Opps','Risks','URL']];
-  LOTS.forEach((l,i)=>{const dp=l.titleSplit?(b.tp/100):(b.sp/100);
+  LOTS.forEach((l,i)=>{const dp=b.sp/100;
     rows.push([i+1,l.lot,l.score,l.dealType,l.titleSplit?'YES':'',l.units||'',l.address,l.price||'TBA',l.price?Math.round(l.price*dp):'TBA',l.propType,l.beds??'',l.tenure,l.condition,l.sqft||'',l.streetAvg||'',l.belowMarket||'',l.estGrossYield||'',l.estMonthlyRent||'',(l.opps||[]).join(' | '),(l.risks||[]).join(' | '),l.url])});
   dl(rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n'),'auction_analysis.csv','text/csv');
 }
