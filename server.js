@@ -940,7 +940,7 @@ app.post('/api/smart-search', async (req, res) => {
 
     const client = new Anthropic({ apiKey });
     const msg = await client.messages.create({
-      model: 'claude-sonnet-4-6-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 4000,
       messages: [{ role: 'user', content: `You are a UK property investment analyst. A user has searched across ${allLots.length} auction lots from ${sources.length} auction house catalogues.
 
@@ -1448,7 +1448,7 @@ ${strippedBatch.map(p => `=== PAGE ${p.page} ===\n${p.content}`).join('\n\n')}
 Return ONLY the JSON array:`;
     try {
       const response = await client.messages.create({
-        model: 'claude-sonnet-4-6-20250514',
+        model: 'claude-sonnet-4-6',
         max_tokens: 16000,
         messages: [{ role: 'user', content: prompt }],
       });
