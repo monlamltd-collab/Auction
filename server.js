@@ -385,7 +385,7 @@ app.get('/api/auctions', async (req, res) => {
     {
       house: 'Edward Mellor', houseSlug: 'edwardmellor', logo: '📍',
       date: '2026-03-01', title: 'Current Lots', lots: null,
-      url: 'https://www.edwardmellor.co.uk/auction-lots/',
+      url: 'https://edwardmellor.co.uk/auctions/04mar2026',
       location: 'Online', type: 'Residential', status: 'upcoming',
       catalogueReady: true,
     },
@@ -401,7 +401,7 @@ app.get('/api/auctions', async (req, res) => {
     {
       house: 'Cottons', houseSlug: 'cottons', logo: '🟤',
       date: '2026-03-01', title: 'Current Lots', lots: null,
-      url: 'https://www.cottons.co.uk/properties/?type=auction',
+      url: 'https://www.cottons.co.uk/current-auction/',
       location: 'Online', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: true,
     },
@@ -417,7 +417,7 @@ app.get('/api/auctions', async (req, res) => {
     {
       house: 'Barnett Ross', houseSlug: 'barnettross', logo: '🔶',
       date: '2026-03-01', title: 'Current Lots', lots: null,
-      url: 'https://www.barnettross.co.uk/auction/',
+      url: 'https://www.barnettross.co.uk/current.php',
       location: 'Online', type: 'Residential', status: 'upcoming',
       catalogueReady: true,
     },
@@ -2198,86 +2198,46 @@ const DOM_EXTRACTORS = {
     (() => {
       const lots = [];
       const seen = new Set();
-      
-      // Method 1: Find lot detail links (most reliable for BM)
-      // Individual lots link to /auctions/{date}/{lot_id}/
       const allLinks = document.querySelectorAll('a[href*="/auctions/"]');
       for (const link of allLinks) {
         const href = link.getAttribute('href') || '';
-        const lotIdMatch = href.match(/\\/auctions\\/[\\w-]+\\/(\\d{5,7})\\/?$/);
-        if (!lotIdMatch) continue;
-        
+        if (!href.match(/\/auctions\/[\w-]+\/\d{5,7}\/?$/)) continue;
         const container = link.closest('div, li, article, section') || link;
         const text = container.textContent || '';
-        
-        // Extract lot number from text
-        const lotNumMatch = text.match(/(?:Lot|LOT)\\s*(\\d{1,4})/i) || text.match(/^\\s*(\\d{1,4})\\s/);
+        const lotNumMatch = text.match(/Lot\s*(\d{1,4})/i);
         const lotNum = lotNumMatch ? parseInt(lotNumMatch[1]) : null;
         if (!lotNum || seen.has(lotNum)) continue;
         seen.add(lotNum);
-        
-        // Extract address - look for postcodes
-        const addrMatch = text.match(/[\\d\\w,\\s]+[A-Z]{1,2}\\d[A-Z\\d]?\\s*\\d[A-Z]{2}/i);
-        const address = addrMatch ? addrMatch[0].trim() : '';
-        
-        // Extract guide price
-        const priceMatch = text.match(/(?:guide\\s*(?:price)?|£)\\s*£?([\\d,]+(?:,\\d{3})*)/i);
+        const addrMatch = text.match(/([^\n]*[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}[^\n]*)/i);
+        const address = addrMatch ? addrMatch[1].trim() : '';
+        const priceMatch = text.match(/guide[^£]*£([\d,]+)/i) || text.match(/£([\d,]+)/);
         const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
-        
-        // Gather features
         const bullets = [];
-        container.querySelectorAll('li, p, span').forEach(el => {
-          const t = el.textContent.trim();
-          if (t.length > 10 && t.length < 200 && !t.match(/cookie|login|register|password/i)) {
-            bullets.push(t);
-          }
-        });
-        
-        if (text.match(/\\bSOLD\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) {
-          if (!bullets.some(b => b.match(/SOLD|STC|WITHDRAWN/i))) bullets.push('SOLD/STC');
-        }
-        
-        if (address || price) {
-          lots.push({ lot: lotNum, address, price, url: href, bullets: bullets.slice(0, 5) });
-        }
+        if (text.match(/SOLD|STC|Withdrawn/i)) bullets.push('SOLD/STC');
+        if (address || price) lots.push({ lot: lotNum, address, price, url: href, bullets });
       }
-      
-      // Method 2: Fallback - scan headers (original approach)
       if (lots.length === 0) {
-        const headers = document.querySelectorAll('h2, h3, h4, h5');
+        const headers = document.querySelectorAll('h2, h3, h4');
         for (const h of headers) {
           const text = h.textContent.trim();
-          const lotMatch = text.match(/^\\s*(\\d{1,4})\\s*$/) || text.match(/Lot\\s+(\\d+)/i);
+          const lotMatch = text.match(/Lot\s+(\d+)/i);
           if (!lotMatch) continue;
           const num = parseInt(lotMatch[1]);
           if (seen.has(num)) continue;
           seen.add(num);
-          const parent = h.closest('.lot, .property, div[class*="lot"], div, li, article') || h.parentElement;
+          const parent = h.closest('div, li, article') || h.parentElement;
           if (!parent) continue;
-          let address = '', price = null, url = '';
-          const links = parent.querySelectorAll('a[href]');
-          for (const lnk of links) {
-            const lt = lnk.textContent.trim();
-            const lhref = lnk.getAttribute('href') || '';
-            if (lt.match(/[A-Z]{1,2}\\d[A-Z\\d]?\\s*\\d[A-Z]{2}/i) && !address) {
-              address = lt;
-              if (lhref && lhref !== '#') url = lhref;
-            }
-          }
-          const pm = parent.textContent.match(/(?:Guide|Price|£)\\s*£?([\\d,]+(?:,\\d{3})*)/i);
-          if (pm) price = parseInt(pm[1].replace(/,/g, ''));
+          const lnk = parent.querySelector('a[href]');
+          const url = lnk ? lnk.getAttribute('href') : '';
+          const addrM = parent.textContent.match(/([^\n]*[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}[^\n]*)/i);
+          const address = addrM ? addrM[1].trim() : '';
+          const pm = parent.textContent.match(/£([\d,]+)/);
+          const price = pm ? parseInt(pm[1].replace(/,/g, '')) : null;
           const bullets = [];
-          parent.querySelectorAll('li').forEach(li => {
-            const t = li.textContent.trim();
-            if (t.length > 5 && t.length < 200) bullets.push(t);
-          });
-          if (parent.textContent.match(/\\bSOLD\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) {
-            if (!bullets.some(b => b.match(/SOLD|STC|WITHDRAWN/i))) bullets.push('SOLD/STC');
-          }
+          if (parent.textContent.match(/SOLD|STC|Withdrawn/i)) bullets.push('SOLD/STC');
           if (address || price) lots.push({ lot: num, address, price, url, bullets });
         }
       }
-      
       return lots;
     })()
   `,
@@ -2731,6 +2691,170 @@ const DOM_EXTRACTORS = {
           if (line.match(/SOLD|STC|Withdrawn/i)) bullets.push(line);
         }
         if (address) lots.push({ lot: num, address: address.replace(/\\s+/g, ' ').trim(), price, url, bullets });
+      }
+      return lots;
+    })()
+  `,
+
+  // ─── EDWARD MELLOR (edwardmellor.co.uk — custom WordPress) ────────
+  // Pattern: lot cards with LOT TBC, address link, Guide Price £X, beds/recep/bath counts
+  // Each card is a link to /property-for-sale/{id} with image, LOT number, address, price
+  edwardmellor: `
+    (() => {
+      const lots = [];
+      const seen = new Set();
+      // Find all property links - they follow /property-for-sale/{id} pattern
+      const links = document.querySelectorAll('a[href*="property-for-sale"]');
+      for (const link of links) {
+        const text = link.textContent || '';
+        const href = link.getAttribute('href') || '';
+        // Skip non-lot links (e.g. site nav)
+        if (!text.match(/LOT|Guide|£/i)) continue;
+        // Extract lot number
+        const lotMatch = text.match(/LOT\\s+(\\d+|TBC)/i);
+        const num = lotMatch && lotMatch[1] !== 'TBC' ? parseInt(lotMatch[1]) : lots.length + 1;
+        // Skip duplicates by URL
+        if (seen.has(href)) continue;
+        seen.add(href);
+        // Address: usually in the link text after LOT line, contains postcode
+        const lines = text.split('\\n').map(l => l.trim()).filter(l => l.length > 3);
+        let address = '';
+        for (const line of lines) {
+          if (line.match(/[A-Z]{1,2}\\d[A-Z\\d]?\\s*\\d?[A-Z]{0,2}/i) && line.match(/,|Road|Street|Lane|Avenue|Drive|Close|Court|Place|Way|Terrace|Crescent/i)) {
+            address = line; break;
+          }
+        }
+        if (!address) {
+          // Fallback: first line that looks like an address (contains comma, not LOT/Guide)
+          for (const line of lines) {
+            if (line.match(/,/) && !line.match(/LOT|Guide|Price|£|AVAILABLE|Legal|Virtual/i) && line.length > 10) {
+              address = line; break;
+            }
+          }
+        }
+        if (!address) continue;
+        // Price
+        const priceMatch = text.match(/(?:Guide\\s*Price|Starting\\s*Bid)[^£]*£([\\d,]+)/i) || text.match(/£([\\d,]+)/);
+        const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
+        // Bullets: beds, property type, status
+        const bullets = [];
+        if (text.match(/SOLD|WITHDRAWN|STC|EXCHANGED/i)) bullets.push('SOLD');
+        if (text.match(/Virtual Viewing/i)) bullets.push('Virtual Viewing Available');
+        if (text.match(/AVAILABLE/i) && !text.match(/SOLD/i)) bullets.push('Available');
+        lots.push({ lot: num, address: address.replace(/\\s+/g, ' ').trim(), price, url: href, bullets });
+      }
+      return lots;
+    })()
+  `,
+
+  // ─── BARNETT ROSS (barnettross.co.uk — PHP server-rendered) ───────
+  // Pattern: archivelist.php shows lot cards with Lot X, address, Guide/Sold price
+  // Individual lots at property.php?id=X with H1 as address, Lot X, price
+  barnettross: `
+    (() => {
+      const lots = [];
+      const seen = new Set();
+      // Try lot list page first (archivelist or lotlist)
+      const cards = document.querySelectorAll('[class*="lot"], [class*="property"], article, .row, tr, a[href*="property.php"]');
+      for (const card of cards) {
+        const text = card.textContent || '';
+        const lotMatch = text.match(/Lot\\s+(\\d+)/i);
+        if (!lotMatch) continue;
+        const num = parseInt(lotMatch[1]);
+        if (seen.has(num)) continue;
+        seen.add(num);
+        const link = card.querySelector ? card.querySelector('a[href*="property"]') : (card.tagName === 'A' ? card : null);
+        const url = link ? link.getAttribute('href') : '';
+        const priceMatch = text.match(/(?:Guide|Reserve)[^£]*£([\\d,]+)/i) || text.match(/Sold[^£]*£([\\d,]+)/i) || text.match(/£([\\d,]+)/);
+        const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
+        // Address from H1, H2, or first line with postcode
+        let address = '';
+        const h = card.querySelector ? card.querySelector('h1, h2, h3, h4, .address, strong') : null;
+        if (h) address = h.textContent.trim();
+        if (!address) {
+          const lines = text.split('\\n').map(l => l.trim()).filter(l => l.length > 5);
+          for (const line of lines) {
+            if (line.match(/[A-Z]{1,2}\\d[A-Z\\d]?\\s*\\d[A-Z]{2}/i)) { address = line; break; }
+            if (line.match(/,.*London|,.*,/) && !line.match(/Lot|Guide|£|Sold/i)) { address = line; break; }
+          }
+        }
+        const bullets = [];
+        if (text.match(/SOLD/i)) bullets.push('SOLD');
+        if (text.match(/Freehold|Leasehold/i)) bullets.push(text.match(/(Freehold|Leasehold)/i)[1]);
+        if (text.match(/Commercial|Residential|Investment|Ground Rent/i)) {
+          const t = text.match(/(Commercial|Residential|Investment|Ground Rent)\\s*\\w*/i);
+          if (t) bullets.push(t[0].trim());
+        }
+        if (address) lots.push({ lot: num, address: address.replace(/\\s+/g, ' ').trim(), price, url, bullets });
+      }
+      return lots;
+    })()
+  `,
+
+  // ─── COTTONS (cottons.co.uk — WordPress) ──────────────────────────
+  // Birmingham-based, holds auctions at Aston Villa. Lot cards with standard format.
+  cottons: `
+    (() => {
+      const lots = [];
+      const seen = new Set();
+      const cards = document.querySelectorAll('[class*="lot"], [class*="property"], article, .listing, .entry, a[href*="lot"]');
+      for (const card of cards) {
+        const text = card.textContent || '';
+        const lotMatch = text.match(/Lot\\s+(\\d+)/i);
+        if (!lotMatch) continue;
+        const num = parseInt(lotMatch[1]);
+        if (seen.has(num)) continue;
+        seen.add(num);
+        const link = card.querySelector ? card.querySelector('a[href]') : (card.tagName === 'A' ? card : null);
+        const url = link ? link.getAttribute('href') : '';
+        const priceMatch = text.match(/Guide[^£]*£([\\d,]+)/i) || text.match(/£([\\d,]+)/);
+        const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
+        let address = '';
+        const h = card.querySelector ? card.querySelector('h2, h3, h4, .title, .address') : null;
+        if (h) address = h.textContent.trim();
+        if (!address) {
+          const lines = text.split('\\n').map(l => l.trim()).filter(l => l.length > 10);
+          for (const line of lines) {
+            if (line.match(/[A-Z]{1,2}\\d[A-Z\\d]?\\s*\\d[A-Z]{2}/i)) { address = line; break; }
+            if (line.match(/,.*,/) && !line.match(/Lot|Guide|£/i)) { address = line; break; }
+          }
+        }
+        const bullets = [];
+        if (text.match(/SOLD|Withdrawn/i)) bullets.push('SOLD');
+        if (address) lots.push({ lot: num, address: address.replace(/\\s+/g, ' ').trim(), price, url, bullets });
+      }
+      return lots;
+    })()
+  `,
+
+  // ─── DEDMAN GRAY (dedmangray.co.uk — custom PHP) ─────────────────
+  // Essex-based auctioneer with auction search page
+  dedmangray: `
+    (() => {
+      const lots = [];
+      const seen = new Set();
+      const cards = document.querySelectorAll('[class*="lot"], [class*="property"], article, .listing, [class*="card"], a[href*="auction"]');
+      for (const card of cards) {
+        const text = card.textContent || '';
+        const lotMatch = text.match(/Lot\\s+(\\d+)/i);
+        const num = lotMatch ? parseInt(lotMatch[1]) : lots.length + 1;
+        const priceMatch = text.match(/Guide[^£]*£([\\d,]+)/i) || text.match(/£([\\d,]+)/);
+        const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
+        let address = '';
+        const h = card.querySelector ? card.querySelector('h2, h3, h4, .title, .address, strong') : null;
+        if (h && h.textContent.match(/,/)) address = h.textContent.trim();
+        if (!address) {
+          const lines = text.split('\\n').map(l => l.trim()).filter(l => l.length > 10);
+          for (const line of lines) {
+            if (line.match(/[A-Z]{1,2}\\d[A-Z\\d]?\\s*\\d[A-Z]{2}/i) && !line.match(/Lot|Guide|£/i)) { address = line; break; }
+          }
+        }
+        if (!address || address.length < 5 || seen.has(address)) continue;
+        seen.add(address);
+        const link = card.querySelector ? card.querySelector('a[href]') : null;
+        const bullets = [];
+        if (text.match(/SOLD|Withdrawn/i)) bullets.push('SOLD');
+        lots.push({ lot: num, address: address.replace(/\\s+/g, ' ').trim(), price, url: link ? link.getAttribute('href') : '', bullets });
       }
       return lots;
     })()
@@ -3678,11 +3802,11 @@ function getCalendarAuctions() {
     { house: 'Pattinson', url: 'https://www.pattinson.co.uk/auction/property-search', catalogueReady: true },
     { house: 'BidX1', url: 'https://bidx1.com/en/united-kingdom', catalogueReady: true },
     { house: 'Phillip Arnold', url: 'https://www.philliparnoldauctions.co.uk/current-lots', catalogueReady: true },
-    { house: 'Edward Mellor', url: 'https://www.edwardmellor.co.uk/auction-lots/', catalogueReady: true },
+    { house: 'Edward Mellor', url: 'https://edwardmellor.co.uk/auctions/04mar2026', catalogueReady: true },
     { house: 'Paul Fosh', url: 'https://www.paulfoshiproperty.com/auction/lots/', catalogueReady: true },
-    { house: 'Cottons', url: 'https://www.cottons.co.uk/properties/?type=auction', catalogueReady: true },
+    { house: 'Cottons', url: 'https://www.cottons.co.uk/current-auction/', catalogueReady: true },
     { house: 'Dedman Gray', url: 'https://www.dedmangray.co.uk/auction/', catalogueReady: true },
-    { house: 'Barnett Ross', url: 'https://www.barnettross.co.uk/auction/', catalogueReady: true },
+    { house: 'Barnett Ross', url: 'https://www.barnettross.co.uk/current.php', catalogueReady: true },
     { house: 'Bradley Hall', url: 'https://www.bradleyhall.co.uk/property/?type=auction', catalogueReady: true },
     { house: 'Connect UK', url: 'https://www.connectukauctions.co.uk/properties/', catalogueReady: true },
     { house: 'Auction Estates', url: 'https://www.auctionestates.co.uk/auction-lots/', catalogueReady: true },
