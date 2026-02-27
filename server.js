@@ -350,6 +350,141 @@ app.get('/api/auctions', (req, res) => {
       location: 'Online', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: true,
     },
+
+    // ── KNIGHT FRANK ──
+    {
+      house: 'Knight Frank', houseSlug: 'knightfrank', logo: '👑',
+      date: '2026-03-12', title: '12 March 2026', lots: null,
+      url: 'https://www.knightfrankauctions.com/forthcoming-auctions/',
+      location: 'Online', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
+
+    // ── PATTINSON ──
+    {
+      house: 'Pattinson', houseSlug: 'pattinson', logo: '🔷',
+      date: '2026-03-05', title: '5 March 2026 (North East)', lots: null,
+      url: 'https://www.pattinson.co.uk/auction/property-search',
+      location: 'Newcastle', type: 'Residential', status: 'upcoming',
+      catalogueReady: true,
+    },
+
+    // ── BIDX1 ──
+    {
+      house: 'BidX1', houseSlug: 'bidx1', logo: '💻',
+      date: '2026-03-01', title: 'March 2026 (Online)', lots: null,
+      url: 'https://bidx1.com/en/united-kingdom',
+      location: 'Online', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
+
+    // ── PHILLIP ARNOLD ──
+    {
+      house: 'Phillip Arnold', houseSlug: 'philliparnold', logo: '🔨',
+      date: '2026-04-16', title: '16 April 2026', lots: null,
+      url: 'https://www.philliparnoldauctions.co.uk/current-lots',
+      location: 'London', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: false,
+    },
+
+    // ── EDWARD MELLOR ──
+    {
+      house: 'Edward Mellor', houseSlug: 'edwardmellor', logo: '🏘️',
+      date: '2026-03-04', title: '4-5 March 2026', lots: null,
+      url: 'https://www.edwardmellor.co.uk/auctions/04mar2026',
+      location: 'Manchester', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
+
+    // ── PAUL FOSH ──
+    {
+      house: 'Paul Fosh', houseSlug: 'paulfosh', logo: '🏴󠁧󠁢󠁷󠁬󠁳󠁿',
+      date: '2026-03-11', title: '11 March 2026', lots: null,
+      url: 'https://www.paulfosh.com/auction-lots/',
+      location: 'Newport', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
+
+    // ── COTTONS ──
+    {
+      house: 'Cottons', houseSlug: 'cottons', logo: '🏭',
+      date: '2026-03-19', title: '19 March 2026', lots: null,
+      url: 'https://www.cottons.co.uk/current-auction/',
+      location: 'Birmingham', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
+
+    // ── DEDMAN GRAY ──
+    {
+      house: 'Dedman Gray', houseSlug: 'dedmangray', logo: '📋',
+      date: '2026-03-18', title: '18 March 2026', lots: null,
+      url: 'https://www.dedmangray.co.uk/auction/',
+      location: 'Essex', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
+
+    // ── BARNETT ROSS ──
+    {
+      house: 'Barnett Ross', houseSlug: 'barnettross', logo: '🔑',
+      date: '2026-03-19', title: '19 March 2026', lots: null,
+      url: 'https://www.barnettross.co.uk/current.php',
+      location: 'London', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: false,
+    },
+
+    // ── BRADLEY HALL ──
+    {
+      house: 'Bradley Hall', houseSlug: 'bradleyhall', logo: '🏠',
+      date: '2026-03-12', title: '12 March 2026', lots: null,
+      url: 'https://www.bradleyhall.co.uk/auction/current-lots/',
+      location: 'Newcastle', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
+
+    // ── CONNECT UK ──
+    {
+      house: 'Connect UK', houseSlug: 'connectuk', logo: '🔗',
+      date: '2026-03-10', title: '10 March 2026', lots: null,
+      url: 'https://www.connectukauctions.co.uk/current-lots/',
+      location: 'Online', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
+
+    // ── AUCTION ESTATES ──
+    {
+      house: 'Auction Estates', houseSlug: 'auctionestates', logo: '🏢',
+      date: '2026-03-12', title: '12 March 2026', lots: null,
+      url: 'https://www.auctionestates.co.uk/current-lots/',
+      location: 'Nottingham', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
+
+    // ── LANDWOOD ──
+    {
+      house: 'Landwood', houseSlug: 'landwood', logo: '🌲',
+      date: '2026-03-10', title: '10 March 2026', lots: null,
+      url: 'https://www.landwoodgroup.com/property-auctions/',
+      location: 'Manchester', type: 'Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
+
+    // ── LOVEITTS ──
+    {
+      house: 'Loveitts', houseSlug: 'loveitts', logo: '❤️',
+      date: '2026-03-11', title: '11 March 2026', lots: null,
+      url: 'https://www.loveitts.co.uk/auction/current-lots/',
+      location: 'Coventry', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
+
+    // ── HUNTERS ──
+    {
+      house: 'Hunters', houseSlug: 'hunters', logo: '🎯',
+      date: '2026-03-05', title: '5 March 2026', lots: null,
+      url: 'https://www.huntersnet.co.uk/auction/current-lots/',
+      location: 'Yorkshire', type: 'Residential', status: 'upcoming',
+      catalogueReady: true,
+    },
   ];
 
   const now = new Date().toISOString().slice(0, 10);
@@ -967,6 +1102,21 @@ function detectAuctionHouse(url) {
   if (u.includes('hollismorgan')) return 'hollismorgan';
   if (u.includes('maggsandallen')) return 'maggsandallen';
   if (u.includes('mchughandco')) return 'mchughandco';
+  if (u.includes('knightfrankauctions')) return 'knightfrank';
+  if (u.includes('pattinson.co.uk')) return 'pattinson';
+  if (u.includes('bidx1.com')) return 'bidx1';
+  if (u.includes('philliparnoldauctions')) return 'philliparnold';
+  if (u.includes('edwardmellor')) return 'edwardmellor';
+  if (u.includes('paulfosh')) return 'paulfosh';
+  if (u.includes('cottons.co.uk')) return 'cottons';
+  if (u.includes('dedmangray')) return 'dedmangray';
+  if (u.includes('barnettross')) return 'barnettross';
+  if (u.includes('bradleyhall')) return 'bradleyhall';
+  if (u.includes('connectukauctions')) return 'connectuk';
+  if (u.includes('auctionestates')) return 'auctionestates';
+  if (u.includes('landwoodgroup')) return 'landwood';
+  if (u.includes('loveitts')) return 'loveitts';
+  if (u.includes('huntersnet')) return 'hunters';
   // buttersjohnbee — PDF-only catalogues, not supported for DOM extraction
   if (u.includes('auctionhouselondon')) return 'auctionhouselondon';
   if (u.includes('auctionhouse.co.uk')) return 'auctionhouse';
@@ -1942,6 +2092,198 @@ const DOM_EXTRACTORS = {
     })()
   `,
 
+  // ── KNIGHT FRANK (EIG platform) ──
+  knightfrank: `
+    (() => {
+      const lots = [];
+      document.querySelectorAll('a[href*="/property/"], a[href*="/lot/"], .lot-card, .property-card, [class*="lot"]').forEach(el => {
+        const text = el.textContent || '';
+        const href = el.getAttribute('href') || '';
+        const lotMatch = text.match(/lot\\s*(\\d+)/i);
+        const num = lotMatch ? parseInt(lotMatch[1]) : lots.length + 1;
+        const priceMatch = text.match(/(?:guide|price|reserve)[:\\s]*£([\\d,]+)/i) || text.match(/£([\\d,]+)/);
+        const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
+        const pcMatch = text.match(/[A-Z]{1,2}\\d{1,2}[A-Z]?\\s*\\d[A-Z]{2}/i);
+        const address = text.replace(/lot\\s*\\d+/i, '').replace(/£[\\d,]+/g, '').replace(/guide\\s*price/i, '').trim().split('\\n')[0].trim();
+        if (address && address.length > 5) {
+          lots.push({ lot: num, address: address.substring(0, 150), price, url: href, bullets: [] });
+        }
+      });
+      return lots;
+    })()
+  `,
+
+  // ── PATTINSON (React SPA with bid cards) ──
+  pattinson: `
+    (() => {
+      const lots = [];
+      document.querySelectorAll('[class*="card"], [class*="property"], [class*="auction-item"], .lot-item').forEach(card => {
+        const text = card.textContent || '';
+        const link = card.querySelector('a[href*="auction"]') || card.querySelector('a');
+        const href = link ? link.getAttribute('href') : '';
+        const lotMatch = text.match(/lot\\s*(\\d+)/i);
+        const num = lotMatch ? parseInt(lotMatch[1]) : lots.length + 1;
+        const priceMatch = text.match(/(?:starting|current|guide)\\s*(?:bid|price)[:\\s]*£([\\d,]+)/i) || text.match(/£([\\d,]+)/);
+        const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
+        const address = text.split('\\n').find(l => l.trim().length > 10 && !l.match(/^(?:lot|starting|current|guide|£|bid)/i));
+        if (address) {
+          lots.push({ lot: num, address: address.trim().substring(0, 150), price, url: href, bullets: [] });
+        }
+      });
+      return lots;
+    })()
+  `,
+
+  // ── BIDX1 (React SPA) ──
+  bidx1: `
+    (() => {
+      const lots = [];
+      document.querySelectorAll('[class*="property"], [class*="card"], [class*="listing"], [class*="lot"]').forEach(card => {
+        const text = card.textContent || '';
+        const link = card.querySelector('a');
+        const href = link ? link.getAttribute('href') : '';
+        const priceMatch = text.match(/€([\\d,]+)/) || text.match(/£([\\d,]+)/);
+        const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
+        const lines = text.split('\\n').map(l => l.trim()).filter(l => l.length > 5);
+        const address = lines.find(l => !l.match(/^(?:€|£|\\d+\\s*bed|guide|reserve|sold)/i));
+        if (address) {
+          lots.push({ lot: lots.length + 1, address: address.substring(0, 150), price, url: href, bullets: [] });
+        }
+      });
+      return lots;
+    })()
+  `,
+
+  // ── PHILLIP ARNOLD (PHP gallery) ──
+  philliparnold: `
+    (() => {
+      const lots = [];
+      document.querySelectorAll('.gallery-item, .lot-item, .property-item, [class*="lot"]').forEach(el => {
+        const text = el.textContent || '';
+        const link = el.querySelector('a');
+        const href = link ? link.getAttribute('href') : '';
+        const lotMatch = text.match(/lot\\s*(\\d+)/i);
+        const num = lotMatch ? parseInt(lotMatch[1]) : lots.length + 1;
+        const priceMatch = text.match(/guide\\s*price\\s*£([\\d,]+)/i) || text.match(/£([\\d,]+)/);
+        const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
+        const address = text.replace(/lot\\s*\\d+/i, '').replace(/guide\\s*price\\s*£[\\d,]+/i, '').replace(/£[\\d,]+/g, '').trim().split('\\n')[0].trim();
+        if (address && address.length > 5) {
+          lots.push({ lot: num, address: address.substring(0, 150), price, url: href, bullets: [] });
+        }
+      });
+      return lots;
+    })()
+  `,
+
+  // ── EDWARD MELLOR (WordPress, verified HTML) ──
+  edwardmellor: `
+    (() => {
+      const lots = [];
+      document.querySelectorAll('a[href*="/property-for-sale/"]').forEach(link => {
+        const text = link.textContent || '';
+        const href = link.getAttribute('href') || '';
+        const lotMatch = text.match(/lot\\s*(\\d+|TBC)/i);
+        const num = lotMatch && lotMatch[1] !== 'TBC' ? parseInt(lotMatch[1]) : lots.length + 1;
+        const priceMatch = text.match(/guide\\s*price\\s*£([\\d,]+)/i) || text.match(/£([\\d,]+)/);
+        const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
+        const pcMatch = text.match(/[A-Z]{1,2}\\d{1,2}[A-Z]?\\s*\\d[A-Z]{2}/i);
+        const addressLine = text.split('\\n').find(l => l.trim().length > 10 && l.match(/[A-Z]{1,2}\\d/));
+        const address = addressLine ? addressLine.trim() : text.split('\\n')[0].trim();
+        if (address && address.length > 5) {
+          const bullets = [];
+          const beds = text.match(/(\\d+)\\s*bed/i);
+          if (beds) bullets.push(beds[1] + ' bed');
+          lots.push({ lot: num, address: address.substring(0, 150), price, url: href, bullets });
+        }
+      });
+      return lots;
+    })()
+  `,
+
+  // ── BARNETT ROSS (PHP) ──
+  barnettross: `
+    (() => {
+      const lots = [];
+      document.querySelectorAll('a[href*="property.php"], .lot-row, .property-row, [class*="lot"]').forEach(el => {
+        const text = el.textContent || '';
+        const href = el.getAttribute('href') || el.querySelector('a')?.getAttribute('href') || '';
+        const lotMatch = text.match(/lot\\s*(\\d+)/i);
+        const num = lotMatch ? parseInt(lotMatch[1]) : lots.length + 1;
+        const priceMatch = text.match(/(?:guide|sold|price)[:\\s]*£([\\d,]+)/i) || text.match(/£([\\d,]+)/);
+        const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
+        const pcMatch = text.match(/[A-Z]{1,2}\\d{1,2}[A-Z]?\\s*\\d[A-Z]{2}/i);
+        const address = text.replace(/lot\\s*\\d+/i, '').replace(/£[\\d,]+/g, '').trim().split('\\n')[0].trim();
+        if (address && address.length > 5) {
+          lots.push({ lot: num, address: address.substring(0, 150), price, url: href, bullets: [] });
+        }
+      });
+      return lots;
+    })()
+  `,
+
+  // ── COTTONS (WordPress) ──
+  cottons: `
+    (() => {
+      const lots = [];
+      document.querySelectorAll('.property-card, .lot-card, [class*="property"], [class*="lot"]').forEach(card => {
+        const text = card.textContent || '';
+        const link = card.querySelector('a');
+        const href = link ? link.getAttribute('href') : '';
+        const lotMatch = text.match(/lot\\s*(\\d+)/i);
+        const num = lotMatch ? parseInt(lotMatch[1]) : lots.length + 1;
+        const priceMatch = text.match(/guide\\s*(?:price)?\\s*£([\\d,]+)/i) || text.match(/£([\\d,]+)/);
+        const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
+        const address = text.split('\\n').find(l => l.trim().length > 10 && !l.match(/^(?:lot|guide|£|sold)/i));
+        if (address) {
+          lots.push({ lot: num, address: address.trim().substring(0, 150), price, url: href, bullets: [] });
+        }
+      });
+      return lots;
+    })()
+  `,
+
+  // ── DEDMAN GRAY (PHP) ──
+  dedmangray: `
+    (() => {
+      const lots = [];
+      document.querySelectorAll('.property-card, .auction-lot, [class*="property"], [class*="lot"]').forEach(card => {
+        const text = card.textContent || '';
+        const link = card.querySelector('a');
+        const href = link ? link.getAttribute('href') : '';
+        const lotMatch = text.match(/lot\\s*(\\d+)/i);
+        const num = lotMatch ? parseInt(lotMatch[1]) : lots.length + 1;
+        const priceMatch = text.match(/guide\\s*(?:price)?\\s*£([\\d,]+)/i) || text.match(/£([\\d,]+)/);
+        const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
+        const address = text.split('\\n').find(l => l.trim().length > 10 && !l.match(/^(?:lot|guide|£|sold)/i));
+        if (address) {
+          lots.push({ lot: num, address: address.trim().substring(0, 150), price, url: href, bullets: [] });
+        }
+      });
+      return lots;
+    })()
+  `,
+
+  // ── EIG PLATFORM (reusable for any EIG-hosted house) ──
+  eigplatform: `
+    (() => {
+      const lots = [];
+      document.querySelectorAll('a[href*="/property/"], a[href*="/lot/"], .lot-card').forEach(el => {
+        const text = el.textContent || '';
+        const href = el.getAttribute('href') || '';
+        const lotMatch = text.match(/lot\\s*(\\d+)/i);
+        const num = lotMatch ? parseInt(lotMatch[1]) : lots.length + 1;
+        const priceMatch = text.match(/£([\\d,]+)/);
+        const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
+        const pcMatch = text.match(/[A-Z]{1,2}\\d{1,2}[A-Z]?\\s*\\d[A-Z]{2}/i);
+        const address = text.replace(/lot\\s*\\d+/i, '').replace(/£[\\d,]+/g, '').trim().split('\\n')[0].trim();
+        if (address && address.length > 5) {
+          lots.push({ lot: num, address: address.substring(0, 150), price, url: href, bullets: [] });
+        }
+      });
+      return lots;
+    })()
+  `,
+
 };
 
 // Universal DOM extractor — works on any auction site by detecting common patterns
@@ -2476,6 +2818,81 @@ function buildLotUrl(lot, house, sourceUrl) {
         return `https://www.mchughandco.com${lot.url}`;
       }
       break;
+    case 'knightfrank':
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://www.knightfrankauctions.com${lot.url}`;
+      }
+      break;
+    case 'pattinson':
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://www.pattinson.co.uk${lot.url}`;
+      }
+      break;
+    case 'bidx1':
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://bidx1.com${lot.url}`;
+      }
+      break;
+    case 'philliparnold':
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://www.philliparnoldauctions.co.uk${lot.url}`;
+      }
+      break;
+    case 'edwardmellor':
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://www.edwardmellor.co.uk${lot.url}`;
+      }
+      break;
+    case 'paulfosh':
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://www.paulfosh.com${lot.url}`;
+      }
+      break;
+    case 'cottons':
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://www.cottons.co.uk${lot.url}`;
+      }
+      break;
+    case 'dedmangray':
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://www.dedmangray.co.uk${lot.url}`;
+      }
+      break;
+    case 'barnettross':
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://www.barnettross.co.uk${lot.url}`;
+      }
+      break;
+    case 'bradleyhall':
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://www.bradleyhall.co.uk${lot.url}`;
+      }
+      break;
+    case 'connectuk':
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://www.connectukauctions.co.uk${lot.url}`;
+      }
+      break;
+    case 'auctionestates':
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://www.auctionestates.co.uk${lot.url}`;
+      }
+      break;
+    case 'landwood':
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://www.landwoodgroup.com${lot.url}`;
+      }
+      break;
+    case 'loveitts':
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://www.loveitts.co.uk${lot.url}`;
+      }
+      break;
+    case 'hunters':
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://www.huntersnet.co.uk${lot.url}`;
+      }
+      break;
   }
   return lot.url || '';
 }
@@ -2857,6 +3274,21 @@ function getCalendarAuctions() {
     { house: 'Maggs & Allen', url: 'https://www.maggsandallen.co.uk/search-auction/', catalogueReady: true },
     { house: 'McHugh & Co', url: 'https://www.mchughandco.com/pages/auctions', catalogueReady: true },
     { house: 'Auction House UK', url: 'https://www.auctionhouse.co.uk/online/auction/2026/3/10', catalogueReady: true },
+    { house: 'Knight Frank', url: 'https://www.knightfrankauctions.com/forthcoming-auctions/', catalogueReady: true },
+    { house: 'Pattinson', url: 'https://www.pattinson.co.uk/auction/property-search', catalogueReady: true },
+    { house: 'BidX1', url: 'https://bidx1.com/en/united-kingdom', catalogueReady: true },
+    { house: 'Phillip Arnold', url: 'https://www.philliparnoldauctions.co.uk/current-lots', catalogueReady: false },
+    { house: 'Edward Mellor', url: 'https://www.edwardmellor.co.uk/auctions/04mar2026', catalogueReady: true },
+    { house: 'Paul Fosh', url: 'https://www.paulfosh.com/auction-lots/', catalogueReady: true },
+    { house: 'Cottons', url: 'https://www.cottons.co.uk/current-auction/', catalogueReady: true },
+    { house: 'Dedman Gray', url: 'https://www.dedmangray.co.uk/auction/', catalogueReady: true },
+    { house: 'Barnett Ross', url: 'https://www.barnettross.co.uk/current.php', catalogueReady: false },
+    { house: 'Bradley Hall', url: 'https://www.bradleyhall.co.uk/auction/current-lots/', catalogueReady: true },
+    { house: 'Connect UK', url: 'https://www.connectukauctions.co.uk/current-lots/', catalogueReady: true },
+    { house: 'Auction Estates', url: 'https://www.auctionestates.co.uk/current-lots/', catalogueReady: true },
+    { house: 'Landwood', url: 'https://www.landwoodgroup.com/property-auctions/', catalogueReady: true },
+    { house: 'Loveitts', url: 'https://www.loveitts.co.uk/auction/current-lots/', catalogueReady: true },
+    { house: 'Hunters', url: 'https://www.huntersnet.co.uk/auction/current-lots/', catalogueReady: true },
   ];
   return auctions.filter(a => a.catalogueReady);
 }
