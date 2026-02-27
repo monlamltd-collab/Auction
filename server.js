@@ -417,10 +417,10 @@ app.get('/api/auctions', (req, res) => {
     // ── DEDMAN GRAY ──
     {
       house: 'Dedman Gray', houseSlug: 'dedmangray', logo: '📋',
-      date: '2026-03-18', title: '18 March 2026', lots: null,
+      date: '2026-03-19', title: '19 March 2026', lots: null,
       url: 'https://www.dedmangray.co.uk/auction/',
       location: 'Essex', type: 'Residential & Commercial', status: 'upcoming',
-      catalogueReady: true,
+      catalogueReady: false,
     },
 
     // ── BARNETT ROSS ──
@@ -436,7 +436,7 @@ app.get('/api/auctions', (req, res) => {
     {
       house: 'Bradley Hall', houseSlug: 'bradleyhall', logo: '🏠',
       date: '2026-03-12', title: '12 March 2026', lots: null,
-      url: 'https://www.bradleyhall.co.uk/auction/current-lots/',
+      url: 'https://auction.bradleyhall.co.uk/search',
       location: 'Newcastle', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: true,
     },
@@ -445,7 +445,7 @@ app.get('/api/auctions', (req, res) => {
     {
       house: 'Connect UK', houseSlug: 'connectuk', logo: '🔗',
       date: '2026-03-10', title: '10 March 2026', lots: null,
-      url: 'https://www.connectukauctions.co.uk/current-lots/',
+      url: 'https://realtime.connectukauctions.co.uk/for-sale/',
       location: 'Online', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: true,
     },
@@ -454,7 +454,7 @@ app.get('/api/auctions', (req, res) => {
     {
       house: 'Auction Estates', houseSlug: 'auctionestates', logo: '🏢',
       date: '2026-03-12', title: '12 March 2026', lots: null,
-      url: 'https://www.auctionestates.co.uk/current-lots/',
+      url: 'https://www.auctionestates.co.uk/view-properties',
       location: 'Nottingham', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: true,
     },
@@ -463,7 +463,7 @@ app.get('/api/auctions', (req, res) => {
     {
       house: 'Landwood', houseSlug: 'landwood', logo: '🌲',
       date: '2026-03-10', title: '10 March 2026', lots: null,
-      url: 'https://www.landwoodgroup.com/property-auctions/',
+      url: 'https://www.landwoodpropertyauctions.com/Auction',
       location: 'Manchester', type: 'Commercial', status: 'upcoming',
       catalogueReady: true,
     },
@@ -472,7 +472,7 @@ app.get('/api/auctions', (req, res) => {
     {
       house: 'Loveitts', houseSlug: 'loveitts', logo: '❤️',
       date: '2026-03-11', title: '11 March 2026', lots: null,
-      url: 'https://www.loveitts.co.uk/auction/current-lots/',
+      url: 'https://www.loveitts.co.uk/auctions',
       location: 'Coventry', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: true,
     },
@@ -481,7 +481,7 @@ app.get('/api/auctions', (req, res) => {
     {
       house: 'Hunters', houseSlug: 'hunters', logo: '🎯',
       date: '2026-03-05', title: '5 March 2026', lots: null,
-      url: 'https://www.huntersnet.co.uk/auction/current-lots/',
+      url: 'https://www.hunters.com/auction-search',
       location: 'Yorkshire', type: 'Residential', status: 'upcoming',
       catalogueReady: true,
     },
@@ -837,8 +837,7 @@ app.post('/api/analyse', async (req, res) => {
       // Puppeteer fallback if static scraping found nothing
       // Skip for houses where Puppeteer wastes memory (blocked, empty, or JS-only)
       const SKIP_PUPPETEER = ['pattinson','knightfrank','paulfosh','cottons','dedmangray',
-        'barnettross','bradleyhall','connectuk','auctionestates','landwood','loveitts','hunters',
-        'philliparnold','network'];
+        'barnettross','philliparnold','network'];
       if (rawLots.length === 0 && !SKIP_PUPPETEER.includes(house)) {
         console.log(`No lots from static HTML, trying Puppeteer for ${house}...`);
         const puppeteerPages = await scrapeWithPuppeteer(url, house);
@@ -1130,11 +1129,11 @@ function detectAuctionHouse(url) {
   if (u.includes('dedmangray')) return 'dedmangray';
   if (u.includes('barnettross')) return 'barnettross';
   if (u.includes('bradleyhall')) return 'bradleyhall';
-  if (u.includes('connectukauctions')) return 'connectuk';
+  if (u.includes('connectukauctions') || u.includes('connectukgroup')) return 'connectuk';
   if (u.includes('auctionestates')) return 'auctionestates';
-  if (u.includes('landwoodgroup')) return 'landwood';
+  if (u.includes('landwoodpropertyauctions') || u.includes('landwoodgroup')) return 'landwood';
   if (u.includes('loveitts')) return 'loveitts';
-  if (u.includes('huntersnet')) return 'hunters';
+  if (u.includes('hunters.com')) return 'hunters';
   // buttersjohnbee — PDF-only catalogues, not supported for DOM extraction
   if (u.includes('auctionhouselondon')) return 'auctionhouselondon';
   if (u.includes('auctionhouse.co.uk')) return 'auctionhouse';
@@ -3240,8 +3239,7 @@ async function autoAnalyseOne(url, apiKey) {
     if (pages && pages.length > 0) rawLots = await extractLotsWithClaude(client, pages, house);
     // Skip Puppeteer fallback for houses where it wastes memory (blocked, empty, or JS-only)
     const SKIP_PUPPETEER = ['pattinson','knightfrank','paulfosh','cottons','dedmangray',
-      'barnettross','bradleyhall','connectuk','auctionestates','landwood','loveitts','hunters',
-      'philliparnold','network'];
+      'barnettross','philliparnold','network'];
     if (rawLots.length === 0 && !SKIP_PUPPETEER.includes(house)) {
       const puppeteerPages = await scrapeWithPuppeteer(url, house);
       if (puppeteerPages.length > 0) rawLots = await extractLotsWithClaude(client, puppeteerPages, house);
@@ -3309,14 +3307,14 @@ function getCalendarAuctions() {
     { house: 'Edward Mellor', url: 'https://www.edwardmellor.co.uk/auctions/04mar2026', catalogueReady: true },
     { house: 'Paul Fosh', url: 'https://www.paulfosh.com/auction-lots/', catalogueReady: true },
     { house: 'Cottons', url: 'https://www.cottons.co.uk/current-auction/', catalogueReady: true },
-    { house: 'Dedman Gray', url: 'https://www.dedmangray.co.uk/auction/', catalogueReady: true },
+    { house: 'Dedman Gray', url: 'https://www.dedmangray.co.uk/auction/', catalogueReady: false },
     { house: 'Barnett Ross', url: 'https://www.barnettross.co.uk/current.php', catalogueReady: false },
-    { house: 'Bradley Hall', url: 'https://www.bradleyhall.co.uk/auction/current-lots/', catalogueReady: true },
-    { house: 'Connect UK', url: 'https://www.connectukauctions.co.uk/current-lots/', catalogueReady: true },
-    { house: 'Auction Estates', url: 'https://www.auctionestates.co.uk/current-lots/', catalogueReady: true },
-    { house: 'Landwood', url: 'https://www.landwoodgroup.com/property-auctions/', catalogueReady: true },
-    { house: 'Loveitts', url: 'https://www.loveitts.co.uk/auction/current-lots/', catalogueReady: true },
-    { house: 'Hunters', url: 'https://www.huntersnet.co.uk/auction/current-lots/', catalogueReady: true },
+    { house: 'Bradley Hall', url: 'https://auction.bradleyhall.co.uk/search', catalogueReady: true },
+    { house: 'Connect UK', url: 'https://realtime.connectukauctions.co.uk/for-sale/', catalogueReady: true },
+    { house: 'Auction Estates', url: 'https://www.auctionestates.co.uk/view-properties', catalogueReady: true },
+    { house: 'Landwood', url: 'https://www.landwoodpropertyauctions.com/Auction', catalogueReady: true },
+    { house: 'Loveitts', url: 'https://www.loveitts.co.uk/auctions', catalogueReady: true },
+    { house: 'Hunters', url: 'https://www.hunters.com/auction-search', catalogueReady: true },
   ];
   return auctions.filter(a => a.catalogueReady);
 }
