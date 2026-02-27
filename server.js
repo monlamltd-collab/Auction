@@ -620,6 +620,14 @@ app.post('/api/analyse', async (req, res) => {
             await new Promise(r => setTimeout(r, 3000));
           }
 
+          // Extra wait for Network Auctions — page loads dynamically
+          if (house === 'network') {
+            await page.waitForSelector('a[href*="/lot/"], a[href*="/property/"], a[href*="MORE INFO"], img[src*="eigproperty"]', { timeout: 15000 }).catch(() => {
+              console.log('Network: Timed out waiting for lot content — catalogue may not be published yet');
+            });
+            await new Promise(r => setTimeout(r, 3000));
+          }
+
           // Scroll to trigger lazy loading
           await page.evaluate(async () => {
             for (let i = 0; i < 15; i++) {
@@ -632,7 +640,7 @@ app.post('/api/analyse', async (req, res) => {
 
           // Extract page 1
           const domLots = await extractWithDOM(page, house);
-          if (domLots && domLots.length >= 3) {
+          if (domLots && domLots.length >= 1) {
             rawLots.push(...domLots);
             console.log(`${house} Page 1: ${domLots.length} lots via DOM extraction`);
 
@@ -1883,32 +1891,115 @@ const DOM_EXTRACTORS = {
     (() => {
       const lots = [];
       const seen = new Set();
-      const cards = document.querySelectorAll('.lot-card, .property-card, [class*="lot-item"], [class*="property"], article');
-      for (const card of cards) {
-        const text = card.textContent || '';
-        const lotMatch = text.match(/Lot\\s+(\\d+)/i);
-        if (!lotMatch) continue;
-        const lotNum = parseInt(lotMatch[1]);
-        if (seen.has(lotNum)) continue;
-        seen.add(lotNum);
-        const link = card.querySelector('a[href]');
-        const url = link ? link.getAttribute('href') : '';
-        const priceMatch = text.match(/(?:Guide|Price)[^£]*£([\\d,]+)/i) || text.match(/£([\\d,]+)/);
-        const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
-        let address = '';
-        const heading = card.querySelector('h2, h3, h4, .address');
-        if (heading) address = heading.textContent.trim();
-        if (!address) continue;
-        const bullets = [];
-        card.querySelectorAll('li').forEach(li => {
-          const t = li.textContent.trim();
-          if (t.length > 3 && t.length < 200) bullets.push(t);
-        });
-        if (text.match(/\\bSOLD\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) {
-          if (!bullets.some(b => b.match(/SOLD|STC|WITHDRAWN/i))) bullets.push('SOLD/STC');
+      
+      // Network Auctions uses EIG platform (eigpropertyauctions.co.uk CDN for images)
+      // Lots are in containers with "MORE INFO" links and "ADD TO FAVOURITES" buttons
+      // Try multiple strategies to find lot containers
+      
+      // Strategy 1: Find all "MORE INFO" or "View Details" links and walk up to card
+      const moreInfoLinks = [...document.querySelectorAll('a')].filter(a => {
+        const t = (a.textContent || '').trim().toUpperCase();
+        return t.includes('MORE INFO') || t.includes('VIEW DETAILS') || t.includes('FULL DETAILS');
+      });
+      
+      for (const link of moreInfoLinks) {
+        const href = link.getAttribute('href') || '';
+        if (!href || href === '#') continue;
+        
+        // Walk up to find the lot card container
+        let card = link;
+        for (let i = 0; i < 10 && card.parentElement; i++) {
+          card = card.parentElement;
+          const cl = (card.className || '').toLowerCase();
+          const tag = card.tagName.toLowerCase();
+          // Stop at likely card boundary
+          if (cl.match(/card|lot|property|listing|item|result|auction/) ||
+              tag === 'article' || tag === 'section' ||
+              (tag === 'div' && card.querySelector('img') && card.querySelector('a[href*="MORE"]'))) break;
         }
-        lots.push({ lot: lotNum, address, price, url, bullets });
+        
+        const text = card.innerText || card.textContent || '';
+        if (text.length < 15 || text.length > 8000) continue;
+        
+        // Extract address — look for postcode pattern or heading
+        let address = '';
+        const heading = card.querySelector('h1, h2, h3, h4, h5, .title, .address, [class*="title"], [class*="address"]');
+        if (heading) address = heading.textContent.trim();
+        if (!address) {
+          const lines = text.split('\\n').map(s => s.trim()).filter(s => s.length > 5);
+          for (const line of lines) {
+            if (line.match(/[A-Z]{1,2}\\d[A-Z\\d]?\\s*\\d[A-Z]{2}/i) && line.length < 200) {
+              address = line;
+              break;
+            }
+          }
+        }
+        if (!address) {
+          // Try the first substantial text line that isn't a button/action
+          const lines = text.split('\\n').map(s => s.trim()).filter(s => s.length > 10 && s.length < 150);
+          const addr = lines.find(l => !l.match(/^(MORE|ADD|VIEW|GUIDE|SOLD|LOT|FAVOURITES|£|REGISTER)/i));
+          if (addr) address = addr;
+        }
+        if (!address || address.length < 5) continue;
+        
+        // Deduplicate
+        const addrKey = address.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 40);
+        if (seen.has(addrKey)) continue;
+        seen.add(addrKey);
+        
+        // Extract price — Network uses formats like "£325,000+", "£90,000 - £100,000"
+        let price = null;
+        const priceMatch = text.match(/£([\\d,]+)(?:\\s*[-–]\\s*£[\\d,]+)?\\s*\\+?/);
+        if (priceMatch) price = parseInt(priceMatch[1].replace(/,/g, ''));
+        
+        // Extract lot number
+        let lotNum = lots.length + 1;
+        const lotMatch = text.match(/Lot\\s+(\\d+)/i);
+        if (lotMatch) lotNum = parseInt(lotMatch[1]);
+        
+        // Extract bullets/features
+        const bullets = [];
+        card.querySelectorAll('li, .feature, .tag, .type, .meta span').forEach(el => {
+          const t = el.textContent.trim();
+          if (t.length > 3 && t.length < 200 && !t.match(/^(MORE|ADD|VIEW|FAVOURITES)/i)) bullets.push(t);
+        });
+        
+        // Check sold status
+        if (text.match(/\\bSOLD\\b|\\bSTC\\b|\\bWithdrawn\\b|\\bPRIOR\\b/i)) {
+          if (!bullets.some(b => b.match(/SOLD|STC|WITHDRAWN|PRIOR/i))) bullets.push('SOLD/STC');
+        }
+        
+        lots.push({ lot: lotNum, address, price, url: href, bullets });
       }
+      
+      // Strategy 2: If strategy 1 found nothing, try finding lot containers by image + price pattern
+      if (lots.length === 0) {
+        const containers = document.querySelectorAll('[class*="lot"], [class*="property"], [class*="listing"], [class*="card"], article, .col, .grid > div');
+        for (const card of containers) {
+          const text = card.innerText || '';
+          const hasPrice = text.match(/£[\\d,]+/);
+          const hasLink = card.querySelector('a[href*="/lot"], a[href*="/property"], a[href*="/auction"]');
+          if (!hasPrice && !hasLink) continue;
+          if (text.length < 20 || text.length > 8000) continue;
+          
+          let address = '';
+          const heading = card.querySelector('h2, h3, h4');
+          if (heading) address = heading.textContent.trim();
+          if (!address) continue;
+          
+          const addrKey = address.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 40);
+          if (seen.has(addrKey)) continue;
+          seen.add(addrKey);
+          
+          const priceMatch = text.match(/£([\\d,]+)/);
+          const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
+          const link = hasLink || card.querySelector('a[href]');
+          const url = link ? link.getAttribute('href') : '';
+          
+          lots.push({ lot: lots.length + 1, address, price, url, bullets: [] });
+        }
+      }
+      
       return lots;
     })()
   `,
@@ -3019,6 +3110,14 @@ async function autoAnalyseOne(url, apiKey) {
           });
           await new Promise(r => setTimeout(r, 3000));
         }
+
+        // Extra wait for Network Auctions
+        if (house === 'network') {
+          await page.waitForSelector('a[href*="/lot/"], a[href*="/property/"], img[src*="eigproperty"]', { timeout: 15000 }).catch(() => {
+            console.log('AUTO Network: Timed out waiting for lot content');
+          });
+          await new Promise(r => setTimeout(r, 3000));
+        }
         await page.evaluate(async () => {
           for (let i = 0; i < 15; i++) { window.scrollBy(0, window.innerHeight); await new Promise(r => setTimeout(r, 500)); }
           window.scrollTo(0, 0);
@@ -3026,7 +3125,7 @@ async function autoAnalyseOne(url, apiKey) {
         await new Promise(r => setTimeout(r, 2000));
 
         const domLots = await extractWithDOM(page, house);
-        if (domLots && domLots.length >= 3) {
+        if (domLots && domLots.length >= 1) {
           rawLots.push(...domLots);
           console.log(`AUTO: ${house} Page 1: ${domLots.length} lots`);
 

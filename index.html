@@ -758,12 +758,34 @@ async function runSmartSearch(query) {
   if (!requireSignup()) return;
   $('mainBtn').disabled = true;
   $('mainBtn').textContent = 'Searching...';
-  $('progressPanel').style.display = 'block';
   $('resultsPanel').style.display = 'none';
   $('logBox').innerHTML = '';
   showResultsView();
-  log('Searching across all analysed catalogues...');
-  prog(30, 'AI is searching...');
+
+  // Show search animation
+  $('progressPanel').style.display = 'block';
+  $('progressPanel').innerHTML=`<div class="scan-animation">
+    <div class="scan-title">🔍 AI is searching all catalogues</div>
+    <div class="scan-steps">
+      <div class="scan-step active" id="sq1"><span class="spinner"></span><span class="check">✓</span> Understanding query</div>
+      <div class="scan-step waiting" id="sq2"><span class="spinner"></span><span class="check">✓</span> Searching cached lots</div>
+      <div class="scan-step waiting" id="sq3"><span class="spinner"></span><span class="check">✓</span> Scoring matches</div>
+      <div class="scan-step waiting" id="sq4"><span class="spinner"></span><span class="check">✓</span> Building report</div>
+    </div>
+    <div class="scan-count" id="scanCount">—</div>
+    <div class="scan-label" id="scanLabel">matches found</div>
+  </div>`;
+
+  // Animate steps
+  const stepTimings = [1000, 2500, 4000];
+  stepTimings.forEach((t, i) => {
+    setTimeout(() => {
+      const prev = $('sq'+(i+1));
+      const next = $('sq'+(i+2));
+      if(prev){prev.classList.remove('active');prev.classList.add('done')}
+      if(next){next.classList.remove('waiting');next.classList.add('active')}
+    }, t);
+  });
 
   try {
     const resp = await fetch('/api/smart-search', {
@@ -779,8 +801,15 @@ async function runSmartSearch(query) {
 
     LOTS = data.results || [];
     SMART_RESULTS = data;
-    log(`Found ${LOTS.length} matching lots across ${data.sources?.length || 0} catalogues`, 'ok');
-    prog(100, 'Complete');
+
+    // Complete all steps
+    for(let i=1;i<=4;i++){const s=$('sq'+i);if(s){s.classList.remove('active','waiting');s.classList.add('done')}}
+    if($('scanCount'))$('scanCount').textContent=LOTS.length;
+    if($('scanLabel'))$('scanLabel').textContent=`matches across ${data.sources?.length||0} catalogues · ${data.totalSearched||0} lots searched`;
+
+    await new Promise(r=>setTimeout(r,1200));
+
+    $('progressPanel').style.display = 'none';
 
     // Show results with report toggle
     $('resultsTitle').textContent = `"${query}" — ${LOTS.length} matches`;
@@ -803,8 +832,10 @@ async function runSmartSearch(query) {
       <div class="stat-card"><div class="v g">${LOTS.filter(l=>(l.score||0)>=3).length}</div><div class="l">Score 3+</div></div>
       <div class="stat-card"><div class="v y">${data.sources?.length||0}</div><div class="l">Catalogues</div></div>`;
   } catch (e) {
-    log(e.message, 'err');
-    prog(0, 'Failed');
+    $('progressPanel').innerHTML=`<div class="scan-animation" style="background:var(--red)">
+      <div class="scan-title">✗ ${e.message}</div>
+      <div class="scan-label"><a href="#" onclick="backToAuctions();return false" style="color:white;text-decoration:underline">← Back to auctions</a></div>
+    </div>`;
   }
   $('mainBtn').disabled = false;
   $('mainBtn').textContent = 'Search';
