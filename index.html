@@ -326,43 +326,56 @@ footer .logo-f span{color:var(--green)}
 
   <!-- ═══════ SEARCH PANEL ═══════ -->
   <div class="search-panel">
-    <div class="search-row">
-      <input id="smartQuery" class="search-input" placeholder="e.g. 'Refurb opportunities under £200k' or 'Title splits in Bristol'">
-      <button class="btn-main" id="mainBtn" onclick="handleSearch()">Search</button>
-    </div>
 
     <div class="filters">
-      <div class="filter-field"><label>Min Price</label><select id="fMinPrice">
+      <div class="filter-field"><label>Min Price</label><select id="fMinPrice" onchange="applyFilters()">
         <option value="">No min</option><option value="25000">£25,000</option><option value="50000">£50,000</option><option value="75000">£75,000</option><option value="100000">£100,000</option><option value="150000">£150,000</option><option value="200000">£200,000</option><option value="300000">£300,000</option><option value="500000">£500,000</option>
       </select></div>
-      <div class="filter-field"><label>Max Price</label><select id="fMaxPrice">
+      <div class="filter-field"><label>Max Price</label><select id="fMaxPrice" onchange="applyFilters()">
         <option value="">No max</option><option value="50000">£50,000</option><option value="100000">£100,000</option><option value="150000">£150,000</option><option value="200000">£200,000</option><option value="300000">£300,000</option><option value="500000">£500,000</option><option value="750000">£750,000</option><option value="1000000">£1,000,000</option><option value="1500000">£1,500,000</option><option value="2000000">£2,000,000</option><option value="3000000">£3,000,000</option><option value="5000000">£5,000,000</option><option value="10000000">£10,000,000</option>
       </select></div>
-      <div class="filter-field"><label>Bedrooms</label><select id="fBeds">
-        <option value="">Any</option><option value="1">1+</option><option value="2">2+</option><option value="3">3+</option><option value="4">4+</option><option value="5">5+</option><option value="6">6+</option><option value="7">7+</option><option value="8">8+</option><option value="9">9+</option><option value="10">10+</option><option value="11">11+</option><option value="12">12+</option><option value="13">13+</option><option value="14">14+</option><option value="15">15+</option><option value="16">16+</option><option value="17">17+</option><option value="18">18+</option><option value="19">19+</option><option value="20">20+</option>
+      <div class="filter-field"><label>Bedrooms</label><select id="fBeds" onchange="applyFilters()">
+        <option value="">Any</option><option value="1">1+</option><option value="2">2+</option><option value="3">3+</option><option value="4">4+</option><option value="5">5+</option>
       </select></div>
-      <div class="filter-field"><label>Property Type</label><select id="fType">
+      <div class="filter-field"><label>Property Type</label><select id="fType" onchange="applyFilters()">
         <option value="">All types</option><option value="house">House</option><option value="flat">Flat / Apartment</option><option value="bungalow">Bungalow</option><option value="commercial">Commercial</option><option value="land">Land / Development</option><option value="garage">Garage / Parking</option><option value="other">Other</option>
       </select></div>
     </div>
     <div class="filters" style="margin-top:-8px">
-      <div class="filter-field"><label>Status</label><select id="fSoldTop" onchange="if($('fSold'))$('fSold').value=this.value;renderLots()">
-        <option value="show">Show sold / STC</option><option value="hide">Hide sold / STC</option>
+      <div class="filter-field"><label>Status</label><select id="fSoldTop" onchange="applyFilters()">
+        <option value="hide">Hide sold / STC</option><option value="show">Show sold / STC</option>
       </select></div>
-      <div class="filter-field"><label>Title Splits</label><select id="fTSTop" onchange="if($('fTS'))$('fTS').value=this.value;renderLots()">
-        <option value="">All lots</option><option value="ts">Title split opportunities</option>
+      <div class="filter-field"><label>Title Splits</label><select id="fTSTop" onchange="applyFilters()">
+        <option value="">All lots</option><option value="ts">Title split opportunities only</option>
       </select></div>
-      <div class="filter-field"></div>
-      <div class="filter-field"></div>
+      <div class="filter-field"><label>Tenure</label><select id="fTenure" onchange="applyFilters()">
+        <option value="">Any</option><option value="Freehold">Freehold</option><option value="Leasehold">Leasehold</option><option value="Share of Freehold">Share of Freehold</option>
+      </select></div>
+      <div class="filter-field"><label>Auction House</label><select id="fHouse" onchange="applyFilters()">
+        <option value="">All houses</option>
+      </select></div>
+    </div>
+
+    <!-- Live filter count -->
+    <div id="filterCount" style="text-align:center;padding:10px 0;font-size:.88rem;color:var(--text3);display:none">
+      <span id="filterCountText"></span>
+    </div>
+
+    <!-- AI search bar -->
+    <div class="search-row" style="margin-top:4px">
+      <input id="smartQuery" class="search-input" placeholder="Now refine with AI: e.g. 'probate sales' or 'development potential near Birmingham'">
+      <button class="btn-main" id="mainBtn" onclick="handleSearch()">Browse</button>
     </div>
 
     <div class="filter-extras">
       <div class="example-prompts">
-        <span class="ex-label">Try:</span>
-        <button class="ex-btn" onclick="setQ('Properties under £150k needing heavy refurbishment')">Heavy refurb under £150k</button>
-        <button class="ex-btn" onclick="setQ('Freehold multi-unit blocks for title splitting')">Title split opportunities</button>
+        <span class="ex-label">Or ask AI:</span>
+        <button class="ex-btn" onclick="setQ('Properties needing heavy refurbishment')">Heavy refurb</button>
+        <button class="ex-btn" onclick="setQ('Freehold multi-unit blocks for title splitting')">Title splits</button>
         <button class="ex-btn" onclick="setQ('High yield investments over 8%')">High yield 8%+</button>
         <button class="ex-btn" onclick="setQ('Development land with planning')">Dev land</button>
+        <button class="ex-btn" onclick="setQ('Probate or executor sales')">Probate</button>
+        <button class="ex-btn" onclick="setQ('Best scoring deals')">Top picks</button>
       </div>
       <button class="adv-toggle" onclick="toggleAdvanced()">⚙️ Budget & deposit</button>
     </div>
@@ -458,6 +471,61 @@ footer .logo-f span{color:var(--green)}
 <script>
 const $=id=>document.getElementById(id);
 let LOTS=[], SMART_RESULTS=null;
+let ALL_LOTS=[], ALL_SOURCES=[], FILTERED_INDICES=[];
+
+// ═══════════════════════════════
+// LOAD ALL LOTS FOR FILTERING
+// ═══════════════════════════════
+async function loadAllLots(){
+  try{
+    const r=await fetch('/api/all-lots');
+    const d=await r.json();
+    ALL_LOTS=d.lots||[];
+    ALL_SOURCES=d.sources||[];
+    // Populate auction house filter
+    const houses=[...new Set(ALL_LOTS.map(l=>l._house))].sort();
+    $('fHouse').innerHTML='<option value="">All houses ('+houses.length+')</option>'+houses.map(h=>`<option value="${h}">${h}</option>`).join('');
+    applyFilters();
+  }catch(e){
+    console.log('Failed to load lots:',e);
+  }
+}
+
+function applyFilters(){
+  if(ALL_LOTS.length===0){
+    $('filterCount').style.display='none';
+    return;
+  }
+  const minP=+$('fMinPrice').value||0;
+  const maxP=+$('fMaxPrice').value||Infinity;
+  const beds=+$('fBeds').value||0;
+  const type=$('fType').value;
+  const sold=$('fSoldTop').value;
+  const ts=$('fTSTop').value;
+  const tenure=$('fTenure').value;
+  const house=$('fHouse').value;
+
+  FILTERED_INDICES=[];
+  let tsCount=0, houseCount=0, topPicks=0;
+
+  ALL_LOTS.forEach((l,i)=>{
+    if(l.price && l.price<minP) return;
+    if(l.price && maxP!==Infinity && l.price>maxP) return;
+    if(beds && (l.beds||0)<beds) return;
+    if(type && l.propType!==type) return;
+    if(sold==='hide' && (l.bullets||[]).some(b=>/SOLD|STC|WITHDRAWN/i.test(b))) return;
+    if(ts==='ts' && !l.titleSplit) return;
+    if(tenure && l.tenure!==tenure) return;
+    if(house && l._house!==house) return;
+    FILTERED_INDICES.push(i);
+    if(l.titleSplit) tsCount++;
+    if(l.propType==='house') houseCount++;
+    if((l.score||0)>=3) topPicks++;
+  });
+
+  $('filterCount').style.display='block';
+  $('filterCountText').innerHTML=`<strong style="color:var(--green);font-size:1.1rem">${FILTERED_INDICES.length.toLocaleString()}</strong> lots match your filters out of <strong>${ALL_LOTS.length.toLocaleString()}</strong> total · ${tsCount} title splits · ${topPicks} scored 3+`;
+}
 
 // ═══════════════════════════════
 // SMART DETECTION: URL or search query?
@@ -466,7 +534,26 @@ function isUrl(s){ return s.match(/^https?:\/\//) || s.match(/\.(co\.uk|com|org)
 
 function handleSearch(){
   const q = $('smartQuery').value.trim();
-  if(!q) return alert('Describe what you\'re looking for, or paste a catalogue URL');
+  if(!q){
+    // No AI query — just show the filtered lots directly
+    if(FILTERED_INDICES.length===0) return alert('No lots match your filters. Try adjusting them.');
+    LOTS=FILTERED_INDICES.map(i=>ALL_LOTS[i]);
+    SMART_RESULTS=null;
+    showResultsView();
+    $('resultsTitle').textContent=`${LOTS.length} lots matching your filters`;
+    $('viewToggle').style.display='none';
+    $('reportView').style.display='none';
+    $('cardsView').style.display='block';
+    buildLotFilters();
+    renderLots();
+    $('resultsPanel').style.display='block';
+    $('statsRow').innerHTML=`
+      <div class="stat-card"><div class="v g">${LOTS.length}</div><div class="l">Lots</div></div>
+      <div class="stat-card"><div class="v p">${LOTS.filter(l=>l.titleSplit).length}</div><div class="l">Title splits</div></div>
+      <div class="stat-card"><div class="v g">${LOTS.filter(l=>(l.score||0)>=3).length}</div><div class="l">Score 3+</div></div>
+      <div class="stat-card"><div class="v y">${[...new Set(LOTS.map(l=>l._house))].length}</div><div class="l">Catalogues</div></div>`;
+    return;
+  }
   if(isUrl(q)){
     runAnalysis(q);
   } else {
@@ -765,7 +852,7 @@ async function runSmartSearch(query) {
   // Show search animation
   $('progressPanel').style.display = 'block';
   $('progressPanel').innerHTML=`<div class="scan-animation">
-    <div class="scan-title">🔍 AI is searching all catalogues</div>
+    <div class="scan-title">🔍 AI is analysing ${FILTERED_INDICES.length < ALL_LOTS.length ? FILTERED_INDICES.length + ' filtered lots' : ALL_LOTS.length + ' lots'}</div>
     <div class="scan-steps">
       <div class="scan-step active" id="sq1"><span class="spinner"></span><span class="check">✓</span> Understanding query</div>
       <div class="scan-step waiting" id="sq2"><span class="spinner"></span><span class="check">✓</span> Searching cached lots</div>
@@ -791,7 +878,7 @@ async function runSmartSearch(query) {
     const resp = await fetch('/api/smart-search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, email: currentUser?.email })
+      body: JSON.stringify({ query, email: currentUser?.email, filteredIndices: FILTERED_INDICES.length > 0 && FILTERED_INDICES.length < ALL_LOTS.length ? FILTERED_INDICES : null })
     });
     const data = await resp.json();
     if (!resp.ok) {
@@ -1021,7 +1108,11 @@ function dl(c,n,t){const b=new Blob([c],{type:t}),a=document.createElement('a');
 
 // Init
 loadCalendar();
+loadAllLots();
 checkUser();
+$('smartQuery').addEventListener('input',()=>{
+  $('mainBtn').textContent=$('smartQuery').value.trim()?'AI Search':'Browse';
+});
 </script>
 </body>
 </html>

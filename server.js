@@ -797,8 +797,42 @@ app.post('/api/analyse', async (req, res) => {
 // ═══════════════════════════════════════════════════════════════
 // SMART SEARCH: Claude-powered filtering across cached analyses
 // ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// ALL LOTS — returns every cached lot for client-side filtering
+// ═══════════════════════════════════════════════════════════════
+app.get('/api/all-lots', async (req, res) => {
+  try {
+    const { data: cached } = await supabase
+      .from('cached_analyses')
+      .select('house, url, lots, total_lots')
+      .gt('expires_at', new Date().toISOString());
+
+    if (!cached || cached.length === 0) {
+      return res.json({ lots: [], sources: [], totalLots: 0 });
+    }
+
+    const allLots = [];
+    const sources = [];
+    for (const c of cached) {
+      if (c.lots && Array.isArray(c.lots)) {
+        sources.push({ house: c.house, url: c.url, count: c.lots.length });
+        for (const lot of c.lots) {
+          allLots.push({ ...lot, _house: c.house, _sourceUrl: c.url });
+        }
+      }
+    }
+
+    res.json({ lots: allLots, sources, totalLots: allLots.length });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// SMART SEARCH — AI-powered search across cached lots
+// ═══════════════════════════════════════════════════════════════
 app.post('/api/smart-search', async (req, res) => {
-  const { query, email } = req.body || {};
+  const { query, email, filteredIndices } = req.body || {};
   if (!query) return res.status(400).json({ error: 'Missing search query' });
   if (!email) return res.status(401).json({ error: 'signup_required' });
 
@@ -839,31 +873,51 @@ app.post('/api/smart-search', async (req, res) => {
       return res.json({ results: [], report: 'No lot data in cache. Please analyse auction catalogues first.', sources: [] });
     }
 
-    // Build a compact lot summary for Claude (to stay within context limits)
-    const lotSummaries = allLots.map((l, i) => 
-      `[${i}] ${l._house} L${l.lot}: ${l.address} | £${l.price || '?'} | Score:${l.score || 0} | ${l.titleSplit ? 'TITLE_SPLIT' : ''} | ${(l.bullets || []).join('; ').substring(0, 150)}`
+    // If client sent pre-filtered indices, only search those lots
+    let searchLots = allLots;
+    let indexMap = null; // maps position in searchLots back to position in allLots
+    if (Array.isArray(filteredIndices) && filteredIndices.length > 0) {
+      indexMap = filteredIndices.filter(i => i >= 0 && i < allLots.length);
+      searchLots = indexMap.map(i => allLots[i]);
+      console.log(`Smart search: pre-filtered to ${searchLots.length} of ${allLots.length} lots`);
+    }
+
+    // Build a compact lot summary for Claude
+    const lotSummaries = searchLots.map((l, i) => 
+      `[${i}] ${l._house} L${l.lot}: ${l.address} | £${l.price || '?'} | Type:${l.propType || '?'} | Beds:${l.beds || '?'} | Tenure:${l.tenure || '?'} | Condition:${l.condition || '?'} | Score:${l.score || 0} | Deal:${l.dealType || 'Standard'} | ${l.titleSplit ? 'TITLE_SPLIT' : ''} | ${l.vacant ? 'Vacant' : 'Tenanted'} | ${(l.opps || []).join(', ').substring(0, 80)} | ${(l.bullets || []).join('; ').substring(0, 120)}`
     ).join('\n');
 
     const client = new Anthropic({ apiKey });
     const msg = await client.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 4000,
-      messages: [{ role: 'user', content: `You are a UK property investment analyst. A user has searched across ${allLots.length} auction lots from ${sources.length} auction house catalogues.
+      messages: [{ role: 'user', content: `You are a UK property investment analyst helping an investor find auction lots matching their criteria.
 
-Their search query: "${query}"
+USER'S SEARCH: "${query}"
+${indexMap ? `\nNote: The user has already filtered by price/type/location using dropdown filters. The ${searchLots.length} lots below are the pre-filtered set. Your job is to apply the natural language query to further refine these results.\n` : ''}
+STEP 1 — INTERPRET THE QUERY
+Break the query down into specific, testable criteria. For example:
+- "detached houses near London" → property type must be house, description/address should mention "detached", location should be in London or the Home Counties (Essex, Kent, Surrey, Hertfordshire, Berkshire, Buckinghamshire, Middlesex, or London postcodes)
+- "title splits under £300k" → titleSplit must be true, price must be under 300000
+- "high yield BTL in the North" → look for tenanted or BTL-suitable properties with high yield indicators, in northern cities/counties
+- "refurb opportunities" → condition should be "needs work" or bullets mention renovation/modernisation/updating
+- "probate sales" → bullets mention executor, probate, estate of, personal representative
+- "best deals" or "top picks" → sort by score descending, return the highest-scoring lots
 
-Here are all available lots (index, house, lot number, address, price, score, title split status, key features):
+STEP 2 — SEARCH
+Apply your interpreted criteria against each lot below. Use the address and postcode to determine location. Use the Type, Beds, Tenure, Condition, Deal, bullets and opportunities fields to assess property characteristics. A lot matches if it satisfies ALL the core criteria from the query.
+
+STEP 3 — RANK
+Order matching lots by relevance — closest matches first. If a lot meets all criteria perfectly, rank it higher than one that's borderline.
+
+Available lots (${searchLots.length} lots${indexMap ? ' pre-filtered by user' : ` from ${sources.length} catalogues`}):
 
 ${lotSummaries.substring(0, 80000)}
-
-TASK:
-1. Identify the lots that best match the user's query. Return the indices of matching lots.
-2. Write a brief investment report (2-3 paragraphs) summarising what you found.
 
 Respond in this exact JSON format:
 {"indices":[0,5,12],"report":"Your report here..."}
 
-Only return lots that genuinely match the query. If nothing matches well, say so in the report and return an empty indices array.` }]
+The report should be 2-3 paragraphs: what you searched for, how many matches, any notable patterns or standout deals. If nothing matches, explain why and suggest what terms might work better.` }]
     });
 
     const responseText = msg.content[0]?.text || '';
@@ -890,8 +944,8 @@ Only return lots that genuinely match the query. If nothing matches well, say so
     }
 
     const matchingLots = (parsed.indices || [])
-      .filter(i => i >= 0 && i < allLots.length)
-      .map(i => allLots[i]);
+      .filter(i => i >= 0 && i < searchLots.length)
+      .map(i => searchLots[i]);
 
     return res.json({
       results: matchingLots,
