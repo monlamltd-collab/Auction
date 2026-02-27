@@ -547,6 +547,10 @@ app.post('/api/analyse', async (req, res) => {
       totalLots: cached.total_lots,
       titleSplits: cached.title_splits,
       topPicks: cached.top_picks,
+      under100k: cached.under_100k || 0,
+      avgYield: cached.avg_yield || null,
+      devPotential: cached.dev_potential || 0,
+      vacantCount: cached.vacant_count || 0,
       lots: cached.lots,
       cached: true,
     });
@@ -858,12 +862,18 @@ app.post('/api/analyse', async (req, res) => {
 
     // ── Cache results ──
     const expiresAt = new Date(Date.now() + CACHE_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    const lotsWithPrice = analysed.filter(l => l.price && l.price > 0);
+    const yieldsArr = analysed.map(l => l.estGrossYield).filter(y => y && y > 0);
     await supabase.from('cached_analyses').upsert({
       url: normalisedUrl,
       house,
       total_lots: analysed.length,
       title_splits: analysed.filter(l => l.titleSplit).length,
       top_picks: analysed.filter(l => l.score >= 3).length,
+      under_100k: lotsWithPrice.filter(l => l.price < 100000).length,
+      avg_yield: yieldsArr.length ? +(yieldsArr.reduce((a, b) => a + b, 0) / yieldsArr.length).toFixed(1) : null,
+      dev_potential: analysed.filter(l => (l.opps || []).some(o => /development|planning|conversion/i.test(o))).length,
+      vacant_count: analysed.filter(l => l.vacant === true).length,
       lots: analysed,
       created_at: new Date().toISOString(),
       expires_at: expiresAt,
@@ -879,6 +889,10 @@ app.post('/api/analyse', async (req, res) => {
       totalLots: analysed.length,
       titleSplits: analysed.filter(l => l.titleSplit).length,
       topPicks: analysed.filter(l => l.score >= 3).length,
+      under100k: lotsWithPrice.filter(l => l.price < 100000).length,
+      avgYield: yieldsArr.length ? +(yieldsArr.reduce((a, b) => a + b, 0) / yieldsArr.length).toFixed(1) : null,
+      devPotential: analysed.filter(l => (l.opps || []).some(o => /development|planning|conversion/i.test(o))).length,
+      vacantCount: analysed.filter(l => l.vacant === true).length,
       lots: analysed,
       cached: false,
     });
@@ -1006,7 +1020,7 @@ app.get('/api/cache-status', async (req, res) => {
   try {
     const { data: cached } = await supabase
       .from('cached_analyses')
-      .select('house, url, total_lots, title_splits, top_picks, created_at, expires_at')
+      .select('house, url, total_lots, title_splits, top_picks, under_100k, avg_yield, dev_potential, vacant_count, created_at, expires_at')
       .gt('expires_at', new Date().toISOString())
       .order('house');
 
@@ -3236,12 +3250,18 @@ async function autoAnalyseOne(url, apiKey) {
 
   const normalisedUrl = url.trim().replace(/\/+$/, '').toLowerCase();
   const expiresAt = new Date(Date.now() + CACHE_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const lotsWithPrice = lots.filter(l => l.price && l.price > 0);
+  const yieldsArr = lots.map(l => l.estGrossYield).filter(y => y && y > 0);
   await supabase.from('cached_analyses').upsert({
     url: normalisedUrl,
     house,
     total_lots: lots.length,
     title_splits: lots.filter(l => l.titleSplit).length,
     top_picks: lots.filter(l => l.score >= 3).length,
+    under_100k: lotsWithPrice.filter(l => l.price < 100000).length,
+    avg_yield: yieldsArr.length ? +(yieldsArr.reduce((a, b) => a + b, 0) / yieldsArr.length).toFixed(1) : null,
+    dev_potential: lots.filter(l => (l.opps || []).some(o => /development|planning|conversion/i.test(o))).length,
+    vacant_count: lots.filter(l => l.vacant === true).length,
     lots,
     created_at: new Date().toISOString(),
     expires_at: expiresAt,

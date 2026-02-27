@@ -734,7 +734,16 @@ function renderCalendar(){
     } else if(a.catalogueReady){
       actionBtn=`<button class="cal-btn primary" onclick="analyseFromCal('${a.url}')">Analyse</button>`;
     }
-    const lotsBadge=cached?`<span class="cal-lots-badge">${cached.title_splits} title splits · ${cached.top_picks} top picks</span>`:'';
+    const badgeParts = [];
+    if(cached) {
+      badgeParts.push(`${cached.title_splits} title splits`);
+      badgeParts.push(`${cached.top_picks} top picks`);
+      if(cached.under_100k > 0) badgeParts.push(`${cached.under_100k} under £100k`);
+      if(cached.avg_yield) badgeParts.push(`avg ${cached.avg_yield}% yield`);
+      if(cached.dev_potential > 0) badgeParts.push(`${cached.dev_potential} dev potential`);
+      if(cached.vacant_count > 0) badgeParts.push(`${cached.vacant_count} vacant`);
+    }
+    const lotsBadge=cached?`<span class="cal-lots-badge">${badgeParts.join(' · ')}</span>`:'';
     return`<div class="cal-card">
       <div class="cal-date"><div class="day">${day}</div><div class="mon">${mon}</div></div>
       <div class="cal-info">
@@ -901,7 +910,12 @@ async function runAnalysis(url){
     // Complete all steps
     for(let i=1;i<=5;i++){const s=$('ss'+i);if(s){s.classList.remove('active','waiting');s.classList.add('done')}}
     if($('scanCount'))$('scanCount').textContent=LOTS.length;
-    if($('scanLabel'))$('scanLabel').textContent=`lots scored · ${data.titleSplits} title splits · ${data.topPicks} top picks`;
+    const scanParts = [`lots scored`, `${data.titleSplits} title splits`, `${data.topPicks} top picks`];
+    if(data.under100k > 0) scanParts.push(`${data.under100k} under £100k`);
+    if(data.avgYield) scanParts.push(`avg ${data.avgYield}% yield`);
+    if(data.devPotential > 0) scanParts.push(`${data.devPotential} dev potential`);
+    if(data.vacantCount > 0) scanParts.push(`${data.vacantCount} vacant`);
+    if($('scanLabel'))$('scanLabel').textContent=scanParts.join(' · ');
 
     // Brief pause to let user see the final count
     await new Promise(r=>setTimeout(r,data.cached?500:1500));
