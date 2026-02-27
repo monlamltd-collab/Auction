@@ -77,7 +77,11 @@ app.post('/api/signup', async (req, res) => {
 // ═══════════════════════════════════════════════════════════════
 // API: AUCTION CALENDAR
 // ═══════════════════════════════════════════════════════════════
-app.get('/api/auctions', (req, res) => {
+// Cache for BM auto-detected auctions (refreshes every 6 hours)
+let bmAuctionsCache = { auctions: [], lastFetched: 0 };
+const BM_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
+
+app.get('/api/auctions', async (req, res) => {
   res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate');
 
   const auctions = [
@@ -230,13 +234,8 @@ app.get('/api/auctions', (req, res) => {
       catalogueReady: false,
     },
     // ── BARNARD MARCUS ──
-    {
-      house: 'Barnard Marcus', houseSlug: 'barnardmarcus', logo: '🏠',
-      date: '2026-03-10', title: '10 March 2026', lots: null,
-      url: 'https://www.barnardmarcusauctions.co.uk/auctions/current/',
-      location: 'Grand Connaught Rooms, London WC2B', type: 'Residential & Commercial', status: 'upcoming',
-      catalogueReady: true,
-    },
+    // ── BARNARD MARCUS (auto-detected from /auctions/upcoming/) ──
+    // Entries are merged dynamically below — no hardcoded entry needed
     // ── AUCTION HOUSE LONDON ──
     {
       house: 'Auction House London', houseSlug: 'auctionhouselondon', logo: '🔑',
@@ -351,6 +350,25 @@ app.get('/api/auctions', (req, res) => {
       catalogueReady: true,
     },
   ];
+
+  // Auto-detect Barnard Marcus auctions (cached for 6 hours)
+  try {
+    if (Date.now() - bmAuctionsCache.lastFetched > BM_CACHE_TTL) {
+      console.log('BM: Refreshing upcoming auctions cache...');
+      const bmAuctions = await detectBarnardMarcusAuctions();
+      if (bmAuctions.length > 0) {
+        bmAuctionsCache = { auctions: bmAuctions, lastFetched: Date.now() };
+        console.log(`BM: Cached ${bmAuctions.length} upcoming auctions`);
+      } else {
+        console.log('BM: No auctions detected, keeping previous cache');
+        bmAuctionsCache.lastFetched = Date.now(); // Don't retry immediately
+      }
+    }
+    auctions.push(...bmAuctionsCache.auctions);
+  } catch (err) {
+    console.error('BM auto-detect error:', err.message);
+    // Continue without BM auctions — non-fatal
+  }
 
   const now = new Date().toISOString().slice(0, 10);
   const upcoming = auctions
@@ -583,9 +601,22 @@ app.post('/api/analyse', async (req, res) => {
 
         } else {
           // ── Generic Puppeteer extraction with auto-pagination ──
-          console.log(`Puppeteer: loading ${scrapeUrl} for ${house}`);
-          await page.goto(scrapeUrl, { waitUntil: 'networkidle2', timeout: 45000 });
+          // Resolve Barnard Marcus URL if needed
+          let resolvedUrl = scrapeUrl;
+          if (rewritten.needsUrlResolve === 'barnardmarcus') {
+            resolvedUrl = await resolveBarnardMarcusUrl(browser, scrapeUrl);
+          }
+          console.log(`Puppeteer: loading ${resolvedUrl} for ${house}`);
+          await page.goto(resolvedUrl, { waitUntil: 'networkidle2', timeout: 45000 });
           await new Promise(r => setTimeout(r, 3000));
+
+          // Extra wait for Barnard Marcus dynamic lot rendering
+          if (house === 'barnardmarcus') {
+            await page.waitForSelector('a[href*="/auctions/"]', { timeout: 15000 }).catch(() => {
+              console.log('BM: Timed out waiting for lot cards — page may not have lots yet');
+            });
+            await new Promise(r => setTimeout(r, 3000));
+          }
 
           // Scroll to trigger lazy loading
           await page.evaluate(async () => {
@@ -1040,8 +1071,9 @@ function rewriteUrl(url, house) {
   }
 
   if (house === 'barnardmarcus') {
-    // Barnard Marcus: server-rendered but DOM extractor works better with Puppeteer
-    return { baseUrl: url, isApi: false, paginateAs: null, preferPuppeteer: true };
+    // Barnard Marcus: /auctions/current/ is just a landing page with no lots.
+    // We resolve it to the date-based URL (e.g. /auctions/10-march-2026/) at scrape time.
+    return { baseUrl: url, isApi: false, paginateAs: null, preferPuppeteer: true, needsUrlResolve: 'barnardmarcus' };
   }
 
   if (house === 'auctionhouselondon') {
@@ -1187,6 +1219,151 @@ async function getBrowser() {
     ],
   });
   return browserInstance;
+}
+
+/**
+ * Resolves Barnard Marcus /auctions/current/ to the actual date-based lot listing URL.
+ * e.g. /auctions/current/ → /auctions/10-march-2026/
+ * If already a date-slug URL, returns as-is.
+ */
+async function resolveBarnardMarcusUrl(browser, inputUrl) {
+  const dateSlugMatch = inputUrl.match(/\/auctions\/(\d{1,2}-[a-z]+-\d{4})\/?$/i);
+  if (dateSlugMatch) return inputUrl;
+
+  console.log('BM: Resolving current auction URL...');
+  let page;
+  try {
+    page = await browser.newPage();
+    await page.setUserAgent(HEADERS['User-Agent']);
+    await page.goto(inputUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
+
+    const dateText = await page.evaluate(() => {
+      const h1 = document.querySelector('h1');
+      return h1 ? h1.textContent.trim() : null;
+    });
+
+    if (!dateText) {
+      console.log('BM: Could not find h1 date element, falling back to input URL');
+      return inputUrl;
+    }
+
+    console.log(`BM: Found auction date: "${dateText}"`);
+
+    // Convert "10th March 2026" → "10-march-2026"
+    const slug = dateText
+      .toLowerCase()
+      .replace(/(\d+)(st|nd|rd|th)/g, '$1')
+      .replace(/\s+/g, '-')
+      .trim();
+
+    if (!slug.match(/^\d{1,2}-[a-z]+-\d{4}$/)) {
+      console.log(`BM: Date slug "${slug}" doesn't match expected format, falling back`);
+      return inputUrl;
+    }
+
+    const resolvedUrl = `https://www.barnardmarcusauctions.co.uk/auctions/${slug}/`;
+    console.log(`BM: Resolved to ${resolvedUrl}`);
+    return resolvedUrl;
+
+  } catch (err) {
+    console.error('BM: URL resolution failed:', err.message);
+    return inputUrl;
+  } finally {
+    if (page) await page.close().catch(() => {});
+  }
+}
+
+/**
+ * Auto-detects all upcoming Barnard Marcus auction dates from their /auctions/upcoming/ page.
+ * Returns an array of auction objects ready to merge into the calendar.
+ */
+async function detectBarnardMarcusAuctions() {
+  let browser, page;
+  try {
+    browser = await getBrowser();
+    page = await browser.newPage();
+    await page.setUserAgent(HEADERS['User-Agent']);
+    await page.goto('https://www.barnardmarcusauctions.co.uk/auctions/upcoming/', {
+      waitUntil: 'domcontentloaded', timeout: 15000
+    });
+
+    const auctions = await page.evaluate(() => {
+      const results = [];
+      const seen = new Set();
+
+      // Strategy 1: Find direct auction links /auctions/{date-slug}/
+      document.querySelectorAll('a[href*="/auctions/"]').forEach(a => {
+        const href = a.getAttribute('href') || '';
+        const m = href.match(/\/auctions\/(\d{1,2}-[a-z]+-\d{4})\/?$/i);
+        if (m && !seen.has(m[1])) {
+          seen.add(m[1]);
+          results.push({ slug: m[1], href });
+        }
+      });
+
+      // Strategy 2: Parse date blocks from the page text
+      // BM shows dates like "3rd Feb", "10th Mar", etc. with year from context
+      const text = document.body.innerText;
+      const datePattern = /(\d{1,2})(st|nd|rd|th)\s*(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/gi;
+      let match;
+      while ((match = datePattern.exec(text)) !== null) {
+        const day = match[1];
+        const monthShort = match[3];
+        const monthMap = { jan:'january', feb:'february', mar:'march', apr:'april', may:'may', jun:'june',
+          jul:'july', aug:'august', sep:'september', oct:'october', nov:'november', dec:'december' };
+        const monthFull = monthMap[monthShort.toLowerCase()];
+        if (!monthFull) continue;
+
+        // Determine year: assume current year, but if month is before current month, assume next year
+        const now = new Date();
+        const monthNum = new Date(Date.parse(monthShort + ' 1, 2000')).getMonth();
+        let year = now.getFullYear();
+        if (monthNum < now.getMonth()) year++;
+
+        const slug = `${day}-${monthFull}-${year}`;
+        if (!seen.has(slug)) {
+          seen.add(slug);
+          results.push({ slug, href: null });
+        }
+      }
+
+      return results;
+    });
+
+    // Convert to calendar entries
+    const monthMap = { january:0, february:1, march:2, april:3, may:4, june:5,
+      july:6, august:7, september:8, october:9, november:10, december:11 };
+
+    return auctions.map(a => {
+      const parts = a.slug.match(/^(\d{1,2})-([a-z]+)-(\d{4})$/);
+      if (!parts) return null;
+      const day = parseInt(parts[1]);
+      const monthIdx = monthMap[parts[2]];
+      const year = parseInt(parts[3]);
+      if (monthIdx === undefined) return null;
+      const date = new Date(year, monthIdx, day);
+      const isoDate = date.toISOString().split('T')[0]; // YYYY-MM-DD
+
+      return {
+        house: 'Barnard Marcus', houseSlug: 'barnardmarcus', logo: '🏠',
+        date: isoDate,
+        title: `${day} ${parts[2].charAt(0).toUpperCase() + parts[2].slice(1)} ${year}`,
+        lots: null,
+        url: 'https://www.barnardmarcusauctions.co.uk/auctions/current/',
+        location: 'Grand Connaught Rooms, London WC2B',
+        type: 'Residential & Commercial',
+        status: 'upcoming',
+        catalogueReady: true,
+        _autoDetected: true
+      };
+    }).filter(Boolean);
+
+  } catch (err) {
+    console.error('BM auto-detect failed:', err.message);
+    return [];
+  } finally {
+    if (page) await page.close().catch(() => {});
+  }
 }
 
 async function scrapeWithPuppeteer(url, house) {
@@ -1693,43 +1870,92 @@ const DOM_EXTRACTORS = {
   `,
 
   // ─── BARNARD MARCUS ────────────────────────────────────────
-  // barnardmarcusauctions.co.uk — Countrywide CMS, server-rendered
+  // barnardmarcusauctions.co.uk — Countrywide CMS, JS-rendered lots
+  // Lots are loaded dynamically. The resolver navigates to the correct date-based URL first.
   barnardmarcus: `
     (() => {
       const lots = [];
       const seen = new Set();
-      const headers = document.querySelectorAll('h2, h3, h4, h5');
-      for (const h of headers) {
-        const text = h.textContent.trim();
-        const lotMatch = text.match(/^\\s*(\\d{1,4})\\s*$/) || text.match(/Lot\\s+(\\d+)/i);
-        if (!lotMatch) continue;
-        const num = parseInt(lotMatch[1]);
-        if (seen.has(num)) continue;
-        seen.add(num);
-        const parent = h.closest('.lot, .property, div[class*="lot"], div, li, article') || h.parentElement;
-        if (!parent) continue;
-        let address = '', price = null, url = '';
-        const links = parent.querySelectorAll('a[href]');
-        for (const link of links) {
-          const lt = link.textContent.trim();
-          const href = link.getAttribute('href') || '';
-          if (lt.match(/[A-Z]{1,2}\\d[A-Z\\d]?\\s*\\d[A-Z]{2}/i) && !address) {
-            address = lt;
-            if (href && href !== '#') url = href;
-          }
-        }
-        const priceMatch = parent.textContent.match(/(?:Guide|Price|£)\\s*£?([\\d,]+(?:,\\d{3})*)/i);
-        if (priceMatch) price = parseInt(priceMatch[1].replace(/,/g, ''));
+      
+      // Method 1: Find lot detail links (most reliable for BM)
+      // Individual lots link to /auctions/{date}/{lot_id}/
+      const allLinks = document.querySelectorAll('a[href*="/auctions/"]');
+      for (const link of allLinks) {
+        const href = link.getAttribute('href') || '';
+        const lotIdMatch = href.match(/\\/auctions\\/[\\w-]+\\/(\\d{5,7})\\/?$/);
+        if (!lotIdMatch) continue;
+        
+        const container = link.closest('div, li, article, section') || link;
+        const text = container.textContent || '';
+        
+        // Extract lot number from text
+        const lotNumMatch = text.match(/(?:Lot|LOT)\\s*(\\d{1,4})/i) || text.match(/^\\s*(\\d{1,4})\\s/);
+        const lotNum = lotNumMatch ? parseInt(lotNumMatch[1]) : null;
+        if (!lotNum || seen.has(lotNum)) continue;
+        seen.add(lotNum);
+        
+        // Extract address - look for postcodes
+        const addrMatch = text.match(/[\\d\\w,\\s]+[A-Z]{1,2}\\d[A-Z\\d]?\\s*\\d[A-Z]{2}/i);
+        const address = addrMatch ? addrMatch[0].trim() : '';
+        
+        // Extract guide price
+        const priceMatch = text.match(/(?:guide\\s*(?:price)?|£)\\s*£?([\\d,]+(?:,\\d{3})*)/i);
+        const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
+        
+        // Gather features
         const bullets = [];
-        parent.querySelectorAll('li').forEach(li => {
-          const t = li.textContent.trim();
-          if (t.length > 5 && t.length < 200) bullets.push(t);
+        container.querySelectorAll('li, p, span').forEach(el => {
+          const t = el.textContent.trim();
+          if (t.length > 10 && t.length < 200 && !t.match(/cookie|login|register|password/i)) {
+            bullets.push(t);
+          }
         });
-        if (parent.textContent.match(/\\bSOLD\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) {
+        
+        if (text.match(/\\bSOLD\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) {
           if (!bullets.some(b => b.match(/SOLD|STC|WITHDRAWN/i))) bullets.push('SOLD/STC');
         }
-        if (address || price) lots.push({ lot: num, address, price, url, bullets });
+        
+        if (address || price) {
+          lots.push({ lot: lotNum, address, price, url: href, bullets: bullets.slice(0, 5) });
+        }
       }
+      
+      // Method 2: Fallback - scan headers (original approach)
+      if (lots.length === 0) {
+        const headers = document.querySelectorAll('h2, h3, h4, h5');
+        for (const h of headers) {
+          const text = h.textContent.trim();
+          const lotMatch = text.match(/^\\s*(\\d{1,4})\\s*$/) || text.match(/Lot\\s+(\\d+)/i);
+          if (!lotMatch) continue;
+          const num = parseInt(lotMatch[1]);
+          if (seen.has(num)) continue;
+          seen.add(num);
+          const parent = h.closest('.lot, .property, div[class*="lot"], div, li, article') || h.parentElement;
+          if (!parent) continue;
+          let address = '', price = null, url = '';
+          const links = parent.querySelectorAll('a[href]');
+          for (const lnk of links) {
+            const lt = lnk.textContent.trim();
+            const lhref = lnk.getAttribute('href') || '';
+            if (lt.match(/[A-Z]{1,2}\\d[A-Z\\d]?\\s*\\d[A-Z]{2}/i) && !address) {
+              address = lt;
+              if (lhref && lhref !== '#') url = lhref;
+            }
+          }
+          const pm = parent.textContent.match(/(?:Guide|Price|£)\\s*£?([\\d,]+(?:,\\d{3})*)/i);
+          if (pm) price = parseInt(pm[1].replace(/,/g, ''));
+          const bullets = [];
+          parent.querySelectorAll('li').forEach(li => {
+            const t = li.textContent.trim();
+            if (t.length > 5 && t.length < 200) bullets.push(t);
+          });
+          if (parent.textContent.match(/\\bSOLD\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) {
+            if (!bullets.some(b => b.match(/SOLD|STC|WITHDRAWN/i))) bullets.push('SOLD/STC');
+          }
+          if (address || price) lots.push({ lot: num, address, price, url, bullets });
+        }
+      }
+      
       return lots;
     })()
   `,
@@ -2733,8 +2959,21 @@ async function autoAnalyseOne(url, apiKey) {
 
       } else {
         // ── Generic auto-paginating Puppeteer extraction ──
-        await page.goto(scrapeUrl, { waitUntil: 'networkidle2', timeout: 45000 });
+        // Resolve Barnard Marcus URL if needed
+        let resolvedUrl = scrapeUrl;
+        if (rewritten.needsUrlResolve === 'barnardmarcus') {
+          resolvedUrl = await resolveBarnardMarcusUrl(browser, scrapeUrl);
+        }
+        await page.goto(resolvedUrl, { waitUntil: 'networkidle2', timeout: 45000 });
         await new Promise(r => setTimeout(r, 3000));
+
+        // Extra wait for Barnard Marcus dynamic lot rendering
+        if (house === 'barnardmarcus') {
+          await page.waitForSelector('a[href*="/auctions/"]', { timeout: 15000 }).catch(() => {
+            console.log('AUTO BM: Timed out waiting for lot cards');
+          });
+          await new Promise(r => setTimeout(r, 3000));
+        }
         await page.evaluate(async () => {
           for (let i = 0; i < 15; i++) { window.scrollBy(0, window.innerHeight); await new Promise(r => setTimeout(r, 500)); }
           window.scrollTo(0, 0);
