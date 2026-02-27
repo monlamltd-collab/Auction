@@ -885,7 +885,7 @@ async function runAnalysis(url){
     const resp=await fetch('/api/analyse',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({url,email:currentUser?.email,budget:{deposit:+($('dep')?.value||0),stdPct:+($('stdPct')?.value||25),tsPct:+($('tsPct')?.value||0)}})
+      body:JSON.stringify({url,email:currentUser?.email,budget:{deposit:+$('dep').value,stdPct:+$('stdPct').value,tsPct:+$('tsPct').value}})
     });
 
     const data=await resp.json();
