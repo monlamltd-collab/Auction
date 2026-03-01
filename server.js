@@ -1809,7 +1809,8 @@ Important:
 Return ONLY the JSON array:`;
 
   try {
-    const response = await client.messages.create({
+    // Use streaming to avoid SDK timeout on large PDF uploads
+    const stream = client.messages.stream({
       model: 'claude-sonnet-4-6',
       max_tokens: 32000,
       messages: [{
@@ -1822,7 +1823,8 @@ Return ONLY the JSON array:`;
           { type: 'text', text: prompt },
         ],
       }],
-    }, { timeout: 10 * 60 * 1000 }); // 10 min — large PDFs need upload + processing time
+    });
+    const response = await stream.finalMessage();
     const text = response.content.map(c => c.text || '').join('');
     if (response.stop_reason === 'max_tokens') {
       log.warn('pdf_truncated', { url, textLength: text.length });
