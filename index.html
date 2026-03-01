@@ -442,7 +442,7 @@ footer .logo-f span{color:var(--green)}
       <span class="oc-icon">🔗</span>
       <div class="oc-text">
         <strong>Analyse any auction catalogue</strong>
-        <span>Paste any UK auction house URL — we'll extract and AI-score every lot. Works with 30+ houses and auto-detects new ones.</span>
+        <span>Paste any UK auction house URL or PDF catalogue — we'll extract and AI-score every lot. Works with 30+ houses and auto-detects new ones.</span>
       </div>
       <div class="oc-input-row">
         <input id="ownUrl" class="search-input" placeholder="Paste any auction catalogue URL..." style="flex:1;margin:0">
@@ -645,7 +645,12 @@ function applyFilters(){
 // ═══════════════════════════════
 function isUrl(s){ return s.match(/^https?:\/\//) || s.match(/\.(co\.uk|com|org)\//i); }
 
+function isPdfUrl(url) {
+  return /\.pdf(\?|$|#)/i.test(url) || /content-type=application\/pdf/i.test(url);
+}
+
 function detectHouseFromUrl(url) {
+  if (isPdfUrl(url)) return { recognised: true, name: 'PDF catalogue', isPdf: true };
   const u = (url || '').toLowerCase();
   const houses = {
     'savills': 'Savills', 'allsop': 'Allsop', 'sdlauctions': 'SDL Auctions',
@@ -665,13 +670,13 @@ function detectHouseFromUrl(url) {
     'auctionhouse.co.uk': 'Auction House UK', 'pughauctions': 'SDL Auctions',
   };
   for (const [domain, name] of Object.entries(houses)) {
-    if (u.includes(domain)) return { recognised: true, name };
+    if (u.includes(domain)) return { recognised: true, name, isPdf: false };
   }
   try {
     const hostname = new URL(url).hostname.replace('www.', '');
     const name = hostname.split('.')[0].replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-    return { recognised: false, name };
-  } catch { return { recognised: false, name: 'this catalogue' }; }
+    return { recognised: false, name, isPdf: false };
+  } catch { return { recognised: false, name: 'this catalogue', isPdf: false }; }
 }
 
 function handleSearch(){
@@ -923,12 +928,16 @@ async function runAnalysis(url){
 
   // Show scanning animation with house detection
   const detected = detectHouseFromUrl(url);
-  const scanTitle = detected.recognised
-    ? `Scanning ${detected.name}`
-    : `Scanning new auction house`;
-  const step1Label = detected.recognised
-    ? `Recognised: ${detected.name}`
-    : `Auto-detecting catalogue structure`;
+  const scanTitle = detected.isPdf
+    ? `Reading PDF catalogue`
+    : detected.recognised
+      ? `Scanning ${detected.name}`
+      : `Scanning new auction house`;
+  const step1Label = detected.isPdf
+    ? `PDF detected — sending to AI`
+    : detected.recognised
+      ? `Recognised: ${detected.name}`
+      : `Auto-detecting catalogue structure`;
 
   $('progressPanel').style.display='block';
   $('progressPanel').innerHTML=`<div class="scan-animation">

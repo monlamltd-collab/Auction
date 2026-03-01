@@ -782,7 +782,11 @@ app.post('/api/analyse', async (req, res) => {
     const client = new Anthropic({ apiKey });
     let rawLots = [];
 
-    if (rewritten.paginateAs === 'allsop_api') {
+    // ── PDF catalogues — send directly to Claude ──
+    if (isPdfUrl(url)) {
+      log.info('pdf_detected', { url, house });
+      rawLots = await extractLotsFromPdf(client, url);
+    } else if (rewritten.paginateAs === 'allsop_api') {
       // Allsop API: paginate through JSON endpoint
       pages = await scrapeAllsopApi(rewritten.baseUrl);
       if (pages.length > 0) {
@@ -1744,6 +1748,106 @@ Return ONLY the JSON array:`;
       console.error(`Claude extraction failed for batch starting at page ${batch[0].page}:`, err.message);
     }
   }
+  return allLots;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PDF EXTRACTION — Send PDF directly to Claude for lot extraction
+// ═══════════════════════════════════════════════════════════════
+function isPdfUrl(url) {
+  return /\.pdf(\?|$|#)/i.test(url) || /content-type=application\/pdf/i.test(url);
+}
+
+async function extractLotsFromPdf(client, url) {
+  log.info('pdf_download', { url });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 60000);
+  let pdfBuffer;
+  try {
+    const resp = await fetch(url, { headers: HEADERS, signal: controller.signal });
+    clearTimeout(timeout);
+    if (!resp.ok) throw new Error(`PDF download failed: HTTP ${resp.status}`);
+    pdfBuffer = Buffer.from(await resp.arrayBuffer());
+  } catch (e) {
+    clearTimeout(timeout);
+    throw new Error(`Couldn't download PDF: ${e.message}`);
+  }
+
+  const pdfBase64 = pdfBuffer.toString('base64');
+  const sizeMB = (pdfBuffer.length / 1024 / 1024).toFixed(1);
+  log.info('pdf_loaded', { sizeMB, bytes: pdfBuffer.length });
+
+  // Claude supports PDFs up to 32MB
+  if (pdfBuffer.length > 32 * 1024 * 1024) {
+    throw new Error('PDF is too large (over 32MB). Try a smaller catalogue.');
+  }
+
+  const allLots = [];
+  const seenLots = new Set();
+
+  // Send full PDF to Claude — it can read the document natively
+  const prompt = `You are extracting property auction lot data from a UK auction house catalogue PDF.
+
+Extract EVERY auction lot you find in this PDF document.
+
+For each lot, return a JSON object with these fields:
+- lot: number (the lot number)
+- address: string (full address including postcode)
+- price: number or null (guide price in pounds, null if TBA/not stated)
+- url: string (empty string — PDFs don't have lot URLs)
+- bullets: array of strings (key features/description points - tenure, bedrooms, condition, sq ft, special circumstances etc)
+
+Return ONLY a JSON array of lot objects, no other text.
+
+Important:
+- Extract the COMPLETE address including postcode
+- Guide prices may be shown as "Guide Price £X" or "Guide £X" or just "£X"
+- Bullet points include things like: property type, bedrooms, tenure (freehold/leasehold), condition, sq ft, vacant/tenanted, executor sale, development potential, completion terms
+- Include ALL lots, even commercial ones or land
+- Do NOT include terms & conditions, legal text, or non-lot pages
+
+Return ONLY the JSON array:`;
+
+  try {
+    const response = await client.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 32000,
+      messages: [{
+        role: 'user',
+        content: [
+          {
+            type: 'document',
+            source: { type: 'base64', media_type: 'application/pdf', data: pdfBase64 },
+          },
+          { type: 'text', text: prompt },
+        ],
+      }],
+    });
+    const text = response.content.map(c => c.text || '').join('');
+    if (response.stop_reason === 'max_tokens') {
+      log.warn('pdf_truncated', { url, textLength: text.length });
+    }
+    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    if (jsonMatch) {
+      const lots = JSON.parse(jsonMatch[0]);
+      for (const lot of lots) {
+        if (lot.lot && !seenLots.has(lot.lot)) {
+          seenLots.add(lot.lot);
+          allLots.push({
+            lot: lot.lot, address: lot.address || '',
+            price: lot.price || null,
+            priceText: lot.price ? `£${lot.price.toLocaleString()}` : 'TBA',
+            url: '', bullets: lot.bullets || [],
+          });
+        }
+      }
+    }
+    log.info('pdf_extracted', { lots: allLots.length, inputTokens: response.usage?.input_tokens, outputTokens: response.usage?.output_tokens });
+  } catch (err) {
+    log.error('pdf_extraction_failed', { error: err.message });
+    throw new Error(`PDF extraction failed: ${err.message}`);
+  }
+
   return allLots;
 }
 
