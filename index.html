@@ -1034,7 +1034,7 @@ async function runSmartSearch(query) {
   // Show search animation
   $('progressPanel').style.display = 'block';
   $('progressPanel').innerHTML=`<div class="scan-animation">
-    <div class="scan-title">🔍 AI is analysing ${FILTERED_INDICES.length < ALL_LOTS.length ? FILTERED_INDICES.length + ' filtered lots' : ALL_LOTS.length + ' lots'}</div>
+    <div class="scan-title">🔍 AI is searching ${ALL_LOTS.length > 0 ? (FILTERED_INDICES.length < ALL_LOTS.length ? FILTERED_INDICES.length + ' filtered lots' : ALL_LOTS.length + ' lots') : 'all cached catalogues'}</div>
     <div class="scan-steps">
       <div class="scan-step active" id="sq1"><span class="spinner"></span><span class="check">✓</span> Understanding query</div>
       <div class="scan-step waiting" id="sq2"><span class="spinner"></span><span class="check">✓</span> Searching cached lots</div>
@@ -1134,7 +1134,7 @@ function renderLots(){
   if(maxP) lots=lots.filter(l=>!l.price||l.price<=maxP);
   if(minBeds) lots=lots.filter(l=>!l.beds||l.beds>=minBeds);
 
-  const ft=$('fType').value,fd=$('fDeal').value,fb=$('fBudget').value,fts=$('fTS')?.value||$('fTSTop').value,fsold=$('fSold')?.value||$('fSoldTop').value,fs=$('fSearch').value.toLowerCase();
+  const ft=$('fType').value,fd=$('fDeal').value,fb=$('fBudget').value,fts=$('fTS')?.value||$('fTSTop')?.value||'',fsold=$('fSold')?.value||$('fSoldTop')?.value||'',fs=$('fSearch').value.toLowerCase();
   if(ft)lots=lots.filter(l=>l.propType===ft);
   if(fd)lots=lots.filter(l=>l.dealType===fd);
   if(fb==='budget'&&b.sm>0)lots=lots.filter(l=>{if(!l.price)return true;return l.price<=b.sm});
