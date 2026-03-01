@@ -75,12 +75,28 @@ app.post('/api/signup', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
+// AUTH HELPER: validate email is a registered user
+// ═══════════════════════════════════════════════════════════════
+async function validateUser(email) {
+  if (!email || !email.includes('@')) return null;
+  try {
+    const { data } = await supabase
+      .from('users')
+      .select('id, email, name')
+      .eq('email', email.toLowerCase().trim())
+      .single();
+    return data || null;
+  } catch {
+    return null;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
 // API: AUCTION CALENDAR
 // ═══════════════════════════════════════════════════════════════
-app.get('/api/auctions', (req, res) => {
-  res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate');
 
-  const auctions = [
+// Hardcoded fallback calendar — used when Supabase auction_calendar table is empty
+const FALLBACK_CALENDAR = [
     // ── SAVILLS ──
     {
       house: 'Savills', houseSlug: 'savills', logo: '🏛️',
@@ -485,14 +501,123 @@ app.get('/api/auctions', (req, res) => {
       location: 'Yorkshire', type: 'Residential', status: 'upcoming',
       catalogueReady: true,
     },
-  ];
+];
 
+async function getAuctionCalendar() {
+  // Try Supabase first
+  try {
+    const now = new Date().toISOString().slice(0, 10);
+    const { data, error } = await supabase
+      .from('auction_calendar')
+      .select('*')
+      .gte('date', now)
+      .order('date', { ascending: true });
+
+    if (!error && data && data.length > 0) {
+      return data.map(row => ({
+        house: row.house,
+        houseSlug: row.house_slug,
+        logo: row.logo,
+        date: row.date,
+        dateEnd: row.date_end || undefined,
+        title: row.title,
+        lots: row.lots,
+        url: row.url,
+        location: row.location,
+        type: row.type,
+        status: row.status,
+        catalogueReady: row.catalogue_ready,
+      }));
+    }
+  } catch (e) {
+    console.warn('Calendar DB read failed, using fallback:', e.message);
+  }
+
+  // Fallback to hardcoded
   const now = new Date().toISOString().slice(0, 10);
-  const upcoming = auctions
+  return FALLBACK_CALENDAR
     .filter(a => a.date >= now || a.status === 'upcoming')
     .sort((a, b) => a.date.localeCompare(b.date));
+}
 
-  res.json({ updated: new Date().toISOString(), count: upcoming.length, auctions: upcoming });
+app.get('/api/auctions', async (req, res) => {
+  res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate');
+  try {
+    const auctions = await getAuctionCalendar();
+    res.json({ updated: new Date().toISOString(), count: auctions.length, auctions });
+  } catch (e) {
+    console.error('Calendar endpoint error:', e.message);
+    res.status(500).json({ error: 'Failed to load auction calendar' });
+  }
+});
+
+// Admin: seed the Supabase calendar from hardcoded data
+app.post('/api/admin/seed-calendar', async (req, res) => {
+  const { secret } = req.body || {};
+  if (!process.env.ADMIN_SECRET || secret !== process.env.ADMIN_SECRET) {
+    return res.status(403).json({ error: 'Invalid admin secret' });
+  }
+  try {
+    const rows = FALLBACK_CALENDAR.map(a => ({
+      house: a.house, house_slug: a.houseSlug, logo: a.logo,
+      date: a.date, date_end: a.dateEnd || null, title: a.title,
+      lots: a.lots || null, url: a.url, location: a.location,
+      type: a.type, status: a.status, catalogue_ready: a.catalogueReady,
+    }));
+    const { data, error } = await supabase.from('auction_calendar').upsert(rows, { onConflict: 'url,date' });
+    if (error) throw error;
+    res.json({ message: `Seeded ${rows.length} auction entries`, count: rows.length });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Admin: add/update a single auction
+app.post('/api/admin/calendar', async (req, res) => {
+  const { secret, auction } = req.body || {};
+  if (!process.env.ADMIN_SECRET || secret !== process.env.ADMIN_SECRET) {
+    return res.status(403).json({ error: 'Invalid admin secret' });
+  }
+  if (!auction || !auction.house || !auction.date || !auction.url) {
+    return res.status(400).json({ error: 'Missing required fields: house, date, url' });
+  }
+  try {
+    const row = {
+      house: auction.house,
+      house_slug: auction.houseSlug || auction.house.toLowerCase().replace(/[^a-z0-9]/g, ''),
+      logo: auction.logo || '🔨',
+      date: auction.date,
+      date_end: auction.dateEnd || null,
+      title: auction.title || auction.date,
+      lots: auction.lots || null,
+      url: auction.url,
+      location: auction.location || 'Online',
+      type: auction.type || 'Residential & Commercial',
+      status: auction.status || 'upcoming',
+      catalogue_ready: auction.catalogueReady !== undefined ? auction.catalogueReady : false,
+      updated_at: new Date().toISOString(),
+    };
+    const { data, error } = await supabase.from('auction_calendar').upsert(row, { onConflict: 'url,date' });
+    if (error) throw error;
+    res.json({ message: 'Auction saved', auction: row });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Admin: delete an auction by ID
+app.delete('/api/admin/calendar/:id', async (req, res) => {
+  const { secret } = req.body || {};
+  if (!process.env.ADMIN_SECRET || secret !== process.env.ADMIN_SECRET) {
+    return res.status(403).json({ error: 'Invalid admin secret' });
+  }
+  try {
+    const { error } = await supabase.from('auction_calendar').delete().eq('id', req.params.id);
+    if (error) throw error;
+    res.json({ message: 'Auction deleted' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -1051,7 +1176,7 @@ app.get('/api/cache-status', async (req, res) => {
 
 app.post('/api/refresh-cache', async (req, res) => {
   const { secret } = req.body || {};
-  if (secret !== process.env.ADMIN_SECRET && secret !== 'bridgematch2026') {
+  if (!process.env.ADMIN_SECRET || secret !== process.env.ADMIN_SECRET) {
     return res.status(403).json({ error: 'Invalid admin secret' });
   }
   res.json({ message: 'Auto-analysis triggered. Check server logs for progress.' });
@@ -3018,14 +3143,28 @@ app.listen(PORT, () => {
 // ═══════════════════════════════════════════════════════════════
 // AUTO-ANALYSIS: Pre-analyse all catalogue-ready auctions
 // ═══════════════════════════════════════════════════════════════
+let _autoAnalysisRunning = false;
+
 async function autoAnalyseAll() {
+  if (_autoAnalysisRunning) {
+    console.log('AUTO: Analysis already running, skipping this invocation');
+    return { skipped: true, reason: 'already_running' };
+  }
+  _autoAnalysisRunning = true;
+  try {
+    return await _doAutoAnalyseAll();
+  } finally {
+    _autoAnalysisRunning = false;
+  }
+}
+
+async function _doAutoAnalyseAll() {
   console.log('\n═══ AUTO-ANALYSIS: checking all catalogue-ready auctions ═══');
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) { console.log('AUTO: No API key, skipping'); return; }
 
   // Get all catalogue-ready auctions from the calendar
-  const allAuctions = getCalendarAuctions();
-  const ready = allAuctions.filter(a => a.catalogueReady);
+  const ready = await getCalendarAuctions();
   console.log(`AUTO: ${ready.length} catalogue-ready auctions to check`);
 
   let analysed = 0, skipped = 0, failed = 0;
@@ -3276,45 +3415,30 @@ async function autoAnalyseOne(url, apiKey) {
   console.log(`AUTO: ✓ ${house}: ${lots.length} lots cached (${lots.filter(l => l.titleSplit).length} title splits, ${lots.filter(l => l.score >= 3).length} top picks)`);
 }
 
-// Helper: get calendar auctions array (used by both /api/auctions and auto-analyse)
-function getCalendarAuctions() {
-  const auctions = [
-    { house: 'Savills', url: 'https://auctions.savills.co.uk/auctions/24--25-february-2026-218', catalogueReady: true },
-    { house: 'Allsop', url: 'https://www.allsop.co.uk/residential-auction-view', catalogueReady: true },
-    { house: 'Allsop', url: 'https://www.allsop.co.uk/commercial-auction-view', catalogueReady: true },
-    { house: 'Network Auctions', url: 'https://www.networkauctions.co.uk/auctions/next-auction/', catalogueReady: true },
-    { house: 'SDL Auctions', url: 'https://www.sdlauctions.co.uk/auction/1310/multi-lot-timed-auction-2026-02-24/', catalogueReady: true },
-    { house: 'SDL Auctions', url: 'https://www.sdlauctions.co.uk/auction/1292/live-streamed-auction-2026-02-26/', catalogueReady: true },
-    { house: 'SDL Auctions', url: 'https://www.sdlauctions.co.uk/auction/1311/multi-lot-timed-auction-2026-03-24/', catalogueReady: true },
-    { house: 'SDL Auctions', url: 'https://www.sdlauctions.co.uk/auction/1297/live-streamed-auction-2026-03-26/', catalogueReady: true },
-    { house: 'SDL Auctions', url: 'https://www.sdlauctions.co.uk/auction/1312/multi-lot-timed-auction-2026-04-28/', catalogueReady: true },
-    { house: 'SDL Auctions', url: 'https://www.sdlauctions.co.uk/auction/1298/live-streamed-auction-2026-04-30/', catalogueReady: true },
-    { house: 'Bond Wolfe', url: 'https://www.bondwolfe.com/auction/3448/', catalogueReady: true },
-    { house: 'Barnard Marcus', url: 'https://www.barnardmarcusauctions.co.uk/auctions/current/', catalogueReady: true },
-    { house: 'Auction House London', url: 'https://auctionhouselondon.co.uk/current-auction', catalogueReady: true },
-    { house: 'Auction House London', url: 'https://auctionhouselondon.co.uk/auction/march-18-19-2026', catalogueReady: true },
-    { house: 'Clive Emson', url: 'https://www.cliveemson.co.uk/search/', catalogueReady: true },
-    { house: 'Strettons', url: 'https://www.strettons.co.uk/auctions/current-catalogue/', catalogueReady: true },
-    { house: 'Acuitus', url: 'https://www.acuitus.co.uk/find-a-property/', catalogueReady: true },
-    { house: 'Hollis Morgan', url: 'https://www.hollismorgan.co.uk/search-auction/?bid=11&showstc=on&orderby=lot_no+asc', catalogueReady: true },
-    { house: 'Maggs & Allen', url: 'https://www.maggsandallen.co.uk/search-auction/', catalogueReady: true },
-    { house: 'McHugh & Co', url: 'https://www.mchughandco.com/pages/auctions', catalogueReady: true },
-    { house: 'Auction House UK', url: 'https://www.auctionhouse.co.uk/online/auction/2026/3/10', catalogueReady: true },
-    { house: 'Knight Frank', url: 'https://www.knightfrankauctions.com/forthcoming-auctions/', catalogueReady: true },
-    { house: 'Pattinson', url: 'https://www.pattinson.co.uk/auction/property-search', catalogueReady: true },
-    { house: 'BidX1', url: 'https://bidx1.com/en/united-kingdom', catalogueReady: true },
-    { house: 'Phillip Arnold', url: 'https://www.philliparnoldauctions.co.uk/current-lots', catalogueReady: false },
-    { house: 'Edward Mellor', url: 'https://www.edwardmellor.co.uk/auctions/04mar2026', catalogueReady: true },
-    { house: 'Paul Fosh', url: 'https://www.paulfosh.com/auction-lots/', catalogueReady: true },
-    { house: 'Cottons', url: 'https://www.cottons.co.uk/current-auction/', catalogueReady: true },
-    { house: 'Dedman Gray', url: 'https://www.dedmangray.co.uk/auction/', catalogueReady: false },
-    { house: 'Barnett Ross', url: 'https://www.barnettross.co.uk/current.php', catalogueReady: false },
-    { house: 'Bradley Hall', url: 'https://auction.bradleyhall.co.uk/search', catalogueReady: true },
-    { house: 'Connect UK', url: 'https://realtime.connectukauctions.co.uk/for-sale/', catalogueReady: true },
-    { house: 'Auction Estates', url: 'https://www.auctionestates.co.uk/view-properties', catalogueReady: true },
-    { house: 'Landwood', url: 'https://www.landwoodpropertyauctions.com/Auction', catalogueReady: true },
-    { house: 'Loveitts', url: 'https://www.loveitts.co.uk/auctions', catalogueReady: true },
-    { house: 'Hunters', url: 'https://www.hunters.com/auction-search', catalogueReady: true },
-  ];
-  return auctions.filter(a => a.catalogueReady);
+// Helper: get catalogue-ready auctions (used by auto-analyse)
+async function getCalendarAuctions() {
+  // Try Supabase first
+  try {
+    const { data, error } = await supabase
+      .from('auction_calendar')
+      .select('house, url, catalogue_ready')
+      .eq('catalogue_ready', true);
+
+    if (!error && data && data.length > 0) {
+      return data.map(row => ({
+        house: row.house,
+        url: row.url,
+        catalogueReady: row.catalogue_ready,
+      }));
+    }
+  } catch (e) {
+    console.warn('Calendar DB read failed in getCalendarAuctions, using fallback:', e.message);
+  }
+
+  // Fallback to hardcoded
+  return FALLBACK_CALENDAR.filter(a => a.catalogueReady).map(a => ({
+    house: a.house,
+    url: a.url,
+    catalogueReady: a.catalogueReady,
+  }));
 }
