@@ -50,6 +50,30 @@ const supabase = createClient(
 );
 
 // ═══════════════════════════════════════════════════════════════
+// STRUCTURED LOGGING
+// ═══════════════════════════════════════════════════════════════
+function log(level, message, meta = {}) {
+  const entry = { ts: new Date().toISOString(), level, msg: message, ...meta };
+  const line = JSON.stringify(entry);
+  if (level === 'error') console.error(line);
+  else if (level === 'warn') console.warn(line);
+  else console.log(line);
+}
+log.info = (msg, meta) => log('info', msg, meta);
+log.warn = (msg, meta) => log('warn', msg, meta);
+log.error = (msg, meta) => log('error', msg, meta);
+
+// Request logging middleware
+app.use((req, res, next) => {
+  if (req.path === '/health') return next();
+  const start = Date.now();
+  res.on('finish', () => {
+    log.info('request', { method: req.method, path: req.path, status: res.statusCode, ms: Date.now() - start, ip: getClientIP(req) });
+  });
+  next();
+});
+
+// ═══════════════════════════════════════════════════════════════
 // CONFIG
 // ═══════════════════════════════════════════════════════════════
 const RATE_LIMIT = 5;
@@ -3195,10 +3219,10 @@ if (process.env.SENTRY_DSN) {
 }
 
 app.listen(PORT, () => {
-  console.log(`Bridgematch running on port ${PORT}`);
-  if (!process.env.SUPABASE_URL) console.warn('⚠️  SUPABASE_URL not set');
-  if (!process.env.SUPABASE_SERVICE_KEY) console.warn('⚠️  SUPABASE_SERVICE_KEY not set');
-  if (!process.env.ANTHROPIC_API_KEY) console.warn('⚠️  ANTHROPIC_API_KEY not set');
+  log.info('server_start', { port: PORT });
+  if (!process.env.SUPABASE_URL) log.warn('missing_env', { var: 'SUPABASE_URL' });
+  if (!process.env.SUPABASE_SERVICE_KEY) log.warn('missing_env', { var: 'SUPABASE_SERVICE_KEY' });
+  if (!process.env.ANTHROPIC_API_KEY) log.warn('missing_env', { var: 'ANTHROPIC_API_KEY' });
 
   // ── Auto-analyse all catalogue-ready auctions ──
   // Run 30s after startup (let everything initialise), then every 6 hours
