@@ -306,6 +306,7 @@ footer .logo-f span{color:var(--green)}
 @keyframes spin{to{transform:rotate(360deg)}}
 .scan-count{font-family:'JetBrains Mono',monospace;font-size:2rem;font-weight:700;color:var(--green);animation:scanPulse 1.5s ease infinite}
 .scan-label{font-size:.78rem;color:rgba(255,255,255,.5);margin-top:4px}
+.auto-detect-notice{font-size:.75rem;color:var(--text3);padding:4px 10px;background:rgba(244,196,48,.12);border:1px solid rgba(244,196,48,.25);border-radius:8px;margin-top:8px;display:inline-block}
 
 /* ── CACHED CALENDAR BUTTON ── */
 .cal-btn.cached{background:var(--green-light);color:var(--green);border:1px solid var(--green)}
@@ -440,11 +441,11 @@ footer .logo-f span{color:var(--green)}
     <div class="oc-inner">
       <span class="oc-icon">🔗</span>
       <div class="oc-text">
-        <strong>Got a catalogue from another auction house?</strong>
-        <span>Paste the URL below and we'll AI-score every lot for you — free.</span>
+        <strong>Analyse any auction catalogue</strong>
+        <span>Paste any UK auction house URL — we'll extract and AI-score every lot. Works with 30+ houses and auto-detects new ones.</span>
       </div>
       <div class="oc-input-row">
-        <input id="ownUrl" class="search-input" placeholder="Paste auction catalogue URL here..." style="flex:1;margin:0">
+        <input id="ownUrl" class="search-input" placeholder="Paste any auction catalogue URL..." style="flex:1;margin:0">
         <button class="btn-main" onclick="runAnalysis($('ownUrl').value.trim())">Analyse</button>
       </div>
     </div>
@@ -643,6 +644,35 @@ function applyFilters(){
 // SMART DETECTION: URL or search query?
 // ═══════════════════════════════
 function isUrl(s){ return s.match(/^https?:\/\//) || s.match(/\.(co\.uk|com|org)\//i); }
+
+function detectHouseFromUrl(url) {
+  const u = (url || '').toLowerCase();
+  const houses = {
+    'savills': 'Savills', 'allsop': 'Allsop', 'sdlauctions': 'SDL Auctions',
+    'btgeddisonspropertyauctions': 'SDL Auctions', 'btgeddisons': 'SDL Auctions',
+    'networkauctions': 'Network Auctions', 'bondwolfe': 'Bond Wolfe',
+    'barnardmarcusauctions': 'Barnard Marcus', 'auctionhouselondon': 'Auction House London',
+    'cliveemson': 'Clive Emson', 'strettons': 'Strettons', 'acuitus': 'Acuitus',
+    'hollismorgan': 'Hollis Morgan', 'maggsandallen': 'Maggs & Allen',
+    'mchughandco': 'McHugh & Co', 'knightfrankauctions': 'Knight Frank',
+    'pattinson.co.uk': 'Pattinson', 'bidx1.com': 'BidX1',
+    'philliparnoldauctions': 'Phillip Arnold', 'edwardmellor': 'Edward Mellor',
+    'paulfosh': 'Paul Fosh', 'cottons.co.uk': 'Cottons',
+    'dedmangray': 'Dedman Gray', 'barnettross': 'Barnett Ross',
+    'bradleyhall': 'Bradley Hall', 'connectukauctions': 'Connect UK',
+    'auctionestates': 'Auction Estates', 'landwoodpropertyauctions': 'Landwood',
+    'loveitts': 'Loveitts', 'hunters.com': 'Hunters',
+    'auctionhouse.co.uk': 'Auction House UK', 'pughauctions': 'SDL Auctions',
+  };
+  for (const [domain, name] of Object.entries(houses)) {
+    if (u.includes(domain)) return { recognised: true, name };
+  }
+  try {
+    const hostname = new URL(url).hostname.replace('www.', '');
+    const name = hostname.split('.')[0].replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    return { recognised: false, name };
+  } catch { return { recognised: false, name: 'this catalogue' }; }
+}
 
 function handleSearch(){
   const q = $('smartQuery').value.trim();
@@ -891,12 +921,20 @@ async function runAnalysis(url){
   SMART_RESULTS=null;
   showResultsView();
 
-  // Show scanning animation
+  // Show scanning animation with house detection
+  const detected = detectHouseFromUrl(url);
+  const scanTitle = detected.recognised
+    ? `Scanning ${detected.name}`
+    : `Scanning new auction house`;
+  const step1Label = detected.recognised
+    ? `Recognised: ${detected.name}`
+    : `Auto-detecting catalogue structure`;
+
   $('progressPanel').style.display='block';
   $('progressPanel').innerHTML=`<div class="scan-animation">
-    <div class="scan-title">🧠 AI is scanning this catalogue</div>
+    <div class="scan-title">${scanTitle}</div>
     <div class="scan-steps">
-      <div class="scan-step active" id="ss1"><span class="spinner"></span><span class="check">✓</span> Loading catalogue</div>
+      <div class="scan-step active" id="ss1"><span class="spinner"></span><span class="check">✓</span> ${step1Label}</div>
       <div class="scan-step waiting" id="ss2"><span class="spinner"></span><span class="check">✓</span> Extracting lots</div>
       <div class="scan-step waiting" id="ss3"><span class="spinner"></span><span class="check">✓</span> Scoring deals</div>
       <div class="scan-step waiting" id="ss4"><span class="spinner"></span><span class="check">✓</span> Land Registry check</div>
@@ -949,6 +987,15 @@ async function runAnalysis(url){
 
     $('progressPanel').style.display='none';
     $('resultsTitle').textContent = `${data.house || 'Auction'} — ${LOTS.length} lots`;
+    // Show notice for auto-detected houses
+    const existingNotice = document.querySelector('.auto-detect-notice');
+    if (existingNotice) existingNotice.remove();
+    if (data.recognised === false && LOTS.length > 0) {
+      const notice = document.createElement('div');
+      notice.className = 'auto-detect-notice';
+      notice.textContent = 'New house auto-detected — results may vary for unfamiliar sites';
+      $('resultsTitle').parentNode.insertBefore(notice, $('resultsTitle').nextSibling);
+    }
     $('viewToggle').style.display='none';
     $('reportView').style.display='none';
     $('cardsView').style.display='block';

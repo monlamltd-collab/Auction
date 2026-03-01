@@ -721,8 +721,11 @@ app.post('/api/analyse', async (req, res) => {
 
   if (cached) {
     console.log(`Cache hit for ${normalisedUrl}`);
+    const cachedSlug = Object.entries(HOUSE_DISPLAY_NAMES).find(([k, v]) => v === cached.house)?.[0] || 'unknown';
     return res.json({
       house: cached.house,
+      houseSlug: cachedSlug,
+      recognised: cachedSlug !== 'unknown',
       totalLots: cached.total_lots,
       titleSplits: cached.title_splits,
       topPicks: cached.top_picks,
@@ -1043,12 +1046,19 @@ app.post('/api/analyse', async (req, res) => {
     await enrichLots(analysed, house, url);
 
     // ── Cache results ──
+    const displayName = getHouseDisplayName(house, url);
     const expiresAt = new Date(Date.now() + CACHE_DAYS * 24 * 60 * 60 * 1000).toISOString();
     const lotsWithPrice = analysed.filter(l => l.price && l.price > 0);
     const yieldsArr = analysed.map(l => l.estGrossYield).filter(y => y && y > 0);
+
+    // Log unknown house successes for future house addition
+    if (house === 'unknown' && analysed.length >= 3) {
+      log.info('NEW_HOUSE_CANDIDATE', { hostname: new URL(url).hostname, lots: analysed.length, url });
+    }
+
     await supabase.from('cached_analyses').upsert({
       url: normalisedUrl,
-      house,
+      house: displayName,
       total_lots: analysed.length,
       title_splits: analysed.filter(l => l.titleSplit).length,
       top_picks: analysed.filter(l => l.score >= 3).length,
@@ -1067,7 +1077,9 @@ app.post('/api/analyse', async (req, res) => {
       .eq('id', user.id);
 
     return res.json({
-      house,
+      house: displayName,
+      houseSlug: house,
+      recognised: house !== 'unknown',
       totalLots: analysed.length,
       titleSplits: analysed.filter(l => l.titleSplit).length,
       topPicks: analysed.filter(l => l.score >= 3).length,
@@ -1338,6 +1350,30 @@ function detectAuctionHouse(url) {
   return 'unknown';
 }
 
+const HOUSE_DISPLAY_NAMES = {
+  savills: 'Savills', allsop: 'Allsop', sdl: 'SDL Auctions',
+  network: 'Network Auctions', bondwolfe: 'Bond Wolfe', barnardmarcus: 'Barnard Marcus',
+  auctionhouselondon: 'Auction House London', auctionhouse: 'Auction House UK',
+  cliveemson: 'Clive Emson', strettons: 'Strettons', acuitus: 'Acuitus',
+  hollismorgan: 'Hollis Morgan', maggsandallen: 'Maggs & Allen', mchughandco: 'McHugh & Co',
+  knightfrank: 'Knight Frank', pattinson: 'Pattinson', bidx1: 'BidX1',
+  philliparnold: 'Phillip Arnold', edwardmellor: 'Edward Mellor', paulfosh: 'Paul Fosh',
+  cottons: 'Cottons', dedmangray: 'Dedman Gray', barnettross: 'Barnett Ross',
+  bradleyhall: 'Bradley Hall', connectuk: 'Connect UK', auctionestates: 'Auction Estates',
+  landwood: 'Landwood', loveitts: 'Loveitts', hunters: 'Hunters',
+};
+
+function getHouseDisplayName(slug, url) {
+  if (HOUSE_DISPLAY_NAMES[slug]) return HOUSE_DISPLAY_NAMES[slug];
+  if (slug === 'unknown' && url) {
+    try {
+      const hostname = new URL(url).hostname.replace('www.', '');
+      return hostname.split('.')[0].replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    } catch { /* fall through */ }
+  }
+  return 'Auction';
+}
+
 // ═══════════════════════════════════════════════════════════════
 // URL REWRITING (map user-friendly URLs to data endpoints)
 // ═══════════════════════════════════════════════════════════════
@@ -1446,7 +1482,12 @@ function rewriteUrl(url, house) {
 
   // buttersjohnbee removed — PDF-only catalogues
 
-  // No rewrite needed
+  // Unknown houses: prefer Puppeteer since most modern auction sites are JS-rendered
+  if (house === 'unknown') {
+    return { baseUrl: url, isApi: false, paginateAs: null, preferPuppeteer: true };
+  }
+
+  // Known houses without specific rewrite rules — static HTML works for these
   return { baseUrl: url, isApi: false, paginateAs: null };
 }
 
