@@ -24,7 +24,7 @@
   --border:#e4dfd6;
   --radius:16px;--radius-sm:10px;
 }
-html{font-size:16px;-webkit-font-smoothing:antialiased;scroll-behavior:smooth}
+html{font-size:16px;-webkit-font-smoothing:antialiased;scroll-behavior:smooth;overflow-x:hidden}
 body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
 
 /* ══════════ HERO ══════════ */
@@ -199,6 +199,15 @@ footer p{font-size:.78rem;color:var(--text3)}
   .step{flex-direction:column;gap:12px;text-align:center;align-items:center}
   .cta-primary{width:100%;justify-content:center}
   .cta-secondary{width:100%;justify-content:center}
+}
+@media(max-width:360px){
+  .hero{padding:24px 12px 40px}
+  .section{padding:40px 12px}
+  .step{padding:20px 16px}
+  .stats-bar{gap:20px;padding:28px 12px}
+  .cta-primary{padding:14px 24px;font-size:.95rem}
+  .cta-secondary{padding:10px 20px;font-size:.85rem}
+  .tool-card{padding:24px 16px}
 }
 </style>
 </head>

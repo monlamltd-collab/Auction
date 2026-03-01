@@ -22,6 +22,7 @@
   --radius:12px;--radius-sm:8px;
 }
 *{margin:0;padding:0;box-sizing:border-box}
+html{overflow-x:hidden}
 body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;line-height:1.6;overflow-x:hidden}
 a{color:var(--green);text-decoration:none}a:hover{text-decoration:underline}
 
@@ -33,7 +34,7 @@ a{color:var(--green);text-decoration:none}a:hover{text-decoration:underline}
 .nav-right{display:flex;align-items:center;gap:10px;min-width:0}
 .nav-cta{padding:8px 20px;border-radius:var(--radius-sm);font-size:.85rem;font-weight:700;color:var(--white);background:var(--green);border:none;cursor:pointer;font-family:inherit;transition:all .15s;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nav-cta:hover{background:var(--green2)}
-.nav-link-bm{font-size:.82rem;font-weight:600;color:var(--green);padding:8px 14px;border-radius:var(--radius-sm);border:1px solid var(--green);transition:all .15s;text-decoration:none!important}
+.nav-link-bm{font-size:.82rem;font-weight:600;color:var(--green);padding:8px 14px;border-radius:var(--radius-sm);border:1px solid var(--green);transition:all .15s;text-decoration:none!important;white-space:nowrap}
 .nav-link-bm:hover{background:var(--green-light);text-decoration:none!important}
 
 /* ── WRAP ── */
@@ -229,10 +230,14 @@ footer .logo-f span{color:var(--green)}
   .cal-actions{grid-column:1/-1}
   .toolbar{flex-direction:column;align-items:stretch}
   .result-header{flex-direction:column;align-items:flex-start}
+  .deal-grid{grid-template-columns:1fr 1fr}
+  .oc-text{min-width:0}
+  .scan-steps{gap:12px}
 }
 @media(max-width:480px){
   .wrap{padding:0 14px}
-  .nav-inner{padding:0 14px}
+  .nav-inner{padding:0 14px;height:48px}
+  .logo{font-size:1.15rem}
   .nav-cta{padding:6px 12px;font-size:.78rem;max-width:140px}
   .nav-link-bm{padding:6px 10px;font-size:.75rem}
   .hero{padding:32px 0 24px}
@@ -249,6 +254,28 @@ footer .logo-f span{color:var(--green)}
   .cal-date{display:flex;align-items:center;gap:8px}
   .cal-date .day{font-size:1.2rem}
   .modal{padding:24px 18px}
+  .lot-header{flex-direction:column;align-items:flex-start;gap:4px}
+  .lot-addr{font-size:.88rem}
+  .lot-details{font-size:.78rem}
+  .lot-actions{gap:8px}
+  .bm-btn{font-size:.72rem;padding:5px 10px}
+  .deal-grid{grid-template-columns:1fr}
+  .oc-inner{padding:14px;gap:8px}
+  .oc-text{min-width:0}
+  .oc-input-row{flex-direction:column}
+  .scan-steps{gap:8px;font-size:.75rem}
+  .scan-title{font-size:1rem}
+  .tb-search{min-width:0}
+}
+@media(max-width:360px){
+  .nav-inner{padding:0 10px;gap:6px}
+  .nav-link-bm{padding:5px 8px;font-size:.7rem}
+  .nav-cta{padding:5px 10px;font-size:.72rem;max-width:110px}
+  .logo{font-size:1.05rem}
+  .filters{grid-template-columns:1fr}
+  .stats-grid{grid-template-columns:1fr 1fr;gap:4px}
+  .hero h1{font-size:1.3rem}
+  .hero h1 br{display:none}
 }
 
 @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
