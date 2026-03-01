@@ -721,9 +721,13 @@ app.post('/api/analyse', async (req, res) => {
 
   if (cached) {
     console.log(`Cache hit for ${normalisedUrl}`);
-    const cachedSlug = Object.entries(HOUSE_DISPLAY_NAMES).find(([k, v]) => v === cached.house)?.[0] || 'unknown';
+    // Handle both old cached entries (slug like 'savills') and new ones (display name like 'Savills')
+    const cachedSlug = HOUSE_DISPLAY_NAMES[cached.house]
+      ? cached.house  // cached.house is already a slug
+      : Object.entries(HOUSE_DISPLAY_NAMES).find(([k, v]) => v === cached.house)?.[0] || 'unknown';
+    const cachedDisplayName = HOUSE_DISPLAY_NAMES[cachedSlug] || cached.house;
     return res.json({
-      house: cached.house,
+      house: cachedDisplayName,
       houseSlug: cachedSlug,
       recognised: cachedSlug !== 'unknown',
       totalLots: cached.total_lots,
