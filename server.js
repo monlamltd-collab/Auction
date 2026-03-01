@@ -692,7 +692,8 @@ app.post('/api/analyse', async (req, res) => {
 
   if (!user) return res.status(401).json({ error: 'signup_required', message: 'Please sign up first' });
 
-  // ── Rate limiting ──
+  // ── Rate limiting (admin bypass with ADMIN_SECRET header) ──
+  const isAdmin = process.env.ADMIN_SECRET && req.headers['x-admin-secret'] === process.env.ADMIN_SECRET;
   const ip = getClientIP(req);
   const today = new Date().toISOString().slice(0, 10);
 
@@ -703,7 +704,7 @@ app.post('/api/analyse', async (req, res) => {
     .eq('date', today)
     .single();
 
-  if (rateRow && rateRow.requests >= RATE_LIMIT) {
+  if (!isAdmin && rateRow && rateRow.requests >= RATE_LIMIT) {
     return res.status(429).json({
       error: 'rate_limited',
       message: `Daily limit reached (${RATE_LIMIT} analyses per day). Try again tomorrow.`
