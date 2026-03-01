@@ -12,6 +12,22 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 
 // ═══════════════════════════════════════════════════════════════
+// CORS
+// ═══════════════════════════════════════════════════════════════
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://auctions.bridgematch.co.uk,https://www.bridgematch.co.uk,https://bridgematch.co.uk').split(',');
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (!origin || ALLOWED_ORIGINS.includes(origin) || origin.includes('localhost') || origin.includes('127.0.0.1')) {
+    res.setHeader('Access-Control-Allow-Origin', origin || '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  }
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
+
+// ═══════════════════════════════════════════════════════════════
 // SUPABASE CLIENT
 // ═══════════════════════════════════════════════════════════════
 const supabase = createClient(
@@ -1075,10 +1091,28 @@ app.post('/api/smart-search', async (req, res) => {
       return res.json({ results: [], report: 'No lot data in cache. Please analyse auction catalogues first.', sources: [] });
     }
 
-    // Build a compact lot summary for Claude (to stay within context limits)
-    const lotSummaries = allLots.map((l, i) => 
-      `[${i}] ${l._house} L${l.lot}: ${l.address} | £${l.price || '?'} | Score:${l.score || 0} | ${l.titleSplit ? 'TITLE_SPLIT' : ''} | ${(l.bullets || []).join('; ').substring(0, 150)}`
-    ).join('\n');
+    // Build a compact lot summary for Claude, prioritising query-relevant lots
+    const queryTerms = query.toLowerCase().split(/\s+/).filter(t => t.length > 2);
+    const lotEntries = allLots.map((l, i) => {
+      const summary = `[${i}] ${l._house} L${l.lot}: ${l.address} | £${l.price || '?'} | Score:${l.score || 0} | ${l.titleSplit ? 'TITLE_SPLIT' : ''} | ${(l.bullets || []).join('; ').substring(0, 150)}`;
+      const searchText = summary.toLowerCase();
+      const relevance = queryTerms.filter(t => searchText.includes(t)).length;
+      return { summary, relevance };
+    });
+
+    // Sort: query-relevant lots first, then by original order
+    lotEntries.sort((a, b) => b.relevance - a.relevance);
+
+    // Build context string with 120K char budget (fits within Claude's context)
+    const CONTEXT_LIMIT = 120000;
+    let lotSummaries = '';
+    let included = 0;
+    for (const entry of lotEntries) {
+      if (lotSummaries.length + entry.summary.length + 1 > CONTEXT_LIMIT) break;
+      lotSummaries += entry.summary + '\n';
+      included++;
+    }
+    const omitted = allLots.length - included;
 
     const client = new Anthropic({ apiKey });
     const msg = await client.messages.create({
@@ -1088,9 +1122,9 @@ app.post('/api/smart-search', async (req, res) => {
 
 Their search query: "${query}"
 
-Here are all available lots (index, house, lot number, address, price, score, title split status, key features):
+Here are ${included} lots${omitted > 0 ? ` (${omitted} lower-relevance lots omitted for brevity)` : ''}, sorted by relevance to the query (index, house, lot number, address, price, score, title split status, key features):
 
-${lotSummaries.substring(0, 80000)}
+${lotSummaries}
 
 TASK:
 1. Identify the lots that best match the user's query. Return the indices of matching lots.
@@ -1463,9 +1497,21 @@ function buildPageUrl(baseUrl, page, house) {
 // PUPPETEER SCRAPING (for JS-rendered sites)
 // ═══════════════════════════════════════════════════════════════
 let browserInstance = null;
+let browserUseCount = 0;
+const BROWSER_MAX_USES = 10;
 
 async function getBrowser() {
-  if (browserInstance && browserInstance.isConnected()) return browserInstance;
+  // Restart browser after N uses to prevent memory bloat
+  if (browserInstance && browserUseCount >= BROWSER_MAX_USES) {
+    console.log(`Puppeteer: recycling browser after ${browserUseCount} uses`);
+    try { await browserInstance.close(); } catch (e) { /* ignore */ }
+    browserInstance = null;
+    browserUseCount = 0;
+  }
+  if (browserInstance && browserInstance.isConnected()) {
+    browserUseCount++;
+    return browserInstance;
+  }
   browserInstance = await puppeteer.launch({
     headless: 'new',
     executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
@@ -1478,6 +1524,7 @@ async function getBrowser() {
       '--no-zygote',
     ],
   });
+  browserUseCount = 1;
   return browserInstance;
 }
 
