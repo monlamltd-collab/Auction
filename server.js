@@ -1,3 +1,14 @@
+// Sentry must be imported before everything else for proper instrumentation
+import * as Sentry from '@sentry/node';
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV || 'production',
+    tracesSampleRate: 0.1,
+  });
+  console.log('Sentry error tracking enabled');
+}
+
 import express from 'express';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -8,6 +19,9 @@ import puppeteer from 'puppeteer';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Trust Railway's reverse proxy for correct client IP via req.ip / X-Forwarded-For
+app.set('trust proxy', 1);
 
 app.use(express.json());
 
@@ -3175,6 +3189,11 @@ async function enrichLots(lots, house, sourceUrl) {
   console.log(`Enrichment complete. ${Object.values(lrCache).flat().length} total Land Registry sales found.`);
   return lots;
 }
+// Sentry error handler — must be after all routes, before app.listen
+if (process.env.SENTRY_DSN) {
+  Sentry.setupExpressErrorHandler(app);
+}
+
 app.listen(PORT, () => {
   console.log(`Bridgematch running on port ${PORT}`);
   if (!process.env.SUPABASE_URL) console.warn('⚠️  SUPABASE_URL not set');
