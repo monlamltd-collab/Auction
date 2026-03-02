@@ -1195,6 +1195,9 @@ app.post('/api/analyse', async (req, res) => {
       .update({ analyses_count: (user.analyses_count || 0) + 1 })
       .eq('id', user.id);
 
+    // Log activity event
+    logActivityEvent('analysis', { house: displayName, url: normalisedUrl, lots_found: analysed.length }, email, getClientIP(req));
+
     sseWrite(res, 'done', {
       house: displayName,
       houseSlug: house,
@@ -1585,6 +1588,9 @@ Only return lots that genuinely match the query. If nothing matches well, say so
       sources,
       totalSearched: filteredLots.length,
     };
+
+    // Log smart search activity
+    logActivityEvent('smart_search', { query, results_count: matchingLots.length }, email, getClientIP(req));
 
     // Cache preset query results (1-hour TTL)
     if (presetSlug) {
@@ -4080,6 +4086,51 @@ async function autoAnalyseOne(url, apiKey) {
 
   console.log(`AUTO: ✓ ${house}: ${newTotalLots} lots cached (${newTitleSplits} title splits, ${newTopPicks} top picks)${catalogueChanged ? ' [CHANGED]' : ' [unchanged]'}`);
 }
+
+// ═══════════════════════════════════════════════════════════════
+// ACTIVITY LOGGING & STATS
+// ═══════════════════════════════════════════════════════════════
+
+async function logActivityEvent(action, detail = {}, email = null, ip = null) {
+  try {
+    await supabase.from('activity_events').insert({
+      user_email: email || null,
+      action,
+      detail,
+      ip: ip || null,
+    });
+  } catch (e) {
+    console.warn('Activity log error:', e.message);
+  }
+}
+
+app.get('/api/admin/daily-stats', async (req, res) => {
+  const { token } = req.query;
+  if (!process.env.ADMIN_SECRET || token !== process.env.ADMIN_SECRET) {
+    return res.status(403).json({ error: 'Invalid admin token' });
+  }
+
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+  try {
+    const { data: events } = await supabase
+      .from('activity_events')
+      .select('action, detail, user_email')
+      .gte('created_at', since);
+
+    const rows = events || [];
+    const analyses = rows.filter(r => r.action === 'analysis').length;
+    const smart_searches = rows.filter(r => r.action === 'smart_search').length;
+    const leads = rows.filter(r => r.action === 'lead_submit').length;
+    const unique_users = new Set(rows.filter(r => r.user_email).map(r => r.user_email)).size;
+
+    res.json({ analyses, smart_searches, leads, unique_users, total_events: rows.length });
+  } catch (e) {
+    console.error('Daily stats error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 
 // Helper: get catalogue-ready auctions (used by auto-analyse)
 async function getCalendarAuctions() {
