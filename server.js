@@ -1693,6 +1693,33 @@ app.get('/check', (req, res) => {
   res.sendFile(join(__dirname, 'bridgematch-lite.html'));
 });
 
+app.get('/api/admin/daily-stats', async (req, res) => {
+  const { token } = req.query;
+  if (!process.env.ADMIN_SECRET || token !== process.env.ADMIN_SECRET) {
+    return res.status(403).json({ error: 'Invalid admin token' });
+  }
+
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+  try {
+    const { data: events } = await supabase
+      .from('activity_events')
+      .select('action, detail, user_email')
+      .gte('created_at', since);
+
+    const rows = events || [];
+    const analyses = rows.filter(r => r.action === 'analysis').length;
+    const smart_searches = rows.filter(r => r.action === 'smart_search').length;
+    const leads = rows.filter(r => r.action === 'lead_submit').length;
+    const unique_users = new Set(rows.filter(r => r.user_email).map(r => r.user_email)).size;
+
+    res.json({ analyses, smart_searches, leads, unique_users, total_events: rows.length });
+  } catch (e) {
+    console.error('Daily stats error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('*', (req, res) => {
   res.sendFile(join(__dirname, 'index.html'));
 });
@@ -4103,34 +4130,6 @@ async function logActivityEvent(action, detail = {}, email = null, ip = null) {
     console.warn('Activity log error:', e.message);
   }
 }
-
-app.get('/api/admin/daily-stats', async (req, res) => {
-  const { token } = req.query;
-  if (!process.env.ADMIN_SECRET || token !== process.env.ADMIN_SECRET) {
-    return res.status(403).json({ error: 'Invalid admin token' });
-  }
-
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-
-  try {
-    const { data: events } = await supabase
-      .from('activity_events')
-      .select('action, detail, user_email')
-      .gte('created_at', since);
-
-    const rows = events || [];
-    const analyses = rows.filter(r => r.action === 'analysis').length;
-    const smart_searches = rows.filter(r => r.action === 'smart_search').length;
-    const leads = rows.filter(r => r.action === 'lead_submit').length;
-    const unique_users = new Set(rows.filter(r => r.user_email).map(r => r.user_email)).size;
-
-    res.json({ analyses, smart_searches, leads, unique_users, total_events: rows.length });
-  } catch (e) {
-    console.error('Daily stats error:', e.message);
-    res.status(500).json({ error: e.message });
-  }
-});
-
 
 // Helper: get catalogue-ready auctions (used by auto-analyse)
 async function getCalendarAuctions() {
