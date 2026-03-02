@@ -91,6 +91,52 @@ const HEADERS = {
 const MAX_PAGES = 40;
 const TIMEOUT = 25000;
 
+// ═══════════════════════════════════════════════════════════════
+// CLAUDE MODEL SELECTION — Haiku for known houses, Sonnet for unknown/PDF
+// ═══════════════════════════════════════════════════════════════
+const MODEL_SONNET = 'claude-sonnet-4-6';
+const MODEL_HAIKU  = 'claude-haiku-4-5-20251001';
+
+// One-line structural hints for known houses — injected into Haiku prompts
+// to compensate for smaller model capacity. Each describes the HTML/JSON shape.
+const HOUSE_EXTRACTION_HINTS = {
+  // Static HTML / SKIP_PUPPETEER houses (always reach Claude)
+  allsop:        'Allsop API returns JSON with properties array. Each has address, guide_price, lot_number, slug, features, auction_type fields.',
+  knightfrank:   'EIG auction platform. Lots in cards/rows with lot number, address, guide price, and detail links under knightfrankauctions.com.',
+  paulfosh:      'Auction lot listings with lot number, address, guide price, property type, and links under paulfosh.com.',
+  cottons:       'Auction catalogue with lot cards showing lot number, address, guide price, property description, and detail links.',
+  dedmangray:    'Property auction lots with lot number, address, guide price, key features, and detail page URLs.',
+  barnettross:   'Auction lot listings with lot number, address, guide/reserve price, brief description, and detail links.',
+  philliparnold: 'Auction catalogue cards with lot number, address, guide price, property type, and detail URLs under philliparnoldauctions.co.uk.',
+  bidx1:         'Online auction platform. Lot cards with lot number, address, guide price, property type, closing date, and detail links under bidx1.com.',
+  edwardmellor:  'Auction lots listed with lot number, full address, guide price, tenure, bedrooms, and detail page links.',
+  bradleyhall:   'Property cards on auction.bradleyhall.co.uk with lot number, address, guide price, and search result links.',
+  connectuk:     'Realtime auction platform. Lot listings with lot number, address, guide price, property type, and detail links.',
+  auctionestates:'Lot cards with lot number, address, guide price, property type, tenure, and detail page URLs.',
+  landwood:      'Commercial/mixed property lots with lot number, address, guide price, property type, and detail links.',
+  loveitts:      'Auction catalogue with lot number, address, guide price, property description, tenure, and links.',
+  hunters:       'Property search results with lot/property cards showing address, price, key features, and detail links.',
+  // preferPuppeteer houses (Claude fallback when DOM extraction fails)
+  network:            'Network Auctions. EIG platform. Lot divs with class current-lots-single, lot-number span, guide-price paragraph, and detail links.',
+  pattinson:          'Pattinson React SPA. Property cards with lot number, address, starting/current bid price, and auction detail links.',
+  savills:            'Savills auctions. Lot cards with lot number, address, guide price, tenure, property type, and detail links on auctions.savills.co.uk.',
+  sdl:                'SDL Auctions / BTG Eddisons. Property cards with lot number, address, guide price, property type, auction date, and detail links.',
+  bondwolfe:          'Bond Wolfe auctions. Lot listings with lot number, address, guide price, property type, tenure, and detail page links.',
+  barnardmarcus:      'Barnard Marcus auctions. Property cards with lot number, address, guide price, property type, and detail links.',
+  auctionhouselondon: 'Auction House London. Lot listings with lot number, address, guide price, property type, tenure, and detail links.',
+  cliveemson:         'Clive Emson land and property auctions. Lots with lot number, address, guide price, property type, acreage, tenure, and links.',
+  strettons:          'Strettons auctions. Commercial/residential lot cards with lot number, address, guide price, property type, and detail links.',
+  acuitus:            'Acuitus commercial auctions. Lot listings with lot number, address, guide price, yield, tenant info, and detail links.',
+  hollismorgan:       'Hollis Morgan auctions. Lot cards with lot number, address, guide price, property type, tenure, and detail links.',
+  maggsandallen:      'Maggs & Allen auctions. Lot listings with lot number, address, guide price, property type, and detail page URLs.',
+  mchughandco:        'McHugh & Co auctions. Lot cards with lot number, address, guide price, property description, and detail links.',
+  auctionhouse:       'Auction House UK. Lot listings with lot number, address, guide price, property type, auction date, and detail links.',
+};
+
+function getExtractionModel(house) {
+  return house === 'unknown' ? MODEL_SONNET : MODEL_HAIKU;
+}
+
 function getClientIP(req) {
   return req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';
 }
@@ -1054,8 +1100,8 @@ app.post('/api/analyse', async (req, res) => {
       }
       // Puppeteer fallback if static scraping found nothing
       // Skip for houses where Puppeteer wastes memory (blocked, empty, or JS-only)
-      const SKIP_PUPPETEER = ['pattinson','knightfrank','paulfosh','cottons','dedmangray',
-        'barnettross','philliparnold','network'];
+      const SKIP_PUPPETEER = ['knightfrank','paulfosh','cottons','dedmangray',
+        'barnettross','philliparnold'];
       if (rawLots.length === 0 && !SKIP_PUPPETEER.includes(house)) {
         console.log(`No lots from static HTML, trying Puppeteer for ${house}...`);
         const puppeteerPages = await scrapeWithPuppeteer(url, house);
@@ -1336,7 +1382,7 @@ app.post('/api/smart-search', async (req, res) => {
 
         const client = new Anthropic({ apiKey });
         const msg = await client.messages.create({
-          model: 'claude-sonnet-4-6',
+          model: MODEL_HAIKU,
           max_tokens: 4000,
           messages: [{ role: 'user', content: `You are a UK property investment analyst. A user has searched across ${filteredDelta.length} NEW auction lots from ${deltaSources.length} recently updated catalogues.
 
@@ -1355,6 +1401,8 @@ Respond in this exact JSON format:
 
 Only return lots that genuinely match the query.` }]
         });
+        const ssUsage = msg.usage || {};
+        log.info('smart_search_incremental', { model: MODEL_HAIKU, input_tokens: ssUsage.input_tokens, output_tokens: ssUsage.output_tokens });
 
         const responseText = msg.content[0]?.text || '';
         let parsed;
@@ -1482,7 +1530,7 @@ Only return lots that genuinely match the query.` }]
 
     const client = new Anthropic({ apiKey });
     const msg = await client.messages.create({
-      model: 'claude-sonnet-4-6',
+      model: MODEL_HAIKU,
       max_tokens: 4000,
       messages: [{ role: 'user', content: `You are a UK property investment analyst. A user has searched across ${filteredLots.length} auction lots from ${sources.length} auction house catalogues.${soldInstruction}
 
@@ -1501,6 +1549,8 @@ Respond in this exact JSON format:
 
 Only return lots that genuinely match the query. If nothing matches well, say so in the report and return an empty indices array.` }]
     });
+    const ssFullUsage = msg.usage || {};
+    log.info('smart_search_full', { model: MODEL_HAIKU, input_tokens: ssFullUsage.input_tokens, output_tokens: ssFullUsage.output_tokens });
 
     const responseText = msg.content[0]?.text || '';
     let parsed;
@@ -1768,8 +1818,13 @@ function rewriteUrl(url, house) {
   }
 
   if (house === 'network') {
-    // Network Auctions: blocks server-side fetches (403), must use Puppeteer
-    // /auctions/next-auction/ or /auctions/current-lots/
+    // Network Auctions: server-rendered HTML with lot data, DOM extractor works well
+    return { baseUrl: url, isApi: false, paginateAs: null, preferPuppeteer: true };
+  }
+
+  if (house === 'pattinson') {
+    // Pattinson: React SPA, needs Puppeteer to render. DOM extractor handles bid cards.
+    // Falls back to Claude automatically if DOM extraction returns <3 lots.
     return { baseUrl: url, isApi: false, paginateAs: null, preferPuppeteer: true };
   }
 
@@ -2025,9 +2080,11 @@ async function extractLotsWithClaude(client, pages, house, onProgress) {
     const batch = pages.slice(i, i + batchSize);
     const strippedBatch = batch.map(p => ({ page: p.page, content: stripHtml(p.html) }));
     const totalStrippedLen = strippedBatch.reduce((sum, p) => sum + p.content.length, 0);
-    console.log(`Batch ${Math.floor(i/batchSize)+1}: ${strippedBatch.length} page(s), ${totalStrippedLen} chars after stripping`);
+    const model = getExtractionModel(house);
+    const hint = HOUSE_EXTRACTION_HINTS[house];
+    console.log(`Batch ${Math.floor(i/batchSize)+1}: ${strippedBatch.length} page(s), ${totalStrippedLen} chars after stripping, model: ${model}`);
     const prompt = `You are extracting property auction lot data from a UK auction house catalogue (${house}).
-
+${hint ? `\nStructure hint: ${hint}\n` : ''}
 Below are ${strippedBatch.length} page(s) of catalogue content. Extract EVERY auction lot you find.
 
 For each lot, return a JSON object with these fields:
@@ -2050,10 +2107,12 @@ ${strippedBatch.map(p => `=== PAGE ${p.page} ===\n${p.content}`).join('\n\n')}
 Return ONLY the JSON array:`;
     try {
       const response = await client.messages.create({
-        model: 'claude-sonnet-4-6',
+        model,
         max_tokens: 16000,
         messages: [{ role: 'user', content: prompt }],
       });
+      const usage = response.usage || {};
+      log.info('claude_extraction', { house, model, batch: Math.floor(i/batchSize)+1, input_tokens: usage.input_tokens, output_tokens: usage.output_tokens });
       const text = response.content.map(c => c.text || '').join('');
       const jsonMatch = text.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
@@ -2137,8 +2196,9 @@ Return ONLY the JSON array:`;
 
   try {
     // Use streaming to avoid SDK timeout on large PDF uploads
+    // PDFs stay on Sonnet — complex layout extraction needs the stronger model
     const stream = client.messages.stream({
-      model: 'claude-sonnet-4-6',
+      model: MODEL_SONNET,
       max_tokens: 32000,
       messages: [{
         role: 'user',
@@ -2152,6 +2212,8 @@ Return ONLY the JSON array:`;
       }],
     });
     const response = await stream.finalMessage();
+    const pdfUsage = response.usage || {};
+    log.info('claude_pdf_extraction', { model: MODEL_SONNET, input_tokens: pdfUsage.input_tokens, output_tokens: pdfUsage.output_tokens });
     const text = response.content.map(c => c.text || '').join('');
     if (response.stop_reason === 'max_tokens') {
       log.warn('pdf_truncated', { url, textLength: text.length });
@@ -3948,8 +4010,8 @@ async function autoAnalyseOne(url, apiKey) {
     const pages = await scrapeAllPages(scrapeUrl, house);
     if (pages && pages.length > 0) rawLots = await extractLotsWithClaude(client, pages, house);
     // Skip Puppeteer fallback for houses where it wastes memory (blocked, empty, or JS-only)
-    const SKIP_PUPPETEER = ['pattinson','knightfrank','paulfosh','cottons','dedmangray',
-      'barnettross','philliparnold','network'];
+    const SKIP_PUPPETEER = ['knightfrank','paulfosh','cottons','dedmangray',
+      'barnettross','philliparnold'];
     if (rawLots.length === 0 && !SKIP_PUPPETEER.includes(house)) {
       const puppeteerPages = await scrapeWithPuppeteer(url, house);
       if (puppeteerPages.length > 0) rawLots = await extractLotsWithClaude(client, puppeteerPages, house);
