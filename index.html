@@ -469,7 +469,7 @@ footer .logo-f span{color:var(--green)}
     <div class="advanced" id="advancedPanel">
       <div class="fp-row">
         <div class="filter-field"><label>Cash Available (£)</label><input id="fpCash" type="number" value="0" placeholder="Deposit + costs"></div>
-        <div class="filter-field"><label>Property Focus</label><select id="fpPropType"><option value="resi">Residential</option><option value="semi">Semi-Commercial</option><option value="comm">Commercial</option></select></div>
+        <div class="filter-field"><label>Property Focus</label><select id="fpPropType"><option value="resi">Residential</option><option value="semi">Semi-Commercial</option><option value="comm">Commercial</option><option value="land_no_pp">Land (No Planning)</option><option value="land_with_pp">Land (With Planning)</option></select></div>
         <div class="filter-field"><label>Loan Term</label><select id="fpTerm"><option value="6">6 months</option><option value="9">9 months</option><option value="12" selected>12 months</option><option value="18">18 months</option><option value="24">24 months</option></select></div>
       </div>
       <div class="fp-checks">
@@ -544,8 +544,10 @@ footer .logo-f span{color:var(--green)}
     <div id="cardsView">
       <div class="toolbar">
         <select class="tb-select" id="fDeal" onchange="renderLots()"><option value="">All deals</option></select>
-        <select class="tb-select" id="fAfford" onchange="renderLots()"><option value="all">All lots</option><option value="affordable">Affordable</option><option value="in_budget">In budget only</option><option value="full_finance">Zero deposit only</option></select>
-        <select class="tb-select" id="fTS" onchange="renderLots()"><option value="">All lots</option><option value="ts">Title split opportunities</option></select>
+        <select class="tb-select" id="fPropType" onchange="renderLots()"><option value="">All types</option></select>
+        <select class="tb-select" id="fCondition" onchange="renderLots()"><option value="">Any condition</option></select>
+        <select class="tb-select" id="fAfford" onchange="renderLots()" style="display:none"><option value="all">All lots</option><option value="affordable">Affordable</option><option value="in_budget">In budget only</option><option value="full_finance">Zero deposit only</option></select>
+        <select class="tb-select" id="fTS" onchange="renderLots()" style="display:none"><option value="">All lots</option><option value="ts">Title split opportunities</option></select>
         <select class="tb-select" id="fSold" onchange="syncSoldFilter('toolbar');renderLots()"><option value="available">Available only</option><option value="all">All lots</option><option value="sold">Sold / STC only</option></select>
         <label class="tb-toggle"><input type="checkbox" id="showROI" onchange="renderLots()"><span class="tb-toggle-label">📊 Deal Analysis</span></label>
         <input class="tb-search" type="text" id="fSearch" placeholder="Search..." oninput="renderLots()">
@@ -818,22 +820,25 @@ function _estNetFromGross(gross,rateStr,pfStr,termMo,mmStr){
 
 function calcAffordability(cash,propType,termMo){
   if(!cash||LENDER_DATA.length===0)return null;
-  const col={resi:'l1',semi:'ls',comm:'lc'}[propType]||'l1';
+  const col={resi:'l1',semi:'ls',comm:'lc',land_no_pp:'lnp',land_with_pp:'lwp'}[propType]||'l1';
+  const isLand=propType==='land_no_pp'||propType==='land_with_pp';
   let bestStdNet=0, bestRefurbNet=0;
 
   for(const l of LENDER_DATA){
-    // Standard LTV
+    // Standard LTV (or land LTV)
     const p=_parseLTV(l[col]);
     if(p.pct>0){
       const net=p.net?p.pct:_estNetFromGross(p.pct,l.r,l.pf,termMo,l.mm);
       if(net>bestStdNet)bestStdNet=net;
     }
-    // Refurb day-1 LTV (best of light-works and upfront)
-    for(const k of ['ld1','ud1']){
-      const rp=_parseLTV(l[k]);
-      if(rp.pct>0){
-        const net=rp.net?rp.pct:_estNetFromGross(rp.pct,l.r,l.pf,termMo,l.mm);
-        if(net>bestRefurbNet)bestRefurbNet=net;
+    // Refurb day-1 LTV — not applicable for land
+    if(!isLand){
+      for(const k of ['ld1','ud1']){
+        const rp=_parseLTV(l[k]);
+        if(rp.pct>0){
+          const net=rp.net?rp.pct:_estNetFromGross(rp.pct,l.r,l.pf,termMo,l.mm);
+          if(net>bestRefurbNet)bestRefurbNet=net;
+        }
       }
     }
   }
@@ -924,11 +929,13 @@ function updateFinanceProfile(){
     }
   }else if(tsInfo){tsInfo.innerHTML=''}
 
-  let html=`Standard bridge: <b>${fmtK(aff.maxStd)}</b> max <span style="color:var(--text4)">(best ${aff.bestStdNet}% net LTV)</span>`;
-  if(PREMIUM_ENABLED&&$('fpRefurb')?.checked&&aff.maxRefurb>aff.maxStd){
+  const isLand=propType==='land_no_pp'||propType==='land_with_pp';
+  const lbl=isLand?(propType==='land_with_pp'?'Land (with planning)':'Land (no planning)'):'Standard bridge';
+  let html=`${lbl}: <b>${fmtK(aff.maxStd)}</b> max <span style="color:var(--text4)">(best ${aff.bestStdNet}% net LTV)</span>`;
+  if(!isLand&&PREMIUM_ENABLED&&$('fpRefurb')?.checked&&aff.maxRefurb>aff.maxStd){
     html+=`<br>Refurb projects: <span class="fp-refurb"><b>${fmtK(aff.maxRefurb)}</b> max</span> <span style="color:var(--text4)">(${aff.bestRefurbNet}% net day-1 LTV)</span>`;
   }
-  if(tsChecked&&aff.maxTS>aff.maxStd){
+  if(!isLand&&tsChecked&&aff.maxTS>aff.maxStd){
     if(aff.fullFinance){
       html+=`<br>Title splits: <span class="fp-split"><b>${fmtK(aff.maxTS)}</b> max</span> <span class="fp-full-finance">(zero deposit* — ${aff.effectiveLTV}% effective LTV, costs only)</span>`;
     }else{
@@ -1432,6 +1439,20 @@ function showView(v) {
 function buildLotFilters(){
   const deals=new Set(LOTS.map(l=>l.dealType).filter(Boolean));
   $('fDeal').innerHTML='<option value="">All deals</option>'+[...deals].sort().map(d=>`<option>${d}</option>`).join('');
+
+  const types=new Set(LOTS.map(l=>l.propType).filter(Boolean));
+  $('fPropType').innerHTML='<option value="">All types</option>'+[...types].sort().map(t=>`<option value="${t}">${t}</option>`).join('');
+  $('fPropType').style.display=types.size>1?'':'none';
+
+  const conds=new Set(LOTS.map(l=>l.condition).filter(Boolean));
+  $('fCondition').innerHTML='<option value="">Any condition</option>'+[...conds].sort().map(c=>`<option value="${c}">${c}</option>`).join('');
+  $('fCondition').style.display=conds.size>1?'':'none';
+
+  const hasTS=LOTS.some(l=>l.titleSplit);
+  $('fTS').style.display=hasTS?'':'none';
+
+  const hasCash=+($('fpCash')?.value)>0;
+  $('fAfford').style.display=hasCash?'':'none';
 }
 
 function renderLots(){
@@ -1449,7 +1470,10 @@ function renderLots(){
   if(minBeds) lots=lots.filter(l=>!l.beds||l.beds>=minBeds);
 
   const ft=$('fType').value,fd=$('fDeal').value,fa=$('fAfford')?.value||'all',fts=$('fTS')?.value||$('fTSTop')?.value||'',fsold=$('fSold')?.value||$('fSoldTop')?.value||'',fs=$('fSearch').value.toLowerCase();
+  const fpt=$('fPropType')?.value||'',fco=$('fCondition')?.value||'';
   if(ft)lots=lots.filter(l=>l.propType===ft);
+  if(fpt)lots=lots.filter(l=>l.propType===fpt);
+  if(fco)lots=lots.filter(l=>l.condition===fco);
   if(fd)lots=lots.filter(l=>l.dealType===fd);
   if(fa==='affordable'&&fp.cash)lots=lots.filter(l=>l._affTag!=='out_of_reach');
   if(fa==='in_budget'&&fp.cash)lots=lots.filter(l=>l._affTag==='in_budget'||l._affTag==='unknown');
