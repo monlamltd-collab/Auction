@@ -379,8 +379,21 @@ const LENDERS=[{"n":"Albatross Lending Group","mn":"£100,000","mx":"£10,000,00
 function parseMoney(s){if(!s)return 0;return parseFloat(s.replace(/[£,\s]/g,''))||0}
 function parseNum(s){if(!s)return 0;const m=s.match(/[\d.]+/);return m?parseFloat(m[0]):0}
 function parseLTV(s){if(!s)return{pct:0,net:false};const m=s.match(/([\d.]+)/);if(!m)return{pct:0,net:false};return{pct:parseFloat(m[0]),net:s.toLowerCase().includes('net')}}
-function parseLTGDV(s){if(!s)return 0;if(s.includes('over 75'))return 77;if(s.includes('75'))return 72.5;if(s.includes('70'))return 67.5;if(s.includes('65'))return 62.5;const m=s.match(/([\d.]+)/);return m?parseFloat(m[0]):0}
+function parseLTGDV(s){if(!s)return 0;if(s.includes('over 75'))return 80;const matches=s.match(/(\d+)/g);if(matches)return Math.max(...matches.map(Number));return 0}
 function parseRate(s){if(!s)return 0;const rates=s.match(/[\d.]+/g);if(!rates)return 0;if(rates.length>=2)return(parseFloat(rates[0])+parseFloat(rates[1]))/2;return parseFloat(rates[0])}
+function parseProcFee(s){if(!s)return 2;const str=s.toLowerCase();if(str.includes('negotiable')||str.includes('no set'))return 1.5;const m=str.match(/(\d+\.?\d*)/);return m?parseFloat(m[0]):2}
+function parseMinMonths(s){if(!s)return 3;const str=s.toLowerCase();if(str.includes('depends'))return 3;const m=str.match(/(\d+)/);return m?parseInt(m[0]):3}
+// Port of backend estimate_net_from_gross — estimates cash-in-hand LTV after retained interest + fees
+function estimateNetFromGross(grossLTV,rateStr,procFeeStr,loanTermMonths,minMonthsStr){
+  if(!grossLTV)return 0;
+  const feePct=parseProcFee(procFeeStr);
+  const monthlyRate=parseRate(rateStr)||0.75;
+  const lenderMin=parseMinMonths(minMonthsStr);
+  const monthsRetained=Math.max(loanTermMonths,lenderMin);
+  const interestDeduction=monthlyRate*monthsRetained;
+  const totalDeduction=feePct+interestDeduction;
+  return grossLTV*(1-totalDeduction/100);
+}
 function fmtK(v){if(v>=1e6)return'£'+(v/1e6).toFixed(1)+'m';return'£'+Math.round(v/1000)+'k'}
 function fmtCurrency(v){return'£'+v.toLocaleString('en-GB',{maximumFractionDigits:0})}
 function formatCurrency(el){let v=el.value.replace(/[^0-9]/g,'');if(v)el.value=parseInt(v).toLocaleString('en-GB');else el.value=''}
@@ -458,7 +471,7 @@ function matchLenders(price,cash,propType,isRefurb,works,gdv,addlVal,addlMort,lo
     if(worksRatio<30)intensity='light';
     else if(worksRatio<50)intensity='medium';
     else if(worksRatio<100)intensity='heavy';
-    else intensity='vheavy';
+    else intensity='very_heavy';
   }
 
   // LTGDV is now calculated per-lender inside the matching loop
@@ -486,9 +499,21 @@ function matchLenders(price,cash,propType,isRefurb,works,gdv,addlVal,addlMort,lo
 
     if(!maxLTV.pct||maxLTV.pct<=0){reasons.push('Property type not available');
     }else{
-      // For net lenders, their stated LTV IS the net amount (better for borrower)
-      const effectiveBorrowerLTV=maxLTV.net?ltv:ltv*1.08; // gross lenders: add ~8% for fees/interest
-      if(effectiveBorrowerLTV>maxLTV.pct+3)reasons.push(`LTV ${ltv.toFixed(0)}% > max ${maxLTV.pct}%${maxLTV.net?' net':' gross'}`);
+      // Net LTV knockout — port of backend logic
+      // For net lenders: stated LTV = cash-in-hand, compare directly
+      // For gross lenders: estimate net after retained interest + fees
+      let estimatedNet;
+      if(maxLTV.net){
+        estimatedNet=maxLTV.pct;
+      }else if(ltv>maxLTV.pct){
+        estimatedNet=maxLTV.pct; // already over gross, net will be worse
+      }else{
+        estimatedNet=estimateNetFromGross(maxLTV.pct,l.r,l.pf,loanTermMonths,l.mm);
+      }
+      if(estimatedNet>0&&ltv>estimatedNet){
+        reasons.push(`LTV too high: need ${ltv.toFixed(0)}% but est. net ~${estimatedNet.toFixed(0)}%`);
+      }
+      l._estimatedNet=estimatedNet;
     }
 
     // Refurb checks
@@ -524,23 +549,31 @@ function matchLenders(price,cash,propType,isRefurb,works,gdv,addlVal,addlMort,lo
 
         // Check if offered for this intensity
         if(offField&&l[offField]&&l[offField].toLowerCase()==='no'){
-          reasons.push(`${intensity} refurb not offered`);
+          reasons.push(`${intensity.replace('_',' ')} refurb not offered`);
         }else if(d1Field&&l[d1Field]){
           refurbDay1=parseLTV(l[d1Field]);
           refurbLTGDV=parseLTGDV(l[lgField]);
 
-          // Calculate per-lender LTGDV based on total debt exposure
-          // LTGDV = (day-1 loan + rolled-up interest + lender-funded works) / GDV
+          // Calculate per-lender LTGDV — port of backend estimate_actual_ltgdv
+          // LTGDV = (day-1 loan + works funded + rolled interest + arrangement fee) / GDV
           if(refurbLTGDV>0&&gdv>0){
             const day1Pct=refurbDay1.pct/100;
             const day1Loan=price*day1Pct;
-            const lenderRate=parseRate(l.r)/100; // monthly rate
-            const rolledInterest=day1Loan*lenderRate*loanTermMonths;
+            const lenderRate=parseRate(l.r)/100; // monthly rate as decimal
             const lenderWorks=(fundingModel==='self-fund')?0:works;
-            const totalDebt=day1Loan+rolledInterest+lenderWorks;
-            const lenderLTGDV=(totalDebt/gdv)*100;
-            if(lenderLTGDV>refurbLTGDV+3){
-              reasons.push(`LTGDV ${lenderLTGDV.toFixed(0)}% > max ${refurbLTGDV.toFixed(0)}%`);
+            // Interest on day-1 for full term
+            const intOnDay1=day1Loan*lenderRate*loanTermMonths;
+            // Interest on works — assume average drawn at midpoint of term
+            const intOnWorks=lenderWorks*lenderRate*(loanTermMonths/2);
+            const totalBeforeFees=day1Loan+lenderWorks+intOnDay1+intOnWorks;
+            // Arrangement fee on total facility (default 2%)
+            const arrFee=totalBeforeFees*(parseProcFee(l.pf)/100);
+            const totalExposure=totalBeforeFees+arrFee;
+            const lenderLTGDV=(totalExposure/gdv)*100;
+            // Backend uses >5% over cap = exclude, 0-5% = warning
+            const shortfallPct=refurbLTGDV>0?((lenderLTGDV-refurbLTGDV)/refurbLTGDV)*100:0;
+            if(shortfallPct>5){
+              reasons.push(`LTGDV likely exceeds ${intensity} works cap`);
             }
           }
         }else if(fundingModel==='self-fund'){
@@ -561,15 +594,18 @@ function matchLenders(price,cash,propType,isRefurb,works,gdv,addlVal,addlMort,lo
     }
 
     if(reasons.length===0){
-      // Calculate this lender's actual LTGDV for display
+      // Calculate this lender's actual LTGDV for display (same formula as knockout)
       let lenderLTGDV=0;
       if(isRefurb&&gdv>0&&refurbDay1&&refurbDay1.pct>0){
         const d1Pct=refurbDay1.pct/100;
         const d1Loan=price*d1Pct;
         const lRate=parseRate(l.r)/100;
-        const rInt=d1Loan*lRate*loanTermMonths;
         const lWorks=(fundingModel==='self-fund')?0:works;
-        lenderLTGDV=((d1Loan+rInt+lWorks)/gdv)*100;
+        const iDay1=d1Loan*lRate*loanTermMonths;
+        const iWorks=lWorks*lRate*(loanTermMonths/2);
+        const totBF=d1Loan+lWorks+iDay1+iWorks;
+        const aFee=totBF*(parseProcFee(l.pf)/100);
+        lenderLTGDV=((totBF+aFee)/gdv)*100;
       }
       eligible.push({...l,_ltv:ltv,_maxLTV:maxLTV,_rate:parseRate(l.r),_refurbDay1:refurbDay1,_refurbLTGDV:refurbLTGDV,_lenderLTGDV:lenderLTGDV,_fundingModel:fundingModel,_addlSecUsed:addlEquity>0&&combinedLTV<ltv});
     }else{
@@ -637,7 +673,7 @@ function renderResults(r){
   if(r.isRefurb){
     const tagClass=r.intensity==='light'?'tag-light':r.intensity==='medium'?'tag-medium':r.intensity==='heavy'?'tag-heavy':'tag-dev';
     html+=`<div class="insight-box">
-      <strong>Refurb Analysis:</strong> Works ratio ${r.worksRatio.toFixed(0)}% = <span class="tag ${tagClass}">${r.intensity.charAt(0).toUpperCase()+r.intensity.slice(1)} refurb</span> &nbsp;|&nbsp;
+      <strong>Refurb Analysis:</strong> Works ratio ${r.worksRatio.toFixed(0)}% = <span class="tag ${tagClass}">${r.intensity==='very_heavy'?'Very Heavy':r.intensity.charAt(0).toUpperCase()+r.intensity.slice(1)} refurb</span> &nbsp;|&nbsp;
       Avg LTGDV: ${r.ltgdv.toFixed(1)}% (${r.loanTermMonths}mo term) &nbsp;|&nbsp; Total project: ${fmtCurrency(r.price+r.works)} → ${fmtCurrency(r.gdv)} GDV
     </div>`;
     
