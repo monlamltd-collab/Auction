@@ -63,6 +63,11 @@ log.info = (msg, meta) => log('info', msg, meta);
 log.warn = (msg, meta) => log('warn', msg, meta);
 log.error = (msg, meta) => log('error', msg, meta);
 
+// SSE helper for streaming progress events
+function sseWrite(res, event, data) {
+  res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+}
+
 // Request logging middleware
 app.use((req, res, next) => {
   if (req.path === '/health') return next();
@@ -105,7 +110,7 @@ app.post('/api/signup', async (req, res) => {
   try {
     const { data: existing } = await supabase
       .from('users')
-      .select('id, email, name')
+      .select('id, email, name, tier')
       .eq('email', email.toLowerCase().trim())
       .single();
 
@@ -117,7 +122,7 @@ app.post('/api/signup', async (req, res) => {
     const { data: newUser, error } = await supabase
       .from('users')
       .insert({ email: email.toLowerCase().trim(), name: name || null })
-      .select('id, email, name')
+      .select('id, email, name, tier')
       .single();
 
     if (error) throw error;
@@ -750,16 +755,26 @@ app.post('/api/analyse', async (req, res) => {
     await supabase.from('rate_limits').insert({ ip, date: today, requests: 1 });
   }
 
-  // ── Fresh analysis ──
+  // ── Fresh analysis — stream progress via SSE ──
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'API key not configured' });
+
+  // Set up SSE stream
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
 
   try {
     const house = detectAuctionHouse(url);
     const rewritten = rewriteUrl(url, house);
     const scrapeUrl = rewritten.baseUrl;
-    
+    const displayNameEarly = getHouseDisplayName(house, url);
+
     console.log(`House: ${house}, URL: ${scrapeUrl}, isApi: ${rewritten.isApi}, preferPuppeteer: ${!!rewritten.preferPuppeteer}`);
+    sseWrite(res, 'phase', { step: 'connecting', house: displayNameEarly });
 
     // Validate URL first (skip for sites that block server-side fetches)
     if (!rewritten.preferPuppeteer) {
@@ -769,19 +784,24 @@ app.post('/api/analyse', async (req, res) => {
         const testResp = await fetch(url, { headers: HEADERS, signal: controller.signal });
         clearTimeout(timeout);
         if (!testResp.ok) {
-          return res.status(400).json({
-            error: 'url_error',
-            message: `That URL returned an error (${testResp.status}). It may not be a catalogue page, or the catalogue hasn't been published yet.`
-          });
+          sseWrite(res, 'error', { message: `That URL returned an error (${testResp.status}). It may not be a catalogue page, or the catalogue hasn't been published yet.` });
+          return res.end();
         }
       } catch (e) {
-        return res.status(400).json({ error: 'url_unreachable', message: "Couldn't reach that URL. Check it's a valid catalogue page." });
+        sseWrite(res, 'error', { message: "Couldn't reach that URL. Check it's a valid catalogue page." });
+        return res.end();
       }
     }
 
     let pages;
     const client = new Anthropic({ apiKey });
     let rawLots = [];
+
+    sseWrite(res, 'phase', { step: 'scraping' });
+
+    const onExtract = (batch, totalBatches, lotsFound) => {
+      sseWrite(res, 'extract', { batch, totalBatches, lotsFound });
+    };
 
     // ── PDF catalogues — send directly to Claude ──
     if (isPdfUrl(url)) {
@@ -790,8 +810,10 @@ app.post('/api/analyse', async (req, res) => {
     } else if (rewritten.paginateAs === 'allsop_api') {
       // Allsop API: paginate through JSON endpoint
       pages = await scrapeAllsopApi(rewritten.baseUrl);
+      sseWrite(res, 'scrape', { pages: pages.length });
       if (pages.length > 0) {
-        rawLots = await extractLotsWithClaude(client, pages, house);
+        sseWrite(res, 'phase', { step: 'extracting' });
+        rawLots = await extractLotsWithClaude(client, pages, house, onExtract);
       }
     } else if (rewritten.preferPuppeteer) {
       // JS-rendered sites: go straight to Puppeteer
@@ -826,10 +848,12 @@ app.post('/api/analyse', async (req, res) => {
             return max;
           });
           console.log(`Savills: detected ${totalPages} pages`);
+          sseWrite(res, 'scrape', { pages: totalPages, lots: 0 });
 
           // Extract from first page
           const firstPageLots = await extractWithDOM(page, house);
           if (firstPageLots && firstPageLots.length > 0) rawLots.push(...firstPageLots);
+          sseWrite(res, 'scrape', { pages: totalPages, lots: rawLots.length });
           console.log(`Page 1: ${firstPageLots ? firstPageLots.length : 0} lots`);
 
           // Load remaining pages
@@ -1012,7 +1036,8 @@ app.post('/api/analyse', async (req, res) => {
             const html = await page.content();
             console.log(`Puppeteer: got ${html.length} chars, sending to Claude...`);
             const puppeteerPages = [{ page: 1, html }];
-            rawLots = await extractLotsWithClaude(client, puppeteerPages, house);
+            sseWrite(res, 'phase', { step: 'extracting' });
+            rawLots = await extractLotsWithClaude(client, puppeteerPages, house, onExtract);
             console.log(`Claude extracted ${rawLots.length} lots from Puppeteer content`);
           }
         }
@@ -1022,8 +1047,10 @@ app.post('/api/analyse', async (req, res) => {
     } else {
       // Standard static HTML scraping
       pages = await scrapeAllPages(scrapeUrl, house);
+      sseWrite(res, 'scrape', { pages: pages ? pages.length : 0 });
       if (pages && pages.length > 0) {
-        rawLots = await extractLotsWithClaude(client, pages, house);
+        sseWrite(res, 'phase', { step: 'extracting' });
+        rawLots = await extractLotsWithClaude(client, pages, house, onExtract);
       }
       // Puppeteer fallback if static scraping found nothing
       // Skip for houses where Puppeteer wastes memory (blocked, empty, or JS-only)
@@ -1034,25 +1061,33 @@ app.post('/api/analyse', async (req, res) => {
         const puppeteerPages = await scrapeWithPuppeteer(url, house);
         if (puppeteerPages.length > 0) {
           console.log(`Puppeteer got ${puppeteerPages.length} page(s), sending to Claude...`);
-          rawLots = await extractLotsWithClaude(client, puppeteerPages, house);
+          sseWrite(res, 'phase', { step: 'extracting' });
+          rawLots = await extractLotsWithClaude(client, puppeteerPages, house, onExtract);
           console.log(`Claude extracted ${rawLots.length} lots from Puppeteer content`);
         }
       }
     }
     
     if (pages && pages.length === 0 && rawLots.length === 0) {
-      return res.status(400).json({ error: 'no_content', message: "Couldn't find any content on that page." });
+      sseWrite(res, 'error', { message: "Couldn't find any content on that page." });
+      return res.end();
     }
 
     if (rawLots.length === 0) {
-      return res.status(400).json({ error: 'no_lots', message: "Couldn't find any auction lots. Make sure you're linking to the catalogue page, not the auction house homepage." });
+      sseWrite(res, 'error', { message: "Couldn't find any auction lots. Make sure you're linking to the catalogue page, not the auction house homepage." });
+      return res.end();
     }
+
+    sseWrite(res, 'phase', { step: 'scoring', lots: rawLots.length });
 
     const analysed = rawLots.map(lot => analyseLot(lot)).sort((a, b) => b.score - a.score);
 
     // ── Enrich with Land Registry + rental yields ──
     console.log('Starting Land Registry + rental yield enrichment...');
-    await enrichLots(analysed, house, url);
+    sseWrite(res, 'phase', { step: 'enriching', lots: analysed.length });
+    await enrichLots(analysed, house, url, (done, total) => {
+      sseWrite(res, 'enrich', { postcodes: done, total });
+    });
 
     // ── Cache results ──
     const displayName = getHouseDisplayName(house, url);
@@ -1064,6 +1099,18 @@ app.post('/api/analyse', async (req, res) => {
     if (house === 'unknown' && analysed.length >= 3) {
       log.info('NEW_HOUSE_CANDIDATE', { hostname: new URL(url).hostname, lots: analysed.length, url });
     }
+
+    // Check if catalogue data actually changed before invalidating preset cache
+    const { data: prevCached } = await supabase
+      .from('cached_analyses')
+      .select('total_lots, top_picks, title_splits')
+      .eq('url', normalisedUrl)
+      .single();
+
+    const catalogueChanged = !prevCached
+      || prevCached.total_lots !== analysed.length
+      || prevCached.top_picks !== analysed.filter(l => l.score >= 3).length
+      || prevCached.title_splits !== analysed.filter(l => l.titleSplit).length;
 
     await supabase.from('cached_analyses').upsert({
       url: normalisedUrl,
@@ -1080,12 +1127,29 @@ app.post('/api/analyse', async (req, res) => {
       expires_at: expiresAt,
     }, { onConflict: 'url' });
 
+    // Mark preset cache entries as partially stale (only the changed catalogue needs re-searching)
+    if (catalogueChanged) {
+      const { data: affected } = await supabase
+        .from('smart_search_cache')
+        .select('query_key, stale_urls')
+        .contains('source_urls', [normalisedUrl]);
+      if (affected && affected.length > 0) {
+        for (const row of affected) {
+          const updatedStale = [...new Set([...(row.stale_urls || []), normalisedUrl])];
+          await supabase.from('smart_search_cache')
+            .update({ stale_urls: updatedStale })
+            .eq('query_key', row.query_key);
+        }
+        console.log(`Marked ${affected.length} preset cache entries stale for: ${normalisedUrl}`);
+      }
+    }
+
     // ── Update user count ──
     await supabase.from('users')
       .update({ analyses_count: (user.analyses_count || 0) + 1 })
       .eq('id', user.id);
 
-    return res.json({
+    sseWrite(res, 'done', {
       house: displayName,
       houseSlug: house,
       recognised: house !== 'unknown',
@@ -1099,26 +1163,258 @@ app.post('/api/analyse', async (req, res) => {
       lots: analysed,
       cached: false,
     });
+    return res.end();
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: err.message || 'Analysis failed' });
+    sseWrite(res, 'error', { message: err.message || 'Analysis failed' });
+    return res.end();
   }
 });
+
+// ═══════════════════════════════════════════════════════════════
+// PRESET QUERIES — cached for instant results
+// ═══════════════════════════════════════════════════════════════
+const PRESET_QUERIES = {
+  'Properties needing heavy refurbishment': 'heavy-refurb',
+  'Freehold multi-unit blocks for title splitting': 'title-splits',
+  'High yield investments over 8%': 'high-yield-8',
+  'Development land with planning': 'dev-land',
+  'Probate or executor sales': 'probate',
+  'Best scoring deals': 'top-picks',
+  'Vacant properties': 'vacant',
+  'Properties under £100k': 'under-100k',
+  'Commercial property': 'commercial',
+  'Land and development sites': 'land-dev',
+  'Flats and apartments': 'flats',
+};
+
+function isPresetQuery(query) {
+  return PRESET_QUERIES[query] || null;
+}
 
 // ═══════════════════════════════════════════════════════════════
 // SMART SEARCH: Claude-powered filtering across cached analyses
 // ═══════════════════════════════════════════════════════════════
 app.post('/api/smart-search', async (req, res) => {
-  const { query, email } = req.body || {};
+  const { query, email, soldFilter } = req.body || {};
   if (!query) return res.status(400).json({ error: 'Missing search query' });
   if (!email) return res.status(401).json({ error: 'signup_required' });
 
   const { data: user } = await supabase
     .from('users')
-    .select('id')
+    .select('id, tier')
     .eq('email', email.toLowerCase().trim())
     .single();
   if (!user) return res.status(401).json({ error: 'signup_required' });
+
+  const presetSlug = isPresetQuery(query);
+  const sf = soldFilter || 'all';
+
+  // Gate custom (non-preset) queries behind premium tier
+  if (!presetSlug && (user.tier || 'free') === 'free') {
+    return res.status(403).json({
+      error: 'premium_required',
+      message: 'Custom AI search is a premium feature',
+      features: [
+        'Natural language AI search across all catalogues',
+        'Email alerts for new lots matching saved criteria',
+        'Unlimited daily catalogue analyses',
+        'CSV/JSON export of results',
+        'Portfolio tracking (watching / bid / won)',
+        'BridgeMatch finance integration per lot',
+        'Historical auction data & price trends',
+        'Custom scoring weights',
+      ],
+    });
+  }
+
+  // Check smart search cache for preset queries
+  if (presetSlug) {
+    const cacheKey = `${presetSlug}:${sf}`;
+    const { data: presetCache } = await supabase
+      .from('smart_search_cache')
+      .select('*')
+      .eq('query_key', cacheKey)
+      .gt('expires_at', new Date().toISOString())
+      .single();
+
+    if (presetCache && (!presetCache.stale_urls || presetCache.stale_urls.length === 0)) {
+      // Fully fresh cache — return instantly
+      return res.json({
+        results: presetCache.results || [],
+        report: presetCache.report || '',
+        sources: presetCache.sources || [],
+        totalSearched: presetCache.total_searched || 0,
+        cached: true,
+      });
+    }
+
+    if (presetCache && presetCache.stale_urls && presetCache.stale_urls.length > 0) {
+      // Partially stale — only re-search the changed catalogues and merge
+      const apiKey = process.env.ANTHROPIC_API_KEY;
+      if (!apiKey) return res.status(500).json({ error: 'API key not configured' });
+
+      try {
+        // Fetch only the changed catalogues
+        const { data: staleCatalogues } = await supabase
+          .from('cached_analyses')
+          .select('house, url, lots, total_lots')
+          .in('url', presetCache.stale_urls)
+          .gt('expires_at', new Date().toISOString());
+
+        if (!staleCatalogues || staleCatalogues.length === 0) {
+          // Stale catalogues expired or gone — strip old results from those sources and return
+          const cleanResults = (presetCache.results || []).filter(l =>
+            !presetCache.stale_urls.includes((l._sourceUrl || '').trim().replace(/\/+$/, '').toLowerCase())
+          );
+          const cleanSources = (presetCache.sources || []).filter(s =>
+            !presetCache.stale_urls.includes((s.url || '').trim().replace(/\/+$/, '').toLowerCase())
+          );
+          await supabase.from('smart_search_cache').update({
+            results: cleanResults, sources: cleanSources,
+            total_searched: cleanResults.length, stale_urls: [],
+          }).eq('query_key', cacheKey);
+          return res.json({ results: cleanResults, report: presetCache.report || '', sources: cleanSources, totalSearched: cleanResults.length, cached: true });
+        }
+
+        // Gather lots from only the changed catalogues
+        const deltaLots = [];
+        const deltaSources = [];
+        for (const c of staleCatalogues) {
+          if (c.lots && Array.isArray(c.lots)) {
+            deltaSources.push({ house: c.house, url: c.url, count: c.lots.length });
+            for (const lot of c.lots) {
+              deltaLots.push({ ...lot, _house: c.house, _sourceUrl: c.url });
+            }
+          }
+        }
+
+        // Apply sold filter to delta lots
+        const soldRe = /\bSOLD\b|\bSTC\b|\bSALE.?AGREED\b|\bWITHDRAWN\b/i;
+        const filteredDelta = sf === 'available'
+          ? deltaLots.filter(l => !(l.bullets || []).some(b => soldRe.test(b)))
+          : sf === 'sold'
+          ? deltaLots.filter(l => (l.bullets || []).some(b => soldRe.test(b)))
+          : deltaLots;
+
+        if (filteredDelta.length === 0) {
+          // Changed catalogues have no matching lots after filtering — just remove old results from those sources
+          const cleanResults = (presetCache.results || []).filter(l =>
+            !presetCache.stale_urls.includes((l._sourceUrl || '').trim().replace(/\/+$/, '').toLowerCase())
+          );
+          const cleanSources = (presetCache.sources || []).filter(s =>
+            !presetCache.stale_urls.includes((s.url || '').trim().replace(/\/+$/, '').toLowerCase())
+          );
+          for (const ds of deltaSources) cleanSources.push(ds);
+          await supabase.from('smart_search_cache').update({
+            results: cleanResults, sources: cleanSources,
+            source_urls: cleanSources.map(s => s.url),
+            total_searched: (presetCache.total_searched || 0) - deltaLots.length + filteredDelta.length,
+            stale_urls: [],
+          }).eq('query_key', cacheKey);
+          return res.json({ results: cleanResults, report: presetCache.report || '', sources: cleanSources, totalSearched: cleanResults.length, cached: true });
+        }
+
+        // Run Claude only on the delta lots
+        const queryTerms = query.toLowerCase().split(/\s+/).filter(t => t.length > 2);
+        const lotEntries = filteredDelta.map((l, i) => {
+          const summary = `[${i}] ${l._house} L${l.lot}: ${l.address} | £${l.price || '?'} | Score:${l.score || 0} | ${l.titleSplit ? 'TITLE_SPLIT' : ''} | ${(l.bullets || []).join('; ').substring(0, 150)}`;
+          const searchText = summary.toLowerCase();
+          const relevance = queryTerms.filter(t => searchText.includes(t)).length;
+          return { summary, relevance };
+        });
+        lotEntries.sort((a, b) => b.relevance - a.relevance);
+
+        const CONTEXT_LIMIT = 120000;
+        let lotSummaries = '';
+        let included = 0;
+        for (const entry of lotEntries) {
+          if (lotSummaries.length + entry.summary.length + 1 > CONTEXT_LIMIT) break;
+          lotSummaries += entry.summary + '\n';
+          included++;
+        }
+
+        const client = new Anthropic({ apiKey });
+        const msg = await client.messages.create({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 4000,
+          messages: [{ role: 'user', content: `You are a UK property investment analyst. A user has searched across ${filteredDelta.length} NEW auction lots from ${deltaSources.length} recently updated catalogues.
+
+Their search query: "${query}"
+
+Here are ${included} lots from the updated catalogues, sorted by relevance:
+
+${lotSummaries}
+
+TASK:
+1. Identify the lots that best match the user's query. Return the indices of matching lots.
+2. Write a one-line summary of what changed (e.g. "3 new heavy refurb properties found in Savills catalogue").
+
+Respond in this exact JSON format:
+{"indices":[0,5,12],"summary":"Brief change summary"}
+
+Only return lots that genuinely match the query.` }]
+        });
+
+        const responseText = msg.content[0]?.text || '';
+        let parsed;
+        try {
+          let cleaned = responseText.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+          const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+          parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : JSON.parse(cleaned);
+        } catch (e) {
+          const indicesMatch = responseText.match(/"indices"\s*:\s*\[([\d,\s]*)\]/);
+          parsed = { indices: indicesMatch ? indicesMatch[1].split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n)) : [], summary: '' };
+        }
+
+        const newMatches = (parsed.indices || [])
+          .filter(i => i >= 0 && i < filteredDelta.length)
+          .map(i => filteredDelta[i]);
+
+        // Merge: keep old results from unchanged catalogues + new results from changed ones
+        const staleUrlSet = new Set(presetCache.stale_urls);
+        const keptResults = (presetCache.results || []).filter(l =>
+          !staleUrlSet.has((l._sourceUrl || '').trim().replace(/\/+$/, '').toLowerCase())
+        );
+        const mergedResults = [...keptResults, ...newMatches];
+
+        // Merge sources
+        const keptSources = (presetCache.sources || []).filter(s =>
+          !staleUrlSet.has((s.url || '').trim().replace(/\/+$/, '').toLowerCase())
+        );
+        const mergedSources = [...keptSources, ...deltaSources];
+
+        const mergedReport = parsed.summary
+          ? `${presetCache.report || ''}\n\nUpdate: ${parsed.summary}`
+          : presetCache.report || '';
+
+        // Update cache with merged results
+        await supabase.from('smart_search_cache').update({
+          results: mergedResults,
+          report: mergedReport,
+          sources: mergedSources,
+          source_urls: mergedSources.map(s => s.url),
+          total_searched: (presetCache.total_searched || 0) + filteredDelta.length,
+          stale_urls: [],
+          cached_at: new Date().toISOString(),
+          expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+        }).eq('query_key', cacheKey);
+
+        console.log(`Incremental preset refresh: ${presetSlug} — ${newMatches.length} new matches from ${deltaSources.map(s => s.house).join(', ')}`);
+
+        return res.json({
+          results: mergedResults,
+          report: mergedReport,
+          sources: mergedSources,
+          totalSearched: (presetCache.total_searched || 0) + filteredDelta.length,
+          cached: true,
+        });
+      } catch (err) {
+        console.error('Incremental preset refresh failed, falling through to full search:', err.message);
+        // Fall through to full search below
+      }
+    }
+  }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'API key not configured' });
@@ -1150,9 +1446,17 @@ app.post('/api/smart-search', async (req, res) => {
       return res.json({ results: [], report: 'No lot data in cache. Please analyse auction catalogues first.', sources: [] });
     }
 
+    // Apply sold filter before sending to Claude
+    const soldRe = /\bSOLD\b|\bSTC\b|\bSALE.?AGREED\b|\bWITHDRAWN\b/i;
+    const filteredLots = soldFilter === 'available'
+      ? allLots.filter(l => !(l.bullets || []).some(b => soldRe.test(b)))
+      : soldFilter === 'sold'
+      ? allLots.filter(l => (l.bullets || []).some(b => soldRe.test(b)))
+      : allLots;
+
     // Build a compact lot summary for Claude, prioritising query-relevant lots
     const queryTerms = query.toLowerCase().split(/\s+/).filter(t => t.length > 2);
-    const lotEntries = allLots.map((l, i) => {
+    const lotEntries = filteredLots.map((l, i) => {
       const summary = `[${i}] ${l._house} L${l.lot}: ${l.address} | £${l.price || '?'} | Score:${l.score || 0} | ${l.titleSplit ? 'TITLE_SPLIT' : ''} | ${(l.bullets || []).join('; ').substring(0, 150)}`;
       const searchText = summary.toLowerCase();
       const relevance = queryTerms.filter(t => searchText.includes(t)).length;
@@ -1171,13 +1475,16 @@ app.post('/api/smart-search', async (req, res) => {
       lotSummaries += entry.summary + '\n';
       included++;
     }
-    const omitted = allLots.length - included;
+    const omitted = filteredLots.length - included;
+
+    const soldInstruction = soldFilter === 'available' ? '\nIMPORTANT: The user has filtered to show only available (unsold) lots. All sold/STC/withdrawn lots have already been excluded.' :
+      soldFilter === 'sold' ? '\nIMPORTANT: The user is specifically looking at sold/STC/withdrawn lots only.' : '';
 
     const client = new Anthropic({ apiKey });
     const msg = await client.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 4000,
-      messages: [{ role: 'user', content: `You are a UK property investment analyst. A user has searched across ${allLots.length} auction lots from ${sources.length} auction house catalogues.
+      messages: [{ role: 'user', content: `You are a UK property investment analyst. A user has searched across ${filteredLots.length} auction lots from ${sources.length} auction house catalogues.${soldInstruction}
 
 Their search query: "${query}"
 
@@ -1219,15 +1526,33 @@ Only return lots that genuinely match the query. If nothing matches well, say so
     }
 
     const matchingLots = (parsed.indices || [])
-      .filter(i => i >= 0 && i < allLots.length)
-      .map(i => allLots[i]);
+      .filter(i => i >= 0 && i < filteredLots.length)
+      .map(i => filteredLots[i]);
 
-    return res.json({
+    const response = {
       results: matchingLots,
       report: parsed.report || '',
       sources,
-      totalSearched: allLots.length,
-    });
+      totalSearched: filteredLots.length,
+    };
+
+    // Cache preset query results (1-hour TTL)
+    if (presetSlug) {
+      const cacheKey = `${presetSlug}:${sf}`;
+      await supabase.from('smart_search_cache').upsert({
+        query_key: cacheKey,
+        results: matchingLots,
+        report: parsed.report || '',
+        sources,
+        source_urls: sources.map(s => s.url),
+        total_searched: filteredLots.length,
+        sold_filter: sf,
+        cached_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      }, { onConflict: 'query_key' });
+    }
+
+    return res.json(response);
   } catch (err) {
     console.error('Smart search error:', err);
     return res.status(500).json({ error: err.message || 'Search failed' });
@@ -1692,7 +2017,7 @@ async function scrapeWithPuppeteer(url, house) {
 // ═══════════════════════════════════════════════════════════════
 // CLAUDE EXTRACTION
 // ═══════════════════════════════════════════════════════════════
-async function extractLotsWithClaude(client, pages, house) {
+async function extractLotsWithClaude(client, pages, house, onProgress) {
   const allLots = [];
   const seenLots = new Set();
   const batchSize = 3;
@@ -1745,6 +2070,7 @@ Return ONLY the JSON array:`;
           }
         }
       }
+      if (onProgress) onProgress(Math.floor(i/batchSize)+1, Math.ceil(pages.length/batchSize), allLots.length);
     } catch (err) {
       console.error(`Claude extraction failed for batch starting at page ${batch[0].page}:`, err.message);
     }
@@ -3279,7 +3605,7 @@ function buildLotUrl(lot, house, sourceUrl) {
 // ═══════════════════════════════════════════════════════════════
 // ENRICHMENT: Land Registry + Rental Yield per lot
 // ═══════════════════════════════════════════════════════════════
-async function enrichLots(lots, house, sourceUrl) {
+async function enrichLots(lots, house, sourceUrl, onProgress) {
   // Group lots by postcode to avoid duplicate queries
   const postcodeMap = {};
   for (const lot of lots) {
@@ -3296,10 +3622,13 @@ async function enrichLots(lots, house, sourceUrl) {
   // Query Land Registry for each unique postcode (with concurrency limit)
   const CONCURRENCY = 5;
   const lrCache = {};
+  let enrichDone = 0;
   for (let i = 0; i < postcodes.length; i += CONCURRENCY) {
     const batch = postcodes.slice(i, i + CONCURRENCY);
     const results = await Promise.all(batch.map(pc => queryLandRegistry(pc)));
     batch.forEach((pc, idx) => { lrCache[pc] = results[idx]; });
+    enrichDone += batch.length;
+    if (onProgress) onProgress(enrichDone, postcodes.length);
     if (i + CONCURRENCY < postcodes.length) await new Promise(r => setTimeout(r, 200));
   }
 
@@ -3639,12 +3968,28 @@ async function autoAnalyseOne(url, apiKey) {
   const expiresAt = new Date(Date.now() + CACHE_DAYS * 24 * 60 * 60 * 1000).toISOString();
   const lotsWithPrice = lots.filter(l => l.price && l.price > 0);
   const yieldsArr = lots.map(l => l.estGrossYield).filter(y => y && y > 0);
+
+  // Check if catalogue data actually changed
+  const { data: prevCached } = await supabase
+    .from('cached_analyses')
+    .select('total_lots, top_picks, title_splits')
+    .eq('url', normalisedUrl)
+    .single();
+
+  const newTotalLots = lots.length;
+  const newTopPicks = lots.filter(l => l.score >= 3).length;
+  const newTitleSplits = lots.filter(l => l.titleSplit).length;
+  const catalogueChanged = !prevCached
+    || prevCached.total_lots !== newTotalLots
+    || prevCached.top_picks !== newTopPicks
+    || prevCached.title_splits !== newTitleSplits;
+
   await supabase.from('cached_analyses').upsert({
     url: normalisedUrl,
     house,
-    total_lots: lots.length,
-    title_splits: lots.filter(l => l.titleSplit).length,
-    top_picks: lots.filter(l => l.score >= 3).length,
+    total_lots: newTotalLots,
+    title_splits: newTitleSplits,
+    top_picks: newTopPicks,
     under_100k: lotsWithPrice.filter(l => l.price < 100000).length,
     avg_yield: yieldsArr.length ? +(yieldsArr.reduce((a, b) => a + b, 0) / yieldsArr.length).toFixed(1) : null,
     dev_potential: lots.filter(l => (l.opps || []).some(o => /development|planning|conversion/i.test(o))).length,
@@ -3654,7 +3999,24 @@ async function autoAnalyseOne(url, apiKey) {
     expires_at: expiresAt,
   }, { onConflict: 'url' });
 
-  console.log(`AUTO: ✓ ${house}: ${lots.length} lots cached (${lots.filter(l => l.titleSplit).length} title splits, ${lots.filter(l => l.score >= 3).length} top picks)`);
+  // Mark preset cache entries as partially stale (only the changed catalogue needs re-searching)
+  if (catalogueChanged) {
+    const { data: affected } = await supabase
+      .from('smart_search_cache')
+      .select('query_key, stale_urls')
+      .contains('source_urls', [normalisedUrl]);
+    if (affected && affected.length > 0) {
+      for (const row of affected) {
+        const updatedStale = [...new Set([...(row.stale_urls || []), normalisedUrl])];
+        await supabase.from('smart_search_cache')
+          .update({ stale_urls: updatedStale })
+          .eq('query_key', row.query_key);
+      }
+      console.log(`AUTO: Marked ${affected.length} preset cache entries stale for: ${normalisedUrl}`);
+    }
+  }
+
+  console.log(`AUTO: ✓ ${house}: ${newTotalLots} lots cached (${newTitleSplits} title splits, ${newTopPicks} top picks)${catalogueChanged ? ' [CHANGED]' : ' [unchanged]'}`);
 }
 
 // Helper: get catalogue-ready auctions (used by auto-analyse)

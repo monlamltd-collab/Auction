@@ -320,7 +320,7 @@ footer .logo-f span{color:var(--green)}
   <div class="nav-inner">
     <div class="logo">Bridge<span>match</span></div>
     <div class="nav-right">
-      <a href="/check" class="nav-link-bm" title="Check if you can finance a deal">🧩 BridgeMatch</a>
+      <a href="/check" class="nav-link-bm" title="Check if you can finance a deal">🧩 Can I fund this?</a>
       <button class="nav-cta" id="navCta" onclick="requireSignup()">Sign up free</button>
     </div>
   </div>
@@ -329,7 +329,7 @@ footer .logo-f span{color:var(--green)}
 <div class="wrap">
 
   <header class="hero">
-    <h1>Find your next property deal<br>at <em>auction</em></h1>
+    <h1>Find your next property deal <br>at <em>auction</em></h1>
     <p class="hero-sub">Search across every major UK auction house at once. AI-powered analysis scores every lot, spots title splits, and finds hidden opportunities.</p>
   </header>
 
@@ -347,6 +347,18 @@ footer .logo-f span{color:var(--green)}
     </div>
   </div>
 
+  <!-- ═══════ PREMIUM MODAL ═══════ -->
+  <div class="modal-bg" id="premiumModal">
+    <div class="modal" style="max-width:440px">
+      <div class="modal-icon">⚡</div>
+      <h2>Upgrade to Premium</h2>
+      <p>Custom AI search is a premium feature. Preset searches are always free.</p>
+      <ul id="premiumFeatures" style="text-align:left;font-size:.88rem;line-height:1.8;padding-left:20px;margin:16px 0;color:var(--text2)"></ul>
+      <a href="mailto:simon@bridgematch.co.uk?subject=Bridgematch%20Premium%20Interest" class="btn-main" style="display:block;width:100%;text-align:center;text-decoration:none">Contact us to upgrade</a>
+      <button onclick="$('premiumModal').style.display='none'" style="margin-top:12px;background:none;border:none;color:var(--text3);cursor:pointer;font-size:.85rem;width:100%">Maybe later</button>
+    </div>
+  </div>
+
   <!-- USER BAR -->
   <div id="userBar" class="user-bar" style="display:none">
     <span class="dot"></span> <span id="userEmail"></span> &nbsp;·&nbsp; <a onclick="signOut()">sign out</a>
@@ -357,13 +369,13 @@ footer .logo-f span{color:var(--green)}
 
     <div class="filters">
       <div class="filter-field"><label>Min Price</label><select id="fMinPrice" onchange="applyFilters()">
-        <option value="">No min</option><option value="25000">£25,000</option><option value="50000">£50,000</option><option value="75000">£75,000</option><option value="100000">£100,000</option><option value="150000">£150,000</option><option value="200000">£200,000</option><option value="300000">£300,000</option><option value="500000">£500,000</option>
+        <option value="">No min</option><option value="25000">£25,000</option><option value="50000">£50,000</option><option value="75000">£75,000</option><option value="100000">£100,000</option><option value="150000">£150,000</option><option value="200000">£200,000</option><option value="300000">£300,000</option><option value="500000">£500,000</option><option value="750000">£750,000</option><option value="1000000">£1,000,000</option><option value="1500000">£1,500,000</option><option value="2000000">£2,000,000</option><option value="2500000">£2,500,000</option><option value="3000000">£3,000,000</option>
       </select></div>
       <div class="filter-field"><label>Max Price</label><select id="fMaxPrice" onchange="applyFilters()">
         <option value="">No max</option><option value="50000">£50,000</option><option value="100000">£100,000</option><option value="150000">£150,000</option><option value="200000">£200,000</option><option value="300000">£300,000</option><option value="500000">£500,000</option><option value="750000">£750,000</option><option value="1000000">£1,000,000</option><option value="1500000">£1,500,000</option><option value="2000000">£2,000,000</option><option value="3000000">£3,000,000</option><option value="5000000">£5,000,000</option><option value="10000000">£10,000,000</option>
       </select></div>
       <div class="filter-field"><label>Bedrooms</label><select id="fBeds" onchange="applyFilters()">
-        <option value="">Any</option><option value="1">1+</option><option value="2">2+</option><option value="3">3+</option><option value="4">4+</option><option value="5">5+</option>
+        <option value="">Any</option><option value="1">1+</option><option value="2">2+</option><option value="3">3+</option><option value="4">4+</option><option value="5">5+</option><option value="6">6+</option><option value="7">7+</option><option value="8">8+</option><option value="9">9+</option><option value="10">10+</option><option value="11">11+</option><option value="12">12+</option><option value="13">13+</option><option value="14">14+</option><option value="15">15+</option>
       </select></div>
       <div class="filter-field"><label>Property Type</label><select id="fType" onchange="applyFilters()">
         <option value="">All types</option><option value="house">House</option><option value="flat">Flat / Apartment</option><option value="bungalow">Bungalow</option><option value="commercial">Commercial</option><option value="land">Land / Development</option><option value="garage">Garage / Parking</option><option value="other">Other</option>
@@ -386,8 +398,8 @@ footer .logo-f span{color:var(--green)}
           <option value="scotland">Scotland</option>
         </optgroup>
       </select></div>
-      <div class="filter-field"><label>Status</label><select id="fSoldTop" onchange="applyFilters()">
-        <option value="hide">Hide sold / STC</option><option value="show">Show sold / STC</option>
+      <div class="filter-field"><label>Status</label><select id="fSoldTop" onchange="syncSoldFilter('top');applyFilters()">
+        <option value="available">Available only</option><option value="all">All lots</option><option value="sold">Sold / STC only</option>
       </select></div>
       <div class="filter-field"><label>Tenure</label><select id="fTenure" onchange="applyFilters()">
         <option value="">Any</option><option value="Freehold">Freehold</option><option value="Leasehold">Leasehold</option><option value="Share of Freehold">Share of Freehold</option>
@@ -423,6 +435,11 @@ footer .logo-f span{color:var(--green)}
         <button class="ex-btn" onclick="setQ('Development land with planning')">Dev land</button>
         <button class="ex-btn" onclick="setQ('Probate or executor sales')">Probate</button>
         <button class="ex-btn" onclick="setQ('Best scoring deals')">Top picks</button>
+        <button class="ex-btn" onclick="setQ('Vacant properties')">Vacant</button>
+        <button class="ex-btn" onclick="setQ('Properties under £100k')">Under 100k</button>
+        <button class="ex-btn" onclick="setQ('Commercial property')">Commercial</button>
+        <button class="ex-btn" onclick="setQ('Land and development sites')">Land & dev</button>
+        <button class="ex-btn" onclick="setQ('Flats and apartments')">Flats</button>
       </div>
       <button class="adv-toggle" onclick="toggleAdvanced()">⚙️ Budget & deposit</button>
     </div>
@@ -488,7 +505,7 @@ footer .logo-f span{color:var(--green)}
         <select class="tb-select" id="fDeal" onchange="renderLots()"><option value="">All deals</option></select>
         <select class="tb-select" id="fBudget" onchange="renderLots()"><option value="all">All lots</option><option value="budget">In budget</option></select>
         <select class="tb-select" id="fTS" onchange="renderLots()"><option value="">All lots</option><option value="ts">Title split opportunities</option></select>
-        <select class="tb-select" id="fSold" onchange="renderLots()"><option value="show">Show sold/STC</option><option value="hide">Hide sold/STC</option></select>
+        <select class="tb-select" id="fSold" onchange="syncSoldFilter('toolbar');renderLots()"><option value="available">Available only</option><option value="all">All lots</option><option value="sold">Sold / STC only</option></select>
         <label class="tb-toggle"><input type="checkbox" id="showROI" onchange="renderLots()"><span class="tb-toggle-label">📊 Deal Analysis</span></label>
         <input class="tb-search" type="text" id="fSearch" placeholder="Search..." oninput="renderLots()">
       </div>
@@ -518,6 +535,11 @@ footer .logo-f span{color:var(--green)}
 const $=id=>document.getElementById(id);
 let LOTS=[], SMART_RESULTS=null;
 let ALL_LOTS=[], ALL_SOURCES=[], FILTERED_INDICES=[];
+
+function syncSoldFilter(source){
+  if(source==='top') { if($('fSold')) $('fSold').value=$('fSoldTop').value; }
+  else { if($('fSoldTop')) $('fSoldTop').value=$('fSold').value; }
+}
 
 // ═══════════════════════════════
 // LOAD ALL LOTS FOR FILTERING
@@ -613,7 +635,9 @@ function applyFilters(){
     if(l.price && maxP!==Infinity && l.price>maxP) return;
     if(beds && (l.beds||0)<beds) return;
     if(type && l.propType!==type) return;
-    if(sold==='hide' && (l.bullets||[]).some(b=>/SOLD|STC|WITHDRAWN/i.test(b))) return;
+    const isSold=(l.bullets||[]).some(b=>/\bSOLD\b|\bSTC\b|\bSALE.?AGREED\b|\bWITHDRAWN\b/i.test(b));
+    if(sold==='available' && isSold) return;
+    if(sold==='sold' && !isSold) return;
     if(tenure && l.tenure!==tenure) return;
     if(condition==='needs work' && l.condition!=='needs work') return;
     if(condition==='good' && l.condition==='needs work') return;
@@ -953,16 +977,48 @@ async function runAnalysis(url){
     <div class="scan-label" id="scanLabel">lots found so far</div>
   </div>`;
 
-  // Animate steps
-  const stepTimings = [1500, 3000, 5000, 7000];
-  stepTimings.forEach((t, i) => {
+  // Map SSE phase names to step indicators
+  const PHASE_STEPS = { connecting: 1, scraping: 2, extracting: 3, scoring: 4, enriching: 5 };
+
+  function advanceStep(stepNum) {
+    for (let i = 1; i < stepNum; i++) {
+      const s = $('ss'+i);
+      if (s) { s.classList.remove('active','waiting'); s.classList.add('done'); }
+    }
+    const cur = $('ss'+stepNum);
+    if (cur) { cur.classList.remove('waiting'); cur.classList.add('active'); }
+  }
+
+  function showResults(data) {
+    LOTS = data.lots || [];
+    for (let i=1;i<=5;i++) { const s=$('ss'+i); if(s){s.classList.remove('active','waiting');s.classList.add('done')} }
+    if($('scanCount')) $('scanCount').textContent = LOTS.length;
+    const scanParts = [`lots scored`, `${data.titleSplits} title splits`, `${data.topPicks} top picks`];
+    if (data.under100k > 0) scanParts.push(`${data.under100k} under £100k`);
+    if (data.avgYield) scanParts.push(`avg ${data.avgYield}% yield`);
+    if (data.devPotential > 0) scanParts.push(`${data.devPotential} dev potential`);
+    if (data.vacantCount > 0) scanParts.push(`${data.vacantCount} vacant`);
+    if($('scanLabel')) $('scanLabel').textContent = scanParts.join(' · ');
+
     setTimeout(() => {
-      const prev = $('ss'+(i+1));
-      const next = $('ss'+(i+2));
-      if(prev){prev.classList.remove('active');prev.classList.add('done')}
-      if(next){next.classList.remove('waiting');next.classList.add('active')}
-    }, t);
-  });
+      $('progressPanel').style.display='none';
+      $('resultsTitle').textContent = `${data.house || 'Auction'} — ${LOTS.length} lots`;
+      const existingNotice = document.querySelector('.auto-detect-notice');
+      if (existingNotice) existingNotice.remove();
+      if (data.recognised === false && LOTS.length > 0) {
+        const notice = document.createElement('div');
+        notice.className = 'auto-detect-notice';
+        notice.textContent = 'New house auto-detected — results may vary for unfamiliar sites';
+        $('resultsTitle').parentNode.insertBefore(notice, $('resultsTitle').nextSibling);
+      }
+      $('viewToggle').style.display='none';
+      $('reportView').style.display='none';
+      $('cardsView').style.display='block';
+      buildLotFilters();
+      renderLots();
+      $('resultsPanel').style.display='block';
+    }, data.cached ? 500 : 1200);
+  }
 
   try{
     const resp=await fetch('/api/analyse',{
@@ -971,46 +1027,70 @@ async function runAnalysis(url){
       body:JSON.stringify({url,email:currentUser?.email,budget:{deposit:+($('dep')?.value||0),stdPct:+($('stdPct')?.value||25),tsPct:+($('tsPct')?.value||0)}})
     });
 
-    const data=await resp.json();
+    const ct = resp.headers.get('content-type') || '';
 
-    if(!resp.ok){
-      if(data.error==='signup_required'){requireSignup();throw new Error('Please sign up first')}
-      if(data.error==='rate_limited'){throw new Error(data.message||'Daily limit reached')}
-      throw new Error(data.message||data.error||'Analysis failed');
+    if (ct.includes('application/json')) {
+      // Cached response — plain JSON
+      const data = await resp.json();
+      if (!resp.ok) {
+        if(data.error==='signup_required'){requireSignup();throw new Error('Please sign up first')}
+        if(data.error==='rate_limited'){throw new Error(data.message||'Daily limit reached')}
+        throw new Error(data.message||data.error||'Analysis failed');
+      }
+      showResults(data);
+    } else {
+      // Fresh analysis — SSE stream
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        // Parse complete SSE events from buffer
+        const parts = buffer.split('\n\n');
+        buffer = parts.pop(); // keep incomplete event in buffer
+
+        for (const part of parts) {
+          let eventType = 'message', eventData = '';
+          for (const line of part.split('\n')) {
+            if (line.startsWith('event: ')) eventType = line.slice(7);
+            else if (line.startsWith('data: ')) eventData = line.slice(6);
+          }
+          if (!eventData) continue;
+
+          try {
+            const d = JSON.parse(eventData);
+            if (eventType === 'phase') {
+              const step = PHASE_STEPS[d.step];
+              if (step) advanceStep(step);
+              if (d.step === 'connecting' && d.house) {
+                const t = $('ss1'); if(t) t.querySelector('.check').nextSibling.textContent = ' ' + d.house;
+              }
+              if (d.lots && $('scanCount')) $('scanCount').textContent = d.lots;
+            } else if (eventType === 'scrape') {
+              if (d.lots !== undefined && $('scanCount')) $('scanCount').textContent = d.lots;
+              if (d.pages && $('scanLabel')) $('scanLabel').textContent = `${d.pages} page(s) found`;
+            } else if (eventType === 'extract') {
+              advanceStep(3);
+              if (d.lotsFound !== undefined && $('scanCount')) $('scanCount').textContent = d.lotsFound;
+              if ($('scanLabel')) $('scanLabel').textContent = `batch ${d.batch}/${d.totalBatches} · ${d.lotsFound} lots extracted`;
+            } else if (eventType === 'enrich') {
+              advanceStep(5);
+              if ($('scanLabel')) $('scanLabel').textContent = `Land Registry: ${d.postcodes}/${d.total} postcodes`;
+            } else if (eventType === 'done') {
+              showResults(d);
+            } else if (eventType === 'error') {
+              throw new Error(d.message || 'Analysis failed');
+            }
+          } catch (parseErr) {
+            if (parseErr.message && !parseErr.message.includes('JSON')) throw parseErr;
+          }
+        }
+      }
     }
-
-    LOTS=data.lots||[];
-
-    // Complete all steps
-    for(let i=1;i<=5;i++){const s=$('ss'+i);if(s){s.classList.remove('active','waiting');s.classList.add('done')}}
-    if($('scanCount'))$('scanCount').textContent=LOTS.length;
-    const scanParts = [`lots scored`, `${data.titleSplits} title splits`, `${data.topPicks} top picks`];
-    if(data.under100k > 0) scanParts.push(`${data.under100k} under £100k`);
-    if(data.avgYield) scanParts.push(`avg ${data.avgYield}% yield`);
-    if(data.devPotential > 0) scanParts.push(`${data.devPotential} dev potential`);
-    if(data.vacantCount > 0) scanParts.push(`${data.vacantCount} vacant`);
-    if($('scanLabel'))$('scanLabel').textContent=scanParts.join(' · ');
-
-    // Brief pause to let user see the final count
-    await new Promise(r=>setTimeout(r,data.cached?500:1500));
-
-    $('progressPanel').style.display='none';
-    $('resultsTitle').textContent = `${data.house || 'Auction'} — ${LOTS.length} lots`;
-    // Show notice for auto-detected houses
-    const existingNotice = document.querySelector('.auto-detect-notice');
-    if (existingNotice) existingNotice.remove();
-    if (data.recognised === false && LOTS.length > 0) {
-      const notice = document.createElement('div');
-      notice.className = 'auto-detect-notice';
-      notice.textContent = 'New house auto-detected — results may vary for unfamiliar sites';
-      $('resultsTitle').parentNode.insertBefore(notice, $('resultsTitle').nextSibling);
-    }
-    $('viewToggle').style.display='none';
-    $('reportView').style.display='none';
-    $('cardsView').style.display='block';
-    buildLotFilters();
-    renderLots();
-    $('resultsPanel').style.display='block';
   }catch(e){
     $('progressPanel').innerHTML=`<div class="scan-animation" style="background:var(--red)">
       <div class="scan-title">✗ ${e.message}</div>
@@ -1060,11 +1140,19 @@ async function runSmartSearch(query) {
     const resp = await fetch('/api/smart-search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, email: currentUser?.email, filteredIndices: FILTERED_INDICES.length > 0 && FILTERED_INDICES.length < ALL_LOTS.length ? FILTERED_INDICES : null })
+      body: JSON.stringify({ query, email: currentUser?.email, filteredIndices: FILTERED_INDICES.length > 0 && FILTERED_INDICES.length < ALL_LOTS.length ? FILTERED_INDICES : null, soldFilter: $('fSoldTop')?.value || 'all' })
     });
     const data = await resp.json();
     if (!resp.ok) {
       if (data.error === 'signup_required') { requireSignup(); throw new Error('Please sign up first'); }
+      if (data.error === 'premium_required') {
+        $('progressPanel').style.display='none';
+        const fl=$('premiumFeatures');
+        fl.innerHTML=(data.features||[]).map(f=>`<li>${f}</li>`).join('');
+        $('premiumModal').style.display='flex';
+        $('mainBtn').disabled=false;$('mainBtn').textContent='Search';
+        return;
+      }
       throw new Error(data.error || 'Search failed');
     }
 
@@ -1074,9 +1162,9 @@ async function runSmartSearch(query) {
     // Complete all steps
     for(let i=1;i<=4;i++){const s=$('sq'+i);if(s){s.classList.remove('active','waiting');s.classList.add('done')}}
     if($('scanCount'))$('scanCount').textContent=LOTS.length;
-    if($('scanLabel'))$('scanLabel').textContent=`matches across ${data.sources?.length||0} catalogues · ${data.totalSearched||0} lots searched`;
+    if($('scanLabel'))$('scanLabel').textContent=`matches across ${data.sources?.length||0} catalogues · ${data.totalSearched||0} lots searched${data.cached?' (cached)':''}`;
 
-    await new Promise(r=>setTimeout(r,1200));
+    if(!data.cached) await new Promise(r=>setTimeout(r,1200));
 
     $('progressPanel').style.display = 'none';
 
@@ -1139,7 +1227,8 @@ function renderLots(){
   if(fd)lots=lots.filter(l=>l.dealType===fd);
   if(fb==='budget'&&b.sm>0)lots=lots.filter(l=>{if(!l.price)return true;return l.price<=b.sm});
   if(fts==='ts')lots=lots.filter(l=>l.titleSplit);
-  if(fsold==='hide')lots=lots.filter(l=>!(l.bullets||[]).some(b=>/\bSOLD\b|\bSTC\b|\bSALE.?AGREED\b|\bWITHDRAWN\b/i.test(b)));
+  if(fsold==='available')lots=lots.filter(l=>!(l.bullets||[]).some(b=>/\bSOLD\b|\bSTC\b|\bSALE.?AGREED\b|\bWITHDRAWN\b/i.test(b)));
+  if(fsold==='sold')lots=lots.filter(l=>(l.bullets||[]).some(b=>/\bSOLD\b|\bSTC\b|\bSALE.?AGREED\b|\bWITHDRAWN\b/i.test(b)));
   if(fs)lots=lots.filter(l=>(l.address||'').toLowerCase().includes(fs)||(l.bullets||[]).join(' ').toLowerCase().includes(fs));
 
   const top=lots.filter(l=>l.score>=3);
