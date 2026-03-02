@@ -135,6 +135,26 @@ a{color:var(--green);text-decoration:none}a:hover{text-decoration:underline}
 .tags{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px}
 .tag{font-size:.7rem;padding:3px 8px;border-radius:12px;font-weight:600}
 .tag-t{background:var(--violet-light);color:var(--violet)}.tag-o{background:var(--green-light);color:var(--green2)}.tag-r{background:var(--red-light);color:var(--red)}
+.tag-aff{font-size:.68rem;padding:2px 7px;border-radius:10px;font-weight:700;letter-spacing:.02em}
+.tag-aff.aff-ok{background:var(--green-light);color:var(--green)}.tag-aff.aff-stretch{background:var(--amber-light);color:var(--amber)}.tag-aff.aff-oor{background:var(--red-light);color:var(--red);opacity:.6}
+.fp-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px}
+.fp-checks{display:flex;gap:18px;margin-top:6px}
+.fp-checks label{font-size:.82rem;color:var(--text2);display:flex;align-items:center;gap:5px;cursor:pointer}
+.fp-ts-settings{display:none;margin-top:10px;padding:10px 12px;background:var(--violet-light);border-radius:var(--radius-sm);border-left:3px solid var(--violet)}
+.fp-ts-settings.show{display:block}
+.fp-ts-row{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.fp-slider-group{display:flex;align-items:center;gap:8px}
+.fp-slider-group input[type="range"]{width:140px;accent-color:var(--violet)}
+.fp-slider-val{font-weight:600;color:var(--violet);font-size:.85rem;min-width:35px}
+.fp-tip{display:inline-block;width:15px;height:15px;border-radius:50%;background:var(--border);color:var(--text3);font-size:.65rem;text-align:center;line-height:15px;cursor:help;margin-left:4px}
+.fp-ts-info{font-size:.78rem;color:var(--text3);line-height:1.5}
+.fp-summary{font-size:.82rem;color:var(--text3);margin-top:10px;line-height:1.7}
+.fp-summary b{color:var(--green)}.fp-summary .fp-refurb{color:var(--amber)}.fp-summary .fp-split{color:var(--violet)}
+.tag-aff.aff-full{background:var(--violet-light);color:var(--violet);font-weight:700}
+.fp-full-finance{color:var(--violet);font-weight:600}
+.aff-stats{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.aff-stat{font-size:.72rem;padding:3px 8px;border-radius:10px;font-weight:600}
+.aff-stat.as-ok{background:var(--green-light);color:var(--green)}.aff-stat.as-str{background:var(--amber-light);color:var(--amber)}.aff-stat.as-oor{background:var(--red-light);color:var(--red)}
 .lot-bullets{list-style:none;padding:0;margin:0}.lot-bullets li{font-size:.82rem;color:var(--text2);padding:2px 0 2px 14px;position:relative}
 .lot-bullets li::before{content:'›';position:absolute;left:0;color:var(--text4)}
 .lot-link{margin-top:0}.lot-link a{font-size:.82rem;color:var(--green);font-weight:600}
@@ -226,6 +246,8 @@ footer .logo-f span{color:var(--green)}
   .search-row{flex-direction:column}
   .stats-grid{grid-template-columns:1fr 1fr}
   .budget-row{grid-template-columns:1fr}
+  .fp-row{grid-template-columns:1fr}
+  .fp-ts-row{flex-direction:column;align-items:flex-start}
   .cal-card{grid-template-columns:48px 1fr;gap:12px}
   .cal-actions{grid-column:1/-1}
   .toolbar{flex-direction:column;align-items:stretch}
@@ -441,15 +463,34 @@ footer .logo-f span{color:var(--green)}
         <button class="ex-btn" onclick="setQ('Land and development sites')">Land & dev</button>
         <button class="ex-btn" onclick="setQ('Flats and apartments')">Flats</button>
       </div>
-      <button class="adv-toggle" onclick="toggleAdvanced()">⚙️ Budget & deposit</button>
+      <button class="adv-toggle" onclick="toggleAdvanced()">💰 Finance profile</button>
     </div>
 
     <div class="advanced" id="advancedPanel">
-      <div class="budget-row">
-        <div class="filter-field"><label>Your Deposit (£)</label><input id="dep" type="number" value="0" placeholder="No limit"></div>
-        <div class="filter-field"><label>Deposit %</label><input id="stdPct" type="number" value="25"></div>
+      <div class="fp-row">
+        <div class="filter-field"><label>Cash Available (£)</label><input id="fpCash" type="number" value="0" placeholder="Deposit + costs"></div>
+        <div class="filter-field"><label>Property Focus</label><select id="fpPropType"><option value="resi">Residential</option><option value="semi">Semi-Commercial</option><option value="comm">Commercial</option></select></div>
+        <div class="filter-field"><label>Loan Term</label><select id="fpTerm"><option value="6">6 months</option><option value="9">9 months</option><option value="12" selected>12 months</option><option value="18">18 months</option><option value="24">24 months</option></select></div>
       </div>
-      <div class="budget-summary" id="budgetInfo"></div>
+      <div class="fp-checks">
+        <label><input type="checkbox" id="fpRefurb" checked> Open to refurb</label>
+        <label><input type="checkbox" id="fpTitleSplit" checked> Title split aware</label>
+      </div>
+      <div class="fp-ts-settings" id="fpTsSettings">
+        <div class="fp-ts-row">
+          <div class="filter-field">
+            <label>Split premium
+              <span class="fp-tip" title="How much more the individual units are worth than the whole block. Block at £400k, 4 flats worth £600k = 50% premium">?</span>
+            </label>
+            <div class="fp-slider-group">
+              <input type="range" id="fpSplitPremium" min="10" max="80" value="30" step="5">
+              <span class="fp-slider-val" id="fpSplitPremiumVal">30%</span>
+            </div>
+          </div>
+          <div class="fp-ts-info" id="fpTsInfo"></div>
+        </div>
+      </div>
+      <div class="fp-summary" id="fpSummary"></div>
     </div>
   </div>
 
@@ -503,7 +544,7 @@ footer .logo-f span{color:var(--green)}
     <div id="cardsView">
       <div class="toolbar">
         <select class="tb-select" id="fDeal" onchange="renderLots()"><option value="">All deals</option></select>
-        <select class="tb-select" id="fBudget" onchange="renderLots()"><option value="all">All lots</option><option value="budget">In budget</option></select>
+        <select class="tb-select" id="fAfford" onchange="renderLots()"><option value="all">All lots</option><option value="affordable">Affordable</option><option value="in_budget">In budget only</option><option value="full_finance">100% finance only</option></select>
         <select class="tb-select" id="fTS" onchange="renderLots()"><option value="">All lots</option><option value="ts">Title split opportunities</option></select>
         <select class="tb-select" id="fSold" onchange="syncSoldFilter('toolbar');renderLots()"><option value="available">Available only</option><option value="all">All lots</option><option value="sold">Sold / STC only</option></select>
         <label class="tb-toggle"><input type="checkbox" id="showROI" onchange="renderLots()"><span class="tb-toggle-label">📊 Deal Analysis</span></label>
@@ -535,6 +576,8 @@ footer .logo-f span{color:var(--green)}
 const $=id=>document.getElementById(id);
 let LOTS=[], SMART_RESULTS=null;
 let ALL_LOTS=[], ALL_SOURCES=[], FILTERED_INDICES=[];
+let LENDER_DATA=[];
+const PREMIUM_ENABLED=true; // TODO: gate behind auth when auction tool gets subscriptions
 
 function syncSoldFilter(source){
   if(source==='top') { if($('fSold')) $('fSold').value=$('fSoldTop').value; }
@@ -750,16 +793,173 @@ function backToAuctions(){
 }
 
 // ═══════════════════════════════
-// BUDGET
+// LENDER DATA + AFFORDABILITY ENGINE
 // ═══════════════════════════════
-function getBudget(){
-  const d=+$('dep').value||0,sp=+$('stdPct').value||25;
-  const sm=d?Math.round(d/(sp/100)):0;
-  $('budgetInfo').innerHTML=d?`Max purchase price: <b>£${sm.toLocaleString()}</b>`:`<span style="color:var(--text4)">No budget limit set — showing all lots</span>`;
-  return {d,sp,sm};
+(async()=>{try{
+  const r=await fetch('https://www.bridgematch.co.uk/api/lenders-lite');
+  if(r.ok){LENDER_DATA=await r.json();console.log('[Finance] Lender data loaded:',LENDER_DATA.length,'lenders');updateFinanceProfile()}
+}catch(e){console.warn('[Finance] Lender data unavailable, using basic budget mode')}})();
+
+// Parsing utilities (same as BridgeMatch Lite)
+function _parseLTV(s){if(!s)return{pct:0,net:false};const m=s.match(/([\d.]+)/);if(!m)return{pct:0,net:false};return{pct:parseFloat(m[0]),net:s.toLowerCase().includes('net')}}
+function _parseRate(s){if(!s)return 0;const rates=s.match(/[\d.]+/g);if(!rates)return 0;if(rates.length>=2)return(parseFloat(rates[0])+parseFloat(rates[1]))/2;return parseFloat(rates[0])}
+function _parseProcFee(s){if(!s)return 2;const str=s.toLowerCase();if(str.includes('negotiable')||str.includes('no set'))return 1.5;const m=str.match(/(\d+\.?\d*)/);return m?parseFloat(m[0]):2}
+function _parseMinMonths(s){if(!s)return 3;if(s.toLowerCase().includes('depends'))return 3;const m=s.match(/(\d+)/);return m?parseInt(m[0]):3}
+function _estNetFromGross(gross,rateStr,pfStr,termMo,mmStr){
+  if(!gross)return 0;
+  const fee=_parseProcFee(pfStr),mr=_parseRate(rateStr)||0.75;
+  const intDed=mr*termMo*0.5;
+  return gross*(1-(fee+intDed)/100);
 }
-['dep','stdPct'].forEach(id=>$(id)?.addEventListener('input',getBudget));
-getBudget();
+
+function calcAffordability(cash,propType,termMo){
+  if(!cash||LENDER_DATA.length===0)return null;
+  const col={resi:'l1',semi:'ls',comm:'lc'}[propType]||'l1';
+  let bestStdNet=0, bestRefurbNet=0;
+
+  for(const l of LENDER_DATA){
+    // Standard LTV
+    const p=_parseLTV(l[col]);
+    if(p.pct>0){
+      const net=p.net?p.pct:_estNetFromGross(p.pct,l.r,l.pf,termMo,l.mm);
+      if(net>bestStdNet)bestStdNet=net;
+    }
+    // Refurb day-1 LTV (best of light-works and upfront)
+    for(const k of ['ld1','ud1']){
+      const rp=_parseLTV(l[k]);
+      if(rp.pct>0){
+        const net=rp.net?rp.pct:_estNetFromGross(rp.pct,l.r,l.pf,termMo,l.mm);
+        if(net>bestRefurbNet)bestRefurbNet=net;
+      }
+    }
+  }
+
+  const costPct=0.07; // SDLT + legal estimate
+  const maxStd=bestStdNet>0?Math.round(cash/(1-bestStdNet/100+costPct)):0;
+  const maxRefurb=bestRefurbNet>0?Math.round(cash/(1-bestRefurbNet/100+costPct)):0;
+
+  // Title split: proper split-premium math
+  const splitPremium=(+($('fpSplitPremium')?.value)||30)/100;
+  const bestSplitLTV=bestStdNet/100;
+  const effectiveLTV=(1+splitPremium)*bestSplitLTV;
+  let maxTS=0,fullFinance=false;
+  if(bestSplitLTV>0){
+    if(effectiveLTV>=1.0){
+      maxTS=Math.round(cash/costPct);
+      fullFinance=true;
+    }else{
+      maxTS=Math.round(cash/(1-effectiveLTV+costPct));
+    }
+  }
+
+  return{maxStd,maxRefurb,maxTS,bestStdNet:Math.round(bestStdNet*10)/10,bestRefurbNet:Math.round(bestRefurbNet*10)/10,splitPremium,effectiveLTV:Math.round(effectiveLTV*1000)/10,fullFinance};
+}
+
+function getAffordabilityTag(lot,aff){
+  if(!lot.price||!aff||!aff.maxStd)return 'unknown';
+  if(lot.price<=aff.maxStd)return 'in_budget';
+  if(PREMIUM_ENABLED&&$('fpRefurb')?.checked){
+    const isRefurb=lot.condition==='needs work'||lot.condition==='poor'||lot.dealType==='Refurb'||lot.dealType==='Refurb+Extend'||lot.dealType==='Development';
+    if(isRefurb&&aff.maxRefurb&&lot.price<=aff.maxRefurb)return 'stretch_refurb';
+  }
+  if(PREMIUM_ENABLED&&$('fpTitleSplit')?.checked){
+    if(lot.titleSplit&&aff.maxTS&&lot.price<=aff.maxTS)return aff.fullFinance?'full_finance':'stretch_split';
+  }
+  return 'out_of_reach';
+}
+
+function affBadgeHtml(tag){
+  if(tag==='in_budget')return '<span class="tag-aff aff-ok">&#10003; In budget</span>';
+  if(tag==='stretch_refurb')return '<span class="tag-aff aff-stretch">&#8599; Refurb stretch</span>';
+  if(tag==='stretch_split')return '<span class="tag-aff aff-stretch">&#8599; Split opportunity</span>';
+  if(tag==='full_finance')return '<span class="tag-aff aff-full">&#9733; 100% finance</span>';
+  if(tag==='out_of_reach')return '<span class="tag-aff aff-oor">&#10007; Out of reach</span>';
+  return '';
+}
+
+// ═══════════════════════════════
+// FINANCE PROFILE
+// ═══════════════════════════════
+function fmtK(n){return n>=1e6?'£'+(n/1e6).toFixed(1)+'m':'£'+Math.round(n/1000)+'k'}
+
+function updateFinanceProfile(){
+  const cash=+$('fpCash')?.value||0;
+  const propType=$('fpPropType')?.value||'resi';
+  const termMo=+($('fpTerm')?.value)||12;
+  const el=$('fpSummary');
+  if(!el)return{cash,aff:null};
+
+  // Toggle title split settings panel visibility
+  const tsChecked=PREMIUM_ENABLED&&$('fpTitleSplit')?.checked;
+  const tsPanel=$('fpTsSettings');
+  if(tsPanel){tsChecked?tsPanel.classList.add('show'):tsPanel.classList.remove('show')}
+
+  // Update slider label
+  const sliderEl=$('fpSplitPremium'),sliderValEl=$('fpSplitPremiumVal');
+  if(sliderEl&&sliderValEl)sliderValEl.textContent=sliderEl.value+'%';
+
+  if(!cash){el.innerHTML='<span style="color:var(--text4)">Enter your cash to see affordability across all lots</span>';return{cash:0,aff:null}}
+
+  const aff=calcAffordability(cash,propType,termMo);
+  if(!aff){
+    // Fallback: simple deposit-% calculation (no lender data)
+    const maxBasic=Math.round(cash/0.32); // ~25% deposit + 7% costs
+    el.innerHTML=`Standard bridge: <b>${fmtK(maxBasic)}</b> max <span style="color:var(--text4)">(estimated — lender data loading)</span>`;
+    return{cash,aff:{maxStd:maxBasic,maxRefurb:0,maxTS:0}};
+  }
+
+  // Update split premium info box
+  const tsInfo=$('fpTsInfo');
+  if(tsInfo&&tsChecked&&cash){
+    const eLTV=aff.effectiveLTV;
+    if(aff.fullFinance){
+      tsInfo.innerHTML=`<span class="fp-full-finance">Effective LTV: ${eLTV}% — Zero deposit</span><br>Lender advance covers full purchase price. Cash for costs only.`;
+    }else{
+      const depPct=Math.round((100-eLTV)*10)/10;
+      tsInfo.innerHTML=`Effective LTV: ${eLTV}% — ~${Math.max(0,depPct)}% deposit needed`;
+    }
+  }else if(tsInfo){tsInfo.innerHTML=''}
+
+  let html=`Standard bridge: <b>${fmtK(aff.maxStd)}</b> max <span style="color:var(--text4)">(best ${aff.bestStdNet}% net LTV)</span>`;
+  if(PREMIUM_ENABLED&&$('fpRefurb')?.checked&&aff.maxRefurb>aff.maxStd){
+    html+=`<br>Refurb projects: <span class="fp-refurb"><b>${fmtK(aff.maxRefurb)}</b> max</span> <span style="color:var(--text4)">(${aff.bestRefurbNet}% net day-1 LTV)</span>`;
+  }
+  if(tsChecked&&aff.maxTS>aff.maxStd){
+    if(aff.fullFinance){
+      html+=`<br>Title splits: <span class="fp-split"><b>${fmtK(aff.maxTS)}</b> max</span> <span class="fp-full-finance">(100% finance — ${aff.effectiveLTV}% effective LTV, costs only)</span>`;
+    }else{
+      html+=`<br>Title splits: <span class="fp-split"><b>${fmtK(aff.maxTS)}</b> max</span> <span style="color:var(--text4)">(${aff.effectiveLTV}% effective LTV, ${Math.round(aff.splitPremium*100)}% premium)</span>`;
+    }
+  }
+  el.innerHTML=html;
+
+  // Persist to localStorage
+  try{localStorage.setItem('bm_finance_profile',JSON.stringify({cash,propType,termMo,refurb:$('fpRefurb')?.checked,titleSplit:$('fpTitleSplit')?.checked,splitPremium:+($('fpSplitPremium')?.value)||30}))}catch(e){}
+
+  return{cash,aff};
+}
+
+// Restore from localStorage
+try{
+  const saved=JSON.parse(localStorage.getItem('bm_finance_profile'));
+  if(saved){
+    window.addEventListener('DOMContentLoaded',()=>{
+      if(saved.cash&&$('fpCash'))$('fpCash').value=saved.cash;
+      if(saved.propType&&$('fpPropType'))$('fpPropType').value=saved.propType;
+      if(saved.termMo&&$('fpTerm'))$('fpTerm').value=saved.termMo;
+      if(saved.refurb!=null&&$('fpRefurb'))$('fpRefurb').checked=saved.refurb;
+      if(saved.titleSplit!=null&&$('fpTitleSplit'))$('fpTitleSplit').checked=saved.titleSplit;
+      if(saved.splitPremium&&$('fpSplitPremium'))$('fpSplitPremium').value=saved.splitPremium;
+      updateFinanceProfile();
+    });
+  }
+}catch(e){}
+
+// Wire up input listeners
+['fpCash','fpPropType','fpTerm','fpRefurb','fpTitleSplit','fpSplitPremium'].forEach(id=>{
+  const el=$(id);
+  if(el)el.addEventListener(el.type==='checkbox'?'change':'input',()=>{updateFinanceProfile();if(typeof renderLots==='function')renderLots()});
+});
 
 function toggleAdvanced(){
   $('advancedPanel').classList.toggle('show');
@@ -1213,8 +1413,12 @@ function buildLotFilters(){
 }
 
 function renderLots(){
-  const b=getBudget();
+  const fp=updateFinanceProfile();
+  const aff=fp.aff;
   let lots=LOTS.slice();
+
+  // Tag every lot with affordability tier
+  lots.forEach(l=>{l._affTag=getAffordabilityTag(l,aff)});
 
   // Apply standard filters
   const minP=+$('fMinPrice').value, maxP=+$('fMaxPrice').value, minBeds=+$('fBeds').value;
@@ -1222,43 +1426,52 @@ function renderLots(){
   if(maxP) lots=lots.filter(l=>!l.price||l.price<=maxP);
   if(minBeds) lots=lots.filter(l=>!l.beds||l.beds>=minBeds);
 
-  const ft=$('fType').value,fd=$('fDeal').value,fb=$('fBudget').value,fts=$('fTS')?.value||$('fTSTop')?.value||'',fsold=$('fSold')?.value||$('fSoldTop')?.value||'',fs=$('fSearch').value.toLowerCase();
+  const ft=$('fType').value,fd=$('fDeal').value,fa=$('fAfford')?.value||'all',fts=$('fTS')?.value||$('fTSTop')?.value||'',fsold=$('fSold')?.value||$('fSoldTop')?.value||'',fs=$('fSearch').value.toLowerCase();
   if(ft)lots=lots.filter(l=>l.propType===ft);
   if(fd)lots=lots.filter(l=>l.dealType===fd);
-  if(fb==='budget'&&b.sm>0)lots=lots.filter(l=>{if(!l.price)return true;return l.price<=b.sm});
+  if(fa==='affordable'&&fp.cash)lots=lots.filter(l=>l._affTag!=='out_of_reach');
+  if(fa==='in_budget'&&fp.cash)lots=lots.filter(l=>l._affTag==='in_budget'||l._affTag==='unknown');
+  if(fa==='full_finance'&&fp.cash)lots=lots.filter(l=>l._affTag==='full_finance');
   if(fts==='ts')lots=lots.filter(l=>l.titleSplit);
   if(fsold==='available')lots=lots.filter(l=>!(l.bullets||[]).some(b=>/\bSOLD\b|\bSTC\b|\bSALE.?AGREED\b|\bWITHDRAWN\b/i.test(b)));
   if(fsold==='sold')lots=lots.filter(l=>(l.bullets||[]).some(b=>/\bSOLD\b|\bSTC\b|\bSALE.?AGREED\b|\bWITHDRAWN\b/i.test(b)));
   if(fs)lots=lots.filter(l=>(l.address||'').toLowerCase().includes(fs)||(l.bullets||[]).join(' ').toLowerCase().includes(fs));
 
   const top=lots.filter(l=>l.score>=3);
-  $('statsRow').innerHTML=`
+  let statsHtml=`
     <div class="stat-card"><div class="v g">${LOTS.length}</div><div class="l">Total lots</div></div>
     <div class="stat-card"><div class="v y">${lots.length}</div><div class="l">Showing</div></div>
     <div class="stat-card"><div class="v g">${top.length}</div><div class="l">Score 3+</div></div>
     <div class="stat-card"><div class="v p">${lots.filter(l=>l.vacant).length}</div><div class="l">Vacant</div></div>
     <div class="stat-card"><div class="v y">${LOTS.filter(l=>l.price).length}</div><div class="l">Priced</div></div>`;
+  if(fp.cash&&aff){
+    const cOk=lots.filter(l=>l._affTag==='in_budget').length;
+    const cStr=lots.filter(l=>l._affTag==='stretch_refurb'||l._affTag==='stretch_split').length;
+    const cFull=lots.filter(l=>l._affTag==='full_finance').length;
+    const cOor=lots.filter(l=>l._affTag==='out_of_reach').length;
+    statsHtml+=`<div class="stat-card" style="grid-column:1/-1"><div class="aff-stats"><span class="aff-stat as-ok">${cOk} in budget</span>${cStr?`<span class="aff-stat as-str">${cStr} stretch</span>`:''}${cFull?`<span class="aff-stat" style="background:var(--violet-light);color:var(--violet)">${cFull} 100% finance</span>`:''}${cOor?`<span class="aff-stat as-oor">${cOor} out of reach</span>`:''}</div></div>`;
+  }
+  $('statsRow').innerHTML=statsHtml;
 
   const out=$('lotsOut');out.innerHTML='';
 
   // Only show Title Splits group for catalogue analyses or when user searched for them
   const showTSGroup = !SMART_RESULTS || /title.?split|multi.?unit|freehold.?block/i.test($('smartQuery')?.value||'');
   const tsL=lots.filter(l=>l.titleSplit&&l.score>=2);
-  if(tsL.length && showTSGroup){out.innerHTML+=`<div class="group-head">🏢 Title Split Opportunities <span class="badge badge-p">${tsL.length}</span></div>`;tsL.forEach(l=>out.innerHTML+=card(l,b))}
+  if(tsL.length && showTSGroup){out.innerHTML+=`<div class="group-head">🏢 Title Split Opportunities <span class="badge badge-p">${tsL.length}</span></div>`;tsL.forEach(l=>out.innerHTML+=card(l))}
 
   const topL=lots.filter(l=>l.score>=3&&!(showTSGroup&&l.titleSplit&&l.score>=2));
-  if(topL.length){out.innerHTML+=`<div class="group-head">🔥 Top Picks <span class="badge badge-g">${topL.length}</span></div>`;topL.forEach(l=>out.innerHTML+=card(l,b))}
+  if(topL.length){out.innerHTML+=`<div class="group-head">🔥 Top Picks <span class="badge badge-g">${topL.length}</span></div>`;topL.forEach(l=>out.innerHTML+=card(l))}
 
   const midL=lots.filter(l=>l.score>=1.5&&l.score<3&&!(showTSGroup&&l.titleSplit&&l.score>=2));
-  if(midL.length){out.innerHTML+=`<div class="group-head">👀 Worth a Look <span class="badge badge-y">${midL.length}</span></div>`;midL.forEach(l=>out.innerHTML+=card(l,b))}
+  if(midL.length){out.innerHTML+=`<div class="group-head">👀 Worth a Look <span class="badge badge-y">${midL.length}</span></div>`;midL.forEach(l=>out.innerHTML+=card(l))}
 
   const rest=lots.filter(l=>l.score<1.5&&!(showTSGroup&&l.titleSplit&&l.score>=2));
-  if(rest.length){out.innerHTML+=`<div class="group-head">Other <span class="badge" style="background:var(--cream);color:var(--text4)">${rest.length}</span></div>`;rest.forEach(l=>out.innerHTML+=card(l,b))}
+  if(rest.length){out.innerHTML+=`<div class="group-head">Other <span class="badge" style="background:var(--cream);color:var(--text4)">${rest.length}</span></div>`;rest.forEach(l=>out.innerHTML+=card(l))}
 }
 
-function card(l,b){
-  const dp=b.sp/100;
-  const depE=l.price?`£${Math.round(l.price*dp).toLocaleString()}`:'TBA';
+function card(l){
+  const dp=0.25; // deposit assumption for deal analysis
   const sc=l.score>=3?'high':l.score>=1.5?'mid':'low';
   let details=[];
   if(l.priceText)details.push(`<span class="price">${l.priceText}</span>`);
@@ -1268,7 +1481,6 @@ function card(l,b){
   if(l.beds!=null)details.push(l.beds+' bed');
   if(l.tenure)details.push(l.tenure);
   if(l.sqft)details.push(l.sqft.toLocaleString()+' sqft');
-  details.push(`<span class="dep">Dep: ${depE}</span>`);
   if(l.titleSplit&&l.price&&l.units)details.push(`£${Math.round(l.price/l.units).toLocaleString()}/unit`);
 
   // Show source house for smart search results
@@ -1329,10 +1541,17 @@ function card(l,b){
   }
 
   const link=l.url?`<div class="lot-link"><a href="${l.url}" target="_blank">View listing ↗</a></div>`:'';
-  const bmLink=l.price?`<a href="/check?price=${l.price}${l.address?'&address='+encodeURIComponent(l.address):''}${l.propType?'&type='+encodeURIComponent(l.propType):''}" class="bm-btn" target="_blank" title="Check bridging finance feasibility">🧩 BridgeMatch It</a>`:'';
+  const fpCash=+($('fpCash')?.value)||0;
+  const fpTerm=$('fpTerm')?.value||'12';
+  const isRefurbCandidate=l.condition==='needs work'||l.condition==='poor'||l.dealType==='Refurb'||l.dealType==='Refurb+Extend'||l.dealType==='Development';
+  let bmUrl=`/check?price=${l.price}${l.address?'&address='+encodeURIComponent(l.address):''}${l.propType?'&type='+encodeURIComponent(l.propType):''}`;
+  if(fpCash)bmUrl+=`&cash=${fpCash}&term=${fpTerm}${isRefurbCandidate?'&refurb=1':''}`;
+  const bmLink=l.price?`<a href="${bmUrl}" class="bm-btn" target="_blank" title="Check bridging finance feasibility">🧩 BridgeMatch It</a>`:'';
+
+  const affBadge=fpCash?affBadgeHtml(l._affTag||'unknown'):'';
 
   return`<div class="lot ${l.titleSplit?'ts':''}">
-    <div class="lot-header"><div class="lot-title">Lot ${l.lot} · ${l.dealType||'Standard'}</div><div class="lot-score ${sc}">${l.score}</div></div>
+    <div class="lot-header"><div class="lot-title">Lot ${l.lot} · ${l.dealType||'Standard'} ${affBadge}</div><div class="lot-score ${sc}">${l.score}</div></div>
     <div class="lot-addr">${l.address||'Address not available'}</div>
     <div class="lot-details">${details.join(' <span class="sep">·</span> ')}</div>
     <div class="tags">${tags}</div>
@@ -1368,10 +1587,9 @@ function calcDealAnalysis(guidePrice,streetAvg,grossYield,monthlyRent){
 
 // Downloads
 function dlCSV(){
-  const b=getBudget();
-  const rows=[['Rank','Lot','Score','Deal','TitleSplit','Units','Address','Guide','Deposit','Type','Beds','Tenure','Condition','Sqft','StreetAvg','BelowMkt%','EstYield%','EstRent/mo','Opps','Risks','URL']];
-  LOTS.forEach((l,i)=>{const dp=b.sp/100;
-    rows.push([i+1,l.lot,l.score,l.dealType,l.titleSplit?'YES':'',l.units||'',l.address,l.price||'TBA',l.price?Math.round(l.price*dp):'TBA',l.propType,l.beds??'',l.tenure,l.condition,l.sqft||'',l.streetAvg||'',l.belowMarket||'',l.estGrossYield||'',l.estMonthlyRent||'',(l.opps||[]).join(' | '),(l.risks||[]).join(' | '),l.url])});
+  const rows=[['Rank','Lot','Score','Deal','TitleSplit','Units','Address','Guide','Affordability','Type','Beds','Tenure','Condition','Sqft','StreetAvg','BelowMkt%','EstYield%','EstRent/mo','Opps','Risks','URL']];
+  LOTS.forEach((l,i)=>{
+    rows.push([i+1,l.lot,l.score,l.dealType,l.titleSplit?'YES':'',l.units||'',l.address,l.price||'TBA',l._affTag||'',l.propType,l.beds??'',l.tenure,l.condition,l.sqft||'',l.streetAvg||'',l.belowMarket||'',l.estGrossYield||'',l.estMonthlyRent||'',(l.opps||[]).join(' | '),(l.risks||[]).join(' | '),l.url])});
   dl(rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n'),'auction_analysis.csv','text/csv');
 }
 function dlJSON(){dl(JSON.stringify(LOTS,null,2),'auction_analysis.json','application/json')}
