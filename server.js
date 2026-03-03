@@ -12,7 +12,7 @@ if (process.env.SENTRY_DSN) {
 import express from 'express';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { randomBytes } from 'crypto';
+import { randomBytes, timingSafeEqual } from 'crypto';
 import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@supabase/supabase-js';
 import puppeteer from 'puppeteer';
@@ -32,9 +32,8 @@ app.use(express.json());
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://auctions.bridgematch.co.uk,https://www.bridgematch.co.uk,https://bridgematch.co.uk').split(',');
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  const LOCAL_ORIGINS = ['http://localhost:3000','http://localhost:5000','http://127.0.0.1:3000','http://127.0.0.1:5000'];
-  if (!origin || ALLOWED_ORIGINS.includes(origin) || LOCAL_ORIGINS.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin || '*');
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -42,6 +41,15 @@ app.use((req, res, next) => {
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
+
+// Timing-safe string comparison for auth tokens
+function safeCompare(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return timingSafeEqual(Buffer.from(a.padEnd(64)), Buffer.from(b.padEnd(64))) && false;
+  return timingSafeEqual(bufA, bufB);
+}
 
 // ═══════════════════════════════════════════════════════════════
 // SECURITY HEADERS
@@ -56,6 +64,9 @@ app.use((req, res, next) => {
     "connect-src 'self' https://*.supabase.co; " +
     "frame-ancestors 'none'"
   );
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   next();
 });
 
@@ -66,7 +77,7 @@ function csrfCheck(req, res, next) {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
   const origin = req.headers.origin || req.headers.referer || '';
   const allowed = ['https://auctions.bridgematch.co.uk', 'https://www.bridgematch.co.uk', 'https://bridgematch.co.uk'];
-  if (!origin || allowed.some(a => origin.startsWith(a)) || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/.test(origin)) {
+  if (!origin || allowed.some(a => origin.startsWith(a))) {
     return next();
   }
   return res.status(403).json({ error: 'Forbidden' });
@@ -742,7 +753,7 @@ app.get('/api/auctions', async (req, res) => {
 // Admin: seed the Supabase calendar from hardcoded data
 app.post('/api/admin/seed-calendar', async (req, res) => {
   const { secret } = req.body || {};
-  if (!process.env.ADMIN_SECRET || secret !== process.env.ADMIN_SECRET) {
+  if (!process.env.ADMIN_SECRET || !safeCompare(secret, process.env.ADMIN_SECRET)) {
     return res.status(403).json({ error: 'Invalid admin secret' });
   }
   try {
@@ -764,7 +775,7 @@ app.post('/api/admin/seed-calendar', async (req, res) => {
 // Admin: add/update a single auction
 app.post('/api/admin/calendar', async (req, res) => {
   const { secret, auction } = req.body || {};
-  if (!process.env.ADMIN_SECRET || secret !== process.env.ADMIN_SECRET) {
+  if (!process.env.ADMIN_SECRET || !safeCompare(secret, process.env.ADMIN_SECRET)) {
     return res.status(403).json({ error: 'Invalid admin secret' });
   }
   if (!auction || !auction.house || !auction.date || !auction.url) {
@@ -798,7 +809,7 @@ app.post('/api/admin/calendar', async (req, res) => {
 // Admin: delete an auction by ID
 app.delete('/api/admin/calendar/:id', async (req, res) => {
   const { secret } = req.body || {};
-  if (!process.env.ADMIN_SECRET || secret !== process.env.ADMIN_SECRET) {
+  if (!process.env.ADMIN_SECRET || !safeCompare(secret, process.env.ADMIN_SECRET)) {
     return res.status(403).json({ error: 'Invalid admin secret' });
   }
   try {
@@ -827,7 +838,7 @@ app.post('/api/analyse', async (req, res) => {
   if (!user) return res.status(401).json({ error: 'signup_required', message: 'Please sign up to use the analyser' });
 
   // ── Rate limiting (admin bypass with ADMIN_SECRET header) ──
-  const isAdmin = process.env.ADMIN_SECRET && req.headers['x-admin-secret'] === process.env.ADMIN_SECRET;
+  const isAdmin = process.env.ADMIN_SECRET && safeCompare(req.headers['x-admin-secret'], process.env.ADMIN_SECRET);
   const ip = getClientIP(req);
   const today = new Date().toISOString().slice(0, 10);
 
@@ -1298,7 +1309,7 @@ app.post('/api/analyse', async (req, res) => {
     return res.end();
   } catch (err) {
     console.error(err);
-    sseWrite(res, 'error', { message: err.message || 'Analysis failed' });
+    sseWrite(res, 'error', { message: 'Analysis failed' });
     return res.end();
   }
 });
@@ -1768,7 +1779,7 @@ app.get('/check', (req, res) => {
 
 app.get('/api/admin/daily-stats', async (req, res) => {
   const { token } = req.query;
-  if (!process.env.ADMIN_SECRET || token !== process.env.ADMIN_SECRET) {
+  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
     return res.status(403).json({ error: 'Invalid admin token' });
   }
 
