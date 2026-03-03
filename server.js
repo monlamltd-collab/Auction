@@ -32,7 +32,8 @@ app.use(express.json());
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://auctions.bridgematch.co.uk,https://www.bridgematch.co.uk,https://bridgematch.co.uk').split(',');
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  if (!origin || ALLOWED_ORIGINS.includes(origin) || origin.includes('localhost') || origin.includes('127.0.0.1')) {
+  const LOCAL_ORIGINS = ['http://localhost:3000','http://localhost:5000','http://127.0.0.1:3000','http://127.0.0.1:5000'];
+  if (!origin || ALLOWED_ORIGINS.includes(origin) || LOCAL_ORIGINS.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin || '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -41,6 +42,36 @@ app.use((req, res, next) => {
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
+
+// ═══════════════════════════════════════════════════════════════
+// SECURITY HEADERS
+// ═══════════════════════════════════════════════════════════════
+app.use((req, res, next) => {
+  res.setHeader('Content-Security-Policy',
+    "default-src 'self'; " +
+    "script-src 'self' 'unsafe-inline'; " +
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+    "font-src 'self' https://fonts.gstatic.com; " +
+    "img-src 'self' data: https:; " +
+    "connect-src 'self' https://*.supabase.co; " +
+    "frame-ancestors 'none'"
+  );
+  next();
+});
+
+// ═══════════════════════════════════════════════════════════════
+// CSRF ORIGIN VALIDATION
+// ═══════════════════════════════════════════════════════════════
+function csrfCheck(req, res, next) {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+  const origin = req.headers.origin || req.headers.referer || '';
+  const allowed = ['https://auctions.bridgematch.co.uk', 'https://www.bridgematch.co.uk', 'https://bridgematch.co.uk'];
+  if (!origin || allowed.some(a => origin.startsWith(a)) || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/.test(origin)) {
+    return next();
+  }
+  return res.status(403).json({ error: 'Forbidden' });
+}
+app.use(csrfCheck);
 
 // ═══════════════════════════════════════════════════════════════
 // SUPABASE CLIENT
@@ -725,7 +756,8 @@ app.post('/api/admin/seed-calendar', async (req, res) => {
     if (error) throw error;
     res.json({ message: `Seeded ${rows.length} auction entries`, count: rows.length });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    log.error('Calendar seed error', { error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -758,7 +790,8 @@ app.post('/api/admin/calendar', async (req, res) => {
     if (error) throw error;
     res.json({ message: 'Auction saved', auction: row });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    log.error('Calendar save error', { error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -773,7 +806,8 @@ app.delete('/api/admin/calendar/:id', async (req, res) => {
     if (error) throw error;
     res.json({ message: 'Auction deleted' });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    log.error('Calendar delete error', { error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -1654,8 +1688,8 @@ Only return lots that genuinely match the query. If nothing matches well, say so
 
     return res.json(response);
   } catch (err) {
-    console.error('Smart search error:', err);
-    return res.status(500).json({ error: err.message || 'Search failed' });
+    log.error('Smart search error', { error: err.message });
+    return res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -1688,7 +1722,8 @@ app.get('/api/cache-status', async (req, res) => {
       missing: missing.map(a => ({ house: a.house, url: a.url })),
     });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    log.error('Cache status error', { error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -1712,7 +1747,8 @@ app.post('/api/analyse-all', async (req, res) => {
     const result = await autoAnalyseAll();
     res.json(result);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    log.error('Refresh cache error', { error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -1752,8 +1788,8 @@ app.get('/api/admin/daily-stats', async (req, res) => {
 
     res.json({ analyses, smart_searches, leads, unique_users, total_events: rows.length });
   } catch (e) {
-    console.error('Daily stats error:', e.message);
-    res.status(500).json({ error: e.message });
+    log.error('Daily stats error', { error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 

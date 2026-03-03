@@ -40,6 +40,11 @@ RUN npm install --production
 # Copy app
 COPY . .
 
+# Run as non-root user (Puppeteer already uses --no-sandbox)
+RUN groupadd -r appuser && useradd -r -g appuser -m appuser
+RUN chown -R appuser:appuser /app
+USER appuser
+
 # Expose port
 EXPOSE 3000
 
