@@ -1740,7 +1740,7 @@ app.get('/api/cache-status', async (req, res) => {
 
 app.post('/api/refresh-cache', async (req, res) => {
   const { secret } = req.body || {};
-  if (!process.env.ADMIN_SECRET || secret !== process.env.ADMIN_SECRET) {
+  if (!process.env.ADMIN_SECRET || !safeCompare(secret, process.env.ADMIN_SECRET)) {
     return res.status(403).json({ error: 'Invalid admin secret' });
   }
   res.json({ message: 'Auto-analysis triggered. Check server logs for progress.' });
