@@ -38,12 +38,14 @@ CREATE TABLE users (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   email text NOT NULL UNIQUE,
   name text,
+  session_token text,
   created_at timestamptz DEFAULT now(),
   last_login timestamptz DEFAULT now(),
   analyses_count integer DEFAULT 0
 );
 
 CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_users_session_token ON users(session_token);
 
 -- 4. Enable Row Level Security (required by Supabase)
 ALTER TABLE cached_analyses ENABLE ROW LEVEL SECURITY;

@@ -143,15 +143,19 @@ async function sendLeadNotification(lead) {
   // });
 }
 
-// API: Get leads (admin)
+// API: Get leads (admin — requires ADMIN_SECRET header)
 app.get('/api/leads', async (req, res) => {
+  if (!process.env.ADMIN_SECRET || req.headers['x-admin-secret'] !== process.env.ADMIN_SECRET) {
+    return res.status(403).json({ error: 'Unauthorized' });
+  }
   const { status, regulated, limit = 50 } = req.query;
+  const safeLimit = Math.min(Math.max(parseInt(limit) || 50, 1), 200);
 
   let query = supabase
     .from('leads')
     .select('*')
     .order('created_at', { ascending: false })
-    .limit(parseInt(limit));
+    .limit(safeLimit);
 
   if (status) query = query.eq('status', status);
   if (regulated === 'true') query = query.eq('is_regulated', true);
@@ -167,8 +171,11 @@ app.get('/api/leads', async (req, res) => {
   }
 });
 
-// API: Update lead status (admin)
+// API: Update lead status (admin — requires ADMIN_SECRET header)
 app.patch('/api/leads/:id', async (req, res) => {
+  if (!process.env.ADMIN_SECRET || req.headers['x-admin-secret'] !== process.env.ADMIN_SECRET) {
+    return res.status(403).json({ error: 'Unauthorized' });
+  }
   const { id } = req.params;
   const { status, referred_to, outcome_notes, proc_fee_earned } = req.body;
 

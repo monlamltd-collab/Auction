@@ -12,6 +12,7 @@ if (process.env.SENTRY_DSN) {
 import express from 'express';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { randomBytes } from 'crypto';
 import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@supabase/supabase-js';
 import puppeteer from 'puppeteer';
@@ -142,6 +143,39 @@ function getClientIP(req) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// URL VALIDATION — prevent SSRF via user-supplied URLs
+// ═══════════════════════════════════════════════════════════════
+function validateUrl(raw) {
+  let parsed;
+  try { parsed = new URL(raw); } catch { return { ok: false, error: 'Invalid URL' }; }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    return { ok: false, error: 'Only http/https URLs are allowed' };
+  }
+  const hostname = parsed.hostname.toLowerCase();
+  // Block localhost, private IPs, link-local, metadata endpoints
+  const blocked = [
+    /^localhost$/,
+    /^127\./,
+    /^10\./,
+    /^172\.(1[6-9]|2\d|3[01])\./,
+    /^192\.168\./,
+    /^169\.254\./,
+    /^0\./,
+    /^\[?::1\]?$/,
+    /^\[?fe80:/i,
+    /^\[?fc00:/i,
+    /^\[?fd/i,
+    /\.local$/,
+    /\.internal$/,
+    /\.railway\.internal$/,
+  ];
+  for (const pat of blocked) {
+    if (pat.test(hostname)) return { ok: false, error: 'URL points to a private/internal address' };
+  }
+  return { ok: true, url: parsed.href };
+}
+
+// ═══════════════════════════════════════════════════════════════
 // STATIC FILES
 // ═══════════════════════════════════════════════════════════════
 app.use('/public', express.static(join(__dirname, 'public')));
@@ -154,6 +188,7 @@ app.post('/api/signup', async (req, res) => {
   if (!email || !email.includes('@')) return res.status(400).json({ error: 'Valid email required' });
 
   try {
+    const token = randomBytes(32).toString('hex');
     const { data: existing } = await supabase
       .from('users')
       .select('id, email, name, tier')
@@ -161,18 +196,18 @@ app.post('/api/signup', async (req, res) => {
       .single();
 
     if (existing) {
-      await supabase.from('users').update({ last_login: new Date().toISOString() }).eq('id', existing.id);
-      return res.json({ user: existing, returning: true });
+      await supabase.from('users').update({ last_login: new Date().toISOString(), session_token: token }).eq('id', existing.id);
+      return res.json({ user: existing, token, returning: true });
     }
 
     const { data: newUser, error } = await supabase
       .from('users')
-      .insert({ email: email.toLowerCase().trim(), name: name || null })
+      .insert({ email: email.toLowerCase().trim(), name: name || null, session_token: token })
       .select('id, email, name, tier')
       .single();
 
     if (error) throw error;
-    return res.json({ user: newUser, returning: false });
+    return res.json({ user: newUser, token, returning: false });
   } catch (err) {
     console.error('Signup error:', err);
     return res.status(500).json({ error: 'Signup failed' });
@@ -180,9 +215,26 @@ app.post('/api/signup', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// AUTH HELPER: validate email is a registered user
+// AUTH HELPER: validate user via Bearer token or email fallback
 // ═══════════════════════════════════════════════════════════════
-async function validateUser(email) {
+async function validateUserFromReq(req) {
+  // Prefer Authorization: Bearer <token>
+  const authHeader = req.headers['authorization'] || '';
+  if (authHeader.startsWith('Bearer ')) {
+    const token = authHeader.slice(7);
+    if (token) {
+      try {
+        const { data } = await supabase
+          .from('users')
+          .select('id, email, name')
+          .eq('session_token', token)
+          .single();
+        if (data) return data;
+      } catch { /* fall through */ }
+    }
+  }
+  // Fallback: email in body (legacy — will be removed)
+  const email = req.body?.email;
   if (!email || !email.includes('@')) return null;
   try {
     const { data } = await supabase
@@ -732,16 +784,13 @@ app.post('/api/analyse', async (req, res) => {
   const { url, budget, email } = req.body || {};
   if (!url) return res.status(400).json({ error: 'Missing url' });
 
-  // ── Check user is signed up ──
-  if (!email) return res.status(401).json({ error: 'signup_required', message: 'Please sign up to use the analyser' });
+  // ── Validate URL to prevent SSRF ──
+  const urlCheck = validateUrl(url);
+  if (!urlCheck.ok) return res.status(400).json({ error: urlCheck.error });
 
-  const { data: user } = await supabase
-    .from('users')
-    .select('id, analyses_count')
-    .eq('email', email.toLowerCase().trim())
-    .single();
-
-  if (!user) return res.status(401).json({ error: 'signup_required', message: 'Please sign up first' });
+  // ── Check user is signed up (token-based auth with email fallback) ──
+  const user = await validateUserFromReq(req);
+  if (!user) return res.status(401).json({ error: 'signup_required', message: 'Please sign up to use the analyser' });
 
   // ── Rate limiting (admin bypass with ADMIN_SECRET header) ──
   const isAdmin = process.env.ADMIN_SECRET && req.headers['x-admin-secret'] === process.env.ADMIN_SECRET;
@@ -1245,15 +1294,10 @@ function isPresetQuery(query) {
 // SMART SEARCH: Claude-powered filtering across cached analyses
 // ═══════════════════════════════════════════════════════════════
 app.post('/api/smart-search', async (req, res) => {
-  const { query, email, soldFilter } = req.body || {};
+  const { query, soldFilter } = req.body || {};
   if (!query) return res.status(400).json({ error: 'Missing search query' });
-  if (!email) return res.status(401).json({ error: 'signup_required' });
 
-  const { data: user } = await supabase
-    .from('users')
-    .select('id, tier')
-    .eq('email', email.toLowerCase().trim())
-    .single();
+  const user = await validateUserFromReq(req);
   if (!user) return res.status(401).json({ error: 'signup_required' });
 
   const presetSlug = isPresetQuery(query);
@@ -1626,7 +1670,7 @@ app.get('/api/cache-status', async (req, res) => {
       .gt('expires_at', new Date().toISOString())
       .order('house');
 
-    const allAuctions = getCalendarAuctions();
+    const allAuctions = await getCalendarAuctions();
     const ready = allAuctions.filter(a => a.catalogueReady);
     const cachedUrls = new Set((cached || []).map(c => c.url));
     
@@ -1660,14 +1704,7 @@ app.post('/api/refresh-cache', async (req, res) => {
 
 // User-facing: analyse all catalogue-ready auctions
 app.post('/api/analyse-all', async (req, res) => {
-  const { email } = req.body || {};
-  if (!email) return res.status(401).json({ error: 'signup_required' });
-
-  const { data: user } = await supabase
-    .from('users')
-    .select('id')
-    .eq('email', email.toLowerCase().trim())
-    .single();
+  const user = await validateUserFromReq(req);
   if (!user) return res.status(401).json({ error: 'signup_required' });
 
   // Trigger auto-analysis and wait for it to complete
@@ -3871,6 +3908,8 @@ async function _doAutoAnalyseAll() {
 }
 
 async function autoAnalyseOne(url, apiKey) {
+  const urlCheck = validateUrl(url);
+  if (!urlCheck.ok) { log.warn('autoAnalyseOne skipped — invalid URL', { url, reason: urlCheck.error }); return []; }
   const house = detectAuctionHouse(url);
   const rewritten = rewriteUrl(url, house);
   const scrapeUrl = rewritten.baseUrl;

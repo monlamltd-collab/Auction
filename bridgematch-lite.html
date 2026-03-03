@@ -370,6 +370,7 @@ select{padding-left:14px;cursor:pointer;appearance:none;
 </div>
 
 <script>
+function esc(s){if(s==null)return '';const d=document.createElement('div');d.textContent=String(s);return d.innerHTML;}
 // ═══════════════════════════════════════════════════════════
 // LENDER DATA (68 UK bridging lenders — embedded from database)
 // ═══════════════════════════════════════════════════════════
@@ -981,13 +982,13 @@ function submitLead(price, loan, ltv, works, count, propType) {
     if (data.isRegulated) {
       formEl.outerHTML = `<div class="lead-success regulated">
         <h3>⚠️ Regulated Enquiry Received</h3>
-        <p>Thank you, ${name}. As this involves a regulated mortgage, your enquiry will be handled by <strong>Mortgage Style</strong>, authorised and regulated by the Financial Conduct Authority (FCA No: [XXXXXX]).</p>
+        <p>Thank you, ${esc(name)}. As this involves a regulated mortgage, your enquiry will be handled by <strong>Mortgage Style</strong>, authorised and regulated by the Financial Conduct Authority (FCA No: [XXXXXX]).</p>
         <p style="margin-top:8px">A specialist advisor will be in touch within 24 hours to discuss your deal.</p>
       </div>`;
     } else {
       formEl.outerHTML = `<div class="lead-success">
         <h3>✅ Enquiry Submitted</h3>
-        <p>Thank you, ${name}. A bridging finance specialist will review your enquiry and be in touch within 24 hours.</p>
+        <p>Thank you, ${esc(name)}. A bridging finance specialist will review your enquiry and be in touch within 24 hours.</p>
         <p style="margin-top:8px;font-size:.82rem;color:var(--text3)">Your deal analysis has been included so they can give you an informed response straight away.</p>
       </div>`;
     }
@@ -1033,7 +1034,7 @@ function submitLead(price, loan, ltv, works, count, propType) {
     if(hdr){
       const ctx=document.createElement('div');
       ctx.style.cssText='margin-top:8px;padding:10px 16px;background:var(--green-light);border-radius:var(--radius-sm);font-size:0.85rem;color:var(--green);font-weight:600;text-align:center';
-      ctx.innerHTML='📍 Checking: '+decodeURIComponent(address);
+      ctx.innerHTML='📍 Checking: '+esc(decodeURIComponent(address));
       hdr.after(ctx);
     }
   }

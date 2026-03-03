@@ -432,9 +432,6 @@ footer .logo-f span{color:var(--green)}
     </div>
     <div class="filters" style="margin-top:-8px">
       <div class="filter-field" style="flex:2"><label>Postcode (e.g. SW1, B15, CF10)</label><input id="fPostcode" placeholder="Any postcode area" oninput="applyFilters()" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:.88rem"></div>
-      <div class="filter-field"><label>Auction House</label><select id="fHouse" onchange="applyFilters()">
-        <option value="">All houses</option>
-      </select></div>
     </div>
 
     <!-- Live filter count -->
@@ -459,9 +456,6 @@ footer .logo-f span{color:var(--green)}
         <button class="ex-btn" onclick="setQ('Best scoring deals')">Top picks</button>
         <button class="ex-btn" onclick="setQ('Vacant properties')">Vacant</button>
         <button class="ex-btn" onclick="setQ('Properties under £100k')">Under 100k</button>
-        <button class="ex-btn" onclick="setQ('Commercial property')">Commercial</button>
-        <button class="ex-btn" onclick="setQ('Land and development sites')">Land & dev</button>
-        <button class="ex-btn" onclick="setQ('Flats and apartments')">Flats</button>
       </div>
       <button class="adv-toggle" onclick="toggleAdvanced()">💰 Finance profile</button>
     </div>
@@ -545,7 +539,7 @@ footer .logo-f span{color:var(--green)}
       <div class="toolbar">
         <select class="tb-select" id="fDeal" onchange="renderLots()"><option value="">All deals</option></select>
         <select class="tb-select" id="fPropType" onchange="renderLots()"><option value="">All types</option></select>
-        <select class="tb-select" id="fCondition" onchange="renderLots()"><option value="">Any condition</option></select>
+        <select class="tb-select" id="fConditionToolbar" onchange="renderLots()"><option value="">Any condition</option></select>
         <select class="tb-select" id="fAfford" onchange="renderLots()" style="display:none"><option value="all">All lots</option><option value="affordable">Affordable</option><option value="in_budget">In budget only</option><option value="full_finance">Zero deposit only</option></select>
         <select class="tb-select" id="fTS" onchange="renderLots()" style="display:none"><option value="">All lots</option><option value="ts">Title split opportunities</option></select>
         <select class="tb-select" id="fSold" onchange="syncSoldFilter('toolbar');renderLots()"><option value="available">Available only</option><option value="all">All lots</option><option value="sold">Sold / STC only</option></select>
@@ -576,6 +570,8 @@ footer .logo-f span{color:var(--green)}
 
 <script>
 const $=id=>document.getElementById(id);
+function esc(s){if(s==null)return '';const d=document.createElement('div');d.textContent=String(s);return d.innerHTML;}
+function safeHref(u){if(!u)return '#';const s=String(u).trim();if(/^https?:\/\//i.test(s))return esc(s);return '#';}
 let LOTS=[], SMART_RESULTS=null;
 let ALL_LOTS=[], ALL_SOURCES=[], FILTERED_INDICES=[];
 let LENDER_DATA=[];
@@ -596,9 +592,6 @@ async function loadAllLots(){
     const d=await r.json();
     ALL_LOTS=d.lots||[];
     ALL_SOURCES=d.sources||[];
-    // Populate auction house filter
-    const houses=[...new Set(ALL_LOTS.map(l=>l._house))].sort();
-    $('fHouse').innerHTML='<option value="">All houses ('+houses.length+')</option>'+houses.map(h=>`<option value="${h}">${h}</option>`).join('');
     applyFilters();
   }catch(e){
     console.log('Failed to load lots:',e);
@@ -669,7 +662,7 @@ function applyFilters(){
   const sold=$('fSoldTop').value;
   const tenure=$('fTenure').value;
   const condition=$('fCondition').value;
-  const house=$('fHouse').value;
+  const house='';
   const location=$('fLocation').value;
   const postcode=$('fPostcode').value.trim().toUpperCase();
 
@@ -1004,7 +997,7 @@ async function loadCalendar(){
 function buildHouseFilters(){
   const houses=[...new Set(calendarData.map(a=>a.house))];
   $('houseFilters').innerHTML=`<button class="hf active" data-house="all" onclick="filterHouse('all')">All</button>`+
-    houses.map(h=>`<button class="hf" data-house="${h}" onclick="filterHouse('${h}')">${h}</button>`).join('');
+    houses.map(h=>`<button class="hf" data-house="${esc(h)}" onclick="filterHouse(this.dataset.house)">${esc(h)}</button>`).join('');
 }
 
 let activeHouse='all';
@@ -1025,11 +1018,12 @@ function renderCalendar(){
     const normUrl=a.url.trim().replace(/\/+$/,'').toLowerCase();
     const cached=cacheStatus[normUrl];
     const lotsText=cached?`${cached.total_lots} lots scored`:a.lots?`${a.lots} lots`:'Lots TBC';
+    const safeUrl=safeHref(a.url);
     let actionBtn='';
     if(cached && cached.total_lots>0){
-      actionBtn=`<button class="cal-btn cached" onclick="analyseFromCal('${a.url}')">✓ View ${cached.total_lots} results</button>`;
+      actionBtn=`<button class="cal-btn cached" data-url="${esc(a.url)}" onclick="analyseFromCal(this.dataset.url)">✓ View ${cached.total_lots} results</button>`;
     } else if(a.catalogueReady){
-      actionBtn=`<button class="cal-btn primary" onclick="analyseFromCal('${a.url}')">Analyse</button>`;
+      actionBtn=`<button class="cal-btn primary" data-url="${esc(a.url)}" onclick="analyseFromCal(this.dataset.url)">Analyse</button>`;
     }
     const badgeParts = [];
     if(cached) {
@@ -1044,13 +1038,13 @@ function renderCalendar(){
     return`<div class="cal-card">
       <div class="cal-date"><div class="day">${day}</div><div class="mon">${mon}</div></div>
       <div class="cal-info">
-        <h3>${a.logo} ${a.house}</h3>
-        <div class="meta"><span>${a.type}</span><span>${a.location}</span><span>${lotsText}</span></div>
+        <h3>${esc(a.logo)} ${esc(a.house)}</h3>
+        <div class="meta"><span>${esc(a.type)}</span><span>${esc(a.location)}</span><span>${lotsText}</span></div>
         ${lotsBadge}
       </div>
       <div class="cal-actions">
         ${actionBtn}
-        <a href="${a.url}" target="_blank" class="cal-btn ghost">Catalogue ↗</a>
+        <a href="${safeUrl}" target="_blank" class="cal-btn ghost">Catalogue ↗</a>
       </div>
     </div>`;
   }).join('');
@@ -1070,8 +1064,8 @@ async function analyseAll(){
   try{
     const r=await fetch('/api/analyse-all',{
       method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({email:currentUser?.email})
+      headers:authHeaders(),
+      body:JSON.stringify({})
     });
     const d=await r.json();
     if(!r.ok) throw new Error(d.error||'Failed');
@@ -1098,6 +1092,8 @@ async function analyseAll(){
 // USER SIGNUP
 // ═══════════════════════════════
 let currentUser=JSON.parse(localStorage.getItem('bm_user')||'null');
+let sessionToken=localStorage.getItem('bm_token')||'';
+function authHeaders(){const h={'Content-Type':'application/json'};if(sessionToken)h['Authorization']='Bearer '+sessionToken;return h;}
 
 function checkUser(){
   if(currentUser){
@@ -1129,7 +1125,9 @@ async function doSignup(){
     const d=await r.json();
     if(!r.ok){$('signupError').textContent=d.error||'Something went wrong';$('signupError').style.display='block';return}
     currentUser=d.user;
+    sessionToken=d.token||'';
     localStorage.setItem('bm_user',JSON.stringify(currentUser));
+    localStorage.setItem('bm_token',sessionToken);
     $('signupModal').classList.remove('show');
     checkUser();
   }catch(e){$('signupError').textContent='Connection error — try again';$('signupError').style.display='block'}
@@ -1137,7 +1135,9 @@ async function doSignup(){
 
 function signOut(){
   currentUser=null;
+  sessionToken='';
   localStorage.removeItem('bm_user');
+  localStorage.removeItem('bm_token');
   checkUser();
 }
 
@@ -1237,8 +1237,8 @@ async function runAnalysis(url){
   try{
     const resp=await fetch('/api/analyse',{
       method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({url,email:currentUser?.email,budget:{deposit:+($('dep')?.value||0),stdPct:+($('stdPct')?.value||25),tsPct:+($('tsPct')?.value||0)}}),
+      headers:authHeaders(),
+      body:JSON.stringify({url,budget:{deposit:+($('dep')?.value||0),stdPct:+($('stdPct')?.value||25),tsPct:+($('tsPct')?.value||0)}}),
       signal
     });
 
@@ -1309,7 +1309,7 @@ async function runAnalysis(url){
   }catch(e){
     if(e.name==='AbortError') return;
     $('progressPanel').innerHTML=`<div class="scan-animation" style="background:var(--red)">
-      <div class="scan-title">✗ ${e.message}</div>
+      <div class="scan-title">✗ ${esc(e.message)}</div>
       <div class="scan-label"><a href="#" onclick="backToAuctions();return false" style="color:white;text-decoration:underline">← Back to auctions</a></div>
     </div>`;
   }
@@ -1365,8 +1365,8 @@ async function runSmartSearch(query) {
   try {
     const resp = await fetch('/api/smart-search', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, email: currentUser?.email, filteredIndices: FILTERED_INDICES.length > 0 && FILTERED_INDICES.length < ALL_LOTS.length ? FILTERED_INDICES : null, soldFilter: $('fSoldTop')?.value || 'all' }),
+      headers: authHeaders(),
+      body: JSON.stringify({ query, filteredIndices: FILTERED_INDICES.length > 0 && FILTERED_INDICES.length < ALL_LOTS.length ? FILTERED_INDICES : null, soldFilter: $('fSoldTop')?.value || 'all' }),
       signal
     });
     const data = await resp.json();
@@ -1375,7 +1375,7 @@ async function runSmartSearch(query) {
       if (data.error === 'premium_required') {
         $('progressPanel').style.display='none';
         const fl=$('premiumFeatures');
-        fl.innerHTML=(data.features||[]).map(f=>`<li>${f}</li>`).join('');
+        fl.innerHTML=(data.features||[]).map(f=>`<li>${esc(f)}</li>`).join('');
         $('premiumModal').style.display='flex';
         $('mainBtn').disabled=false;$('mainBtn').textContent='Search';
         return;
@@ -1401,8 +1401,8 @@ async function runSmartSearch(query) {
 
     // Report
     let rh = '';
-    if (data.report) rh += `<p>${data.report.replace(/\n/g, '</p><p>')}</p>`;
-    if (data.sources?.length) rh += `<div class="sources">Searched ${data.totalSearched||0} lots across ${data.sources.length} catalogues: ${data.sources.map(s=>`${s.house} (${s.count})`).join(', ')}</div>`;
+    if (data.report) rh += `<p>${esc(data.report).replace(/\n/g, '</p><p>')}</p>`;
+    if (data.sources?.length) rh += `<div class="sources">Searched ${data.totalSearched||0} lots across ${data.sources.length} catalogues: ${data.sources.map(s=>`${esc(s.house)} (${s.count})`).join(', ')}</div>`;
     $('reportView').innerHTML = rh;
 
     showView('cards');
@@ -1418,7 +1418,7 @@ async function runSmartSearch(query) {
   } catch (e) {
     if(e.name==='AbortError') return; // Silently ignore aborted requests
     $('progressPanel').innerHTML=`<div class="scan-animation" style="background:var(--red)">
-      <div class="scan-title">✗ ${e.message}</div>
+      <div class="scan-title">✗ ${esc(e.message)}</div>
       <div class="scan-label"><a href="#" onclick="backToAuctions();return false" style="color:white;text-decoration:underline">← Back to auctions</a></div>
     </div>`;
   }
@@ -1438,15 +1438,15 @@ function showView(v) {
 // ═══════════════════════════════
 function buildLotFilters(){
   const deals=new Set(LOTS.map(l=>l.dealType).filter(Boolean));
-  $('fDeal').innerHTML='<option value="">All deals</option>'+[...deals].sort().map(d=>`<option>${d}</option>`).join('');
+  $('fDeal').innerHTML='<option value="">All deals</option>'+[...deals].sort().map(d=>`<option value="${esc(d)}">${esc(d)}</option>`).join('');
 
   const types=new Set(LOTS.map(l=>l.propType).filter(Boolean));
-  $('fPropType').innerHTML='<option value="">All types</option>'+[...types].sort().map(t=>`<option value="${t}">${t}</option>`).join('');
+  $('fPropType').innerHTML='<option value="">All types</option>'+[...types].sort().map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('');
   $('fPropType').style.display=types.size>1?'':'none';
 
   const conds=new Set(LOTS.map(l=>l.condition).filter(Boolean));
-  $('fCondition').innerHTML='<option value="">Any condition</option>'+[...conds].sort().map(c=>`<option value="${c}">${c}</option>`).join('');
-  $('fCondition').style.display=conds.size>1?'':'none';
+  $('fConditionToolbar').innerHTML='<option value="">Any condition</option>'+[...conds].sort().map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  $('fConditionToolbar').style.display=conds.size>1?'':'none';
 
   const hasTS=LOTS.some(l=>l.titleSplit);
   $('fTS').style.display=hasTS?'':'none';
@@ -1470,7 +1470,7 @@ function renderLots(){
   if(minBeds) lots=lots.filter(l=>!l.beds||l.beds>=minBeds);
 
   const ft=$('fType').value,fd=$('fDeal').value,fa=$('fAfford')?.value||'all',fts=$('fTS')?.value||$('fTSTop')?.value||'',fsold=$('fSold')?.value||$('fSoldTop')?.value||'',fs=$('fSearch').value.toLowerCase();
-  const fpt=$('fPropType')?.value||'',fco=$('fCondition')?.value||'';
+  const fpt=$('fPropType')?.value||'',fco=$('fConditionToolbar')?.value||'';
   if(ft)lots=lots.filter(l=>l.propType===ft);
   if(fpt)lots=lots.filter(l=>l.propType===fpt);
   if(fco)lots=lots.filter(l=>l.condition===fco);
@@ -1520,24 +1520,24 @@ function card(l){
   const dp=0.25; // deposit assumption for deal analysis
   const sc=l.score>=3?'high':l.score>=1.5?'mid':'low';
   let details=[];
-  if(l.priceText)details.push(`<span class="price">${l.priceText}</span>`);
+  if(l.priceText)details.push(`<span class="price">${esc(l.priceText)}</span>`);
   else if(l.price)details.push(`<span class="price">Guide £${l.price.toLocaleString()}</span>`);
   else details.push(`<span class="price">POA</span>`);
-  if(l.propType)details.push(l.propType);
-  if(l.beds!=null)details.push(l.beds+' bed');
-  if(l.tenure)details.push(l.tenure);
+  if(l.propType)details.push(esc(l.propType));
+  if(l.beds!=null)details.push(esc(l.beds)+' bed');
+  if(l.tenure)details.push(esc(l.tenure));
   if(l.sqft)details.push(l.sqft.toLocaleString()+' sqft');
   if(l.titleSplit&&l.price&&l.units)details.push(`£${Math.round(l.price/l.units).toLocaleString()}/unit`);
 
   // Show source house for smart search results
-  const houseTag = l._house ? `<span class="tag" style="background:var(--cream);color:var(--text3)">${l._house}</span>` : '';
+  const houseTag = l._house ? `<span class="tag" style="background:var(--cream);color:var(--text3)">${esc(l._house)}</span>` : '';
 
   let tags=houseTag;
   if(l.titleSplit)tags+=`<span class="tag tag-t">TITLE SPLIT</span>`;
-  if(l.units)tags+=`<span class="tag tag-t">${l.units} units</span>`;
-  (l.opps||[]).filter(o=>!o.startsWith('Title split')).forEach(o=>tags+=`<span class="tag tag-o">${o}</span>`);
-  (l.risks||[]).forEach(r=>tags+=`<span class="tag tag-r">${r}</span>`);
-  const bul=(l.bullets||[]).slice(0,4).map(b=>`<li>${b}</li>`).join('');
+  if(l.units)tags+=`<span class="tag tag-t">${esc(l.units)} units</span>`;
+  (l.opps||[]).filter(o=>!o.startsWith('Title split')).forEach(o=>tags+=`<span class="tag tag-o">${esc(o)}</span>`);
+  (l.risks||[]).forEach(r=>tags+=`<span class="tag tag-r">${esc(r)}</span>`);
+  const bul=(l.bullets||[]).slice(0,4).map(b=>`<li>${esc(b)}</li>`).join('');
 
   let enrichHtml='';
   const hasLR=l.streetAvg||l.streetSalesCount>0;
@@ -1555,7 +1555,7 @@ function card(l){
     }
     if(l.streetSales&&l.streetSales.length>0){
       enrichHtml+=`<details class="street-sales"><summary>View ${l.streetSales.length} recent street sales</summary><div class="ss-list">`;
-      l.streetSales.forEach(s=>{enrichHtml+=`<div class="ss-row"><span class="ss-addr">${s.address}</span><span class="ss-price">£${s.price.toLocaleString()}</span><span class="ss-date">${s.date.slice(0,10)}</span><span class="ss-type">${s.type||''}</span></div>`;});
+      l.streetSales.forEach(s=>{enrichHtml+=`<div class="ss-row"><span class="ss-addr">${esc(s.address)}</span><span class="ss-price">£${s.price.toLocaleString()}</span><span class="ss-date">${esc(s.date.slice(0,10))}</span><span class="ss-type">${esc(s.type||'')}</span></div>`;});
       enrichHtml+=`</div></details>`;
     }
     enrichHtml+='</div>';
@@ -1586,7 +1586,7 @@ function card(l){
     dealHtml=`<div class="deal-panel"><div class="deal-header">📊 Deal Analysis</div><div class="deal-note">No comparable data available for this lot — ROI cannot be estimated.</div></div>`;
   }
 
-  const link=l.url?`<div class="lot-link"><a href="${l.url}" target="_blank">View listing ↗</a></div>`:'';
+  const link=l.url?`<div class="lot-link"><a href="${safeHref(l.url)}" target="_blank">View listing ↗</a></div>`:'';
   const fpCash=+($('fpCash')?.value)||0;
   const fpTerm=$('fpTerm')?.value||'12';
   const isRefurbCandidate=l.condition==='needs work'||l.condition==='poor'||l.dealType==='Refurb'||l.dealType==='Refurb+Extend'||l.dealType==='Development';
@@ -1597,8 +1597,8 @@ function card(l){
   const affBadge=fpCash?affBadgeHtml(l._affTag||'unknown'):'';
 
   return`<div class="lot ${l.titleSplit?'ts':''}">
-    <div class="lot-header"><div class="lot-title">Lot ${l.lot} · ${l.dealType||'Standard'} ${affBadge}</div><div class="lot-score ${sc}">${l.score}</div></div>
-    <div class="lot-addr">${l.address||'Address not available'}</div>
+    <div class="lot-header"><div class="lot-title">Lot ${esc(l.lot)} · ${esc(l.dealType||'Standard')} ${affBadge}</div><div class="lot-score ${sc}">${l.score}</div></div>
+    <div class="lot-addr">${esc(l.address||'Address not available')}</div>
     <div class="lot-details">${details.join(' <span class="sep">·</span> ')}</div>
     <div class="tags">${tags}</div>
     <ul class="lot-bullets">${bul}</ul>${enrichHtml}${dealHtml}
