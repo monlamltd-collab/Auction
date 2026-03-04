@@ -1844,6 +1844,38 @@ Only return lots that genuinely match the query. If nothing matches well, say so
 // ═══════════════════════════════════════════════════════════════
 // ADMIN: Cache Status & Manual Refresh
 // ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// API: ALL LOTS — pre-load every cached lot for frontend filtering
+// ═══════════════════════════════════════════════════════════════
+app.get('/api/all-lots', async (req, res) => {
+  try {
+    if (!supabase) return res.json({ lots: [], sources: [] });
+
+    const { data: cached } = await supabase
+      .from('cached_analyses')
+      .select('house, url, lots')
+      .gt('expires_at', new Date().toISOString());
+
+    if (!cached || cached.length === 0) return res.json({ lots: [], sources: [] });
+
+    const lots = [];
+    const sources = [];
+    for (const c of cached) {
+      if (c.lots && Array.isArray(c.lots)) {
+        sources.push({ house: c.house, url: c.url, count: c.lots.length });
+        for (const lot of c.lots) {
+          lots.push({ ...lot, _house: c.house, _sourceUrl: c.url });
+        }
+      }
+    }
+
+    res.json({ lots, sources });
+  } catch (e) {
+    log.error('All lots error', { error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 app.get('/api/cache-status', async (req, res) => {
   try {
     const { data: cached } = await supabase
