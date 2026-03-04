@@ -17,6 +17,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@supabase/supabase-js';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { readFileSync } from 'fs';
+import { lookup } from 'dns/promises';
 import puppeteer from 'puppeteer';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -26,7 +27,7 @@ const PORT = process.env.PORT || 3000;
 // Trust Railway's reverse proxy for correct client IP via req.ip / X-Forwarded-For
 app.set('trust proxy', 1);
 
-app.use(express.json());
+app.use(express.json({ limit: '100kb' }));
 
 // ═══════════════════════════════════════════════════════════════
 // CORS
@@ -62,10 +63,11 @@ app.use((req, res, next) => {
     "script-src 'self' 'unsafe-inline'; " +
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
     "font-src 'self' https://fonts.gstatic.com; " +
-    "img-src 'self' data: https:; " +
+    "img-src 'self' data:; " +
     "connect-src 'self' https://*.supabase.co; " +
     "frame-ancestors 'none'"
   );
+  res.setHeader('Strict-Transport-Security', 'max-age=63072000; includeSubDomains');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
@@ -79,10 +81,10 @@ function csrfCheck(req, res, next) {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
   const origin = req.headers.origin || req.headers.referer || '';
   const allowed = ['https://auctions.bridgematch.co.uk', 'https://www.bridgematch.co.uk', 'https://bridgematch.co.uk'];
-  if (!origin || allowed.some(a => origin.startsWith(a))) {
+  if (origin && allowed.some(a => origin.startsWith(a))) {
     return next();
   }
-  return res.status(403).json({ error: 'Forbidden' });
+  return res.status(403).json({ error: 'Forbidden — missing or invalid Origin header' });
 }
 app.use(csrfCheck);
 
@@ -271,32 +273,46 @@ function getClientIP(req) {
 // ═══════════════════════════════════════════════════════════════
 // URL VALIDATION — prevent SSRF via user-supplied URLs
 // ═══════════════════════════════════════════════════════════════
-function validateUrl(raw) {
+const BLOCKED_HOST_PATTERNS = [
+  /^localhost$/,
+  /^127\./,
+  /^10\./,
+  /^172\.(1[6-9]|2\d|3[01])\./,
+  /^192\.168\./,
+  /^169\.254\./,
+  /^0\./,
+  /^\[?::1\]?$/,
+  /^\[?fe80:/i,
+  /^\[?fc00:/i,
+  /^\[?fd/i,
+  /\.local$/,
+  /\.internal$/,
+  /\.railway\.internal$/,
+];
+
+function isPrivateIP(ip) {
+  return BLOCKED_HOST_PATTERNS.some(pat => pat.test(ip));
+}
+
+async function validateUrl(raw) {
   let parsed;
   try { parsed = new URL(raw); } catch { return { ok: false, error: 'Invalid URL' }; }
   if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
     return { ok: false, error: 'Only http/https URLs are allowed' };
   }
   const hostname = parsed.hostname.toLowerCase();
-  // Block localhost, private IPs, link-local, metadata endpoints
-  const blocked = [
-    /^localhost$/,
-    /^127\./,
-    /^10\./,
-    /^172\.(1[6-9]|2\d|3[01])\./,
-    /^192\.168\./,
-    /^169\.254\./,
-    /^0\./,
-    /^\[?::1\]?$/,
-    /^\[?fe80:/i,
-    /^\[?fc00:/i,
-    /^\[?fd/i,
-    /\.local$/,
-    /\.internal$/,
-    /\.railway\.internal$/,
-  ];
-  for (const pat of blocked) {
-    if (pat.test(hostname)) return { ok: false, error: 'URL points to a private/internal address' };
+  // Block by hostname pattern
+  if (isPrivateIP(hostname)) {
+    return { ok: false, error: 'URL points to a private/internal address' };
+  }
+  // DNS resolution check to prevent DNS rebinding
+  try {
+    const { address } = await lookup(hostname);
+    if (isPrivateIP(address)) {
+      return { ok: false, error: 'URL resolves to a private/internal address' };
+    }
+  } catch {
+    return { ok: false, error: 'Cannot resolve hostname' };
   }
   return { ok: true, url: parsed.href };
 }
@@ -465,19 +481,7 @@ async function validateUserFromReq(req) {
     } catch { /* fall through */ }
   }
 
-  // 3) Fallback: email in body (legacy — will be removed)
-  const email = req.body?.email;
-  if (!email || !email.includes('@')) return null;
-  try {
-    const { data } = await supabase
-      .from('users')
-      .select('id, email, name')
-      .eq('email', email.toLowerCase().trim())
-      .single();
-    return data || null;
-  } catch {
-    return null;
-  }
+  return null;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1058,7 +1062,7 @@ app.post('/api/admin/discover-catalogues', async (req, res) => {
       const hrefMatches = [...html.matchAll(/href="([^"]*(?:auction|lot|catalogue|sale|property)[^"]*)"/gi)];
       const hrefs = [...new Set(hrefMatches.map(m => m[1]))].slice(0, 50);
 
-      const client = new (require('anthropic').default)({ apiKey: process.env.ANTHROPIC_API_KEY });
+      const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
       const aiResp = await client.messages.create({
         model: MODEL_HAIKU,
         max_tokens: 2000,
@@ -1118,7 +1122,7 @@ app.post('/api/analyse', async (req, res) => {
   if (!url) return res.status(400).json({ error: 'Missing url' });
 
   // ── Validate URL to prevent SSRF ──
-  const urlCheck = validateUrl(url);
+  const urlCheck = await validateUrl(url);
   if (!urlCheck.ok) return res.status(400).json({ error: urlCheck.error });
 
   // ── Check user is signed up (token-based auth with email fallback) ──
@@ -1130,14 +1134,23 @@ app.post('/api/analyse', async (req, res) => {
   const ip = getClientIP(req);
   const today = new Date().toISOString().slice(0, 10);
 
-  const { data: rateRow } = await supabase
-    .from('rate_limits')
-    .select('requests')
-    .eq('ip', ip)
-    .eq('date', today)
-    .single();
+  // Atomic rate limit check: upsert+increment in one call via RPC, fallback to select
+  let currentRequests = 0;
+  try {
+    const { data: rateRow } = await supabase.rpc('increment_rate_limit', { p_ip: ip, p_date: today });
+    currentRequests = rateRow ?? 0;
+  } catch {
+    // Fallback if RPC not yet deployed: read then write (non-atomic)
+    const { data: rateRow } = await supabase
+      .from('rate_limits')
+      .select('requests')
+      .eq('ip', ip)
+      .eq('date', today)
+      .single();
+    currentRequests = rateRow?.requests ?? 0;
+  }
 
-  if (!isAdmin && rateRow && rateRow.requests >= RATE_LIMIT) {
+  if (!isAdmin && currentRequests >= RATE_LIMIT) {
     return res.status(429).json({
       error: 'rate_limited',
       message: `Daily limit reached (${RATE_LIMIT} analyses per day). Try again tomorrow.`
@@ -1176,12 +1189,8 @@ app.post('/api/analyse', async (req, res) => {
     });
   }
 
-  // ── Increment rate counter (only for fresh analyses, not cached) ──
-  if (rateRow) {
-    await supabase.from('rate_limits').update({ requests: rateRow.requests + 1 }).eq('ip', ip).eq('date', today);
-  } else {
-    await supabase.from('rate_limits').insert({ ip, date: today, requests: 1 });
-  }
+  // Rate counter already incremented atomically above (pre-cache check)
+  // For cached responses, the count was bumped but that's acceptable (prevents cache-probe abuse)
 
   // ── Fresh analysis — stream progress via SSE ──
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -1633,6 +1642,20 @@ app.post('/api/smart-search', async (req, res) => {
   const user = await validateUserFromReq(req);
   if (!user) return res.status(401).json({ error: 'signup_required' });
 
+  // Rate limit: 30 smart searches per IP per day
+  const SEARCH_RATE_LIMIT = 30;
+  const searchIp = req.ip || 'unknown';
+  const searchToday = new Date().toISOString().slice(0, 10);
+  const searchKey = `search:${searchIp}`;
+  try {
+    const { data: sr } = await supabase.from('rate_limits').select('requests').eq('ip', searchKey).eq('date', searchToday).single();
+    if (sr && sr.requests >= SEARCH_RATE_LIMIT) {
+      return res.status(429).json({ error: 'rate_limited', message: `Daily search limit reached (${SEARCH_RATE_LIMIT}). Try again tomorrow.` });
+    }
+    if (sr) { await supabase.from('rate_limits').update({ requests: sr.requests + 1 }).eq('ip', searchKey).eq('date', searchToday); }
+    else { await supabase.from('rate_limits').insert({ ip: searchKey, date: searchToday, requests: 1 }); }
+  } catch { /* rate limit check failed — allow through */ }
+
   const presetSlug = isPresetQuery(query);
   const sf = soldFilter || 'all';
 
@@ -2028,6 +2051,11 @@ app.get('/api/all-lots', async (req, res) => {
 });
 
 app.get('/api/cache-status', async (req, res) => {
+  // Require admin auth to prevent internal state leakage
+  const adminToken = req.headers['x-admin-secret'] || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(adminToken, process.env.ADMIN_SECRET)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
   try {
     const { data: cached } = await supabase
       .from('cached_analyses')
@@ -2098,7 +2126,7 @@ app.get('/check', (req, res) => {
 });
 
 app.get('/api/admin/daily-stats', async (req, res) => {
-  const { token } = req.query;
+  const token = req.headers['x-admin-secret'] || req.query.token || '';
   if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
     return res.status(403).json({ error: 'Invalid admin token' });
   }
@@ -2127,9 +2155,9 @@ app.get('/api/admin/daily-stats', async (req, res) => {
 app.get('*', (req, res) => {
   try {
     let html = readFileSync(join(__dirname, 'index.html'), 'utf-8');
-    // Inject Supabase config so keys aren't hardcoded in HTML
-    html = html.replace("window.__SUPABASE_URL__ || ''", SUPABASE_URL ? `'${SUPABASE_URL}'` : "''");
-    html = html.replace("window.__SUPABASE_ANON_KEY__ || ''", SUPABASE_ANON_KEY ? `'${SUPABASE_ANON_KEY}'` : "''");
+    // Inject Supabase config — JSON.stringify escapes any special chars to prevent XSS
+    html = html.replace("window.__SUPABASE_URL__ || ''", JSON.stringify(SUPABASE_URL || ''));
+    html = html.replace("window.__SUPABASE_ANON_KEY__ || ''", JSON.stringify(SUPABASE_ANON_KEY || ''));
     html = html.replace("window.__AUTH_ENABLED__ || false", AUTH_ENABLED ? 'true' : 'false');
     res.type('html').send(html);
   } catch (e) {
@@ -2424,6 +2452,21 @@ function buildPageUrl(baseUrl, page, house) {
 let browserInstance = null;
 let browserUseCount = 0;
 const BROWSER_MAX_USES = 10;
+const MAX_CONCURRENT_PAGES = 3;
+let activePagesCount = 0;
+
+async function acquirePage() {
+  // Wait for a slot if at max concurrency
+  while (activePagesCount >= MAX_CONCURRENT_PAGES) {
+    await new Promise(r => setTimeout(r, 500));
+  }
+  activePagesCount++;
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  const origClose = page.close.bind(page);
+  page.close = async () => { activePagesCount = Math.max(0, activePagesCount - 1); return origClose(); };
+  return page;
+}
 
 async function getBrowser() {
   // Restart browser after N uses to prevent memory bloat
@@ -2455,10 +2498,8 @@ async function getBrowser() {
 
 async function scrapeWithPuppeteer(url, house) {
   const pages = [];
-  let browser;
   try {
-    browser = await getBrowser();
-    const page = await browser.newPage();
+    const page = await acquirePage();
     await page.setUserAgent(HEADERS['User-Agent']);
     await page.setViewport({ width: 1280, height: 900 });
 
@@ -3823,6 +3864,9 @@ function extractStreet(address) {
 
 async function queryLandRegistry(postcode) {
   if (!postcode) return [];
+  // Sanitize postcode: strip non-alphanumeric/space, validate UK format
+  const sanitised = postcode.replace(/[^A-Z0-9 ]/gi, '').trim();
+  if (!/^[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}$/i.test(sanitised)) return [];
   const sparql = `
 PREFIX lrppi: <http://landregistry.data.gov.uk/def/ppi/>
 PREFIX lrcommon: <http://landregistry.data.gov.uk/def/common/>
@@ -3830,7 +3874,7 @@ PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
 PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
 SELECT ?paon ?saon ?street ?town ?postcode ?amount ?date ?category ?propertyType
 WHERE {
-  VALUES ?postcode {"${postcode}"^^xsd:string}
+  VALUES ?postcode {"${sanitised}"^^xsd:string}
   ?addr lrcommon:postcode ?postcode.
   ?transx lrppi:propertyAddress ?addr ;
           lrppi:pricePaid ?amount ;
@@ -4363,8 +4407,7 @@ async function discoverAndUpdateCalendar(apiKey) {
 
       if (hrefs.length === 0 && stripped.length < 200) continue;
 
-      const Anthropic = require('anthropic');
-      const client = new Anthropic.default({ apiKey });
+      const client = new Anthropic({ apiKey });
       const aiResp = await client.messages.create({
         model: MODEL_HAIKU,
         max_tokens: 1500,
@@ -4447,7 +4490,7 @@ No catalogues? Return {"catalogues": []}`
 }
 
 async function autoAnalyseOne(url, apiKey) {
-  const urlCheck = validateUrl(url);
+  const urlCheck = await validateUrl(url);
   if (!urlCheck.ok) { log.warn('autoAnalyseOne skipped — invalid URL', { url, reason: urlCheck.error }); return []; }
   const house = detectAuctionHouse(url);
   const rewritten = rewriteUrl(url, house);

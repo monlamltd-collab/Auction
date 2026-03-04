@@ -1094,7 +1094,7 @@ function renderCalendar(){
       </div>
       <div class="cal-actions">
         ${actionBtn}
-        <a href="${safeUrl}" target="_blank" class="cal-btn ghost">Catalogue ↗</a>
+        <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="cal-btn ghost">Catalogue ↗</a>
       </div>
     </div>`;
   }).join('');
@@ -1130,7 +1130,7 @@ async function analyseAll(){
     // Refresh calendar to show updated status
     loadCalendar();
   }catch(e){
-    btn.textContent='✗ '+e.message;
+    btn.textContent='✗ Analysis failed — please try again';
     setTimeout(()=>{
       btn.disabled=false;
       btn.textContent='🚀 Analyse all auctions';
@@ -1245,7 +1245,8 @@ async function handleSendMagicLink() {
     $('authStep2').style.display = '';
     $('authSentEmail').textContent = email;
   } catch (err) {
-    $('signupError').textContent = err.message || 'Failed to send magic link.';
+    console.error('Magic link error:', err);
+    $('signupError').textContent = 'Failed to send magic link. Please try again.';
     $('signupError').style.display = 'block';
   } finally {
     btn.disabled = false;
@@ -1436,8 +1437,9 @@ async function runAnalysis(url){
     }
   }catch(e){
     if(e.name==='AbortError') return;
+    console.error('Analysis error:', e);
     $('progressPanel').innerHTML=`<div class="scan-animation" style="background:var(--red)">
-      <div class="scan-title">✗ ${esc(e.message)}</div>
+      <div class="scan-title">✗ Analysis failed — please try again</div>
       <div class="scan-label"><a href="#" onclick="backToAuctions();return false" style="color:white;text-decoration:underline">← Back to auctions</a></div>
     </div>`;
   }
@@ -1547,8 +1549,9 @@ async function runSmartSearch(query) {
       <div class="stat-card"><div class="v y">${data.sources?.length||0}</div><div class="l">Catalogues</div></div>`;
   } catch (e) {
     if(e.name==='AbortError') return; // Silently ignore aborted requests
+    console.error('Analysis error:', e);
     $('progressPanel').innerHTML=`<div class="scan-animation" style="background:var(--red)">
-      <div class="scan-title">✗ ${esc(e.message)}</div>
+      <div class="scan-title">✗ Analysis failed — please try again</div>
       <div class="scan-label"><a href="#" onclick="backToAuctions();return false" style="color:white;text-decoration:underline">← Back to auctions</a></div>
     </div>`;
   }
@@ -1717,13 +1720,13 @@ function card(l){
     dealHtml=`<div class="deal-panel"><div class="deal-header">📊 Deal Analysis</div><div class="deal-note">No comparable data available for this lot — ROI cannot be estimated.</div></div>`;
   }
 
-  const link=l.url?`<div class="lot-link"><a href="${safeHref(l.url)}" target="_blank">View listing ↗</a></div>`:'';
+  const link=l.url?`<div class="lot-link"><a href="${safeHref(l.url)}" target="_blank" rel="noopener noreferrer">View listing ↗</a></div>`:'';
   const fpCash=+($('fpCash')?.value)||0;
   const fpTerm=$('fpTerm')?.value||'12';
   const isRefurbCandidate=l.condition==='needs work'||l.condition==='poor'||l.dealType==='Refurb'||l.dealType==='Refurb+Extend'||l.dealType==='Development';
   let bmUrl=`/check?price=${l.price}${l.address?'&address='+encodeURIComponent(l.address):''}${l.propType?'&type='+encodeURIComponent(l.propType):''}`;
   if(fpCash)bmUrl+=`&cash=${fpCash}&term=${fpTerm}${isRefurbCandidate?'&refurb=1':''}`;
-  const bmLink=l.price?`<a href="${bmUrl}" class="bm-btn" target="_blank" title="Check bridging finance feasibility">🧩 BridgeMatch It</a>`:'';
+  const bmLink=l.price?`<a href="${bmUrl}" class="bm-btn" target="_blank" rel="noopener noreferrer" title="Check bridging finance feasibility">🧩 BridgeMatch It</a>`:'';
 
   const affBadge=fpCash?affBadgeHtml(l._affTag||'unknown'):'';
 
@@ -1775,7 +1778,6 @@ function dl(c,n,t){const b=new Blob([c],{type:t}),a=document.createElement('a');
 // Init
 loadCalendar();
 loadAllLots();
-checkUser();
 $('smartQuery').addEventListener('input',()=>{
   $('mainBtn').textContent=$('smartQuery').value.trim()?'AI Search':'Browse';
 });
