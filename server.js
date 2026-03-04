@@ -422,6 +422,62 @@ app.get('/api/auth/me', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
+// API: LEAD SUBMISSION (BridgeMatch Lite)
+// ═══════════════════════════════════════════════════════════════
+app.post('/api/leads', async (req, res) => {
+  const {
+    name, email, phone, contactPref, isRegulated, occupancy,
+    propertyPrice, loanAmount, ltvPercent, worksBudget,
+    matchingLenders, propertyType, propertyAddress,
+    depositRange, experienceLevel, auctionUrl, dealData
+  } = req.body || {};
+
+  if (!name || !email || !phone) {
+    return res.status(400).json({ error: 'Name, email, and phone are required' });
+  }
+  if (!email.includes('@')) {
+    return res.status(400).json({ error: 'Valid email required' });
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('leads')
+      .insert({
+        name,
+        email: email.toLowerCase().trim(),
+        phone,
+        contact_pref: contactPref || 'email',
+        is_regulated: !!isRegulated,
+        occupancy: occupancy || null,
+        property_price: propertyPrice || null,
+        loan_amount: loanAmount || null,
+        ltv_percent: ltvPercent || null,
+        works_budget: worksBudget || null,
+        matching_lenders: matchingLenders || null,
+        property_type: propertyType || null,
+        property_address: propertyAddress || null,
+        deposit_range: depositRange || null,
+        experience_level: experienceLevel || null,
+        auction_url: auctionUrl || null,
+        deal_data: dealData || null,
+        ip_address: req.ip || null,
+        created_at: new Date().toISOString(),
+      })
+      .select('id')
+      .single();
+
+    if (error) throw error;
+
+    logActivityEvent('lead_submit', { email, propertyPrice, loanAmount, isRegulated }, email, req.ip);
+
+    res.json({ ok: true, id: data?.id, isRegulated: !!isRegulated });
+  } catch (err) {
+    log.error('Lead submission error', { error: err.message });
+    res.status(500).json({ error: 'Failed to submit enquiry' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
 // AUTH HELPER: validate user via Supabase JWT or legacy token
 // ═══════════════════════════════════════════════════════════════
 async function validateUserFromReq(req) {
