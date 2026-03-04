@@ -343,7 +343,7 @@ footer .logo-f span{color:var(--green)}
     <div class="logo">Bridge<span>match</span></div>
     <div class="nav-right">
       <a href="/check" class="nav-link-bm" title="Check if you can finance a deal">🧩 Can I fund this?</a>
-      <button class="nav-cta" id="navCta" onclick="requireSignup()">Sign up free</button>
+      <button class="nav-cta" id="navCta" onclick="requireSignup()">Sign in</button>
     </div>
   </div>
 </nav>
@@ -355,17 +355,36 @@ footer .logo-f span{color:var(--green)}
     <p class="hero-sub">Search across every major UK auction house at once. AI-powered analysis scores every lot, flags key opportunities, and helps you find deals others miss.</p>
   </header>
 
-  <!-- ═══════ SIGNUP MODAL ═══════ -->
+  <!-- ═══════ AUTH MODAL (Magic Link) ═══════ -->
   <div class="modal-bg" id="signupModal">
     <div class="modal">
-      <div class="modal-icon">🔓</div>
-      <h2>Unlock Bridgematch</h2>
-      <p>Free to use — just enter your email. We'll also let you know when new catalogues drop.</p>
-      <input id="signupName" placeholder="Your name (optional)">
-      <input id="signupEmail" placeholder="Email address" type="email">
-      <div id="signupError" style="color:var(--red);font-size:.82rem;margin-bottom:8px;display:none"></div>
-      <button class="btn-main" style="width:100%" onclick="doSignup()">Get started — it's free</button>
-      <div class="modal-note">No card required · No spam · Unsubscribe anytime</div>
+      <!-- Step 1: Email + consent -->
+      <div id="authStep1">
+        <div class="modal-icon">🔓</div>
+        <h2>Sign in to Bridgematch</h2>
+        <p>Free to use — we'll email you a secure sign-in link.</p>
+        <input id="signupEmail" placeholder="Email address" type="email">
+        <div style="text-align:left;margin:10px 0 14px;font-size:.82rem;color:var(--text2)">
+          <label style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;cursor:pointer">
+            <input type="checkbox" id="consentAlerts" checked style="margin-top:3px;accent-color:var(--green)">
+            <span>Send me auction alerts and feature updates</span>
+          </label>
+          <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer">
+            <input type="checkbox" id="consentPartner" style="margin-top:3px;accent-color:var(--green)">
+            <span>I'd also like to hear about BridgeMatch bridging finance tools and partner offers</span>
+          </label>
+        </div>
+        <div id="signupError" style="color:var(--red);font-size:.82rem;margin-bottom:8px;display:none"></div>
+        <button class="btn-main" style="width:100%" id="btnSendMagicLink" onclick="handleSendMagicLink()">Send Magic Link</button>
+        <div class="modal-note">No password needed · No spam · Unsubscribe anytime</div>
+      </div>
+      <!-- Step 2: Check email -->
+      <div id="authStep2" style="display:none">
+        <div class="modal-icon">✉️</div>
+        <h2>Check your email</h2>
+        <p>We've sent a sign-in link to <strong id="authSentEmail"></strong>. Click the link in your email to sign in.</p>
+        <button class="btn-main" style="width:100%;background:var(--cream);color:var(--text2)" onclick="$('signupModal').classList.remove('show');$('authStep1').style.display='';$('authStep2').style.display='none'">Close</button>
+      </div>
     </div>
   </div>
 
@@ -569,6 +588,12 @@ footer .logo-f span{color:var(--green)}
   </footer>
 </div>
 
+<script src="/public/supabase.min.js"></script>
+<script>
+const SUPABASE_URL = window.__SUPABASE_URL__ || '';
+const SUPABASE_ANON_KEY = window.__SUPABASE_ANON_KEY__ || '';
+const AUTH_ENABLED = window.__AUTH_ENABLED__ || false;
+</script>
 <script>
 const $=id=>document.getElementById(id);
 function esc(s){if(s==null)return '';const d=document.createElement('div');d.textContent=String(s);return d.innerHTML;}
@@ -1114,59 +1139,129 @@ async function analyseAll(){
 }
 
 // ═══════════════════════════════
-// USER SIGNUP
+// AUTH (Supabase Magic Link)
 // ═══════════════════════════════
-let currentUser=JSON.parse(localStorage.getItem('bm_user')||'null');
-let sessionToken=localStorage.getItem('bm_token')||'';
-function authHeaders(){const h={'Content-Type':'application/json'};if(sessionToken)h['Authorization']='Bearer '+sessionToken;return h;}
+let supabaseClient = null;
+let currentSession = null;
+let currentUser = null;
 
-function checkUser(){
-  if(currentUser){
-    $('userBar').style.display='flex';
-    $('userEmail').textContent=currentUser.email;
-    $('navCta').textContent=currentUser.email.split('@')[0];
-    $('navCta').onclick=null;
-  }else{
-    $('userBar').style.display='none';
-    $('navCta').textContent='Sign up free';
-    $('navCta').onclick=()=>requireSignup();
+function initAuth() {
+  if (!AUTH_ENABLED) return;
+  if (typeof supabase !== 'undefined' && SUPABASE_URL && SUPABASE_ANON_KEY) {
+    supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    supabaseClient.auth.getSession().then(({ data }) => {
+      if (data.session) onSignIn(data.session);
+      else onSignOut();
+    });
+    supabaseClient.auth.onAuthStateChange((event, session) => {
+      if (session && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION')) {
+        onSignIn(session);
+      } else if (event === 'SIGNED_OUT') {
+        onSignOut();
+      }
+    });
   }
 }
-checkUser();
 
-function requireSignup(){
-  if(currentUser) return true;
+function getAuthHeaders() {
+  const h = { 'Content-Type': 'application/json' };
+  if (currentSession && currentSession.access_token) {
+    h['Authorization'] = 'Bearer ' + currentSession.access_token;
+  }
+  return h;
+}
+// Backward compat alias used by existing call sites
+function authHeaders() { return getAuthHeaders(); }
+
+function onSignIn(session) {
+  currentSession = session;
+  currentUser = session.user;
+  $('userBar').style.display = 'flex';
+  $('userEmail').textContent = currentUser.email || '';
+  $('navCta').textContent = (currentUser.email || '').split('@')[0];
+  $('navCta').onclick = null;
+  $('signupModal').classList.remove('show');
+
+  // Submit pending consent from sessionStorage
+  const pending = sessionStorage.getItem('bm_pending_consent');
+  if (pending) {
+    sessionStorage.removeItem('bm_pending_consent');
+    try {
+      const consent = JSON.parse(pending);
+      fetch('/api/auth/consent', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(consent) })
+        .catch(e => console.warn('Consent submit failed:', e));
+    } catch {}
+  }
+
+  // Clean up legacy localStorage tokens
+  localStorage.removeItem('bm_user');
+  localStorage.removeItem('bm_token');
+}
+
+function onSignOut() {
+  currentSession = null;
+  currentUser = null;
+  $('userBar').style.display = 'none';
+  $('navCta').textContent = 'Sign in';
+  $('navCta').onclick = () => requireSignup();
+}
+
+function requireSignup() {
+  if (currentUser) return true;
   $('signupModal').classList.add('show');
+  $('authStep1').style.display = '';
+  $('authStep2').style.display = 'none';
+  $('signupError').style.display = 'none';
+  $('signupEmail').value = '';
+  $('signupEmail').focus();
   return false;
 }
 
-async function doSignup(){
-  const email=$('signupEmail').value.trim();
-  const name=$('signupName').value.trim();
-  $('signupError').style.display='none';
-  if(!email||!email.includes('@')){$('signupError').textContent='Please enter a valid email';$('signupError').style.display='block';return}
-  try{
-    const r=await fetch('/api/signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,name})});
-    const d=await r.json();
-    if(!r.ok){$('signupError').textContent=d.error||'Something went wrong';$('signupError').style.display='block';return}
-    currentUser=d.user;
-    sessionToken=d.token||'';
-    localStorage.setItem('bm_user',JSON.stringify(currentUser));
-    localStorage.setItem('bm_token',sessionToken);
-    $('signupModal').classList.remove('show');
-    checkUser();
-  }catch(e){$('signupError').textContent='Connection error — try again';$('signupError').style.display='block'}
+async function handleSendMagicLink() {
+  const email = ($('signupEmail').value || '').trim();
+  const btn = $('btnSendMagicLink');
+  $('signupError').style.display = 'none';
+  if (!email || !email.includes('@')) {
+    $('signupError').textContent = 'Please enter a valid email address';
+    $('signupError').style.display = 'block';
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+
+  // Store consent choices in sessionStorage to submit after magic link callback
+  sessionStorage.setItem('bm_pending_consent', JSON.stringify({
+    auction_alerts: !!$('consentAlerts').checked,
+    partner_marketing: !!$('consentPartner').checked
+  }));
+
+  try {
+    const { error } = await supabaseClient.auth.signInWithOtp({
+      email: email,
+      options: { emailRedirectTo: window.location.origin }
+    });
+    if (error) throw error;
+    $('authStep1').style.display = 'none';
+    $('authStep2').style.display = '';
+    $('authSentEmail').textContent = email;
+  } catch (err) {
+    $('signupError').textContent = err.message || 'Failed to send magic link.';
+    $('signupError').style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Send Magic Link';
+  }
 }
 
-function signOut(){
-  currentUser=null;
-  sessionToken='';
-  localStorage.removeItem('bm_user');
-  localStorage.removeItem('bm_token');
-  checkUser();
+function signOut() {
+  if (supabaseClient) supabaseClient.auth.signOut();
+  onSignOut();
 }
 
-$('signupModal').addEventListener('click',e=>{if(e.target===$('signupModal'))$('signupModal').classList.remove('show')});
+// Init auth on load
+initAuth();
+
+$('signupModal').addEventListener('click', e => { if (e.target === $('signupModal')) $('signupModal').classList.remove('show'); });
 
 // ═══════════════════════════════
 // CATALOGUE ANALYSIS

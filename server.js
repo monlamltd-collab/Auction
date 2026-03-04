@@ -15,6 +15,8 @@ import { dirname, join } from 'path';
 import { randomBytes, timingSafeEqual } from 'crypto';
 import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@supabase/supabase-js';
+import { createRemoteJWKSet, jwtVerify } from 'jose';
+import { readFileSync } from 'fs';
 import puppeteer from 'puppeteer';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -91,6 +93,49 @@ const supabase = createClient(
   process.env.SUPABASE_URL || '',
   process.env.SUPABASE_SERVICE_KEY || ''
 );
+
+// ═══════════════════════════════════════════════════════════════
+// SUPABASE AUTH (JWT verification)
+// ═══════════════════════════════════════════════════════════════
+const SUPABASE_URL = process.env.SUPABASE_URL || '';
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || '';
+const SUPABASE_JWT_SECRET = process.env.SUPABASE_JWT_SECRET || '';
+const AUTH_ENABLED = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
+
+let jwks = null;
+if (SUPABASE_URL) {
+  try {
+    jwks = createRemoteJWKSet(new URL(SUPABASE_URL.replace(/\/$/, '') + '/auth/v1/.well-known/jwks.json'));
+    console.log('[AUTH] JWKS client created for ES256 verification');
+  } catch (e) {
+    console.warn('[AUTH] Failed to create JWKS client:', e.message);
+  }
+}
+
+async function verifySupabaseToken(token) {
+  // Try ES256 via JWKS first (Supabase default)
+  if (jwks) {
+    try {
+      const { payload } = await jwtVerify(token, jwks, { audience: 'authenticated' });
+      return payload;
+    } catch (e) {
+      if (e.code === 'ERR_JWT_EXPIRED') return { error: 'Session expired — please sign in again' };
+      // Fall through to HS256
+    }
+  }
+  // Fallback: HS256 with JWT secret
+  if (SUPABASE_JWT_SECRET) {
+    try {
+      const secret = new TextEncoder().encode(SUPABASE_JWT_SECRET);
+      const { payload } = await jwtVerify(token, secret, { audience: 'authenticated' });
+      return payload;
+    } catch (e) {
+      if (e.code === 'ERR_JWT_EXPIRED') return { error: 'Session expired — please sign in again' };
+      return { error: 'Invalid token' };
+    }
+  }
+  return { error: 'Auth not configured' };
+}
 
 // ═══════════════════════════════════════════════════════════════
 // STRUCTURED LOGGING
@@ -296,25 +341,131 @@ app.post('/api/signup', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// AUTH HELPER: validate user via Bearer token or email fallback
+// API: AUTH CONSENT (GDPR)
+// ═══════════════════════════════════════════════════════════════
+app.post('/api/auth/consent', async (req, res) => {
+  const user = await validateUserFromReq(req);
+  if (!user) return res.status(401).json({ error: 'Authentication required' });
+
+  const { auction_alerts, partner_marketing } = req.body || {};
+  const now = new Date().toISOString();
+  const ip = req.ip || req.headers['x-forwarded-for'] || '';
+  const ua = req.headers['user-agent'] || '';
+
+  try {
+    // Update user consent columns
+    const updates = {};
+    if (typeof auction_alerts === 'boolean') {
+      updates.consent_auction_alerts = auction_alerts;
+      updates.consent_auction_alerts_at = now;
+    }
+    if (typeof partner_marketing === 'boolean') {
+      updates.consent_partner_marketing = partner_marketing;
+      updates.consent_partner_marketing_at = now;
+    }
+    if (Object.keys(updates).length > 0) {
+      await supabase.from('users').update(updates).eq('id', user.id);
+    }
+
+    // Append immutable audit log entries
+    const logEntries = [];
+    if (typeof auction_alerts === 'boolean') {
+      logEntries.push({ user_id: user.id, user_email: user.email, consent_type: 'auction_alerts', consent_given: auction_alerts, ip_address: ip, user_agent: ua });
+    }
+    if (typeof partner_marketing === 'boolean') {
+      logEntries.push({ user_id: user.id, user_email: user.email, consent_type: 'partner_marketing', consent_given: partner_marketing, ip_address: ip, user_agent: ua });
+    }
+    if (logEntries.length > 0) {
+      await supabase.from('user_consent_log').insert(logEntries);
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    log.error('Consent update error', { error: err.message, userId: user.id });
+    res.status(500).json({ error: 'Failed to update consent' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// API: AUTH ME
+// ═══════════════════════════════════════════════════════════════
+app.get('/api/auth/me', async (req, res) => {
+  const user = await validateUserFromReq(req);
+  if (!user) return res.status(401).json({ error: 'Authentication required' });
+
+  try {
+    const { data } = await supabase
+      .from('users')
+      .select('id, email, name, tier, consent_auction_alerts, consent_partner_marketing')
+      .eq('id', user.id)
+      .single();
+    res.json(data || user);
+  } catch (err) {
+    res.json(user);
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// AUTH HELPER: validate user via Supabase JWT or legacy token
 // ═══════════════════════════════════════════════════════════════
 async function validateUserFromReq(req) {
-  // Prefer Authorization: Bearer <token>
   const authHeader = req.headers['authorization'] || '';
+
   if (authHeader.startsWith('Bearer ')) {
     const token = authHeader.slice(7);
-    if (token) {
-      try {
-        const { data } = await supabase
+    if (!token) return null;
+
+    // 1) Try Supabase JWT verification
+    const payload = await verifySupabaseToken(token);
+    if (payload && !payload.error && payload.sub) {
+      const authId = payload.sub;
+      const email = payload.email;
+
+      // Look up by supabase_auth_id first
+      const { data: byAuthId } = await supabase
+        .from('users')
+        .select('id, email, name')
+        .eq('supabase_auth_id', authId)
+        .single();
+      if (byAuthId) return byAuthId;
+
+      // Link existing user by email on first JWT login
+      if (email) {
+        const { data: byEmail } = await supabase
           .from('users')
           .select('id, email, name')
-          .eq('session_token', token)
+          .eq('email', email.toLowerCase().trim())
           .single();
-        if (data) return data;
-      } catch { /* fall through */ }
+        if (byEmail) {
+          await supabase.from('users')
+            .update({ supabase_auth_id: authId, last_login: new Date().toISOString() })
+            .eq('id', byEmail.id);
+          return byEmail;
+        }
+      }
+
+      // Auto-create new user
+      const { data: newUser, error: insertErr } = await supabase
+        .from('users')
+        .insert({ email: (email || '').toLowerCase().trim(), supabase_auth_id: authId })
+        .select('id, email, name')
+        .single();
+      if (!insertErr && newUser) return newUser;
+      return null;
     }
+
+    // 2) Legacy fallback: session_token lookup (migration window)
+    try {
+      const { data } = await supabase
+        .from('users')
+        .select('id, email, name')
+        .eq('session_token', token)
+        .single();
+      if (data) return data;
+    } catch { /* fall through */ }
   }
-  // Fallback: email in body (legacy — will be removed)
+
+  // 3) Fallback: email in body (legacy — will be removed)
   const email = req.body?.email;
   if (!email || !email.includes('@')) return null;
   try {
@@ -1974,7 +2125,16 @@ app.get('/api/admin/daily-stats', async (req, res) => {
 });
 
 app.get('*', (req, res) => {
-  res.sendFile(join(__dirname, 'index.html'));
+  try {
+    let html = readFileSync(join(__dirname, 'index.html'), 'utf-8');
+    // Inject Supabase config so keys aren't hardcoded in HTML
+    html = html.replace("window.__SUPABASE_URL__ || ''", SUPABASE_URL ? `'${SUPABASE_URL}'` : "''");
+    html = html.replace("window.__SUPABASE_ANON_KEY__ || ''", SUPABASE_ANON_KEY ? `'${SUPABASE_ANON_KEY}'` : "''");
+    html = html.replace("window.__AUTH_ENABLED__ || false", AUTH_ENABLED ? 'true' : 'false');
+    res.type('html').send(html);
+  } catch (e) {
+    res.sendFile(join(__dirname, 'index.html'));
+  }
 });
 
 // ═══════════════════════════════════════════════════════════════
