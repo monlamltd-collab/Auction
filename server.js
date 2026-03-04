@@ -1587,7 +1587,7 @@ app.post('/api/analyse', async (req, res) => {
       .eq('id', user.id);
 
     // Log activity event
-    logActivityEvent('analysis', { house: displayName, url: normalisedUrl, lots_found: analysed.length }, email, getClientIP(req));
+    logActivityEvent('analysis', { house: displayName, url: normalisedUrl, lots_found: analysed.length }, user?.email, getClientIP(req));
 
     sseWrite(res, 'done', {
       house: displayName,
@@ -1990,7 +1990,7 @@ Only return lots that genuinely match the query. If nothing matches well, say so
     };
 
     // Log smart search activity
-    logActivityEvent('smart_search', { query, results_count: matchingLots.length }, email, getClientIP(req));
+    logActivityEvent('smart_search', { query, results_count: matchingLots.length }, user?.email, getClientIP(req));
 
     // Cache preset query results (1-hour TTL)
     if (presetSlug) {
