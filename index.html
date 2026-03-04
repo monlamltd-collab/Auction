@@ -578,6 +578,30 @@ let ALL_LOTS=[], ALL_SOURCES=[], FILTERED_INDICES=[];
 let LENDER_DATA=[];
 const PREMIUM_ENABLED=true; // TODO: gate behind auth when auction tool gets subscriptions
 let _searchAbort=null; // AbortController for in-flight searches
+let _searchTimers=[]; // setTimeout IDs for step animations
+let _searchReader=null; // SSE ReadableStreamDefaultReader (for cleanup on abort)
+
+// Reset ALL search state to a clean slate before each new search.
+// Prevents previous search data/filters leaking into the next one.
+function resetSearchState(){
+  // 1. Abort any in-flight request
+  if(_searchAbort){_searchAbort.abort();_searchAbort=null}
+  // 2. Cancel any active SSE reader
+  if(_searchReader){try{_searchReader.cancel()}catch(e){}_searchReader=null}
+  // 3. Clear all pending step-animation timers
+  _searchTimers.forEach(id=>clearTimeout(id));
+  _searchTimers=[];
+  // 4. Clear data arrays
+  LOTS=[];
+  SMART_RESULTS=null;
+  // 5. Reset toolbar filter values so old filters don't silently exclude new results
+  const filterResets={fDeal:'',fType:'',fPropType:'',fConditionToolbar:'',fTS:'',fAfford:'all',fSold:'all',fSoldTop:'all',fSearch:''};
+  for(const[id,val] of Object.entries(filterResets)){const el=$(id);if(el)el.value=val}
+  // 6. Clear UI
+  $('resultsPanel').style.display='none';
+  $('logBox').innerHTML='';
+  $('mainBtn').disabled=true;
+}
 
 function syncSoldFilter(source){
   if(source==='top') { if($('fSold')) $('fSold').value=$('fSoldTop').value; }
@@ -732,6 +756,7 @@ function detectHouseFromUrl(url) {
     'auctionestates': 'Auction Estates', 'landwoodpropertyauctions': 'Landwood',
     'loveitts': 'Loveitts', 'hunters.com': 'Hunters',
     'auctionhouse.co.uk': 'Auction House UK', 'pughauctions': 'SDL Auctions',
+    'probate.auction': 'Probate Auction', 'timedauctions.probate.auction': 'Probate Auction',
   };
   for (const [domain, name] of Object.entries(houses)) {
     if (u.includes(domain)) return { recognised: true, name, isPdf: false };
@@ -783,10 +808,9 @@ function showResultsView(){
 }
 
 function backToAuctions(){
-  if(_searchAbort){_searchAbort.abort();_searchAbort=null}
+  resetSearchState();
   document.body.classList.remove('view-results');
   $('progressPanel').style.display='none';
-  $('resultsPanel').style.display='none';
   $('mainBtn').disabled=false;
   $('mainBtn').textContent=$('smartQuery').value.trim()?'AI Search':'Browse';
   window.scrollTo({top:0,behavior:'smooth'});
@@ -1154,15 +1178,13 @@ async function runAnalysis(url){
   if(!requireSignup()) return;
   if(!url) url=$('smartQuery').value.trim();
   if(!url)return alert('Please paste an auction catalogue URL');
-  if(_searchAbort){_searchAbort.abort();_searchAbort=null}
+
+  // Clean slate — abort previous, clear all state, reset filters
+  resetSearchState();
   _searchAbort=new AbortController();
   const signal=_searchAbort.signal;
 
   $('mainBtn').disabled=true;
-  $('resultsPanel').style.display='none';
-  $('logBox').innerHTML='';
-  LOTS=[];
-  SMART_RESULTS=null;
   showResultsView();
 
   // Show scanning animation with house detection
@@ -1257,54 +1279,64 @@ async function runAnalysis(url){
     } else {
       // Fresh analysis — SSE stream
       const reader = resp.body.getReader();
+      _searchReader = reader; // Track for cleanup on abort
       const decoder = new TextDecoder();
       let buffer = '';
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
+      try {
+        while (true) {
+          // Check abort BEFORE reading — prevents processing stale data from previous search
+          if (signal.aborted) break;
+          const { done, value } = await reader.read();
+          if (done || signal.aborted) break;
+          buffer += decoder.decode(value, { stream: true });
 
-        // Parse complete SSE events from buffer
-        const parts = buffer.split('\n\n');
-        buffer = parts.pop(); // keep incomplete event in buffer
+          // Parse complete SSE events from buffer
+          const parts = buffer.split('\n\n');
+          buffer = parts.pop(); // keep incomplete event in buffer
 
-        for (const part of parts) {
-          let eventType = 'message', eventData = '';
-          for (const line of part.split('\n')) {
-            if (line.startsWith('event: ')) eventType = line.slice(7);
-            else if (line.startsWith('data: ')) eventData = line.slice(6);
-          }
-          if (!eventData) continue;
-
-          try {
-            const d = JSON.parse(eventData);
-            if (eventType === 'phase') {
-              const step = PHASE_STEPS[d.step];
-              if (step) advanceStep(step);
-              if (d.step === 'connecting' && d.house) {
-                const t = $('ss1'); if(t) t.querySelector('.check').nextSibling.textContent = ' ' + d.house;
-              }
-              if (d.lots && $('scanCount')) $('scanCount').textContent = d.lots;
-            } else if (eventType === 'scrape') {
-              if (d.lots !== undefined && $('scanCount')) $('scanCount').textContent = d.lots;
-              if (d.pages && $('scanLabel')) $('scanLabel').textContent = `${d.pages} page(s) found`;
-            } else if (eventType === 'extract') {
-              advanceStep(3);
-              if (d.lotsFound !== undefined && $('scanCount')) $('scanCount').textContent = d.lotsFound;
-              if ($('scanLabel')) $('scanLabel').textContent = `batch ${d.batch}/${d.totalBatches} · ${d.lotsFound} lots extracted`;
-            } else if (eventType === 'enrich') {
-              advanceStep(5);
-              if ($('scanLabel')) $('scanLabel').textContent = `Land Registry: ${d.postcodes}/${d.total} postcodes`;
-            } else if (eventType === 'done') {
-              showResults(d);
-            } else if (eventType === 'error') {
-              throw new Error(d.message || 'Analysis failed');
+          for (const part of parts) {
+            if (signal.aborted) break;
+            let eventType = 'message', eventData = '';
+            for (const line of part.split('\n')) {
+              if (line.startsWith('event: ')) eventType = line.slice(7);
+              else if (line.startsWith('data: ')) eventData = line.slice(6);
             }
-          } catch (parseErr) {
-            if (parseErr.message && !parseErr.message.includes('JSON')) throw parseErr;
+            if (!eventData) continue;
+
+            try {
+              const d = JSON.parse(eventData);
+              if (eventType === 'phase') {
+                const step = PHASE_STEPS[d.step];
+                if (step) advanceStep(step);
+                if (d.step === 'connecting' && d.house) {
+                  const t = $('ss1'); if(t) t.querySelector('.check').nextSibling.textContent = ' ' + d.house;
+                }
+                if (d.lots && $('scanCount')) $('scanCount').textContent = d.lots;
+              } else if (eventType === 'scrape') {
+                if (d.lots !== undefined && $('scanCount')) $('scanCount').textContent = d.lots;
+                if (d.pages && $('scanLabel')) $('scanLabel').textContent = `${d.pages} page(s) found`;
+              } else if (eventType === 'extract') {
+                advanceStep(3);
+                if (d.lotsFound !== undefined && $('scanCount')) $('scanCount').textContent = d.lotsFound;
+                if ($('scanLabel')) $('scanLabel').textContent = `batch ${d.batch}/${d.totalBatches} · ${d.lotsFound} lots extracted`;
+              } else if (eventType === 'enrich') {
+                advanceStep(5);
+                if ($('scanLabel')) $('scanLabel').textContent = `Land Registry: ${d.postcodes}/${d.total} postcodes`;
+              } else if (eventType === 'done') {
+                showResults(d);
+              } else if (eventType === 'error') {
+                throw new Error(d.message || 'Analysis failed');
+              }
+            } catch (parseErr) {
+              if (parseErr.message && !parseErr.message.includes('JSON')) throw parseErr;
+            }
           }
         }
+      } finally {
+        // Always clean up reader reference
+        _searchReader = null;
+        try { reader.cancel(); } catch(e) {}
       }
     }
   }catch(e){
@@ -1314,7 +1346,8 @@ async function runAnalysis(url){
       <div class="scan-label"><a href="#" onclick="backToAuctions();return false" style="color:white;text-decoration:underline">← Back to auctions</a></div>
     </div>`;
   }
-  _searchAbort=null;
+  // Only clear if this search's controller is still the active one (prevents race with new search)
+  if(_searchAbort?.signal === signal) _searchAbort=null;
   $('mainBtn').disabled=false;
 }
 
@@ -1323,13 +1356,14 @@ async function runAnalysis(url){
 // ═══════════════════════════════
 async function runSmartSearch(query) {
   if (!requireSignup()) return;
-  if(_searchAbort){_searchAbort.abort();_searchAbort=null}
+
+  // Clean slate — abort previous, clear all state, reset filters
+  resetSearchState();
   _searchAbort=new AbortController();
   const signal=_searchAbort.signal;
+
   $('mainBtn').disabled = true;
   $('mainBtn').textContent = 'Searching...';
-  $('resultsPanel').style.display = 'none';
-  $('logBox').innerHTML = '';
   showResultsView();
 
   // Show search animation
@@ -1346,22 +1380,22 @@ async function runSmartSearch(query) {
     <div class="scan-label" id="scanLabel">matches found</div>
   </div>`;
 
-  // Animate steps (with "still working" fallback if fetch takes longer than animation)
+  // Animate steps — track timer IDs so resetSearchState() can cancel them
   const stepTimings = [1000, 2500, 4000];
   stepTimings.forEach((t, i) => {
-    setTimeout(() => {
+    _searchTimers.push(setTimeout(() => {
       if(signal.aborted) return;
       const prev = $('sq'+(i+1));
       const next = $('sq'+(i+2));
       if(prev){prev.classList.remove('active');prev.classList.add('done')}
       if(next){next.classList.remove('waiting');next.classList.add('active')}
-    }, t);
+    }, t));
   });
-  setTimeout(()=>{
+  _searchTimers.push(setTimeout(()=>{
     if(signal.aborted) return;
     const sl=$('scanLabel');
     if(sl&&$('progressPanel')?.style.display==='block')sl.textContent='Still working — querying AI...';
-  },5000);
+  },5000));
 
   try {
     const resp = await fetch('/api/smart-search', {
@@ -1423,7 +1457,8 @@ async function runSmartSearch(query) {
       <div class="scan-label"><a href="#" onclick="backToAuctions();return false" style="color:white;text-decoration:underline">← Back to auctions</a></div>
     </div>`;
   }
-  _searchAbort=null;
+  // Only clear if this search's controller is still the active one (prevents race with new search)
+  if(_searchAbort?.signal === signal) _searchAbort=null;
   $('mainBtn').disabled = false;
   $('mainBtn').textContent = 'Search';
 }

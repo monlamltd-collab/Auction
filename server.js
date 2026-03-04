@@ -174,11 +174,50 @@ const HOUSE_EXTRACTION_HINTS = {
   maggsandallen:      'Maggs & Allen auctions. Lot listings with lot number, address, guide price, property type, and detail page URLs.',
   mchughandco:        'McHugh & Co auctions. Lot cards with lot number, address, guide price, property description, and detail links.',
   auctionhouse:       'Auction House UK. Lot listings with lot number, address, guide price, property type, auction date, and detail links.',
+  probateauction:     'Probate Auction. WordPress site. Lots in div.property-list-card containers within a div.property-list-grid. Each card has a Swiper image gallery, lot number, address, guide price (e.g. £280,000+), description paragraph, and a "Property Details" link.',
 };
 
 function getExtractionModel(house) {
   return house === 'unknown' ? MODEL_SONNET : MODEL_HAIKU;
 }
+
+// ═══════════════════════════════════════════════════════════════
+// HOUSE ROOTS — catalogue discovery URLs
+// ═══════════════════════════════════════════════════════════════
+// Each house's root/listing page where upcoming auction catalogue links can be found.
+// Used by /api/discover-catalogues to auto-detect new auction URLs when they change.
+const HOUSE_ROOTS = {
+  savills:            'https://auctions.savills.co.uk/upcoming-auctions',
+  allsop:             'https://www.allsop.co.uk/auction-calendar/',
+  sdl:                'https://www.sdlauctions.co.uk/property-auctions/upcoming-auctions/',
+  network:            'https://www.networkauctions.co.uk/auctions/',
+  bondwolfe:          'https://www.bondwolfe.com/auctions/properties/',
+  barnardmarcus:      'https://www.barnardmarcusauctions.co.uk/auction-dates/',
+  auctionhouselondon: 'https://www.auctionhouselondon.co.uk/next-auction/',
+  auctionhouse:       'https://www.auctionhouse.co.uk/auction/search',
+  cliveemson:         'https://www.cliveemson.co.uk/properties/',
+  strettons:          'https://www.strettons.co.uk/auctions/',
+  acuitus:            'https://www.acuitus.co.uk/find-a-property/',
+  hollismorgan:       'https://www.hollismorgan.co.uk/search-auction/',
+  maggsandallen:      'https://www.maggsandallen.co.uk/search-auction/',
+  mchughandco:        'https://www.mchughandco.com/pages/auctions',
+  knightfrank:        'https://www.knightfrankauctions.com/',
+  pattinson:          'https://www.pattinson.co.uk/auction',
+  bidx1:              'https://www.bidx1.com/en-gb/properties',
+  philliparnold:      'https://www.philliparnoldauctions.co.uk/',
+  edwardmellor:       'https://www.edwardmellor.co.uk/auction/',
+  paulfosh:           'https://www.paulfosh.com/auction/',
+  cottons:            'https://www.cottons.co.uk/auction/',
+  dedmangray:         'https://www.dedmangray.co.uk/auction/',
+  barnettross:        'https://www.barnettross.co.uk/auction/',
+  bradleyhall:        'https://auction.bradleyhall.co.uk/',
+  connectuk:          'https://www.connectukauctions.co.uk/',
+  auctionestates:     'https://www.auctionestates.co.uk/',
+  landwood:           'https://www.landwoodpropertyauctions.com/',
+  loveitts:           'https://www.loveitts.co.uk/auction/',
+  hunters:            'https://www.hunters.com/auction',
+  probateauction:     'https://probate.auction/auctions/',
+};
 
 function getClientIP(req) {
   return req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';
@@ -505,6 +544,14 @@ const FALLBACK_CALENDAR = [
       location: 'Online (Live Stream)', type: 'Commercial', status: 'upcoming',
       catalogueReady: false,
     },
+    // ── PROBATE AUCTION ──
+    {
+      house: 'Probate Auction', houseSlug: 'probateauction', logo: '⚖️',
+      date: '2026-03-11', title: '11 March 2026', lots: null,
+      url: 'https://probate.auction/auctions/wednesday-11th-march-2026/',
+      location: 'Online', type: 'Residential (Probate)', status: 'upcoming',
+      catalogueReady: true,
+    },
     // ── HOLLIS MORGAN (Bristol) ──
     {
       house: 'Hollis Morgan', houseSlug: 'hollismorgan', logo: '🏘️',
@@ -820,6 +867,96 @@ app.delete('/api/admin/calendar/:id', async (req, res) => {
     log.error('Calendar delete error', { error: e.message });
     res.status(500).json({ error: 'Internal server error' });
   }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// API: DISCOVER CATALOGUES — find upcoming auction URLs from root pages
+// ═══════════════════════════════════════════════════════════════
+// Scrapes a house's root/listing page and uses Claude to extract catalogue links.
+// This handles URL format changes (date slugs, query params, auction IDs) automatically.
+app.post('/api/admin/discover-catalogues', async (req, res) => {
+  const { secret, houses } = req.body || {};
+  if (!process.env.ADMIN_SECRET || !safeCompare(secret, process.env.ADMIN_SECRET)) {
+    return res.status(403).json({ error: 'Invalid admin secret' });
+  }
+
+  const targetHouses = houses || Object.keys(HOUSE_ROOTS);
+  const results = [];
+
+  for (const slug of targetHouses) {
+    const rootUrl = HOUSE_ROOTS[slug];
+    if (!rootUrl) { results.push({ house: slug, error: 'No root URL configured' }); continue; }
+
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+      const resp = await fetch(rootUrl, { headers: HEADERS, signal: controller.signal });
+      clearTimeout(timeout);
+      if (!resp.ok) { results.push({ house: slug, error: `HTTP ${resp.status}` }); continue; }
+      const html = await resp.text();
+
+      // Strip HTML to reduce token usage, keep links and text
+      const stripped = html
+        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .substring(0, 8000);
+
+      // Also extract all hrefs for Claude to reference
+      const hrefMatches = [...html.matchAll(/href="([^"]*(?:auction|lot|catalogue|sale|property)[^"]*)"/gi)];
+      const hrefs = [...new Set(hrefMatches.map(m => m[1]))].slice(0, 50);
+
+      const client = new (require('anthropic').default)({ apiKey: process.env.ANTHROPIC_API_KEY });
+      const aiResp = await client.messages.create({
+        model: MODEL_HAIKU,
+        max_tokens: 2000,
+        messages: [{
+          role: 'user',
+          content: `You are analysing an auction house's listing page to find links to upcoming/current auction catalogues.
+
+House: ${HOUSE_DISPLAY_NAMES[slug] || slug}
+Root URL: ${rootUrl}
+
+Page text (truncated):
+${stripped}
+
+Links found on page:
+${hrefs.join('\n')}
+
+Extract ALL auction catalogue links you can find. For each, provide:
+- url: The full URL (resolve relative URLs against ${rootUrl})
+- title: The auction title/date as shown on page
+- date: The auction date in YYYY-MM-DD format if you can determine it (null if unclear)
+- catalogueReady: true if the catalogue appears to have lots listed, false if "coming soon"
+
+Return ONLY valid JSON: {"catalogues": [{"url": "...", "title": "...", "date": "...", "catalogueReady": true}]}
+If no catalogues found, return {"catalogues": []}`
+        }]
+      });
+
+      let catalogues = [];
+      try {
+        let text = aiResp.content[0].text.trim();
+        if (text.startsWith('```')) text = text.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
+        catalogues = JSON.parse(text).catalogues || [];
+      } catch (e) {
+        results.push({ house: slug, error: 'AI returned invalid JSON', raw: aiResp.content[0].text.substring(0, 200) });
+        continue;
+      }
+
+      results.push({
+        house: slug,
+        displayName: HOUSE_DISPLAY_NAMES[slug] || slug,
+        rootUrl,
+        catalogues,
+      });
+    } catch (e) {
+      results.push({ house: slug, error: e.message });
+    }
+  }
+
+  res.json({ discovered: results.length, results });
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -1844,6 +1981,7 @@ function detectAuctionHouse(url) {
   if (u.includes('landwoodpropertyauctions') || u.includes('landwoodgroup')) return 'landwood';
   if (u.includes('loveitts')) return 'loveitts';
   if (u.includes('hunters.com')) return 'hunters';
+  if (u.includes('probate.auction') || u.includes('timedauctions.probate.auction')) return 'probateauction';
   // buttersjohnbee — PDF-only catalogues, not supported for DOM extraction
   if (u.includes('auctionhouselondon')) return 'auctionhouselondon';
   if (u.includes('auctionhouse.co.uk')) return 'auctionhouse';
@@ -1862,6 +2000,7 @@ const HOUSE_DISPLAY_NAMES = {
   cottons: 'Cottons', dedmangray: 'Dedman Gray', barnettross: 'Barnett Ross',
   bradleyhall: 'Bradley Hall', connectuk: 'Connect UK', auctionestates: 'Auction Estates',
   landwood: 'Landwood', loveitts: 'Loveitts', hunters: 'Hunters',
+  probateauction: 'Probate Auction',
 };
 
 function getHouseDisplayName(slug, url) {
@@ -1972,17 +2111,26 @@ function rewriteUrl(url, house) {
   }
 
   if (house === 'hollismorgan') {
-    // Always rewrite to the current lots view with proper params
-    return { baseUrl: 'https://www.hollismorgan.co.uk/search-auction/?bid=11&showstc=on&orderby=lot_no+asc', isApi: false, paginateAs: null, preferPuppeteer: true };
+    // Use the URL as-is — calendar or user provides the correct ?bid= param for each auction.
+    // Falls back to root listing page if no specific auction URL given.
+    const baseUrl = u.includes('search-auction') ? url : (HOUSE_ROOTS.hollismorgan + '?showstc=on&orderby=lot_no+asc');
+    return { baseUrl, isApi: false, paginateAs: null, preferPuppeteer: true };
   }
 
   if (house === 'maggsandallen') {
-    // Always rewrite to the current auction lots
-    return { baseUrl: 'https://www.maggsandallen.co.uk/search-auction/?auction=1&orderby=lot_no&n=0', isApi: false, paginateAs: null, preferPuppeteer: true };
+    // Use the URL as-is — calendar or user provides the correct ?auction= param.
+    // Falls back to root listing page if no specific auction URL given.
+    const baseUrl = u.includes('search-auction') ? url : (HOUSE_ROOTS.maggsandallen + '?orderby=lot_no&n=0');
+    return { baseUrl, isApi: false, paginateAs: null, preferPuppeteer: true };
   }
 
   if (house === 'mchughandco') {
     // McHugh & Co: /pages/auctions or /Auctions/LotList.aspx — may need Puppeteer
+    return { baseUrl: url, isApi: false, paginateAs: null, preferPuppeteer: true };
+  }
+
+  if (house === 'probateauction') {
+    // Probate Auction: WordPress with Swiper galleries, property-list-card containers
     return { baseUrl: url, isApi: false, paginateAs: null, preferPuppeteer: true };
   }
 
@@ -3147,6 +3295,30 @@ const DOM_EXTRACTORS = {
     })()
   `,
 
+  probateauction: `
+    (() => {
+      const lots = [];
+      document.querySelectorAll('.property-list-card').forEach(card => {
+        const text = card.textContent || '';
+        const link = card.querySelector('a[href*="/lot/"], a[href*="property"]');
+        const href = link ? link.getAttribute('href') : '';
+        const lotMatch = text.match(/lot\\s*(\\d+)/i);
+        const num = lotMatch ? parseInt(lotMatch[1]) : lots.length + 1;
+        const priceMatch = text.match(/£([\\d,]+)/);
+        const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
+        const lines = text.split('\\n').map(l => l.trim()).filter(l => l.length > 0);
+        // Address is typically the first substantial line that isn't lot number or price
+        const address = lines.find(l => l.length > 10 && !l.match(/^(?:lot|guide|£|sold|property details|view|swipe)/i));
+        // Description is the longest paragraph-like text
+        const desc = lines.filter(l => l.length > 30 && !l.match(/^(?:lot|£)/i)).join(' ').substring(0, 300);
+        if (address) {
+          lots.push({ lot: num, address: address.substring(0, 150), price, url: href, bullets: desc ? [desc] : [] });
+        }
+      });
+      return lots;
+    })()
+  `,
+
   // ── EIG PLATFORM (reusable for any EIG-hosted house) ──
   eigplatform: `
     (() => {
@@ -3913,7 +4085,13 @@ async function _doAutoAnalyseAll() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) { console.log('AUTO: No API key, skipping'); return; }
 
-  // Get all catalogue-ready auctions from the calendar
+  // ── Step 1: Discover new catalogues from house root pages ──
+  // Runs once per cycle to find new auction URLs that aren't in the calendar yet.
+  await discoverAndUpdateCalendar(apiKey).catch(e =>
+    console.error('AUTO-DISCOVER: failed —', e.message)
+  );
+
+  // ── Step 2: Analyse all catalogue-ready auctions ──
   const ready = await getCalendarAuctions();
   console.log(`AUTO: ${ready.length} catalogue-ready auctions to check`);
 
@@ -3952,6 +4130,128 @@ async function _doAutoAnalyseAll() {
 
   console.log(`═══ AUTO-ANALYSIS COMPLETE: ${analysed} analysed, ${skipped} cached, ${failed} failed ═══\n`);
   return { analysed, skipped, failed, total: ready.length };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// AUTO-DISCOVER: Scrape house root pages to find new catalogue URLs
+// ═══════════════════════════════════════════════════════════════
+// Runs as part of the 6-hour auto-analysis cycle. For each house with a
+// HOUSE_ROOTS entry, fetches the root page, extracts auction links with
+// Claude Haiku, and upserts any new ones into the Supabase calendar.
+async function discoverAndUpdateCalendar(apiKey) {
+  if (!supabase || !apiKey) return;
+
+  // Only discover for houses that have root URLs configured
+  const slugs = Object.keys(HOUSE_ROOTS);
+  console.log(`AUTO-DISCOVER: Checking ${slugs.length} house root pages for new catalogues`);
+
+  let discovered = 0, errors = 0;
+
+  for (const slug of slugs) {
+    const rootUrl = HOUSE_ROOTS[slug];
+    try {
+      // Fetch root page
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+      const resp = await fetch(rootUrl, { headers: HEADERS, signal: controller.signal });
+      clearTimeout(timeout);
+      if (!resp.ok) continue;
+      const html = await resp.text();
+
+      // Extract text + links for AI
+      const stripped = html
+        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .substring(0, 6000);
+
+      const hrefMatches = [...html.matchAll(/href="([^"]*(?:auction|lot|catalogue|sale|propert)[^"]*)"/gi)];
+      const hrefs = [...new Set(hrefMatches.map(m => m[1]))].slice(0, 40);
+
+      if (hrefs.length === 0 && stripped.length < 200) continue;
+
+      const Anthropic = require('anthropic');
+      const client = new Anthropic.default({ apiKey });
+      const aiResp = await client.messages.create({
+        model: MODEL_HAIKU,
+        max_tokens: 1500,
+        messages: [{
+          role: 'user',
+          content: `Extract auction catalogue links from this auction house page.
+
+House: ${HOUSE_DISPLAY_NAMES[slug] || slug}
+Root URL: ${rootUrl}
+
+Page text (truncated):
+${stripped}
+
+Links found:
+${hrefs.join('\n')}
+
+For each UPCOMING or CURRENT auction with lots to view, provide:
+- url: Full URL (resolve relative URLs against ${rootUrl})
+- title: Auction title/date
+- date: YYYY-MM-DD if determinable, null otherwise
+- catalogueReady: true if lots appear listed
+
+Return ONLY: {"catalogues": [{"url":"...","title":"...","date":"...","catalogueReady":true}]}
+No catalogues? Return {"catalogues": []}`
+        }]
+      });
+
+      let catalogues = [];
+      try {
+        let text = aiResp.content[0].text.trim();
+        if (text.startsWith('```')) text = text.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
+        catalogues = JSON.parse(text).catalogues || [];
+      } catch { continue; }
+
+      // Upsert discovered catalogues into Supabase calendar
+      for (const cat of catalogues) {
+        if (!cat.url) continue;
+        const normUrl = cat.url.trim().replace(/\/+$/, '').toLowerCase();
+
+        // Check if this URL is already in the calendar
+        const { data: existing } = await supabase
+          .from('auction_calendar')
+          .select('id')
+          .eq('url', cat.url)
+          .maybeSingle();
+
+        if (existing) continue; // Already known
+
+        // Insert new calendar entry
+        const { error } = await supabase.from('auction_calendar').insert({
+          house: HOUSE_DISPLAY_NAMES[slug] || slug,
+          house_slug: slug,
+          logo: '🔨',
+          date: cat.date || new Date().toISOString().split('T')[0],
+          title: cat.title || 'Upcoming',
+          url: cat.url,
+          location: 'Online',
+          type: 'Residential & Commercial',
+          status: 'upcoming',
+          catalogue_ready: cat.catalogueReady || false,
+          updated_at: new Date().toISOString(),
+        });
+
+        if (!error) {
+          discovered++;
+          console.log(`AUTO-DISCOVER: ✓ New catalogue found — ${HOUSE_DISPLAY_NAMES[slug]}: ${cat.title} (${cat.url})`);
+        }
+      }
+
+      // Brief pause between houses
+      await new Promise(r => setTimeout(r, 1000));
+
+    } catch (e) {
+      errors++;
+      // Silent — don't let one house's failure stop the rest
+    }
+  }
+
+  console.log(`AUTO-DISCOVER: Complete — ${discovered} new catalogues found, ${errors} errors`);
 }
 
 async function autoAnalyseOne(url, apiKey) {
