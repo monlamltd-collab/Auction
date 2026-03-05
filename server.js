@@ -63,7 +63,7 @@ app.use((req, res, next) => {
     "script-src 'self' 'unsafe-inline'; " +
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
     "font-src 'self' https://fonts.gstatic.com; " +
-    "img-src 'self' data:; " +
+    "img-src 'self' data: https:; " +
     "connect-src 'self' https://*.supabase.co; " +
     "frame-ancestors 'none'"
   );
@@ -1342,7 +1342,7 @@ app.post('/api/analyse', async (req, res) => {
       sseWrite(res, 'scrape', { pages: pages.length });
       if (pages.length > 0) {
         sseWrite(res, 'phase', { step: 'extracting' });
-        rawLots = await extractLotsWithClaude(client, pages, house, onExtract);
+        rawLots = await extractLotsWithClaude(client, pages, house, onExtract, scrapeUrl);
       }
     } else if (rewritten.preferPuppeteer) {
       // JS-rendered sites: go straight to Puppeteer
@@ -1566,7 +1566,7 @@ app.post('/api/analyse', async (req, res) => {
             console.log(`Puppeteer: got ${html.length} chars, sending to Claude...`);
             const puppeteerPages = [{ page: 1, html }];
             sseWrite(res, 'phase', { step: 'extracting' });
-            rawLots = await extractLotsWithClaude(client, puppeteerPages, house, onExtract);
+            rawLots = await extractLotsWithClaude(client, puppeteerPages, house, onExtract, scrapeUrl);
             console.log(`Claude extracted ${rawLots.length} lots from Puppeteer content`);
           }
         }
@@ -1579,7 +1579,7 @@ app.post('/api/analyse', async (req, res) => {
       sseWrite(res, 'scrape', { pages: pages ? pages.length : 0 });
       if (pages && pages.length > 0) {
         sseWrite(res, 'phase', { step: 'extracting' });
-        rawLots = await extractLotsWithClaude(client, pages, house, onExtract);
+        rawLots = await extractLotsWithClaude(client, pages, house, onExtract, scrapeUrl);
       }
       // Puppeteer fallback if static scraping found nothing
       // Skip for houses where Puppeteer wastes memory (blocked, empty, or JS-only)
@@ -1591,7 +1591,7 @@ app.post('/api/analyse', async (req, res) => {
         if (puppeteerPages.length > 0) {
           console.log(`Puppeteer got ${puppeteerPages.length} page(s), sending to Claude...`);
           sseWrite(res, 'phase', { step: 'extracting' });
-          rawLots = await extractLotsWithClaude(client, puppeteerPages, house, onExtract);
+          rawLots = await extractLotsWithClaude(client, puppeteerPages, house, onExtract, scrapeUrl);
           console.log(`Claude extracted ${rawLots.length} lots from Puppeteer content`);
         }
       }
@@ -2662,7 +2662,7 @@ async function scrapeWithPuppeteer(url, house) {
 // ═══════════════════════════════════════════════════════════════
 // CLAUDE EXTRACTION
 // ═══════════════════════════════════════════════════════════════
-async function extractLotsWithClaude(client, pages, house, onProgress) {
+async function extractLotsWithClaude(client, pages, house, onProgress, catalogueUrl) {
   const allLots = [];
   const seenLots = new Set();
   const batchSize = 3;
@@ -2722,6 +2722,14 @@ Return ONLY the JSON array:`;
       if (onProgress) onProgress(Math.floor(i/batchSize)+1, Math.ceil(pages.length/batchSize), allLots.length);
     } catch (err) {
       console.error(`Claude extraction failed for batch starting at page ${batch[0].page}:`, err.message);
+    }
+  }
+  // Resolve relative URLs to absolute using the catalogue URL as base
+  if (catalogueUrl) {
+    for (const lot of allLots) {
+      if (lot.url && !/^https?:\/\//i.test(lot.url)) {
+        try { lot.url = new URL(lot.url, catalogueUrl).href; } catch {}
+      }
     }
   }
   return allLots;
@@ -3806,33 +3814,88 @@ const UNIVERSAL_DOM_EXTRACTOR = `
 `;
 
 async function extractWithDOM(page, house) {
+  let lots = null;
+
   // Try house-specific extractor first
   const extractor = DOM_EXTRACTORS[house];
   if (extractor) {
     try {
-      const lots = await page.evaluate(extractor);
-      if (Array.isArray(lots) && lots.length > 0) {
-        console.log(`DOM extractor for ${house}: found ${lots.length} lots directly`);
-        return lots;
+      const result = await page.evaluate(extractor);
+      if (Array.isArray(result) && result.length > 0) {
+        console.log(`DOM extractor for ${house}: found ${result.length} lots directly`);
+        lots = result;
       }
     } catch (err) {
       console.log(`DOM extractor error for ${house}: ${err.message}`);
     }
   }
-  
+
   // Fall back to universal extractor
+  if (!lots) {
+    try {
+      const result = await page.evaluate(UNIVERSAL_DOM_EXTRACTOR);
+      if (Array.isArray(result) && result.length > 0) {
+        console.log(`Universal DOM extractor for ${house}: found ${result.length} lots`);
+        lots = result;
+      }
+    } catch (err) {
+      console.log(`Universal DOM extractor error for ${house}: ${err.message}`);
+    }
+  }
+
+  if (!lots) {
+    console.log(`All DOM extractors for ${house}: found 0 lots, falling back to Claude`);
+    return null;
+  }
+
+  // Resolve relative URLs to absolute using the page's own URL as base
+  const baseUrl = page.url();
+  for (const lot of lots) {
+    if (lot.url && !/^https?:\/\//i.test(lot.url)) {
+      try { lot.url = new URL(lot.url, baseUrl).href; } catch {}
+    }
+    if (lot.detailUrl && !/^https?:\/\//i.test(lot.detailUrl)) {
+      try { lot.detailUrl = new URL(lot.detailUrl, baseUrl).href; } catch {}
+    }
+  }
+
+  // Image extraction pass — grab first img src per lot card
   try {
-    const lots = await page.evaluate(UNIVERSAL_DOM_EXTRACTOR);
-    if (Array.isArray(lots) && lots.length > 0) {
-      console.log(`Universal DOM extractor for ${house}: found ${lots.length} lots`);
-      return lots;
+    const images = await page.evaluate(() => {
+      const results = [];
+      const cards = document.querySelectorAll('[class*="lot"], [class*="card"], [class*="property"], [class*="catalogue"], tr, article, .item');
+      for (const card of cards) {
+        const img = card.querySelector('img');
+        if (!img) continue;
+        const src = img.src || img.dataset.src || img.dataset.lazySrc || img.getAttribute('data-original');
+        if (!src) continue;
+        const text = card.textContent || '';
+        const lotMatch = text.match(/\b(?:lot\s*)?(\d{1,4})\b/i);
+        results.push({ lotNum: lotMatch ? lotMatch[1] : null, imageUrl: src, text: text.slice(0, 100) });
+      }
+      return results;
+    });
+    // Match images to lots by lot number
+    if (images && images.length > 0) {
+      for (const lot of lots) {
+        if (lot.imageUrl) continue; // already has one
+        const lotNum = String(lot.lot);
+        const match = images.find(img => img.lotNum === lotNum);
+        if (match && match.imageUrl) {
+          let imgUrl = match.imageUrl;
+          if (!/^https?:\/\//i.test(imgUrl)) {
+            try { imgUrl = new URL(imgUrl, baseUrl).href; } catch {}
+          }
+          lot.imageUrl = imgUrl;
+        }
+      }
+      console.log(`Image extraction for ${house}: ${lots.filter(l => l.imageUrl).length}/${lots.length} lots got images`);
     }
   } catch (err) {
-    console.log(`Universal DOM extractor error for ${house}: ${err.message}`);
+    console.log(`Image extraction error for ${house}: ${err.message}`);
   }
-  
-  console.log(`All DOM extractors for ${house}: found 0 lots, falling back to Claude`);
-  return null;
+
+  return lots;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -4592,7 +4655,7 @@ async function autoAnalyseOne(url, apiKey) {
 
   if (rewritten.paginateAs === 'allsop_api') {
     const pages = await scrapeAllsopApi(rewritten.baseUrl);
-    if (pages.length > 0) rawLots = await extractLotsWithClaude(client, pages, house);
+    if (pages.length > 0) rawLots = await extractLotsWithClaude(client, pages, house, null, scrapeUrl);
 
   } else if (rewritten.preferPuppeteer) {
     const browser = await getBrowser();
@@ -4744,7 +4807,7 @@ async function autoAnalyseOne(url, apiKey) {
         } else {
           const html = await page.content();
           const puppeteerPages = [{ page: 1, html }];
-          rawLots = await extractLotsWithClaude(client, puppeteerPages, house);
+          rawLots = await extractLotsWithClaude(client, puppeteerPages, house, null, scrapeUrl);
           console.log(`AUTO: ${house}: ${rawLots.length} lots via Claude fallback`);
         }
       }
@@ -4754,13 +4817,13 @@ async function autoAnalyseOne(url, apiKey) {
 
   } else {
     const pages = await scrapeAllPages(scrapeUrl, house);
-    if (pages && pages.length > 0) rawLots = await extractLotsWithClaude(client, pages, house);
+    if (pages && pages.length > 0) rawLots = await extractLotsWithClaude(client, pages, house, null, scrapeUrl);
     // Skip Puppeteer fallback for houses where it wastes memory (blocked, empty, or JS-only)
     const SKIP_PUPPETEER = ['knightfrank','paulfosh','cottons','dedmangray',
       'barnettross','philliparnold'];
     if (rawLots.length === 0 && !SKIP_PUPPETEER.includes(house)) {
       const puppeteerPages = await scrapeWithPuppeteer(url, house);
-      if (puppeteerPages.length > 0) rawLots = await extractLotsWithClaude(client, puppeteerPages, house);
+      if (puppeteerPages.length > 0) rawLots = await extractLotsWithClaude(client, puppeteerPages, house, null, scrapeUrl);
     }
   }
 

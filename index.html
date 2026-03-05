@@ -1730,7 +1730,10 @@ function card(l){
 
   const affBadge=fpCash?affBadgeHtml(l._affTag||'unknown'):'';
 
+  const imgHtml=l.imageUrl?`<img src="${esc(l.imageUrl)}" alt="" loading="lazy" style="width:100%;height:160px;object-fit:cover;border-radius:8px 8px 0 0" onerror="this.style.display='none'">`:'';
+
   return`<div class="lot ${l.titleSplit?'ts':''}">
+    ${imgHtml}
     <div class="lot-header"><div class="lot-title">Lot ${esc(l.lot)} · ${esc(l.dealType||'Standard')} ${affBadge}</div><div class="lot-score ${sc}">${l.score}</div></div>
     <div class="lot-addr">${esc(l.address||'Address not available')}</div>
     <div class="lot-details">${details.join(' <span class="sep">·</span> ')}</div>
