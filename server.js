@@ -64,7 +64,7 @@ app.use((req, res, next) => {
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
     "font-src 'self' https://fonts.gstatic.com; " +
     "img-src 'self' data: https:; " +
-    "connect-src 'self' https://*.supabase.co; " +
+    "connect-src 'self' https://*.supabase.co https://www.bridgematch.co.uk; " +
     "frame-ancestors 'none'"
   );
   res.setHeader('Strict-Transport-Security', 'max-age=63072000; includeSubDomains');
@@ -2127,12 +2127,19 @@ app.get('/api/all-lots', async (req, res) => {
 
     const lots = [];
     const sources = [];
+    const seenAddrs = new Set();
     for (const c of cached) {
       if (c.lots && Array.isArray(c.lots)) {
-        sources.push({ house: c.house, url: c.url, count: c.lots.length });
+        let dedupCount = 0;
         for (const lot of c.lots) {
+          // Deduplicate by normalised address across all sources
+          const addrKey = ((lot.address || '') + '|' + (lot.url || '')).toLowerCase().replace(/[\s,]+/g, ' ').trim();
+          if (addrKey.length > 5 && seenAddrs.has(addrKey)) continue;
+          if (addrKey.length > 5) seenAddrs.add(addrKey);
           lots.push({ ...lot, _house: c.house, _sourceUrl: c.url });
+          dedupCount++;
         }
+        sources.push({ house: c.house, url: c.url, count: dedupCount });
       }
     }
 
@@ -2761,15 +2768,18 @@ Return ONLY the JSON array:`;
       if (jsonMatch) {
         const lots = JSON.parse(jsonMatch[0]);
         for (const lot of lots) {
-          if (lot.lot && !seenLots.has(lot.lot)) {
-            seenLots.add(lot.lot);
-            allLots.push({
-              lot: lot.lot, address: lot.address || '',
-              price: lot.price || null,
-              priceText: lot.price ? `£${lot.price.toLocaleString()}` : 'TBA',
-              url: lot.url || '', bullets: lot.bullets || [],
-            });
-          }
+          if (!lot.lot) continue;
+          // Deduplicate by lot number AND by normalised address
+          const addrKey = (lot.address || '').toLowerCase().replace(/[\s,]+/g, ' ').trim();
+          if (seenLots.has(lot.lot) || (addrKey.length > 10 && seenLots.has(addrKey))) continue;
+          seenLots.add(lot.lot);
+          if (addrKey.length > 10) seenLots.add(addrKey);
+          allLots.push({
+            lot: lot.lot, address: lot.address || '',
+            price: lot.price || null,
+            priceText: lot.price ? `£${lot.price.toLocaleString()}` : 'TBA',
+            url: lot.url || '', bullets: lot.bullets || [],
+          });
         }
       }
       if (onProgress) onProgress(Math.floor(i/batchSize)+1, Math.ceil(pages.length/batchSize), allLots.length);
