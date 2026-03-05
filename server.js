@@ -3813,6 +3813,84 @@ const UNIVERSAL_DOM_EXTRACTOR = `
   })()
 `;
 
+// HTTP-based image backfill — fetches catalogue page(s) and matches images to lots by URL
+async function backfillImages(catalogueUrl, lots) {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    const resp = await fetch(catalogueUrl, { headers: HEADERS, signal: controller.signal });
+    clearTimeout(timeout);
+    if (!resp.ok) return null;
+    const html = await resp.text();
+
+    // Also fix relative lot URLs while we're at it
+    for (const lot of lots) {
+      if (lot.url && !/^https?:\/\//i.test(lot.url)) {
+        try { lot.url = new URL(lot.url, catalogueUrl).href; } catch {}
+      }
+    }
+
+    // Strategy 1: Find <a href="...">...<img src="..."> patterns (image inside link)
+    const hrefImgMap = {};
+    const linkImgRe = /<a[^>]+href="([^"]+)"[^>]*>[^]*?<img[^>]+src="([^"]+)"/gi;
+    let m;
+    while ((m = linkImgRe.exec(html)) !== null) {
+      const href = m[1];
+      const src = m[2];
+      if (!hrefImgMap[href] && !src.startsWith('data:') && src.length > 10
+        && !src.includes('.svg') && !src.includes('icon') && !src.includes('logo')) {
+        hrefImgMap[href] = src;
+      }
+    }
+
+    // Strategy 2: Collect all property-like images for ID-based matching
+    const imgRe = /<img[^>]+src="(https?:\/\/[^"]+(?:\.jpe?g|\.png|\.webp)[^"]*)"/gi;
+    const allImages = [];
+    while ((m = imgRe.exec(html)) !== null) {
+      const src = m[1];
+      if (!src.includes('.svg') && !src.includes('icon') && !src.includes('logo')) {
+        allImages.push(src);
+      }
+    }
+
+    let updated = 0;
+    for (const lot of lots) {
+      if (lot.imageUrl || !lot.url) continue;
+      // Strategy 1: direct href match (raw and absolute)
+      let imgSrc = hrefImgMap[lot.url];
+      // Also try http/https variant
+      if (!imgSrc && lot.url.startsWith('http://')) {
+        imgSrc = hrefImgMap[lot.url.replace('http://', 'https://')];
+      } else if (!imgSrc && lot.url.startsWith('https://')) {
+        imgSrc = hrefImgMap[lot.url.replace('https://', 'http://')];
+      }
+      // Also try the raw relative path as key
+      if (!imgSrc) {
+        try {
+          const path = new URL(lot.url).pathname;
+          imgSrc = hrefImgMap[path];
+        } catch {}
+      }
+      // Strategy 2: match by numeric lot ID in URL
+      if (!imgSrc) {
+        const idMatch = lot.url.match(/[-/](\d{4,})(?:[^/]*)?$/);
+        if (idMatch) {
+          const lotId = idMatch[1];
+          imgSrc = allImages.find(src => src.includes('/' + lotId + '/') || src.includes('-' + lotId + '.'));
+        }
+      }
+      if (imgSrc) {
+        lot.imageUrl = /^https?:\/\//i.test(imgSrc) ? imgSrc : (() => { try { return new URL(imgSrc, catalogueUrl).href; } catch { return null; } })();
+        if (lot.imageUrl) updated++;
+      }
+    }
+    return updated > 0 ? lots : null;
+  } catch (err) {
+    console.log(`Image backfill error for ${catalogueUrl}: ${err.message}`);
+    return null;
+  }
+}
+
 async function extractWithDOM(page, house) {
   let lots = null;
 
@@ -4513,13 +4591,27 @@ async function _doAutoAnalyseAll() {
       // Check if we already have a fresh cache
       const { data: cached } = await supabase
         .from('cached_analyses')
-        .select('url, total_lots, created_at')
+        .select('url, total_lots, created_at, lots')
         .eq('url', normalisedUrl)
         .gt('expires_at', new Date().toISOString())
         .single();
 
       if (cached && cached.total_lots > 0) {
-        console.log(`AUTO: ✓ ${auction.house} already cached (${cached.total_lots} lots)`);
+        // Backfill images for cached lots that are missing them
+        const cachedLots = cached.lots || [];
+        const missingImages = cachedLots.filter(l => l.url && !l.imageUrl).length;
+        if (missingImages > 0) {
+          const updated = await backfillImages(auction.url, cachedLots);
+          if (updated) {
+            await supabase.from('cached_analyses').update({ lots: updated }).eq('url', normalisedUrl);
+            const gained = updated.filter(l => l.imageUrl).length;
+            console.log(`AUTO: ✓ ${auction.house} already cached (${cached.total_lots} lots) — backfilled ${gained} images`);
+          } else {
+            console.log(`AUTO: ✓ ${auction.house} already cached (${cached.total_lots} lots)`);
+          }
+        } else {
+          console.log(`AUTO: ✓ ${auction.house} already cached (${cached.total_lots} lots)`);
+        }
         skipped++;
         continue;
       }
