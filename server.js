@@ -470,6 +470,42 @@ app.post('/api/leads', async (req, res) => {
 
     logActivityEvent('lead_submit', { email, propertyPrice, loanAmount, isRegulated }, email, req.ip);
 
+    // Email notification via Resend
+    const resendKey = process.env.RESEND_API_KEY;
+    if (resendKey) {
+      const regulated = isRegulated ? '⚠️ REGULATED (owner-occupier)' : 'Investment (bridging)';
+      const html = `
+        <h2>New Lead from Auction Tool</h2>
+        <table style="border-collapse:collapse;font-family:sans-serif;font-size:14px">
+          <tr><td style="padding:4px 12px 4px 0;font-weight:bold">Name</td><td>${name}</td></tr>
+          <tr><td style="padding:4px 12px 4px 0;font-weight:bold">Email</td><td><a href="mailto:${email}">${email}</a></td></tr>
+          <tr><td style="padding:4px 12px 4px 0;font-weight:bold">Phone</td><td><a href="tel:${phone}">${phone}</a></td></tr>
+          <tr><td style="padding:4px 12px 4px 0;font-weight:bold">Preferred contact</td><td>${contactPref || 'email'}</td></tr>
+          <tr><td style="padding:4px 12px 4px 0;font-weight:bold">Type</td><td>${regulated}</td></tr>
+          ${propertyAddress ? `<tr><td style="padding:4px 12px 4px 0;font-weight:bold">Property</td><td>${propertyAddress}</td></tr>` : ''}
+          ${propertyPrice ? `<tr><td style="padding:4px 12px 4px 0;font-weight:bold">Price</td><td>${propertyPrice}</td></tr>` : ''}
+          ${loanAmount ? `<tr><td style="padding:4px 12px 4px 0;font-weight:bold">Loan needed</td><td>${loanAmount}</td></tr>` : ''}
+          ${ltvPercent ? `<tr><td style="padding:4px 12px 4px 0;font-weight:bold">LTV</td><td>${ltvPercent}%</td></tr>` : ''}
+          ${worksBudget ? `<tr><td style="padding:4px 12px 4px 0;font-weight:bold">Works budget</td><td>${worksBudget}</td></tr>` : ''}
+          ${matchingLenders ? `<tr><td style="padding:4px 12px 4px 0;font-weight:bold">Matching lenders</td><td>${matchingLenders}</td></tr>` : ''}
+          ${propertyType ? `<tr><td style="padding:4px 12px 4px 0;font-weight:bold">Property type</td><td>${propertyType}</td></tr>` : ''}
+          ${depositRange ? `<tr><td style="padding:4px 12px 4px 0;font-weight:bold">Deposit range</td><td>${depositRange}</td></tr>` : ''}
+          ${experienceLevel ? `<tr><td style="padding:4px 12px 4px 0;font-weight:bold">Experience</td><td>${experienceLevel}</td></tr>` : ''}
+          ${auctionUrl ? `<tr><td style="padding:4px 12px 4px 0;font-weight:bold">Source</td><td><a href="${auctionUrl}">View deal</a></td></tr>` : ''}
+        </table>
+      `;
+      fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: 'BridgeMatch <hello@bridgematch.co.uk>',
+          to: ['hello@bridgematch.co.uk'],
+          subject: `🏠 New lead: ${name} — ${propertyPrice || 'price TBC'}`,
+          html,
+        }),
+      }).catch(e => log.warn('Lead email failed', { error: e.message }));
+    }
+
     res.json({ ok: true, id: data?.id, isRegulated: !!isRegulated });
   } catch (err) {
     log.error('Lead submission error', { error: err.message });
