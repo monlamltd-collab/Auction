@@ -3848,6 +3848,9 @@ async function extractWithDOM(page, house) {
     return null;
   }
 
+  // Save raw URLs (before resolution) for image matching against DOM hrefs
+  const rawUrls = lots.map(l => l.url || '');
+
   // Resolve relative URLs to absolute using the page's own URL as base
   const baseUrl = page.url();
   for (const lot of lots) {
@@ -3859,34 +3862,49 @@ async function extractWithDOM(page, house) {
     }
   }
 
-  // Image extraction pass — grab first img src per lot card
+  // Image extraction pass — match by lot URL, not lot number text
   try {
-    const images = await page.evaluate(() => {
-      const results = [];
-      const cards = document.querySelectorAll('[class*="lot"], [class*="card"], [class*="property"], [class*="catalogue"], tr, article, .item');
-      for (const card of cards) {
-        const img = card.querySelector('img');
+    const hrefImageMap = await page.evaluate(() => {
+      const map = {};
+      const links = document.querySelectorAll('a[href]');
+      for (const link of links) {
+        const rawHref = link.getAttribute('href') || '';
+        const absHref = link.href; // browser-resolved absolute
+        if (!rawHref || rawHref === '#') continue;
+        if (map[rawHref] || map[absHref]) continue;
+        // Look for an image inside the link itself first
+        let img = link.querySelector('img');
+        // Then walk up to parent container (up to 5 levels)
+        if (!img) {
+          let el = link;
+          for (let depth = 0; depth < 5; depth++) {
+            el = el.parentElement;
+            if (!el) break;
+            img = el.querySelector('img');
+            if (img) break;
+          }
+        }
         if (!img) continue;
-        const src = img.src || img.dataset.src || img.dataset.lazySrc || img.getAttribute('data-original');
-        if (!src) continue;
-        const text = card.textContent || '';
-        const lotMatch = text.match(/\b(?:lot\s*)?(\d{1,4})\b/i);
-        results.push({ lotNum: lotMatch ? lotMatch[1] : null, imageUrl: src, text: text.slice(0, 100) });
+        const src = img.getAttribute('src') || img.dataset.src
+          || img.getAttribute('data-lazy-src') || img.getAttribute('data-original')
+          || (img.srcset ? img.srcset.split(',')[0].trim().split(/\s+/)[0] : '');
+        if (!src || src.startsWith('data:') || src.length < 10) continue;
+        map[rawHref] = src;
+        map[absHref] = src;
       }
-      return results;
+      return map;
     });
-    // Match images to lots by lot number
-    if (images && images.length > 0) {
-      for (const lot of lots) {
-        if (lot.imageUrl) continue; // already has one
-        const lotNum = String(lot.lot);
-        const match = images.find(img => img.lotNum === lotNum);
-        if (match && match.imageUrl) {
-          let imgUrl = match.imageUrl;
+    if (hrefImageMap && Object.keys(hrefImageMap).length > 0) {
+      for (let i = 0; i < lots.length; i++) {
+        if (lots[i].imageUrl) continue;
+        // Match using raw URL (as in DOM), resolved URL, or absolute lot.url
+        const imgSrc = hrefImageMap[rawUrls[i]] || hrefImageMap[lots[i].url];
+        if (imgSrc) {
+          let imgUrl = imgSrc;
           if (!/^https?:\/\//i.test(imgUrl)) {
             try { imgUrl = new URL(imgUrl, baseUrl).href; } catch {}
           }
-          lot.imageUrl = imgUrl;
+          lots[i].imageUrl = imgUrl;
         }
       }
       console.log(`Image extraction for ${house}: ${lots.filter(l => l.imageUrl).length}/${lots.length} lots got images`);
