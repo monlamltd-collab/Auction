@@ -1343,6 +1343,7 @@ app.post('/api/analyse', async (req, res) => {
       if (pages.length > 0) {
         sseWrite(res, 'phase', { step: 'extracting' });
         rawLots = await extractLotsWithClaude(client, pages, house, onExtract, scrapeUrl);
+        enrichAllsopLots(rawLots, pages);
       }
     } else if (rewritten.preferPuppeteer) {
       // JS-rendered sites: go straight to Puppeteer
@@ -2509,6 +2510,58 @@ async function scrapeAllsopApi(baseUrl) {
     }
   }
   return pages;
+}
+
+// Enrich Allsop lots with reference and image data from raw API JSON
+function enrichAllsopLots(lots, pages) {
+  // Parse all API results from raw JSON pages
+  const apiItems = [];
+  for (const p of pages) {
+    try {
+      const json = JSON.parse(p.html);
+      const results = json?.data?.results || [];
+      apiItems.push(...results);
+    } catch {}
+  }
+  if (apiItems.length === 0) return;
+
+  // Build lookup by postcode (most reliable match field)
+  const byPostcode = {};
+  for (const item of apiItems) {
+    const pc = (item.postcode || '').trim().toUpperCase();
+    if (pc) {
+      if (!byPostcode[pc]) byPostcode[pc] = [];
+      byPostcode[pc].push(item);
+    }
+  }
+
+  let matched = 0;
+  for (const lot of lots) {
+    // Extract postcode from lot address
+    const pcMatch = (lot.address || '').match(/[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}/i);
+    if (!pcMatch) continue;
+    // Normalise postcode: "EC4A3DQ" → "EC4A 3DQ"
+    const rawPc = pcMatch[0].toUpperCase().replace(/\s+/g, '');
+    const lotPc = rawPc.slice(0, -3) + ' ' + rawPc.slice(-3);
+    const candidates = byPostcode[lotPc] || byPostcode[rawPc] || [];
+    // If only one property at this postcode, it's a match
+    let match = candidates.length === 1 ? candidates[0] : null;
+    // If multiple, try matching by address text
+    if (!match && candidates.length > 1) {
+      const lotAddr = (lot.address || '').toLowerCase();
+      match = candidates.find(c => {
+        const apiAddr = (c.allsop_address || c.address1 || '').toLowerCase();
+        return lotAddr.includes(apiAddr.split(',')[0]) || apiAddr.includes(lotAddr.split(',')[0]);
+      });
+    }
+    if (match) {
+      lot.reference = match.reference;
+      lot.allsopPropertyId = match.allsop_property_id;
+      lot.imageFileId = match.image_file_id;
+      matched++;
+    }
+  }
+  console.log(`Allsop enrichment: matched ${matched}/${lots.length} lots with API data`);
 }
 
 function detectTotalPages(html, url, house) {
@@ -4315,8 +4368,9 @@ function buildLotUrl(lot, house, sourceUrl) {
       }
       break;
     case 'allsop':
-      // Allsop: individual lot pages are /lot/{lot-number}/
-      return `https://www.allsop.co.uk/lot/${lot.lot}/`;
+      // Allsop: lot overview pages use the property reference
+      if (lot.reference) return `https://www.allsop.co.uk/lot-overview/lot/${lot.reference}`;
+      return `https://www.allsop.co.uk/find-a-property/`;
     case 'sdl':
       // SDL/BTG Eddisons: individual property pages are /property/{id}/slug
       // If we have a property ID from Claude extraction, construct the URL
@@ -4627,20 +4681,52 @@ async function _doAutoAnalyseAll() {
         .single();
 
       if (cached && cached.total_lots > 0) {
-        // Backfill images for cached lots that are missing them
         const cachedLots = cached.lots || [];
+        let needsUpdate = false;
+
+        // Allsop-specific: fix broken lot URLs and enrich with API data
+        if (auction.house === 'allsop') {
+          const brokenUrls = cachedLots.filter(l => l.url && /allsop\.co\.uk\/lot\/\d+/i.test(l.url)).length;
+          if (brokenUrls > 0) {
+            try {
+              const rewritten = rewriteUrl(auction.url, 'allsop');
+              if (rewritten?.isApi) {
+                const pages = await scrapeAllsopApi(rewritten.baseUrl);
+                if (pages.length > 0) {
+                  enrichAllsopLots(cachedLots, pages);
+                  // Rebuild URLs for enriched lots
+                  for (const lot of cachedLots) {
+                    if (lot.reference) {
+                      lot.url = `https://www.allsop.co.uk/lot-overview/lot/${lot.reference}`;
+                    }
+                  }
+                  needsUpdate = true;
+                  console.log(`AUTO: ✓ ${auction.house} — fixed ${brokenUrls} broken lot URLs`);
+                }
+              }
+            } catch (e) {
+              console.log(`AUTO: Allsop URL fix failed: ${e.message}`);
+            }
+          }
+        }
+
+        // Backfill images for cached lots that are missing them
         const missingImages = cachedLots.filter(l => l.url && !l.imageUrl).length;
         if (missingImages > 0) {
           const updated = await backfillImages(auction.url, cachedLots);
           if (updated) {
-            await supabase.from('cached_analyses').update({ lots: updated }).eq('url', normalisedUrl);
+            needsUpdate = true;
             const gained = updated.filter(l => l.imageUrl).length;
             console.log(`AUTO: ✓ ${auction.house} already cached (${cached.total_lots} lots) — backfilled ${gained} images`);
-          } else {
+          } else if (!needsUpdate) {
             console.log(`AUTO: ✓ ${auction.house} already cached (${cached.total_lots} lots)`);
           }
-        } else {
+        } else if (!needsUpdate) {
           console.log(`AUTO: ✓ ${auction.house} already cached (${cached.total_lots} lots)`);
+        }
+
+        if (needsUpdate) {
+          await supabase.from('cached_analyses').update({ lots: cachedLots }).eq('url', normalisedUrl);
         }
         skipped++;
         continue;
@@ -4795,7 +4881,10 @@ async function autoAnalyseOne(url, apiKey) {
 
   if (rewritten.paginateAs === 'allsop_api') {
     const pages = await scrapeAllsopApi(rewritten.baseUrl);
-    if (pages.length > 0) rawLots = await extractLotsWithClaude(client, pages, house, null, scrapeUrl);
+    if (pages.length > 0) {
+      rawLots = await extractLotsWithClaude(client, pages, house, null, scrapeUrl);
+      enrichAllsopLots(rawLots, pages);
+    }
 
   } else if (rewritten.preferPuppeteer) {
     const browser = await getBrowser();
