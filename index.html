@@ -2439,10 +2439,14 @@ $('smartQuery').addEventListener('input',()=>{
     if (!currentUser || (currentUser.email || '').toLowerCase() !== ADMIN_EMAIL) return;
     if (document.getElementById('debugWidget')) return;
 
-    // Load html2canvas
-    const sc = document.createElement('script');
-    sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
-    document.head.appendChild(sc);
+    // Load html2canvas (with error handling)
+    if (typeof html2canvas === 'undefined') {
+      const sc = document.createElement('script');
+      sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+      sc.onload = () => console.log('[Debug] html2canvas loaded');
+      sc.onerror = () => console.warn('[Debug] html2canvas failed to load — capture will fall back to upload');
+      document.head.appendChild(sc);
+    }
 
     // Floating button
     const fab = document.createElement('button');
@@ -2587,7 +2591,9 @@ $('smartQuery').addEventListener('input',()=>{
 
     function getPos(e) {
       const rect = c.getBoundingClientRect();
-      const src = e.touches ? e.touches[0] : (e.changedTouches ? e.changedTouches[0] : e);
+      let src = e;
+      if (e.touches && e.touches.length > 0) src = e.touches[0];
+      else if (e.changedTouches && e.changedTouches.length > 0) src = e.changedTouches[0];
       return {
         x: (src.clientX - rect.left) * (c.width / rect.width),
         y: (src.clientY - rect.top) * (c.height / rect.height)
@@ -2678,27 +2684,39 @@ $('smartQuery').addEventListener('input',()=>{
     const btn = document.getElementById('debugCapture');
     const panel = document.getElementById('debugPanel');
     const fab = document.getElementById('debugWidget');
+    const status = document.getElementById('debugStatus');
     btn.textContent = 'Capturing...';
     btn.disabled = true;
-    // Hide debug UI so it doesn't appear in screenshot
-    if (panel) panel.style.visibility = 'hidden';
-    if (fab) fab.style.visibility = 'hidden';
 
     try {
-      await new Promise(r => setTimeout(r, 100)); // let paint settle
-      const srcCanvas = await html2canvas(document.body, { useCORS: true, scale: 1, logging: false });
+      // Hide debug UI so it doesn't appear in screenshot
+      if (panel) panel.style.visibility = 'hidden';
+      if (fab) fab.style.visibility = 'hidden';
+      await new Promise(r => setTimeout(r, 150));
+
+      // Try html2canvas first, fall back to simpler approach if it errors on cross-origin images
+      if (typeof html2canvas === 'undefined') throw new Error('html2canvas not loaded');
+      const srcCanvas = await html2canvas(document.body, {
+        useCORS: true,
+        allowTaint: true,
+        scale: 1,
+        logging: false,
+        ignoreElements: el => el.id === 'debugPanel' || el.id === 'debugWidget'
+      });
+      const dataUrl = srcCanvas.toDataURL('image/png');
+
       if (panel) panel.style.visibility = '';
       if (fab) fab.style.visibility = '';
       btn.textContent = '\uD83D\uDCF7 Capture Page';
       btn.disabled = false;
-      loadImageToCanvas(srcCanvas.toDataURL('image/png'));
+      loadImageToCanvas(dataUrl);
     } catch (e) {
+      console.error('Debug capture error:', e);
       if (panel) panel.style.visibility = '';
       if (fab) fab.style.visibility = '';
       btn.textContent = '\uD83D\uDCF7 Capture Page';
       btn.disabled = false;
-      const status = document.getElementById('debugStatus');
-      if (status) status.textContent = 'Capture failed: ' + e.message;
+      if (status) status.textContent = 'Capture failed — use Upload instead. (' + e.message + ')';
     }
   };
 
