@@ -2369,6 +2369,141 @@ loadAllLots();
 $('smartQuery').addEventListener('input',()=>{
   $('mainBtn').textContent=$('smartQuery').value.trim()?'AI Search':'Browse';
 });
+// ═══════════════════════════════
+// ADMIN DEBUG WIDGET
+// ═══════════════════════════════
+(function initDebugWidget() {
+  const ADMIN_EMAIL = 'simon.deeming@gmail.com';
+  const DL_PATH = 'C:\\Users\\SimonDeeming\\Downloads\\';
+
+  function boot() {
+    if (!currentUser || (currentUser.email || '').toLowerCase() !== ADMIN_EMAIL) return;
+    if (document.getElementById('debugWidget')) return;
+
+    // Load html2canvas
+    const sc = document.createElement('script');
+    sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+    document.head.appendChild(sc);
+
+    // Floating button
+    const fab = document.createElement('button');
+    fab.id = 'debugWidget';
+    fab.textContent = '\uD83D\uDC1B';
+    fab.title = 'Debug: send screenshot to Claude Code';
+    fab.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:9999;width:48px;height:48px;border-radius:50%;border:2px solid var(--border);background:var(--white);font-size:1.4rem;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.12);transition:transform .15s';
+    fab.onmouseenter = () => fab.style.transform = 'scale(1.1)';
+    fab.onmouseleave = () => fab.style.transform = '';
+    fab.onclick = openPanel;
+    document.body.appendChild(fab);
+  }
+
+  function openPanel() {
+    if (document.getElementById('debugPanel')) { document.getElementById('debugPanel').remove(); return; }
+
+    const panel = document.createElement('div');
+    panel.id = 'debugPanel';
+    panel.style.cssText = 'position:fixed;bottom:80px;right:20px;z-index:9999;width:360px;background:var(--white);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.15);padding:20px;font-family:"DM Sans",sans-serif';
+    panel.innerHTML =
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">' +
+        '<b style="font-size:.95rem">Bug Report</b>' +
+        '<button onclick="this.closest(\'#debugPanel\').remove()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--text3)">\u2715</button>' +
+      '</div>' +
+      '<textarea id="debugDesc" placeholder="Describe the issue..." style="width:100%;height:80px;border:1px solid var(--border);border-radius:8px;padding:10px;font-family:inherit;font-size:.85rem;resize:vertical;margin-bottom:8px"></textarea>' +
+      '<div id="debugPreview" style="margin-bottom:10px;border-radius:8px;overflow:hidden;border:1px solid var(--border);display:none"><img id="debugImg" style="width:100%;display:block"></div>' +
+      '<div style="display:flex;gap:8px">' +
+        '<button id="debugCapture" onclick="captureDebugScreenshot()" style="flex:1;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--cream);cursor:pointer;font-size:.82rem;font-weight:600">\uD83D\uDCF7 Capture Page</button>' +
+        '<label style="flex:1;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--cream);cursor:pointer;font-size:.82rem;font-weight:600;text-align:center">\uD83D\uDCC1 Upload<input type="file" id="debugUpload" accept="image/*" onchange="handleDebugUpload(event)" style="display:none"></label>' +
+      '</div>' +
+      '<button id="debugSend" onclick="sendDebugReport()" style="width:100%;margin-top:10px;padding:10px;border:none;border-radius:8px;background:var(--green);color:white;font-weight:600;font-size:.85rem;cursor:pointer" disabled>Copy for Claude Code</button>' +
+      '<div id="debugStatus" style="font-size:.78rem;color:var(--text3);margin-top:6px;text-align:center"></div>';
+    document.body.appendChild(panel);
+    document.getElementById('debugDesc').focus();
+  }
+
+  window.captureDebugScreenshot = async function() {
+    const btn = document.getElementById('debugCapture');
+    const panel = document.getElementById('debugPanel');
+    btn.textContent = 'Capturing...';
+    btn.disabled = true;
+    panel.style.display = 'none'; // hide panel from screenshot
+
+    try {
+      const canvas = await html2canvas(document.body, { useCORS: true, scale: 1, logging: false });
+      window._debugBlob = null;
+      canvas.toBlob(blob => { window._debugBlob = blob; }, 'image/png');
+      document.getElementById('debugImg').src = canvas.toDataURL('image/png');
+      document.getElementById('debugPreview').style.display = 'block';
+      document.getElementById('debugSend').disabled = false;
+    } catch (e) {
+      document.getElementById('debugStatus').textContent = 'Capture failed: ' + e.message;
+    }
+    panel.style.display = '';
+    btn.textContent = '\uD83D\uDCF7 Capture Page';
+    btn.disabled = false;
+  };
+
+  window.handleDebugUpload = function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    window._debugBlob = file;
+    window._debugUploadName = file.name;
+    const reader = new FileReader();
+    reader.onload = () => {
+      document.getElementById('debugImg').src = reader.result;
+      document.getElementById('debugPreview').style.display = 'block';
+      document.getElementById('debugSend').disabled = false;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  window.sendDebugReport = function() {
+    const desc = document.getElementById('debugDesc').value.trim();
+    if (!desc) { document.getElementById('debugStatus').textContent = 'Please add a description'; return; }
+
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const filename = 'debug-' + ts + '.png';
+    const filepath = DL_PATH + filename;
+
+    // Download screenshot
+    if (window._debugBlob) {
+      const url = URL.createObjectURL(window._debugBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } else if (window._debugUploadName) {
+      // Already a local file — user knows the path
+    }
+
+    // Build clipboard text
+    const clipText = desc + '\n\n' + filepath + '\n[Image: source: ' + filepath + ']';
+
+    navigator.clipboard.writeText(clipText).then(() => {
+      document.getElementById('debugStatus').innerHTML = '<span style="color:var(--green)">Copied! Paste into Claude Code.</span>';
+      setTimeout(() => { document.getElementById('debugPanel')?.remove(); }, 2000);
+    }).catch(() => {
+      // Fallback: select a textarea
+      const ta = document.createElement('textarea');
+      ta.value = clipText;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+      document.getElementById('debugStatus').innerHTML = '<span style="color:var(--green)">Copied! Paste into Claude Code.</span>';
+      setTimeout(() => { document.getElementById('debugPanel')?.remove(); }, 2000);
+    });
+  };
+
+  // Boot when auth state changes
+  const _origSignIn = onSignIn;
+  window.onSignIn = function(session) {
+    _origSignIn(session);
+    setTimeout(boot, 500);
+  };
+  // Also try on load in case already signed in
+  setTimeout(boot, 2000);
+})();
 </script>
 </body>
 </html>
