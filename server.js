@@ -2416,6 +2416,48 @@ app.post('/api/refresh-cache', async (req, res) => {
   autoAnalyseAll().catch(e => console.error('Manual refresh failed:', e));
 });
 
+// Admin: backfill images for all cached catalogues (no AI tokens used)
+app.post('/api/admin/backfill-images', async (req, res) => {
+  const adminToken = req.headers['x-admin-secret'] || req.body?.secret || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(adminToken, process.env.ADMIN_SECRET)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  try {
+    const { data: cached } = await supabase
+      .from('cached_analyses')
+      .select('url, house, lots')
+      .gt('expires_at', new Date().toISOString());
+
+    if (!cached || cached.length === 0) return res.json({ message: 'No cached catalogues found', results: [] });
+
+    const results = [];
+    for (const entry of cached) {
+      const lots = entry.lots || [];
+      const missing = lots.filter(l => l.url && !l.imageUrl).length;
+      if (missing === 0) {
+        results.push({ house: entry.house, url: entry.url, total: lots.length, missing: 0, gained: 0, status: 'skipped — all have images' });
+        continue;
+      }
+
+      const updated = await backfillImages(entry.url, lots);
+      if (updated) {
+        const gained = updated.filter(l => l.imageUrl).length - (lots.length - missing);
+        await supabase.from('cached_analyses').update({ lots: updated }).eq('url', entry.url);
+        results.push({ house: entry.house, url: entry.url, total: lots.length, missing, gained, status: 'updated' });
+      } else {
+        results.push({ house: entry.house, url: entry.url, total: lots.length, missing, gained: 0, status: 'no matches found' });
+      }
+    }
+
+    const totalGained = results.reduce((s, r) => s + r.gained, 0);
+    res.json({ message: `Backfill complete. ${totalGained} images added across ${cached.length} catalogues.`, results });
+  } catch (err) {
+    log.error('Image backfill error', { error: err.message });
+    res.status(500).json({ error: 'Backfill failed: ' + err.message });
+  }
+});
+
 // User-facing: analyse all catalogue-ready auctions
 app.post('/api/analyse-all', async (req, res) => {
   const user = await validateUserFromReq(req);
