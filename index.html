@@ -2435,23 +2435,28 @@ $('smartQuery').addEventListener('input',()=>{
   const ADMIN_EMAIL = 'simon.deeming@gmail.com';
   const DL_PATH = 'C:\\Users\\SimonDeeming\\Downloads\\';
 
+  // State
+  let _baseImg = null;
+  let _annotations = [];
+  let _tool = 'circle';
+  let _drawing = false;
+  let _startPos = null;
+  let _freePath = [];
+
   function boot() {
     if (!currentUser || (currentUser.email || '').toLowerCase() !== ADMIN_EMAIL) return;
     if (document.getElementById('debugWidget')) return;
 
-    // Load html2canvas (with error handling)
+    // Load html2canvas
     if (typeof html2canvas === 'undefined') {
       const sc = document.createElement('script');
       sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
-      sc.onload = () => console.log('[Debug] html2canvas loaded');
-      sc.onerror = () => console.warn('[Debug] html2canvas failed to load — capture will fall back to upload');
       document.head.appendChild(sc);
     }
 
-    // Floating button
     const fab = document.createElement('button');
     fab.id = 'debugWidget';
-    fab.textContent = '\uD83D\uDC1B';
+    fab.innerHTML = '&#x1F41B;';
     fab.title = 'Debug: send screenshot to Claude Code';
     fab.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:9999;width:48px;height:48px;border-radius:50%;border:2px solid var(--border);background:var(--white);font-size:1.4rem;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.12);transition:transform .15s';
     fab.onmouseenter = () => fab.style.transform = 'scale(1.1)';
@@ -2461,293 +2466,291 @@ $('smartQuery').addEventListener('input',()=>{
   }
 
   function openPanel() {
-    if (document.getElementById('debugPanel')) { document.getElementById('debugPanel').remove(); return; }
+    const existing = document.getElementById('debugPanel');
+    if (existing) { existing.remove(); return; }
 
-    // Reset state for fresh panel
-    _canvasWired = false;
-    _debugBaseImage = null;
-    _debugHistory = [];
+    _baseImg = null;
+    _annotations = [];
 
     const panel = document.createElement('div');
     panel.id = 'debugPanel';
     panel.style.cssText = 'position:fixed;bottom:80px;right:20px;z-index:9999;width:360px;background:var(--white);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.15);padding:20px;font-family:"DM Sans",sans-serif';
-    panel.innerHTML =
-      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">' +
-        '<b style="font-size:.95rem">Bug Report</b>' +
-        '<button onclick="this.closest(\'#debugPanel\').remove()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--text3)">\u2715</button>' +
-      '</div>' +
-      '<div id="debugStep1">' +
-        '<textarea id="debugDesc" placeholder="Describe the issue..." style="width:100%;height:80px;border:1px solid var(--border);border-radius:8px;padding:10px;font-family:inherit;font-size:.85rem;resize:vertical;margin-bottom:8px"></textarea>' +
-        '<div style="display:flex;gap:8px">' +
-          '<button id="debugCapture" onclick="captureDebugScreenshot()" style="flex:1;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--cream);cursor:pointer;font-size:.82rem;font-weight:600">\uD83D\uDCF7 Capture Page</button>' +
-          '<label id="debugUploadLabel" style="flex:1;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--cream);cursor:pointer;font-size:.82rem;font-weight:600;text-align:center">\uD83D\uDCC1 Upload<input type="file" id="debugUpload" accept="image/*" style="display:none"></label>' +
-        '</div>' +
-      '</div>' +
-      '<div id="debugStep2" style="display:none">' +
-        '<div style="font-size:.8rem;color:var(--text3);margin-bottom:6px">Draw on the screenshot to highlight the issue, then hit Send.</div>' +
-        '<div id="debugPreview" style="margin-bottom:10px;border-radius:8px;overflow:hidden;border:1px solid var(--border);position:relative">' +
-          '<canvas id="debugCanvas" style="width:100%;display:block;cursor:crosshair"></canvas>' +
-          '<div style="display:flex;gap:4px;padding:6px;background:#f5f5f5;border-top:1px solid var(--border);align-items:center">' +
-            '<button onclick="setDebugTool(\'circle\')" id="dtCircle" style="padding:3px 8px;border:1px solid var(--border);border-radius:6px;font-size:.75rem;cursor:pointer;background:var(--green);color:white">Circle</button>' +
-            '<button onclick="setDebugTool(\'arrow\')" id="dtArrow" style="padding:3px 8px;border:1px solid var(--border);border-radius:6px;font-size:.75rem;cursor:pointer;background:white">Arrow</button>' +
-            '<button onclick="setDebugTool(\'draw\')" id="dtDraw" style="padding:3px 8px;border:1px solid var(--border);border-radius:6px;font-size:.75rem;cursor:pointer;background:white">Draw</button>' +
-            '<span style="flex:1"></span>' +
-            '<button onclick="undoDebugDraw()" style="padding:3px 8px;border:1px solid var(--border);border-radius:6px;font-size:.75rem;cursor:pointer;background:white">Undo</button>' +
-          '</div>' +
-        '</div>' +
-        '<button id="debugSend" onclick="sendDebugReport()" style="width:100%;padding:10px;border:none;border-radius:8px;background:var(--green);color:white;font-weight:600;font-size:.85rem;cursor:pointer">Send to Claude Code</button>' +
-      '</div>' +
-      '<div id="debugStatus" style="font-size:.78rem;color:var(--text3);margin-top:6px;text-align:center"></div>';
-    document.body.appendChild(panel);
 
-    // Wire upload via addEventListener (inline onchange in innerHTML is unreliable)
-    document.getElementById('debugUpload').addEventListener('change', function() {
+    // Step 1: Description + capture/upload
+    const step1 = document.createElement('div');
+    step1.id = 'debugStep1';
+
+    const header = document.createElement('div');
+    header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:12px';
+    header.innerHTML = '<b style="font-size:.95rem">Bug Report</b>';
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = '\u2715';
+    closeBtn.style.cssText = 'background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--text3)';
+    closeBtn.onclick = () => panel.remove();
+    header.appendChild(closeBtn);
+
+    const desc = document.createElement('textarea');
+    desc.id = 'debugDesc';
+    desc.placeholder = 'Describe the issue...';
+    desc.style.cssText = 'width:100%;height:80px;border:1px solid var(--border);border-radius:8px;padding:10px;font-family:inherit;font-size:.85rem;resize:vertical;margin-bottom:8px';
+
+    const btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display:flex;gap:8px';
+
+    const captureBtn = document.createElement('button');
+    captureBtn.id = 'debugCapture';
+    captureBtn.innerHTML = '&#x1F4F7; Capture Page';
+    captureBtn.style.cssText = 'flex:1;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--cream);cursor:pointer;font-size:.82rem;font-weight:600';
+    captureBtn.onclick = doCapture;
+
+    const uploadLabel = document.createElement('label');
+    uploadLabel.style.cssText = 'flex:1;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--cream);cursor:pointer;font-size:.82rem;font-weight:600;text-align:center';
+    uploadLabel.innerHTML = '&#x1F4C1; Upload';
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*';
+    fileInput.style.display = 'none';
+    fileInput.onchange = function() {
       const file = this.files[0];
       if (!file) return;
       const reader = new FileReader();
-      reader.onload = () => loadImageToCanvas(reader.result);
+      reader.onload = () => showAnnotator(reader.result);
       reader.readAsDataURL(file);
-    });
+    };
+    uploadLabel.appendChild(fileInput);
 
-    document.getElementById('debugDesc').focus();
+    btnRow.appendChild(captureBtn);
+    btnRow.appendChild(uploadLabel);
+    step1.appendChild(header);
+    step1.appendChild(desc);
+    step1.appendChild(btnRow);
+
+    // Step 2: Annotate + send (hidden initially)
+    const step2 = document.createElement('div');
+    step2.id = 'debugStep2';
+    step2.style.display = 'none';
+    step2.innerHTML =
+      '<div style="font-size:.8rem;color:var(--text3);margin-bottom:6px">Draw on the screenshot to highlight the issue, then hit Send.</div>' +
+      '<div style="margin-bottom:10px;border-radius:8px;overflow:hidden;border:1px solid var(--border)">' +
+        '<canvas id="debugCanvas" style="width:100%;display:block;cursor:crosshair"></canvas>' +
+        '<div id="debugToolbar" style="display:flex;gap:4px;padding:6px;background:#f5f5f5;border-top:1px solid var(--border);align-items:center"></div>' +
+      '</div>';
+
+    const sendBtn = document.createElement('button');
+    sendBtn.textContent = 'Send to Claude Code';
+    sendBtn.style.cssText = 'width:100%;padding:10px;border:none;border-radius:8px;background:var(--green);color:white;font-weight:600;font-size:.85rem;cursor:pointer';
+    sendBtn.onclick = doSend;
+    step2.appendChild(sendBtn);
+
+    // Status line
+    const status = document.createElement('div');
+    status.id = 'debugStatus';
+    status.style.cssText = 'font-size:.78rem;color:var(--text3);margin-top:6px;text-align:center';
+
+    panel.appendChild(step1);
+    panel.appendChild(step2);
+    panel.appendChild(status);
+    document.body.appendChild(panel);
+    desc.focus();
   }
 
-  // Drawing state
-  let _debugBaseImage = null; // original screenshot as Image element
-  let _debugHistory = [];     // array of drawn annotations (for undo)
-  let _debugTool = 'circle';
-  let _debugDrawing = false;
-  let _debugStart = null;
-  let _debugFreePath = [];
-
-  function loadImageToCanvas(src) {
+  function showAnnotator(dataUrl) {
     const img = new Image();
     img.onload = () => {
-      _debugBaseImage = img;
-      _debugHistory = [];
+      _baseImg = img;
+      _annotations = [];
+      _tool = 'circle';
+
+      const step1 = document.getElementById('debugStep1');
+      const step2 = document.getElementById('debugStep2');
+      if (step1) step1.style.display = 'none';
+      if (step2) step2.style.display = '';
+
+      // Size canvas
       const canvas = document.getElementById('debugCanvas');
       if (!canvas) return;
       canvas.width = img.width;
       canvas.height = img.height;
-      canvas.style.width = '100%';
-      canvas.style.height = 'auto';
-      redrawDebugCanvas();
-      setupCanvasEvents();
-      // Switch to step 2 (annotate)
-      const s1 = document.getElementById('debugStep1');
-      const s2 = document.getElementById('debugStep2');
-      if (s1) s1.style.display = 'none';
-      if (s2) s2.style.display = '';
+      redraw(canvas);
+
+      // Build toolbar buttons
+      const tb = document.getElementById('debugToolbar');
+      if (tb) {
+        tb.innerHTML = '';
+        const tools = [['circle','Circle'],['arrow','Arrow'],['draw','Draw']];
+        tools.forEach(([t,label]) => {
+          const b = document.createElement('button');
+          b.textContent = label;
+          b.dataset.tool = t;
+          b.style.cssText = 'padding:3px 8px;border:1px solid var(--border);border-radius:6px;font-size:.75rem;cursor:pointer;' + (t === 'circle' ? 'background:var(--green);color:white' : 'background:white');
+          b.onclick = () => {
+            _tool = t;
+            tb.querySelectorAll('button').forEach(x => { x.style.background = x.dataset.tool === t ? 'var(--green)' : 'white'; x.style.color = x.dataset.tool === t ? 'white' : ''; });
+          };
+          tb.appendChild(b);
+        });
+        const spacer = document.createElement('span');
+        spacer.style.flex = '1';
+        tb.appendChild(spacer);
+        const undo = document.createElement('button');
+        undo.textContent = 'Undo';
+        undo.style.cssText = 'padding:3px 8px;border:1px solid var(--border);border-radius:6px;font-size:.75rem;cursor:pointer;background:white';
+        undo.onclick = () => { _annotations.pop(); redraw(document.getElementById('debugCanvas')); };
+        tb.appendChild(undo);
+      }
+
+      // Wire canvas mouse events (fresh each time — no stale closures)
+      wireCanvas(canvas);
     };
-    img.src = src;
+    img.src = dataUrl;
   }
 
-  function redrawDebugCanvas() {
-    const canvas = document.getElementById('debugCanvas');
+  function redraw(canvas) {
+    if (!canvas) return;
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    if (_debugBaseImage) ctx.drawImage(_debugBaseImage, 0, 0);
-    for (const ann of _debugHistory) {
+    if (_baseImg) ctx.drawImage(_baseImg, 0, 0);
+    const lw = Math.max(3, canvas.width / 120);
+    for (const a of _annotations) {
       ctx.strokeStyle = '#ff2222';
-      ctx.lineWidth = Math.max(3, canvas.width / 120);
+      ctx.lineWidth = lw;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
-      if (ann.type === 'circle') {
-        const rx = Math.abs(ann.x2 - ann.x1) / 2;
-        const ry = Math.abs(ann.y2 - ann.y1) / 2;
-        const cx = (ann.x1 + ann.x2) / 2;
-        const cy = (ann.y1 + ann.y2) / 2;
+      if (a.type === 'circle') {
+        const rx = Math.abs(a.x2 - a.x1) / 2, ry = Math.abs(a.y2 - a.y1) / 2;
         ctx.beginPath();
-        ctx.ellipse(cx, cy, Math.max(rx, 5), Math.max(ry, 5), 0, 0, Math.PI * 2);
+        ctx.ellipse((a.x1+a.x2)/2, (a.y1+a.y2)/2, Math.max(rx,5), Math.max(ry,5), 0, 0, Math.PI*2);
         ctx.stroke();
-      } else if (ann.type === 'arrow') {
-        const dx = ann.x2 - ann.x1, dy = ann.y2 - ann.y1;
-        const angle = Math.atan2(dy, dx);
-        const headLen = Math.max(15, canvas.width / 40);
-        ctx.beginPath();
-        ctx.moveTo(ann.x1, ann.y1);
-        ctx.lineTo(ann.x2, ann.y2);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(ann.x2, ann.y2);
-        ctx.lineTo(ann.x2 - headLen * Math.cos(angle - 0.4), ann.y2 - headLen * Math.sin(angle - 0.4));
-        ctx.moveTo(ann.x2, ann.y2);
-        ctx.lineTo(ann.x2 - headLen * Math.cos(angle + 0.4), ann.y2 - headLen * Math.sin(angle + 0.4));
-        ctx.stroke();
-      } else if (ann.type === 'draw' && ann.path.length > 1) {
-        ctx.beginPath();
-        ctx.moveTo(ann.path[0].x, ann.path[0].y);
-        for (let i = 1; i < ann.path.length; i++) ctx.lineTo(ann.path[i].x, ann.path[i].y);
+      } else if (a.type === 'arrow') {
+        const angle = Math.atan2(a.y2-a.y1, a.x2-a.x1);
+        const hl = Math.max(15, canvas.width/40);
+        ctx.beginPath(); ctx.moveTo(a.x1,a.y1); ctx.lineTo(a.x2,a.y2); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(a.x2,a.y2); ctx.lineTo(a.x2-hl*Math.cos(angle-.4),a.y2-hl*Math.sin(angle-.4)); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(a.x2,a.y2); ctx.lineTo(a.x2-hl*Math.cos(angle+.4),a.y2-hl*Math.sin(angle+.4)); ctx.stroke();
+      } else if (a.type === 'draw' && a.path.length > 1) {
+        ctx.beginPath(); ctx.moveTo(a.path[0].x, a.path[0].y);
+        for (let i=1;i<a.path.length;i++) ctx.lineTo(a.path[i].x,a.path[i].y);
         ctx.stroke();
       }
     }
   }
 
-  let _canvasWired = false;
-  function setupCanvasEvents() {
-    const c = document.getElementById('debugCanvas');
-    if (!c || _canvasWired) return;
-    _canvasWired = true;
-
+  function wireCanvas(canvas) {
+    // Use fresh handler functions each time (avoids stale closure issues)
     function getPos(e) {
-      const rect = c.getBoundingClientRect();
-      let src = e;
-      if (e.touches && e.touches.length > 0) src = e.touches[0];
-      else if (e.changedTouches && e.changedTouches.length > 0) src = e.changedTouches[0];
-      return {
-        x: (src.clientX - rect.left) * (c.width / rect.width),
-        y: (src.clientY - rect.top) * (c.height / rect.height)
-      };
+      const r = canvas.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) return {x:0,y:0};
+      const s = (e.touches && e.touches.length) ? e.touches[0] : (e.changedTouches && e.changedTouches.length) ? e.changedTouches[0] : e;
+      return { x: (s.clientX-r.left)*(canvas.width/r.width), y: (s.clientY-r.top)*(canvas.height/r.height) };
     }
-
-    function onStart(e) {
+    canvas.onmousedown = canvas.ontouchstart = function(e) {
       e.preventDefault();
-      _debugDrawing = true;
-      _debugStart = getPos(e);
-      _debugFreePath = [_debugStart];
-    }
-    function onMove(e) {
-      if (!_debugDrawing) return;
+      _drawing = true;
+      _startPos = getPos(e);
+      _freePath = [_startPos];
+    };
+    canvas.onmousemove = canvas.ontouchmove = function(e) {
+      if (!_drawing) return;
       e.preventDefault();
       const pos = getPos(e);
-      if (_debugTool === 'draw') {
-        _debugFreePath.push(pos);
-      }
-      redrawDebugCanvas();
-      const ctx = c.getContext('2d');
+      if (_tool === 'draw') _freePath.push(pos);
+      // Live preview: redraw base + saved annotations + current in-progress shape
+      redraw(canvas);
+      const ctx = canvas.getContext('2d');
       ctx.strokeStyle = '#ff2222';
-      ctx.lineWidth = Math.max(3, c.width / 120);
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      if (_debugTool === 'circle') {
-        const rx = Math.abs(pos.x - _debugStart.x) / 2;
-        const ry = Math.abs(pos.y - _debugStart.y) / 2;
-        ctx.beginPath();
-        ctx.ellipse((_debugStart.x + pos.x) / 2, (_debugStart.y + pos.y) / 2, Math.max(rx, 2), Math.max(ry, 2), 0, 0, Math.PI * 2);
-        ctx.stroke();
-      } else if (_debugTool === 'arrow') {
-        const angle = Math.atan2(pos.y - _debugStart.y, pos.x - _debugStart.x);
-        const headLen = Math.max(15, c.width / 40);
-        ctx.beginPath();
-        ctx.moveTo(_debugStart.x, _debugStart.y);
-        ctx.lineTo(pos.x, pos.y);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(pos.x, pos.y);
-        ctx.lineTo(pos.x - headLen * Math.cos(angle - 0.4), pos.y - headLen * Math.sin(angle - 0.4));
-        ctx.moveTo(pos.x, pos.y);
-        ctx.lineTo(pos.x - headLen * Math.cos(angle + 0.4), pos.y - headLen * Math.sin(angle + 0.4));
-        ctx.stroke();
-      } else if (_debugTool === 'draw' && _debugFreePath.length > 1) {
-        ctx.beginPath();
-        ctx.moveTo(_debugFreePath[0].x, _debugFreePath[0].y);
-        for (let i = 1; i < _debugFreePath.length; i++) ctx.lineTo(_debugFreePath[i].x, _debugFreePath[i].y);
+      ctx.lineWidth = Math.max(3, canvas.width/120);
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      if (_tool === 'circle') {
+        const rx=Math.abs(pos.x-_startPos.x)/2, ry=Math.abs(pos.y-_startPos.y)/2;
+        ctx.beginPath(); ctx.ellipse((_startPos.x+pos.x)/2,(_startPos.y+pos.y)/2,Math.max(rx,2),Math.max(ry,2),0,0,Math.PI*2); ctx.stroke();
+      } else if (_tool === 'arrow') {
+        const angle=Math.atan2(pos.y-_startPos.y,pos.x-_startPos.x), hl=Math.max(15,canvas.width/40);
+        ctx.beginPath(); ctx.moveTo(_startPos.x,_startPos.y); ctx.lineTo(pos.x,pos.y); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(pos.x,pos.y); ctx.lineTo(pos.x-hl*Math.cos(angle-.4),pos.y-hl*Math.sin(angle-.4)); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(pos.x,pos.y); ctx.lineTo(pos.x-hl*Math.cos(angle+.4),pos.y-hl*Math.sin(angle+.4)); ctx.stroke();
+      } else if (_tool === 'draw' && _freePath.length > 1) {
+        ctx.beginPath(); ctx.moveTo(_freePath[0].x,_freePath[0].y);
+        for (let i=1;i<_freePath.length;i++) ctx.lineTo(_freePath[i].x,_freePath[i].y);
         ctx.stroke();
       }
-    }
-    function onEnd(e) {
-      if (!_debugDrawing) return;
-      _debugDrawing = false;
+    };
+    canvas.onmouseup = canvas.onmouseleave = canvas.ontouchend = function(e) {
+      if (!_drawing) return;
+      _drawing = false;
       const pos = getPos(e);
-      if (_debugTool === 'circle' || _debugTool === 'arrow') {
-        _debugHistory.push({ type: _debugTool, x1: _debugStart.x, y1: _debugStart.y, x2: pos.x, y2: pos.y });
-      } else if (_debugTool === 'draw') {
-        _debugFreePath.push(pos);
-        _debugHistory.push({ type: 'draw', path: [..._debugFreePath] });
+      if (_tool === 'circle' || _tool === 'arrow') {
+        _annotations.push({type:_tool, x1:_startPos.x, y1:_startPos.y, x2:pos.x, y2:pos.y});
+      } else if (_tool === 'draw') {
+        _freePath.push(pos);
+        _annotations.push({type:'draw', path:[..._freePath]});
       }
-      redrawDebugCanvas();
-    }
-
-    c.addEventListener('mousedown', onStart);
-    c.addEventListener('mousemove', onMove);
-    c.addEventListener('mouseup', onEnd);
-    c.addEventListener('mouseleave', onEnd);
-    c.addEventListener('touchstart', onStart, { passive: false });
-    c.addEventListener('touchmove', onMove, { passive: false });
-    c.addEventListener('touchend', onEnd);
+      redraw(canvas);
+    };
   }
 
-  window.setDebugTool = function(tool) {
-    _debugTool = tool;
-    ['dtCircle','dtArrow','dtDraw'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) { el.style.background = id === 'dt' + tool.charAt(0).toUpperCase() + tool.slice(1) ? 'var(--green)' : 'white'; el.style.color = id === 'dt' + tool.charAt(0).toUpperCase() + tool.slice(1) ? 'white' : ''; }
-    });
-  };
-
-  window.undoDebugDraw = function() {
-    _debugHistory.pop();
-    redrawDebugCanvas();
-  };
-
-  window.captureDebugScreenshot = async function() {
+  async function doCapture() {
     const btn = document.getElementById('debugCapture');
     const panel = document.getElementById('debugPanel');
     const fab = document.getElementById('debugWidget');
     const status = document.getElementById('debugStatus');
-    btn.textContent = 'Capturing...';
-    btn.disabled = true;
+    if (btn) { btn.textContent = 'Capturing...'; btn.disabled = true; }
 
     try {
-      // Hide debug UI so it doesn't appear in screenshot
       if (panel) panel.style.visibility = 'hidden';
       if (fab) fab.style.visibility = 'hidden';
-      await new Promise(r => setTimeout(r, 150));
+      await new Promise(r => setTimeout(r, 200));
 
-      // Try html2canvas first, fall back to simpler approach if it errors on cross-origin images
-      if (typeof html2canvas === 'undefined') throw new Error('html2canvas not loaded');
-      const srcCanvas = await html2canvas(document.body, {
-        useCORS: true,
-        allowTaint: true,
-        scale: 1,
-        logging: false,
-        ignoreElements: el => el.id === 'debugPanel' || el.id === 'debugWidget'
-      });
-      const dataUrl = srcCanvas.toDataURL('image/png');
+      if (typeof html2canvas === 'undefined') throw new Error('html2canvas not loaded yet — try again in a moment');
+      const srcCanvas = await html2canvas(document.body, { useCORS:true, allowTaint:true, scale:1, logging:false });
+
+      // allowTaint means toDataURL may throw — catch separately
+      let dataUrl;
+      try { dataUrl = srcCanvas.toDataURL('image/png'); }
+      catch(taintErr) {
+        // Tainted — re-render without cross-origin images
+        const srcCanvas2 = await html2canvas(document.body, { useCORS:false, allowTaint:false, scale:1, logging:false });
+        dataUrl = srcCanvas2.toDataURL('image/png');
+      }
 
       if (panel) panel.style.visibility = '';
       if (fab) fab.style.visibility = '';
-      btn.textContent = '\uD83D\uDCF7 Capture Page';
-      btn.disabled = false;
-      loadImageToCanvas(dataUrl);
-    } catch (e) {
-      console.error('Debug capture error:', e);
+      if (btn) { btn.innerHTML = '&#x1F4F7; Capture Page'; btn.disabled = false; }
+      showAnnotator(dataUrl);
+    } catch(e) {
+      console.error('[Debug] capture failed:', e);
       if (panel) panel.style.visibility = '';
       if (fab) fab.style.visibility = '';
-      btn.textContent = '\uD83D\uDCF7 Capture Page';
-      btn.disabled = false;
-      if (status) status.textContent = 'Capture failed — use Upload instead. (' + e.message + ')';
+      if (btn) { btn.innerHTML = '&#x1F4F7; Capture Page'; btn.disabled = false; }
+      if (status) status.textContent = 'Capture failed: ' + e.message + ' — use Upload instead';
     }
-  };
+  }
 
-  window.sendDebugReport = function() {
-    const desc = document.getElementById('debugDesc').value.trim();
-    if (!desc) { document.getElementById('debugStatus').textContent = 'Please add a description'; return; }
+  function doSend() {
+    const descEl = document.getElementById('debugDesc');
+    const statusEl = document.getElementById('debugStatus');
+    const desc = descEl ? descEl.value.trim() : '';
+    if (!desc) { if (statusEl) statusEl.textContent = 'Please add a description'; return; }
 
     const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const filename = 'debug-' + ts + '.png';
     const filepath = DL_PATH + filename;
 
-    // Create final image with description burned in at top
     const srcCanvas = document.getElementById('debugCanvas');
+    if (!srcCanvas) return;
     const finalCanvas = document.createElement('canvas');
     const bannerHeight = 60;
     finalCanvas.width = srcCanvas.width;
     finalCanvas.height = srcCanvas.height + bannerHeight;
     const fctx = finalCanvas.getContext('2d');
 
-    // Black banner with description text
     fctx.fillStyle = '#1a1714';
     fctx.fillRect(0, 0, finalCanvas.width, bannerHeight);
     fctx.fillStyle = '#ff4444';
     fctx.font = 'bold ' + Math.max(16, Math.round(finalCanvas.width / 40)) + 'px sans-serif';
     fctx.fillText('BUG: ' + desc, 12, bannerHeight / 2 + 6);
-    // Page URL in smaller text
     fctx.fillStyle = '#aaaaaa';
     fctx.font = Math.max(11, Math.round(finalCanvas.width / 60)) + 'px sans-serif';
     fctx.fillText(window.location.href, 12, bannerHeight - 8);
-
-    // Draw annotated screenshot below
     fctx.drawImage(srcCanvas, 0, bannerHeight);
 
     finalCanvas.toBlob(blob => {
@@ -2758,10 +2761,10 @@ $('smartQuery').addEventListener('input',()=>{
       a.click();
       URL.revokeObjectURL(url);
 
-      // Copy filepath to clipboard — user just Ctrl+V in Claude Code
       const clipText = filepath;
       navigator.clipboard.writeText(clipText).then(() => {
-        document.getElementById('debugStatus').innerHTML = '<span style="color:var(--green)">Sent! Ctrl+V in Claude Code.</span>';
+        const s = document.getElementById('debugStatus');
+        if (s) s.innerHTML = '<span style="color:var(--green)">Sent! Ctrl+V in Claude Code.</span>';
         setTimeout(() => { document.getElementById('debugPanel')?.remove(); }, 2500);
       }).catch(() => {
         const ta = document.createElement('textarea');
