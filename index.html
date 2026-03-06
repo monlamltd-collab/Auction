@@ -2408,22 +2408,27 @@ $('smartQuery').addEventListener('input',()=>{
         '<b style="font-size:.95rem">Bug Report</b>' +
         '<button onclick="this.closest(\'#debugPanel\').remove()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--text3)">\u2715</button>' +
       '</div>' +
-      '<textarea id="debugDesc" placeholder="Describe the issue..." style="width:100%;height:80px;border:1px solid var(--border);border-radius:8px;padding:10px;font-family:inherit;font-size:.85rem;resize:vertical;margin-bottom:8px"></textarea>' +
-      '<div id="debugPreview" style="margin-bottom:10px;border-radius:8px;overflow:hidden;border:1px solid var(--border);display:none;position:relative">' +
-        '<canvas id="debugCanvas" style="width:100%;display:block;cursor:crosshair"></canvas>' +
-        '<div id="debugDrawTools" style="display:flex;gap:4px;padding:6px;background:#f5f5f5;border-top:1px solid var(--border);align-items:center">' +
-          '<button onclick="setDebugTool(\'circle\')" id="dtCircle" class="dt-active" style="padding:3px 8px;border:1px solid var(--border);border-radius:6px;font-size:.75rem;cursor:pointer;background:var(--green);color:white">Circle</button>' +
-          '<button onclick="setDebugTool(\'arrow\')" id="dtArrow" style="padding:3px 8px;border:1px solid var(--border);border-radius:6px;font-size:.75rem;cursor:pointer;background:white">Arrow</button>' +
-          '<button onclick="setDebugTool(\'draw\')" id="dtDraw" style="padding:3px 8px;border:1px solid var(--border);border-radius:6px;font-size:.75rem;cursor:pointer;background:white">Draw</button>' +
-          '<span style="flex:1"></span>' +
-          '<button onclick="undoDebugDraw()" style="padding:3px 8px;border:1px solid var(--border);border-radius:6px;font-size:.75rem;cursor:pointer;background:white">Undo</button>' +
+      '<div id="debugStep1">' +
+        '<textarea id="debugDesc" placeholder="Describe the issue..." style="width:100%;height:80px;border:1px solid var(--border);border-radius:8px;padding:10px;font-family:inherit;font-size:.85rem;resize:vertical;margin-bottom:8px"></textarea>' +
+        '<div style="display:flex;gap:8px">' +
+          '<button id="debugCapture" onclick="captureDebugScreenshot()" style="flex:1;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--cream);cursor:pointer;font-size:.82rem;font-weight:600">\uD83D\uDCF7 Capture Page</button>' +
+          '<label style="flex:1;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--cream);cursor:pointer;font-size:.82rem;font-weight:600;text-align:center">\uD83D\uDCC1 Upload<input type="file" id="debugUpload" accept="image/*" onchange="handleDebugUpload(event)" style="display:none"></label>' +
         '</div>' +
       '</div>' +
-      '<div style="display:flex;gap:8px">' +
-        '<button id="debugCapture" onclick="captureDebugScreenshot()" style="flex:1;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--cream);cursor:pointer;font-size:.82rem;font-weight:600">\uD83D\uDCF7 Capture Page</button>' +
-        '<label style="flex:1;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--cream);cursor:pointer;font-size:.82rem;font-weight:600;text-align:center">\uD83D\uDCC1 Upload<input type="file" id="debugUpload" accept="image/*" onchange="handleDebugUpload(event)" style="display:none"></label>' +
+      '<div id="debugStep2" style="display:none">' +
+        '<div style="font-size:.8rem;color:var(--text3);margin-bottom:6px">Draw on the screenshot to highlight the issue, then hit Send.</div>' +
+        '<div id="debugPreview" style="margin-bottom:10px;border-radius:8px;overflow:hidden;border:1px solid var(--border);position:relative">' +
+          '<canvas id="debugCanvas" style="width:100%;display:block;cursor:crosshair"></canvas>' +
+          '<div style="display:flex;gap:4px;padding:6px;background:#f5f5f5;border-top:1px solid var(--border);align-items:center">' +
+            '<button onclick="setDebugTool(\'circle\')" id="dtCircle" style="padding:3px 8px;border:1px solid var(--border);border-radius:6px;font-size:.75rem;cursor:pointer;background:var(--green);color:white">Circle</button>' +
+            '<button onclick="setDebugTool(\'arrow\')" id="dtArrow" style="padding:3px 8px;border:1px solid var(--border);border-radius:6px;font-size:.75rem;cursor:pointer;background:white">Arrow</button>' +
+            '<button onclick="setDebugTool(\'draw\')" id="dtDraw" style="padding:3px 8px;border:1px solid var(--border);border-radius:6px;font-size:.75rem;cursor:pointer;background:white">Draw</button>' +
+            '<span style="flex:1"></span>' +
+            '<button onclick="undoDebugDraw()" style="padding:3px 8px;border:1px solid var(--border);border-radius:6px;font-size:.75rem;cursor:pointer;background:white">Undo</button>' +
+          '</div>' +
+        '</div>' +
+        '<button id="debugSend" onclick="sendDebugReport()" style="width:100%;padding:10px;border:none;border-radius:8px;background:var(--green);color:white;font-weight:600;font-size:.85rem;cursor:pointer">Send to Claude Code</button>' +
       '</div>' +
-      '<button id="debugSend" onclick="sendDebugReport()" style="width:100%;margin-top:10px;padding:10px;border:none;border-radius:8px;background:var(--green);color:white;font-weight:600;font-size:.85rem;cursor:pointer" disabled>Copy for Claude Code</button>' +
       '<div id="debugStatus" style="font-size:.78rem;color:var(--text3);margin-top:6px;text-align:center"></div>';
     document.body.appendChild(panel);
     document.getElementById('debugDesc').focus();
@@ -2443,16 +2448,15 @@ $('smartQuery').addEventListener('input',()=>{
       _debugBaseImage = img;
       _debugHistory = [];
       const canvas = document.getElementById('debugCanvas');
-      // Set canvas to image aspect ratio, max width 320
-      const scale = 320 / img.width;
       canvas.width = img.width;
       canvas.height = img.height;
       canvas.style.width = '100%';
       canvas.style.height = 'auto';
       redrawDebugCanvas();
       setupCanvasEvents(canvas);
-      document.getElementById('debugPreview').style.display = 'block';
-      document.getElementById('debugSend').disabled = false;
+      // Switch to step 2 (annotate)
+      document.getElementById('debugStep1').style.display = 'none';
+      document.getElementById('debugStep2').style.display = '';
     };
     img.src = src;
   }
@@ -2629,9 +2633,29 @@ $('smartQuery').addEventListener('input',()=>{
     const filename = 'debug-' + ts + '.png';
     const filepath = DL_PATH + filename;
 
-    // Export canvas with annotations as PNG
-    const canvas = document.getElementById('debugCanvas');
-    canvas.toBlob(blob => {
+    // Create final image with description burned in at top
+    const srcCanvas = document.getElementById('debugCanvas');
+    const finalCanvas = document.createElement('canvas');
+    const bannerHeight = 60;
+    finalCanvas.width = srcCanvas.width;
+    finalCanvas.height = srcCanvas.height + bannerHeight;
+    const fctx = finalCanvas.getContext('2d');
+
+    // Black banner with description text
+    fctx.fillStyle = '#1a1714';
+    fctx.fillRect(0, 0, finalCanvas.width, bannerHeight);
+    fctx.fillStyle = '#ff4444';
+    fctx.font = 'bold ' + Math.max(16, Math.round(finalCanvas.width / 40)) + 'px sans-serif';
+    fctx.fillText('BUG: ' + desc, 12, bannerHeight / 2 + 6);
+    // Page URL in smaller text
+    fctx.fillStyle = '#aaaaaa';
+    fctx.font = Math.max(11, Math.round(finalCanvas.width / 60)) + 'px sans-serif';
+    fctx.fillText(window.location.href, 12, bannerHeight - 8);
+
+    // Draw annotated screenshot below
+    fctx.drawImage(srcCanvas, 0, bannerHeight);
+
+    finalCanvas.toBlob(blob => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -2639,11 +2663,11 @@ $('smartQuery').addEventListener('input',()=>{
       a.click();
       URL.revokeObjectURL(url);
 
-      // Copy to clipboard
-      const clipText = desc + '\n\n' + filepath + '\n[Image: source: ' + filepath + ']';
+      // Copy filepath to clipboard — user just Ctrl+V in Claude Code
+      const clipText = filepath;
       navigator.clipboard.writeText(clipText).then(() => {
-        document.getElementById('debugStatus').innerHTML = '<span style="color:var(--green)">Copied! Paste into Claude Code.</span>';
-        setTimeout(() => { document.getElementById('debugPanel')?.remove(); }, 2000);
+        document.getElementById('debugStatus').innerHTML = '<span style="color:var(--green)">Sent! Ctrl+V in Claude Code.</span>';
+        setTimeout(() => { document.getElementById('debugPanel')?.remove(); }, 2500);
       }).catch(() => {
         const ta = document.createElement('textarea');
         ta.value = clipText;
@@ -2651,8 +2675,8 @@ $('smartQuery').addEventListener('input',()=>{
         ta.select();
         document.execCommand('copy');
         ta.remove();
-        document.getElementById('debugStatus').innerHTML = '<span style="color:var(--green)">Copied! Paste into Claude Code.</span>';
-        setTimeout(() => { document.getElementById('debugPanel')?.remove(); }, 2000);
+        document.getElementById('debugStatus').innerHTML = '<span style="color:var(--green)">Sent! Ctrl+V in Claude Code.</span>';
+        setTimeout(() => { document.getElementById('debugPanel')?.remove(); }, 2500);
       });
     }, 'image/png');
   };
