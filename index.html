@@ -921,7 +921,7 @@ function syncSoldFilter(source){
 // ═══════════════════════════════
 async function loadAllLots(){
   try{
-    const r=await fetch('/api/all-lots');
+    const r=await fetch('/api/all-lots',{headers:getAuthHeaders()});
     const d=await r.json();
     ALL_LOTS=d.lots||[];
     ALL_SOURCES=d.sources||[];
