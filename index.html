@@ -2305,7 +2305,11 @@ function triggerFinanceCheck(idx) {
 
   _financeDebounce = setTimeout(async () => {
     try {
-      const r = await fetch('https://www.bridgematch.co.uk/api/filter?loan_amount=' + loanAmount + '&property_value=' + lot.price + '&property_type=' + apiType);
+      const r = await fetch('https://www.bridgematch.co.uk/api/filter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ loan_amount: loanAmount, market_value: lot.price, property_type: apiType, transaction_type: 'purchase', charge_position: '1st', loan_term_months: 12 })
+      });
       if (!r.ok) throw new Error('API error');
       const data = await r.json();
       const count = data.count || data.lenders?.length || 0;
