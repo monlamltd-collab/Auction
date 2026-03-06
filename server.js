@@ -19,13 +19,18 @@ import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { readFileSync } from 'fs';
 import { lookup } from 'dns/promises';
 import puppeteer from 'puppeteer';
+import Stripe from 'stripe';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Trust Railway's reverse proxy for correct client IP via req.ip / X-Forwarded-For
 app.set('trust proxy', 1);
+
+// Stripe webhook needs raw body for signature verification — MUST come before express.json()
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }));
 
 app.use(express.json({ limit: '100kb' }));
 
@@ -64,7 +69,8 @@ app.use((req, res, next) => {
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
     "font-src 'self' https://fonts.gstatic.com; " +
     "img-src 'self' data: https:; " +
-    "connect-src 'self' https://*.supabase.co https://www.bridgematch.co.uk; " +
+    "connect-src 'self' https://*.supabase.co https://www.bridgematch.co.uk https://checkout.stripe.com; " +
+    "frame-src https://checkout.stripe.com; " +
     "frame-ancestors 'none'"
   );
   res.setHeader('Strict-Transport-Security', 'max-age=63072000; includeSubDomains');
@@ -79,6 +85,7 @@ app.use((req, res, next) => {
 // ═══════════════════════════════════════════════════════════════
 function csrfCheck(req, res, next) {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+  if (req.path === '/api/stripe/webhook') return next(); // Stripe uses its own signature verification
   const origin = req.headers.origin || req.headers.referer || '';
   const allowed = ['https://auctions.bridgematch.co.uk', 'https://www.bridgematch.co.uk', 'https://bridgematch.co.uk'];
   if (origin && allowed.some(a => origin.startsWith(a))) {
@@ -412,13 +419,192 @@ app.get('/api/auth/me', async (req, res) => {
   try {
     const { data } = await supabase
       .from('users')
-      .select('id, email, name, tier, consent_auction_alerts, consent_partner_marketing')
+      .select('id, email, name, tier, analyses_count, tier_expires_at, stripe_subscription_id, consent_auction_alerts, consent_partner_marketing')
       .eq('id', user.id)
       .single();
     res.json(data || user);
   } catch (err) {
     res.json(user);
   }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// STRIPE: Checkout, Webhook, Portal, Status
+// ═══════════════════════════════════════════════════════════════
+
+// POST /api/stripe/checkout — create Stripe Checkout session
+app.post('/api/stripe/checkout', async (req, res) => {
+  if (!stripe) return res.status(503).json({ error: 'Payments not configured' });
+  const user = await validateUserFromReq(req);
+  if (!user) return res.status(401).json({ error: 'Authentication required' });
+
+  const { product } = req.body || {};
+  if (!['day_pass', 'monthly'].includes(product)) {
+    return res.status(400).json({ error: 'Invalid product. Use "day_pass" or "monthly".' });
+  }
+
+  const priceId = product === 'day_pass'
+    ? process.env.STRIPE_DAY_PASS_PRICE_ID
+    : process.env.STRIPE_MONTHLY_PRICE_ID;
+  if (!priceId) return res.status(503).json({ error: 'Price not configured' });
+
+  try {
+    // Lazy-create Stripe customer
+    let customerId = user.stripe_customer_id;
+    if (!customerId) {
+      const customer = await stripe.customers.create({ email: user.email, metadata: { user_id: user.id } });
+      customerId = customer.id;
+      await supabase.from('users').update({ stripe_customer_id: customerId }).eq('id', user.id);
+    }
+
+    const sessionParams = {
+      customer: customerId,
+      line_items: [{ price: priceId, quantity: 1 }],
+      mode: product === 'monthly' ? 'subscription' : 'payment',
+      success_url: `${req.headers.origin || 'https://auctions.bridgematch.co.uk'}/?payment=success`,
+      cancel_url: `${req.headers.origin || 'https://auctions.bridgematch.co.uk'}/?payment=cancelled`,
+      metadata: { user_id: user.id, product },
+    };
+
+    const session = await stripe.checkout.sessions.create(sessionParams);
+    res.json({ url: session.url });
+  } catch (err) {
+    log.error('Stripe checkout error', { error: err.message, userId: user.id });
+    res.status(500).json({ error: 'Failed to create checkout session' });
+  }
+});
+
+// POST /api/stripe/webhook — Stripe event handler
+app.post('/api/stripe/webhook', async (req, res) => {
+  if (!stripe) return res.sendStatus(400);
+  const sig = req.headers['stripe-signature'];
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  if (!sig || !webhookSecret) return res.sendStatus(400);
+
+  let event;
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+  } catch (err) {
+    log.warn('Stripe webhook signature failed', { error: err.message });
+    return res.status(400).send('Webhook signature verification failed');
+  }
+
+  try {
+    switch (event.type) {
+      case 'checkout.session.completed': {
+        const session = event.data.object;
+        const userId = session.metadata?.user_id;
+        const product = session.metadata?.product;
+        if (!userId) break;
+
+        // Record payment
+        await supabase.from('payments').insert({
+          user_id: userId,
+          stripe_session_id: session.id,
+          stripe_payment_intent: session.payment_intent || session.subscription,
+          product_type: product || 'unknown',
+          amount_pence: session.amount_total || 0,
+          currency: session.currency || 'gbp',
+          status: 'completed',
+        });
+
+        if (product === 'day_pass') {
+          // Day pass: premium for 24 hours
+          await supabase.from('users').update({
+            tier: 'premium',
+            tier_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+          }).eq('id', userId);
+        } else if (product === 'monthly') {
+          // Monthly sub: premium until cancelled
+          await supabase.from('users').update({
+            tier: 'premium',
+            stripe_subscription_id: session.subscription,
+            tier_expires_at: null, // managed by subscription lifecycle
+          }).eq('id', userId);
+        }
+
+        log.info('Payment completed', { userId, product, amount: session.amount_total });
+        break;
+      }
+
+      case 'customer.subscription.deleted': {
+        const sub = event.data.object;
+        // Find user by subscription ID and downgrade
+        const { data: subUser } = await supabase
+          .from('users')
+          .select('id')
+          .eq('stripe_subscription_id', sub.id)
+          .single();
+        if (subUser) {
+          await supabase.from('users').update({
+            tier: 'free',
+            stripe_subscription_id: null,
+            tier_expires_at: null,
+          }).eq('id', subUser.id);
+          log.info('Subscription cancelled', { userId: subUser.id });
+        }
+        break;
+      }
+
+      case 'customer.subscription.updated': {
+        const sub = event.data.object;
+        const { data: subUser } = await supabase
+          .from('users')
+          .select('id')
+          .eq('stripe_subscription_id', sub.id)
+          .single();
+        if (subUser && sub.status === 'active') {
+          await supabase.from('users').update({ tier: 'premium' }).eq('id', subUser.id);
+        } else if (subUser && ['past_due', 'canceled', 'unpaid'].includes(sub.status)) {
+          await supabase.from('users').update({ tier: 'free', stripe_subscription_id: null, tier_expires_at: null }).eq('id', subUser.id);
+        }
+        break;
+      }
+
+      case 'invoice.payment_failed': {
+        const invoice = event.data.object;
+        log.warn('Invoice payment failed', { customer: invoice.customer, subscription: invoice.subscription });
+        break;
+      }
+    }
+  } catch (err) {
+    log.error('Stripe webhook handler error', { error: err.message, eventType: event.type });
+  }
+
+  res.json({ received: true });
+});
+
+// POST /api/stripe/portal — billing portal for subscription management
+app.post('/api/stripe/portal', async (req, res) => {
+  if (!stripe) return res.status(503).json({ error: 'Payments not configured' });
+  const user = await validateUserFromReq(req);
+  if (!user) return res.status(401).json({ error: 'Authentication required' });
+  if (!user.stripe_customer_id) return res.status(400).json({ error: 'No billing account found' });
+
+  try {
+    const session = await stripe.billingPortal.sessions.create({
+      customer: user.stripe_customer_id,
+      return_url: `${req.headers.origin || 'https://auctions.bridgematch.co.uk'}/`,
+    });
+    res.json({ url: session.url });
+  } catch (err) {
+    log.error('Stripe portal error', { error: err.message });
+    res.status(500).json({ error: 'Failed to create portal session' });
+  }
+});
+
+// GET /api/stripe/status — return user's subscription status
+app.get('/api/stripe/status', async (req, res) => {
+  const user = await validateUserFromReq(req);
+  if (!user) return res.status(401).json({ error: 'Authentication required' });
+
+  res.json({
+    tier: user.tier || 'free',
+    scansUsed: user.analyses_count || 0,
+    scanLimit: FREE_SCAN_LIMIT,
+    tierExpiresAt: user.tier_expires_at || null,
+    hasSubscription: !!user.stripe_subscription_id,
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -532,22 +718,32 @@ async function validateUserFromReq(req) {
       // Look up by supabase_auth_id first
       const { data: byAuthId } = await supabase
         .from('users')
-        .select('id, email, name')
+        .select('id, email, name, tier, analyses_count, stripe_customer_id, tier_expires_at, stripe_subscription_id')
         .eq('supabase_auth_id', authId)
         .single();
-      if (byAuthId) return byAuthId;
+      if (byAuthId) {
+        if (byAuthId.tier === 'premium' && byAuthId.tier_expires_at && new Date(byAuthId.tier_expires_at) < new Date()) {
+          await supabase.from('users').update({ tier: 'free', tier_expires_at: null, stripe_subscription_id: null }).eq('id', byAuthId.id);
+          byAuthId.tier = 'free'; byAuthId.tier_expires_at = null;
+        }
+        return byAuthId;
+      }
 
       // Link existing user by email on first JWT login
       if (email) {
         const { data: byEmail } = await supabase
           .from('users')
-          .select('id, email, name')
+          .select('id, email, name, tier, analyses_count, stripe_customer_id, tier_expires_at, stripe_subscription_id')
           .eq('email', email.toLowerCase().trim())
           .single();
         if (byEmail) {
           await supabase.from('users')
             .update({ supabase_auth_id: authId, last_login: new Date().toISOString() })
             .eq('id', byEmail.id);
+          if (byEmail.tier === 'premium' && byEmail.tier_expires_at && new Date(byEmail.tier_expires_at) < new Date()) {
+            await supabase.from('users').update({ tier: 'free', tier_expires_at: null, stripe_subscription_id: null }).eq('id', byEmail.id);
+            byEmail.tier = 'free'; byEmail.tier_expires_at = null;
+          }
           return byEmail;
         }
       }
@@ -556,7 +752,7 @@ async function validateUserFromReq(req) {
       const { data: newUser, error: insertErr } = await supabase
         .from('users')
         .insert({ email: (email || '').toLowerCase().trim(), supabase_auth_id: authId })
-        .select('id, email, name')
+        .select('id, email, name, tier, analyses_count, stripe_customer_id, tier_expires_at, stripe_subscription_id')
         .single();
       if (!insertErr && newUser) return newUser;
       return null;
@@ -566,7 +762,7 @@ async function validateUserFromReq(req) {
     try {
       const { data } = await supabase
         .from('users')
-        .select('id, email, name')
+        .select('id, email, name, tier, analyses_count, stripe_customer_id, tier_expires_at, stripe_subscription_id')
         .eq('session_token', token)
         .single();
       if (data) return data;
@@ -574,6 +770,12 @@ async function validateUserFromReq(req) {
   }
 
   return null;
+}
+
+const FREE_SCAN_LIMIT = 3;
+
+function stripAIFields(lots) {
+  return lots.map(lot => ({ ...lot, score: null, opps: [], risks: [], bullets: [], dealType: null, blurred: true }));
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1221,6 +1423,11 @@ app.post('/api/analyse', async (req, res) => {
   const user = await validateUserFromReq(req);
   if (!user) return res.status(401).json({ error: 'signup_required', message: 'Please sign up to use the analyser' });
 
+  // ── Free tier scan gating ──
+  const userTier = user.tier || 'free';
+  const scanCount = user.analyses_count || 0;
+  const isFreeLimited = (userTier === 'free' && scanCount >= FREE_SCAN_LIMIT);
+
   // ── Rate limiting (admin bypass with ADMIN_SECRET header) ──
   const isAdmin = process.env.ADMIN_SECRET && safeCompare(req.headers['x-admin-secret'], process.env.ADMIN_SECRET);
   const ip = getClientIP(req);
@@ -1276,8 +1483,11 @@ app.post('/api/analyse', async (req, res) => {
       avgYield: cached.avg_yield || null,
       devPotential: cached.dev_potential || 0,
       vacantCount: cached.vacant_count || 0,
-      lots: cached.lots,
+      lots: isFreeLimited ? stripAIFields(cached.lots) : cached.lots,
       cached: true,
+      blurred: isFreeLimited,
+      scansUsed: scanCount,
+      scanLimit: FREE_SCAN_LIMIT,
     });
   }
 
@@ -1682,6 +1892,9 @@ app.post('/api/analyse', async (req, res) => {
     // Log activity event
     logActivityEvent('analysis', { house: displayName, url: normalisedUrl, lots_found: analysed.length }, user?.email, getClientIP(req));
 
+    const updatedScanCount = (user.analyses_count || 0) + 1;
+    const nowFreeLimited = (userTier === 'free' && updatedScanCount >= FREE_SCAN_LIMIT);
+
     sseWrite(res, 'done', {
       house: displayName,
       houseSlug: house,
@@ -1693,8 +1906,11 @@ app.post('/api/analyse', async (req, res) => {
       avgYield: yieldsArr.length ? +(yieldsArr.reduce((a, b) => a + b, 0) / yieldsArr.length).toFixed(1) : null,
       devPotential: analysed.filter(l => (l.opps || []).some(o => /development|planning|conversion/i.test(o))).length,
       vacantCount: analysed.filter(l => l.vacant === true).length,
-      lots: analysed,
+      lots: isFreeLimited ? stripAIFields(analysed) : analysed,
       cached: false,
+      blurred: isFreeLimited,
+      scansUsed: updatedScanCount,
+      scanLimit: FREE_SCAN_LIMIT,
     });
     return res.end();
   } catch (err) {
@@ -2118,6 +2334,10 @@ app.get('/api/all-lots', async (req, res) => {
   try {
     if (!supabase) return res.json({ lots: [], sources: [] });
 
+    // Optional auth — anonymous users see full data (entice signup)
+    const user = await validateUserFromReq(req);
+    const shouldBlur = user && (user.tier || 'free') === 'free' && (user.analyses_count || 0) >= FREE_SCAN_LIMIT;
+
     const { data: cached } = await supabase
       .from('cached_analyses')
       .select('house, url, lots')
@@ -2143,7 +2363,7 @@ app.get('/api/all-lots', async (req, res) => {
       }
     }
 
-    res.json({ lots, sources });
+    res.json({ lots: shouldBlur ? stripAIFields(lots) : lots, sources, blurred: !!shouldBlur });
   } catch (e) {
     log.error('All lots error', { error: e.message });
     res.status(500).json({ error: 'Internal server error' });

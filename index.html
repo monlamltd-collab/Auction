@@ -239,6 +239,20 @@ a{color:var(--green);text-decoration:none}a:hover{text-decoration:underline}
 .modal-icon{font-size:2rem;margin-bottom:10px}
 .modal h2{font-family:'Source Serif 4',serif;font-size:1.3rem;font-weight:700;color:var(--navy);margin-bottom:6px}
 .modal p{color:var(--text2);font-size:.88rem;margin-bottom:20px}
+/* Paywall modal */
+.paywall-cards{display:flex;gap:12px;margin:16px 0}
+.paywall-card{flex:1;border:2px solid #e0e6ed;border-radius:12px;padding:18px 14px;text-align:center;cursor:pointer;transition:all .15s}
+.paywall-card:hover{border-color:var(--accent);box-shadow:0 4px 16px rgba(46,125,50,.12)}
+.paywall-card.popular{border-color:var(--accent);background:#f0faf2}
+.paywall-card .price{font-size:1.6rem;font-weight:700;color:var(--navy)}
+.paywall-card .period{font-size:.75rem;color:var(--text3)}
+.paywall-card .plan-name{font-weight:600;font-size:.9rem;margin-bottom:8px;color:var(--navy)}
+.paywall-card .plan-desc{font-size:.78rem;color:var(--text3);margin-top:6px}
+.paywall-features{text-align:left;font-size:.82rem;line-height:1.9;margin:12px 0;padding-left:6px;list-style:none}
+.paywall-features li::before{content:'✓ ';color:var(--accent);font-weight:700}
+.paywall-free-note{font-size:.78rem;color:var(--text3);background:#f5f7fa;border-radius:8px;padding:8px 12px;margin-top:10px}
+.pro-badge{display:inline-block;background:var(--accent);color:white;font-size:.65rem;font-weight:700;padding:2px 7px;border-radius:10px;margin-left:6px;vertical-align:middle;letter-spacing:.5px}
+.scan-counter{font-size:.78rem;color:var(--text3);margin-top:8px}
 .modal input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:13px 16px;color:var(--text);font-size:.9rem;outline:0;margin-bottom:10px;font-family:inherit}
 .modal input:focus{border-color:var(--green)}
 .modal input::placeholder{color:var(--text4)}
@@ -319,6 +333,10 @@ footer .logo-f span{color:var(--green)}
 /* ── PHOTO LOT CARD ── */
 .lot-card{background:var(--white);border:1px solid #d5dde5;border-radius:var(--radius);overflow:hidden;transition:all .15s ease;cursor:pointer}
 .lot-card:hover{box-shadow:0 4px 20px rgba(26,42,58,0.12);transform:translateY(-2px)}
+.lot-card.blurred .card-body{filter:blur(6px);pointer-events:none;user-select:none}
+.lot-card.blurred .card-footer{filter:blur(4px);pointer-events:none}
+.lot-card.blurred{position:relative}
+.lot-card.blurred::after{content:'🔒 Upgrade to see AI analysis';position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(255,255,255,.95) 40%);padding:32px 16px 16px;text-align:center;font-weight:600;font-size:.85rem;color:var(--accent);pointer-events:none}
 .card-image-wrapper{position:relative;height:200px;width:100%;overflow:hidden;background:#eef2f7}
 .card-image{width:100%;height:100%;object-fit:cover;object-position:center;display:block}
 .card-image-placeholder{height:200px;background:#eef2f7;display:flex;align-items:center;justify-content:center}
@@ -582,21 +600,40 @@ footer .logo-f span{color:var(--green)}
     </div>
   </div>
 
-  <!-- ═══════ PREMIUM MODAL ═══════ -->
-  <div class="modal-bg" id="premiumModal">
-    <div class="modal" style="max-width:440px">
+  <!-- ═══════ PAYWALL MODAL ═══════ -->
+  <div class="modal-bg" id="paywallModal">
+    <div class="modal" style="max-width:500px">
       <div class="modal-icon">⚡</div>
-      <h2>Upgrade to Premium</h2>
-      <p>Custom AI search is a premium feature. Preset searches are always free.</p>
-      <ul id="premiumFeatures" style="text-align:left;font-size:.88rem;line-height:1.8;padding-left:20px;margin:16px 0;color:var(--text2)"></ul>
-      <a href="mailto:simon@bridgematch.co.uk?subject=Bridgematch%20Premium%20Interest" class="btn-main" style="display:block;width:100%;text-align:center;text-decoration:none">Contact us to upgrade</a>
-      <button onclick="$('premiumModal').style.display='none'" style="margin-top:12px;background:none;border:none;color:var(--text3);cursor:pointer;font-size:.85rem;width:100%">Maybe later</button>
+      <h2>Unlock AI Analysis</h2>
+      <p id="paywallReason">You've used your 3 free AI scans. Upgrade to keep analysing catalogues.</p>
+      <div class="paywall-cards">
+        <div class="paywall-card" onclick="startCheckout('day_pass')">
+          <div class="plan-name">Day Pass</div>
+          <div class="price">£1.99</div>
+          <div class="period">one-time · 24hr access</div>
+          <div class="plan-desc">Perfect for auction day</div>
+        </div>
+        <div class="paywall-card popular" onclick="startCheckout('monthly')">
+          <div class="plan-name">Monthly Pro</div>
+          <div class="price">£9.99</div>
+          <div class="period">per month · cancel anytime</div>
+          <div class="plan-desc">Unlimited AI analysis</div>
+        </div>
+      </div>
+      <ul class="paywall-features">
+        <li>AI scores, opportunities & risks for every lot</li>
+        <li>Unlimited catalogue scans</li>
+        <li>Full deal analysis & expanded cards</li>
+        <li>Download CSV/JSON exports</li>
+      </ul>
+      <div class="paywall-free-note">BridgeMatch finance matching is always free — it's our gift to fellow investors.</div>
+      <button onclick="$('paywallModal').classList.remove('show')" style="margin-top:12px;background:none;border:none;color:var(--text3);cursor:pointer;font-size:.85rem;width:100%">Maybe later</button>
     </div>
   </div>
 
   <!-- USER BAR -->
   <div id="userBar" class="user-bar" style="display:none">
-    <span class="dot"></span> <span id="userEmail"></span> &nbsp;·&nbsp; <a onclick="signOut()">sign out</a>
+    <span class="dot"></span> <span id="userEmail"></span> &nbsp;·&nbsp; <a id="manageSubLink" onclick="openBillingPortal()" style="display:none;cursor:pointer">manage plan</a><span id="manageSubDot" style="display:none"> · </span><a onclick="signOut()">sign out</a>
   </div>
 
   <!-- ═══════ SEARCH PANEL ═══════ -->
@@ -1442,6 +1479,9 @@ function onSignIn(session) {
   // Clean up legacy localStorage tokens
   localStorage.removeItem('bm_user');
   localStorage.removeItem('bm_token');
+
+  // Check Pro status
+  updateProStatus();
 }
 
 function onSignOut() {
@@ -1509,6 +1549,86 @@ function signOut() {
 initAuth();
 
 $('signupModal').addEventListener('click', e => { if (e.target === $('signupModal')) $('signupModal').classList.remove('show'); });
+$('paywallModal').addEventListener('click', e => { if (e.target === $('paywallModal')) $('paywallModal').classList.remove('show'); });
+
+// ═══════════════════════════════
+// STRIPE / PAYWALL
+// ═══════════════════════════════
+function showPaywall(reason) {
+  if (reason) $('paywallReason').textContent = reason;
+  $('paywallModal').classList.add('show');
+}
+
+async function startCheckout(product) {
+  if (!currentSession) { requireSignup(); return; }
+  try {
+    const resp = await fetch('/api/stripe/checkout', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ product }),
+    });
+    const data = await resp.json();
+    if (data.url) {
+      window.location.href = data.url;
+    } else {
+      alert(data.error || 'Failed to start checkout');
+    }
+  } catch (err) {
+    alert('Checkout failed: ' + err.message);
+  }
+}
+
+async function openBillingPortal() {
+  try {
+    const resp = await fetch('/api/stripe/portal', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+    });
+    const data = await resp.json();
+    if (data.url) window.location.href = data.url;
+    else alert(data.error || 'Failed to open billing portal');
+  } catch (err) {
+    alert('Portal error: ' + err.message);
+  }
+}
+
+// Payment success toast
+(function checkPaymentSuccess() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('payment') === 'success') {
+    window.history.replaceState({}, '', window.location.pathname);
+    setTimeout(() => {
+      const toast = document.createElement('div');
+      toast.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#2e7d32;color:white;padding:12px 24px;border-radius:8px;font-weight:600;z-index:999;font-size:.9rem;box-shadow:0 4px 20px rgba(0,0,0,.15)';
+      toast.textContent = 'Payment successful! You now have Pro access.';
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 5000);
+    }, 500);
+  }
+})();
+
+// Pro badge + scan counter in user bar
+async function updateProStatus() {
+  if (!currentSession) return;
+  try {
+    const resp = await fetch('/api/stripe/status', { headers: getAuthHeaders() });
+    if (!resp.ok) return;
+    const data = await resp.json();
+    const emailEl = $('userEmail');
+    // Remove old badge if present
+    const oldBadge = document.querySelector('.pro-badge');
+    if (oldBadge) oldBadge.remove();
+    if (data.tier === 'premium') {
+      emailEl.insertAdjacentHTML('afterend', '<span class="pro-badge">PRO</span>');
+      if ($('manageSubLink')) $('manageSubLink').style.display = '';
+      if ($('manageSubDot')) $('manageSubDot').style.display = '';
+    }
+    // Store for scan counter display
+    window._userTier = data.tier;
+    window._scansUsed = data.scansUsed;
+    window._scanLimit = data.scanLimit;
+  } catch {}
+}
 
 // ═══════════════════════════════
 // CATALOGUE ANALYSIS
@@ -1531,15 +1651,16 @@ async function runAnalysis(url){
 
   // Show scanning animation with house detection
   const detected = detectHouseFromUrl(url);
+  const safeName = esc(detected.name || '');
   const scanTitle = detected.isPdf
     ? `Reading PDF catalogue`
     : detected.recognised
-      ? `Scanning ${detected.name}`
+      ? `Scanning ${safeName}`
       : `Scanning new auction house`;
   const step1Label = detected.isPdf
     ? `PDF detected — sending to AI`
     : detected.recognised
-      ? `Recognised: ${detected.name}`
+      ? `Recognised: ${safeName}`
       : `Auto-detecting catalogue structure`;
 
   $('progressPanel').style.display='block';
@@ -1596,6 +1717,17 @@ async function runAnalysis(url){
       buildLotFilters();
       renderLots();
       $('resultsPanel').style.display='block';
+
+      // Show scan counter for free users
+      if (data.blurred) {
+        showPaywall('You\'ve used your ' + data.scanLimit + ' free AI scans. Upgrade to see full analysis.');
+      } else if (data.scansUsed !== undefined && data.scanLimit && (window._userTier || 'free') === 'free') {
+        const remaining = Math.max(0, data.scanLimit - data.scansUsed);
+        const counter = document.querySelector('.scan-counter') || document.createElement('div');
+        counter.className = 'scan-counter';
+        counter.textContent = remaining > 0 ? remaining + ' free scan' + (remaining !== 1 ? 's' : '') + ' remaining' : 'No free scans remaining';
+        if (!counter.parentNode) $('resultsPanel').insertBefore(counter, $('resultsPanel').firstChild);
+      }
     }, data.cached ? 500 : 1200);
   }
 
@@ -1752,9 +1884,7 @@ async function runSmartSearch(query) {
       if (data.error === 'signup_required') { requireSignup(); throw new Error('Please sign up first'); }
       if (data.error === 'premium_required') {
         $('progressPanel').style.display='none';
-        const fl=$('premiumFeatures');
-        fl.innerHTML=(data.features||[]).map(f=>`<li>${esc(f)}</li>`).join('');
-        $('premiumModal').style.display='flex';
+        showPaywall('Custom AI search requires a Pro subscription.');
         $('mainBtn').disabled=false;$('mainBtn').textContent='Search';
         return;
       }
@@ -1945,7 +2075,8 @@ function card(l){
   const viewLink = l.url ? '<a href="' + safeHref(l.url) + '" target="_blank" rel="noopener noreferrer" class="card-view-link" onclick="event.stopPropagation()">View listing ↗</a>' : '<span></span>';
   const bmBtn = l.price ? '<button class="card-bm-btn" onclick="bridgeMatchLot(' + l._idx + ',event)">🧩 BridgeMatch It</button>' : '';
 
-  return '<div class="lot-card" id="lot-' + l._idx + '" onclick="expandCard(LOTS[' + l._idx + '])">' +
+  const blurClass = l.blurred ? ' blurred' : '';
+  return '<div class="lot-card' + blurClass + '" id="lot-' + l._idx + '" onclick="' + (l.blurred ? 'showPaywall()' : 'expandCard(LOTS[' + l._idx + '])') + '">' +
     getCardImageHtml(l) +
     '<div class="card-body">' +
       '<div class="card-row1"><span class="card-lot-info">' + catLabel + '</span><span class="card-price">' + esc(priceText) + '</span></div>' +
@@ -2066,7 +2197,8 @@ function getCardImageHtml(lot) {
     '<div class="card-image-shimmer"></div>' +
     '<img class="card-image" src="' + esc(lot.imageUrl) + '" alt="' + esc(lot.address) + '" loading="lazy" ' +
     'onload="this.previousElementSibling.style.display=\'none\'" ' +
-    'onerror="this.parentElement.innerHTML=getPlaceholderHtml(\'' + esc(lot.propType || 'house') + '\')">' +
+    'onerror="this.parentElement.innerHTML=getPlaceholderHtml(this.dataset.proptype)"' +
+    ' data-proptype="' + esc(lot.propType || 'house') + '">' +
     getCardImageBadges(lot) +
   '</div>';
 }
@@ -2088,6 +2220,8 @@ function getSignalChips(lot) {
 }
 
 function expandCard(lot) {
+  if (lot.blurred) { showPaywall(); return; }
+
   // Close any existing expanded panel
   const existing = document.querySelector('.expanded-panel');
   if (existing) existing.remove();
@@ -2184,7 +2318,7 @@ function triggerFinanceCheck(idx) {
         html += '<div class="fw-lenders">' + lenders.map(l => '<span class="fw-lender-chip">' + esc(l.name || l.lender || l) + '</span>').join('') + '</div>';
       }
       html += '</div>';
-      html += '<a class="fw-cta" href="https://www.bridgematch.co.uk/brokers?loan=' + loanAmount + '&value=' + lot.price + '&type=' + apiType + '" target="_blank">See all ' + count + ' matches on BridgeMatch →</a>';
+      html += '<a class="fw-cta" href="https://www.bridgematch.co.uk/brokers?loan=' + encodeURIComponent(loanAmount) + '&value=' + encodeURIComponent(lot.price) + '&type=' + encodeURIComponent(apiType) + '" target="_blank">See all ' + count + ' matches on BridgeMatch →</a>';
       resultsEl.innerHTML = html;
     } catch (e) {
       resultsEl.innerHTML = '<div class="fw-error">Unable to check finance — try again later</div>';
