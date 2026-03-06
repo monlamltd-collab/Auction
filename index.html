@@ -2429,7 +2429,7 @@ $('smartQuery').addEventListener('input',()=>{
   $('mainBtn').textContent=$('smartQuery').value.trim()?'AI Search':'Browse';
 });
 // ═══════════════════════════════
-// ADMIN DEBUG WIDGET
+// ADMIN DEBUG WIDGET v4
 // ═══════════════════════════════
 (function initDebugWidget() {
   const ADMIN_EMAIL = 'simon.deeming@gmail.com';
@@ -2466,8 +2466,9 @@ $('smartQuery').addEventListener('input',()=>{
   }
 
   function openPanel() {
+    console.log('[Debug] openPanel called');
     const existing = document.getElementById('debugPanel');
-    if (existing) { existing.remove(); return; }
+    if (existing) { console.log('[Debug] panel exists, removing'); existing.remove(); return; }
 
     _baseImg = null;
     _annotations = [];
@@ -2551,12 +2552,14 @@ $('smartQuery').addEventListener('input',()=>{
     panel.appendChild(step2);
     panel.appendChild(status);
     document.body.appendChild(panel);
+    console.log('[Debug] panel appended, step1 visible');
     desc.focus();
   }
 
   function showAnnotator(dataUrl) {
     const img = new Image();
     img.onload = () => {
+      console.log('[Debug] image loaded for annotator, size:', img.width, 'x', img.height);
       _baseImg = img;
       _annotations = [];
       _tool = 'circle';
@@ -2636,7 +2639,7 @@ $('smartQuery').addEventListener('input',()=>{
   }
 
   function wireCanvas(canvas) {
-    // Use fresh handler functions each time (avoids stale closure issues)
+    console.log('[Debug] wireCanvas called, canvas:', canvas.width, 'x', canvas.height);
     function getPos(e) {
       const r = canvas.getBoundingClientRect();
       if (r.width === 0 || r.height === 0) return {x:0,y:0};
@@ -2689,6 +2692,7 @@ $('smartQuery').addEventListener('input',()=>{
   }
 
   async function doCapture() {
+    console.log('[Debug] doCapture called, html2canvas:', typeof html2canvas);
     const btn = document.getElementById('debugCapture');
     const panel = document.getElementById('debugPanel');
     const fab = document.getElementById('debugWidget');
