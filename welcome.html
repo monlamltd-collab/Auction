@@ -3,235 +3,357 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Bridgematch — Find Auction Deals, Finance Them Instantly</title>
-<meta name="description" content="Free UK property auction directory with AI scoring. Search every major auction house, spot hidden deals, check bridging finance in one click.">
-<meta property="og:title" content="Bridgematch — Your Unfair Advantage at Auction">
+<title>Auction Brain — Your Unfair Advantage at Auction</title>
+<meta name="description" content="Auction Brain scores every UK auction lot for investment potential and checks 68 bridging lenders in one click. Free.">
+<meta property="og:title" content="Auction Brain — Your Unfair Advantage at Auction">
 <meta property="og:description" content="AI scores every lot. 68 lenders checked instantly. Free.">
 <meta property="og:type" content="website">
-<meta property="og:url" content="https://bridgematch.co.uk/welcome">
-<link rel="canonical" href="https://bridgematch.co.uk/welcome">
-<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@400;600;700;900&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<meta property="og:url" content="https://auctions.bridgematch.co.uk/welcome">
+<link rel="canonical" href="https://auctions.bridgematch.co.uk/welcome">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@400;600;700;800;900&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
   --bg:#faf8f4;--white:#fff;--cream:#f3f0ea;
   --text:#1a1714;--text2:#5c564d;--text3:#8a847a;
-  --green:#0f8a5f;--green2:#0b7a52;--green-light:#e8f5ee;--green-pale:#f0faf4;
-  --navy:#1a2332;
-  --blue:#2563eb;--blue-light:#eff4ff;
+  --green:#2e7d32;--green2:#1b5e20;--green-light:#e8f5ee;--green-pale:#f0faf4;
+  --navy:#1a2332;--navy-accent:#1a3a5c;
   --amber:#c47a15;--amber-light:#fef6e8;
-  --red:#c4392a;
   --border:#e4dfd6;
   --radius:16px;--radius-sm:10px;
 }
 html{font-size:16px;-webkit-font-smoothing:antialiased;scroll-behavior:smooth;overflow-x:hidden}
 body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
 
+/* ══════════ NAV ══════════ */
+.nav{position:fixed;top:0;left:0;right:0;z-index:50;padding:16px 24px;transition:all .3s}
+.nav.scrolled{background:rgba(255,255,255,.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:10px 24px}
+.nav-inner{max-width:1100px;margin:0 auto;display:flex;justify-content:space-between;align-items:center}
+.nav-logo{font-family:'Source Serif 4',serif;font-size:1.3rem;font-weight:700;color:var(--navy);text-decoration:none}
+.nav-logo span{color:var(--green)}
+.nav-logo small{display:block;font-family:'DM Sans',sans-serif;font-size:9px;font-weight:500;color:var(--text3);letter-spacing:.02em;margin-top:-2px}
+.nav-links{display:flex;gap:8px;align-items:center}
+.nav-link{font-size:.88rem;font-weight:600;color:var(--text2);text-decoration:none;padding:8px 16px;border-radius:var(--radius-sm);transition:all .15s}
+.nav-link:hover{color:var(--green);background:var(--green-light)}
+.nav-btn{font-size:.88rem;font-weight:700;color:var(--white);background:var(--green);text-decoration:none;padding:10px 24px;border-radius:var(--radius-sm);transition:all .15s;border:none;cursor:pointer}
+.nav-btn:hover{background:var(--green2);transform:translateY(-1px);box-shadow:0 4px 12px rgba(46,125,50,.25)}
+
 /* ══════════ HERO ══════════ */
 .hero{
   min-height:100vh;min-height:100svh;
   display:flex;flex-direction:column;align-items:center;justify-content:center;
-  text-align:center;padding:40px 20px 60px;
+  text-align:center;padding:80px 24px 80px;
   position:relative;overflow:hidden;
+  background:linear-gradient(170deg,#faf8f4 0%,#eef8f0 30%,#e8f0fa 70%,#faf8f4 100%);
 }
 .hero::before{
-  content:'';position:absolute;inset:0;
-  background:
-    radial-gradient(ellipse 80% 60% at 50% 0%, rgba(15,138,95,0.06) 0%, transparent 70%),
-    radial-gradient(ellipse 60% 50% at 80% 100%, rgba(37,99,235,0.04) 0%, transparent 70%);
-  pointer-events:none;
+  content:'';position:absolute;top:-200px;right:-150px;width:600px;height:600px;border-radius:50%;
+  background:radial-gradient(circle,rgba(46,125,50,.07) 0%,transparent 70%);pointer-events:none;
+}
+.hero::after{
+  content:'';position:absolute;bottom:-200px;left:-100px;width:500px;height:500px;border-radius:50%;
+  background:radial-gradient(circle,rgba(26,58,92,.05) 0%,transparent 70%);pointer-events:none;
 }
 
-.brand{
-  font-family:'Source Serif 4',serif;font-size:1.6rem;font-weight:700;
-  color:var(--navy);margin-bottom:32px;letter-spacing:-0.01em;
-  opacity:0;animation:fadeDown .6s ease .1s forwards;
+/* Floating decorative elements */
+.hero-float{position:absolute;pointer-events:none;opacity:.08;font-size:2rem}
+.hero-float:nth-child(1){top:15%;left:8%;animation:float 6s ease-in-out infinite}
+.hero-float:nth-child(2){top:25%;right:10%;animation:float 8s ease-in-out 1s infinite}
+.hero-float:nth-child(3){bottom:20%;left:12%;animation:float 7s ease-in-out 2s infinite}
+.hero-float:nth-child(4){bottom:30%;right:8%;animation:float 9s ease-in-out .5s infinite}
+@keyframes float{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(-20px) rotate(5deg)}}
+
+.hero-badge{
+  display:inline-flex;align-items:center;gap:8px;
+  background:var(--white);border:1px solid var(--border);border-radius:24px;
+  padding:8px 20px;font-size:.82rem;font-weight:600;color:var(--text2);
+  margin-bottom:28px;box-shadow:0 2px 8px rgba(0,0,0,.04);
+  opacity:0;animation:fadeUp .6s ease .1s forwards;
 }
-.brand span{color:var(--green)}
+.badge-dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse-dot 2s ease infinite}
+@keyframes pulse-dot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(1.4)}}
 
 .hero h1{
-  font-family:'Source Serif 4',serif;font-size:clamp(2.2rem,6vw,3.6rem);
-  font-weight:900;line-height:1.08;color:var(--navy);
-  max-width:700px;letter-spacing:-0.02em;
+  font-family:'Source Serif 4',serif;font-size:clamp(2.4rem,6vw,4rem);
+  font-weight:800;line-height:1.06;color:var(--navy);
+  max-width:750px;letter-spacing:-0.03em;
   margin-bottom:20px;
   opacity:0;animation:fadeUp .7s ease .2s forwards;
 }
-.hero h1 em{font-style:normal;color:var(--green)}
+.hero h1 em{
+  font-style:normal;
+  background:linear-gradient(135deg,var(--green),#43a047);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
 
 .hero-sub{
   font-size:clamp(1rem,2.5vw,1.2rem);color:var(--text2);
-  max-width:520px;line-height:1.6;margin-bottom:36px;
+  max-width:540px;line-height:1.65;margin-bottom:36px;
   opacity:0;animation:fadeUp .7s ease .35s forwards;
 }
 
 .cta-group{
-  display:flex;flex-direction:column;gap:12px;align-items:center;
+  display:flex;gap:14px;align-items:center;flex-wrap:wrap;justify-content:center;
   opacity:0;animation:fadeUp .7s ease .5s forwards;
 }
 .cta-primary{
   display:inline-flex;align-items:center;gap:8px;
-  padding:16px 36px;border-radius:var(--radius);
-  font-size:1.05rem;font-weight:700;font-family:inherit;
-  color:var(--white);background:var(--green);
+  padding:16px 40px;border-radius:var(--radius);
+  font-size:1.05rem;font-weight:700;font-family:'DM Sans',sans-serif;
+  color:var(--white);background:linear-gradient(135deg,var(--green),#43a047);
   border:none;cursor:pointer;text-decoration:none;
-  transition:all .2s;box-shadow:0 4px 16px rgba(15,138,95,0.25);
+  transition:all .2s;box-shadow:0 4px 20px rgba(46,125,50,0.3);
 }
-.cta-primary:hover{background:var(--green2);transform:translateY(-2px);box-shadow:0 6px 24px rgba(15,138,95,0.3);text-decoration:none}
+.cta-primary:hover{transform:translateY(-3px);box-shadow:0 8px 32px rgba(46,125,50,0.4);text-decoration:none}
 .cta-secondary{
   display:inline-flex;align-items:center;gap:6px;
-  padding:12px 28px;border-radius:var(--radius);
-  font-size:.92rem;font-weight:600;font-family:inherit;
+  padding:14px 32px;border-radius:var(--radius);
+  font-size:.95rem;font-weight:600;font-family:'DM Sans',sans-serif;
   color:var(--green);background:var(--white);
-  border:2px solid var(--green);cursor:pointer;text-decoration:none;
-  transition:all .2s;
+  border:2px solid rgba(46,125,50,.2);cursor:pointer;text-decoration:none;
+  transition:all .2s;box-shadow:0 2px 8px rgba(0,0,0,.04);
 }
-.cta-secondary:hover{background:var(--green-light);text-decoration:none}
+.cta-secondary:hover{background:var(--green-light);border-color:var(--green);text-decoration:none}
 
 .trust-line{
-  margin-top:28px;font-size:.82rem;color:var(--text3);
+  margin-top:32px;font-size:.85rem;color:var(--text3);
+  display:flex;gap:20px;flex-wrap:wrap;justify-content:center;
   opacity:0;animation:fadeUp .7s ease .65s forwards;
 }
-.trust-line strong{color:var(--text2)}
+.trust-item{display:inline-flex;align-items:center;gap:5px}
+.trust-check{color:var(--green);font-weight:700;font-size:.7rem}
 
-/* ══════════ SCROLL HINT ══════════ */
 .scroll-hint{
-  position:absolute;bottom:24px;left:50%;transform:translateX(-50%);
-  opacity:0;animation:fadeUp .7s ease .8s forwards;
+  position:absolute;bottom:28px;left:50%;transform:translateX(-50%);
+  opacity:0;animation:fadeUp .7s ease .9s forwards;
 }
 .scroll-arrow{
-  width:28px;height:28px;border-right:2px solid var(--text3);border-bottom:2px solid var(--text3);
-  transform:rotate(45deg);animation:bounce 2s ease infinite;
+  width:24px;height:24px;border-right:2px solid var(--text3);border-bottom:2px solid var(--text3);
+  transform:rotate(45deg);opacity:.4;animation:bounce 2s ease infinite;
 }
+
+/* ══════════ SOCIAL PROOF BAR ══════════ */
+.social-proof{
+  background:var(--white);border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+  padding:24px;text-align:center;
+}
+.social-proof-inner{
+  max-width:800px;margin:0 auto;display:flex;justify-content:center;gap:32px;flex-wrap:wrap;align-items:center;
+  font-size:.82rem;color:var(--text3);font-weight:500;
+}
+.sp-item{display:flex;align-items:center;gap:6px}
+.sp-icon{font-size:1.1rem}
 
 /* ══════════ HOW IT WORKS ══════════ */
-.section{padding:64px 20px;max-width:800px;margin:0 auto}
+.section{padding:80px 24px;max-width:1000px;margin:0 auto}
 .section-label{
-  font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;
-  color:var(--green);margin-bottom:12px;text-align:center;
+  font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.12em;
+  color:var(--green);margin-bottom:14px;text-align:center;
+  display:flex;align-items:center;justify-content:center;gap:10px;
 }
+.section-label::before,.section-label::after{content:'';width:28px;height:1px;background:var(--green);opacity:.35}
 .section h2{
-  font-family:'Source Serif 4',serif;font-size:clamp(1.6rem,4vw,2.2rem);
-  font-weight:700;color:var(--navy);text-align:center;margin-bottom:48px;
-  line-height:1.2;
+  font-family:'Source Serif 4',serif;font-size:clamp(1.6rem,4vw,2.4rem);
+  font-weight:700;color:var(--navy);text-align:center;margin-bottom:56px;
+  line-height:1.15;letter-spacing:-0.02em;
 }
 
-.steps{display:grid;grid-template-columns:1fr;gap:24px}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:28px;position:relative}
+.steps::before{
+  content:'';position:absolute;top:52px;left:calc(16.67% + 24px);right:calc(16.67% + 24px);
+  height:2px;background:linear-gradient(90deg,var(--border) 0%,var(--green) 50%,var(--border) 100%);opacity:.3;
+}
 
 .step{
-  display:flex;gap:20px;align-items:flex-start;
+  display:flex;flex-direction:column;align-items:center;text-align:center;
   background:var(--white);border:1px solid var(--border);
-  border-radius:var(--radius);padding:28px 24px;
-  transition:all .2s;
+  border-radius:var(--radius);padding:36px 24px 32px;
+  transition:all .25s;position:relative;z-index:1;
 }
-.step:hover{box-shadow:0 4px 20px rgba(0,0,0,.06);transform:translateY(-2px)}
+.step:hover{box-shadow:0 12px 40px rgba(0,0,0,.08);transform:translateY(-6px)}
+.step.highlight{
+  background:linear-gradient(180deg,#f0faf4,var(--white));
+  border-color:rgba(46,125,50,.2);
+  box-shadow:0 4px 24px rgba(46,125,50,.1);
+}
+
+.step-icon{font-size:1.8rem;margin-bottom:8px}
 
 .step-num{
-  flex-shrink:0;width:48px;height:48px;border-radius:50%;
+  flex-shrink:0;width:52px;height:52px;border-radius:50%;
   display:flex;align-items:center;justify-content:center;
-  font-family:'JetBrains Mono',monospace;font-size:1.1rem;font-weight:700;
+  font-family:'JetBrains Mono',monospace;font-size:1.2rem;font-weight:700;
+  margin-bottom:20px;box-shadow:0 2px 8px rgba(0,0,0,.06);
+  background:var(--cream);color:var(--text2);
 }
-.step-num.blue{background:var(--blue-light);color:var(--blue)}
-.step-num.green{background:var(--green-light);color:var(--green)}
+.step-num.green{background:linear-gradient(135deg,var(--green),#43a047);color:var(--white);box-shadow:0 4px 16px rgba(46,125,50,.3)}
 .step-num.gold{background:var(--amber-light);color:var(--amber)}
 
-.step-content h3{font-size:1.05rem;font-weight:700;color:var(--navy);margin-bottom:4px}
-.step-content p{font-size:.9rem;color:var(--text2);line-height:1.55}
+.step-content h3{font-family:'Source Serif 4',serif;font-size:1.1rem;font-weight:700;color:var(--navy);margin-bottom:8px}
+.step-content p{font-size:.9rem;color:var(--text2);line-height:1.6}
+.step.highlight .step-content p{font-weight:500}
 
 /* ══════════ STATS BAR ══════════ */
 .stats-bar{
-  background:var(--navy);padding:48px 20px;
-  display:flex;justify-content:center;gap:48px;flex-wrap:wrap;
+  background:linear-gradient(135deg,#1a2332 0%,#1e3a4f 50%,#1a2332 100%);
+  padding:64px 24px;position:relative;overflow:hidden;
 }
-.stat{text-align:center}
+.stats-bar::before{
+  content:'';position:absolute;inset:0;
+  background:url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.02'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+}
+.stats-inner{max-width:900px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr);gap:24px;position:relative}
+.stat{text-align:center;padding:20px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);transition:all .2s}
+.stat:hover{background:rgba(255,255,255,.08);transform:translateY(-3px)}
 .stat-val{
-  font-family:'JetBrains Mono',monospace;font-size:clamp(1.8rem,4vw,2.6rem);
-  font-weight:700;color:var(--green);line-height:1;
+  font-family:'JetBrains Mono',monospace;font-size:clamp(2rem,4.5vw,3rem);
+  font-weight:700;color:#4ade80;line-height:1;text-shadow:0 0 40px rgba(74,222,128,.2);
 }
-.stat-label{font-size:.82rem;color:rgba(255,255,255,.6);margin-top:6px}
+.stat-label{font-size:.75rem;color:rgba(255,255,255,.5);margin-top:10px;text-transform:uppercase;letter-spacing:.06em;font-weight:500}
 
 /* ══════════ TOOLS ══════════ */
-.tools{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:16px}
+.tools{display:grid;grid-template-columns:1fr 1fr;gap:24px}
 .tool-card{
   background:var(--white);border:1px solid var(--border);
-  border-radius:var(--radius);padding:32px 24px;text-align:center;
-  position:relative;overflow:hidden;transition:all .2s;
+  border-radius:var(--radius);padding:36px 28px;text-align:left;
+  position:relative;overflow:hidden;transition:all .25s;
 }
-.tool-card:hover{box-shadow:0 4px 20px rgba(0,0,0,.06);transform:translateY(-2px)}
-.tool-card::before{
-  content:'';position:absolute;top:0;left:0;right:0;height:4px;
-}
-.tool-card.ab::before{background:var(--blue)}
-.tool-card.bm::before{background:var(--green)}
+.tool-card:hover{box-shadow:0 12px 40px rgba(0,0,0,.08);transform:translateY(-4px)}
+.tool-card::before{content:'';position:absolute;top:0;left:0;right:0;height:4px}
+.tool-card::after{content:'';position:absolute;top:-40%;right:-20%;width:200px;height:200px;border-radius:50%;opacity:.04;pointer-events:none}
+.tool-card.ab::before{background:linear-gradient(90deg,var(--green),#4ade80)}
+.tool-card.ab::after{background:var(--green)}
+.tool-card.bm::before{background:linear-gradient(90deg,var(--navy-accent),#3b82f6)}
+.tool-card.bm::after{background:var(--navy-accent)}
 
-.tool-emoji{font-size:2.4rem;margin-bottom:12px;display:block}
-.tool-card h3{font-size:1.05rem;font-weight:700;color:var(--navy);margin-bottom:6px}
-.tool-card p{font-size:.85rem;color:var(--text2);line-height:1.5}
+.tool-icon-wrap{width:56px;height:56px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:1.8rem;margin-bottom:20px}
+.tool-card.ab .tool-icon-wrap{background:var(--green-light)}
+.tool-card.bm .tool-icon-wrap{background:#eef4ff}
+
+.tool-card h3{font-family:'Source Serif 4',serif;font-size:1.15rem;font-weight:700;color:var(--navy);margin-bottom:8px}
+.tool-card p{font-size:.9rem;color:var(--text2);line-height:1.6;margin-bottom:16px}
+.tool-features{list-style:none;padding:0}
+.tool-features li{font-size:.85rem;color:var(--text2);padding:5px 0;display:flex;align-items:center;gap:8px}
+.tool-features li::before{content:'✓';color:var(--green);font-weight:700;font-size:.75rem}
+
+/* ══════════ TESTIMONIAL / USE CASE ══════════ */
+.use-cases{padding:80px 24px;max-width:1000px;margin:0 auto}
+.use-cases h2{font-family:'Source Serif 4',serif;font-size:clamp(1.4rem,3.5vw,2rem);font-weight:700;color:var(--navy);text-align:center;margin-bottom:48px}
+.uc-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+.uc-card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:28px 24px;transition:all .2s}
+.uc-card:hover{box-shadow:0 8px 28px rgba(0,0,0,.06);transform:translateY(-3px)}
+.uc-icon{font-size:1.6rem;margin-bottom:12px;display:block}
+.uc-card h4{font-family:'Source Serif 4',serif;font-size:.95rem;font-weight:700;color:var(--navy);margin-bottom:6px}
+.uc-card p{font-size:.85rem;color:var(--text2);line-height:1.55}
 
 /* ══════════ FINAL CTA ══════════ */
 .final-cta{
-  text-align:center;padding:64px 20px 80px;
+  text-align:center;padding:80px 24px;
+  background:linear-gradient(160deg,var(--navy) 0%,#1e3a4f 60%,#1a3a3a 100%);
+  position:relative;overflow:hidden;
 }
+.final-cta::before{content:'';position:absolute;top:-100px;right:-80px;width:300px;height:300px;border-radius:50%;background:radial-gradient(circle,rgba(46,125,50,.12),transparent 70%);pointer-events:none}
+.final-cta::after{content:'';position:absolute;bottom:-80px;left:-60px;width:250px;height:250px;border-radius:50%;background:radial-gradient(circle,rgba(59,130,246,.08),transparent 70%);pointer-events:none}
 .final-cta h2{
-  font-family:'Source Serif 4',serif;font-size:clamp(1.6rem,4vw,2.2rem);
-  font-weight:700;color:var(--navy);margin-bottom:12px;
+  font-family:'Source Serif 4',serif;font-size:clamp(1.6rem,4vw,2.4rem);
+  font-weight:700;color:var(--white);margin-bottom:14px;position:relative;
 }
-.final-cta p{font-size:1rem;color:var(--text2);margin-bottom:32px;max-width:480px;margin-left:auto;margin-right:auto;line-height:1.6}
+.final-cta p{font-size:1.05rem;color:rgba(255,255,255,.6);margin-bottom:36px;max-width:480px;margin-left:auto;margin-right:auto;line-height:1.65;position:relative}
+.final-cta .cta-primary{font-size:1.1rem;padding:18px 44px;position:relative}
+.final-cta .cta-secondary{color:rgba(255,255,255,.7);border-color:rgba(255,255,255,.2);background:transparent;position:relative}
+.final-cta .cta-secondary:hover{color:#fff;border-color:rgba(255,255,255,.5);background:rgba(255,255,255,.08)}
 
 /* ══════════ FOOTER ══════════ */
 footer{
-  text-align:center;padding:24px 20px 32px;
+  text-align:center;padding:32px 24px 40px;
   border-top:1px solid var(--border);
 }
-footer .brand-f{font-family:'Source Serif 4',serif;font-size:1rem;font-weight:700;color:var(--navy);margin-bottom:4px}
-footer .brand-f span{color:var(--green)}
+.footer-brand{font-family:'Source Serif 4',serif;font-size:1.1rem;font-weight:700;color:var(--navy);margin-bottom:2px}
+.footer-brand span{color:var(--green)}
+.footer-powered{font-size:.72rem;color:var(--text4);margin-bottom:12px}
+.footer-powered b{font-family:'Source Serif 4',serif;font-weight:600;color:var(--text3)}
+.footer-powered b span{color:var(--green)}
 footer p{font-size:.78rem;color:var(--text3)}
+footer a{color:inherit;text-decoration:none;margin:0 8px}
+footer a:hover{color:var(--green)}
 
 /* ══════════ ANIMATIONS ══════════ */
-@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
 @keyframes fadeDown{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
 @keyframes bounce{0%,20%,50%,80%,100%{transform:rotate(45deg) translateY(0)}40%{transform:rotate(45deg) translateY(-8px)}60%{transform:rotate(45deg) translateY(-4px)}}
 
+/* Scroll-reveal */
+.reveal{opacity:0;transform:translateY(24px);transition:opacity .6s ease,transform .6s ease}
+.reveal.visible{opacity:1;transform:translateY(0)}
+
 /* ══════════ RESPONSIVE ══════════ */
-@media(max-width:600px){
-  .hero{padding:32px 16px 48px}
+@media(max-width:768px){
+  .steps{grid-template-columns:1fr;gap:16px}
+  .steps::before{display:none}
+  .step{flex-direction:column;gap:12px;text-align:center;align-items:center;padding:28px 20px}
   .tools{grid-template-columns:1fr}
-  .stats-bar{gap:32px;padding:36px 20px}
-  .step{flex-direction:column;gap:12px;text-align:center;align-items:center}
-  .cta-primary{width:100%;justify-content:center}
-  .cta-secondary{width:100%;justify-content:center}
+  .uc-grid{grid-template-columns:1fr}
+  .stats-inner{grid-template-columns:repeat(2,1fr);gap:16px}
+  .nav-link{display:none}
+}
+@media(max-width:600px){
+  .hero{padding:60px 16px 60px}
+  .cta-group{flex-direction:column;width:100%;max-width:340px}
+  .cta-primary,.cta-secondary{width:100%;justify-content:center}
+  .trust-line{flex-direction:column;gap:8px}
+  .social-proof-inner{flex-direction:column;gap:12px}
+  .hero-float{display:none}
 }
 @media(max-width:360px){
-  .hero{padding:24px 12px 40px}
-  .section{padding:40px 12px}
-  .step{padding:20px 16px}
-  .stats-bar{gap:20px;padding:28px 12px}
-  .cta-primary{padding:14px 24px;font-size:.95rem}
-  .cta-secondary{padding:10px 20px;font-size:.85rem}
-  .tool-card{padding:24px 16px}
+  .hero{padding:48px 12px 48px}
+  .hero h1{font-size:2rem}
+  .section{padding:48px 16px}
+  .step{padding:24px 16px}
+  .stats-bar{padding:40px 16px}
+  .stats-inner{gap:12px}
+  .tool-card{padding:24px 18px}
+  .final-cta{padding:56px 16px}
 }
 </style>
 </head>
 <body>
 
-<!-- ═══════ HERO — one screen, one message ═══════ -->
-<section class="hero">
-  <div class="brand">Bridge<span>match</span></div>
+<!-- ═══════ NAV ═══════ -->
+<nav class="nav" id="mainNav">
+  <div class="nav-inner">
+    <a href="/" class="nav-logo">Auction <span>Brain</span><small>powered by Bridgematch</small></a>
+    <div class="nav-links">
+      <a href="/" class="nav-link">Browse Deals</a>
+      <a href="/" class="nav-btn">Get Started</a>
+    </div>
+  </div>
+</nav>
 
-  <h1>Your unfair advantage at <em>auction</em></h1>
+<!-- ═══════ HERO ═══════ -->
+<section class="hero">
+  <div class="hero-float">🏠</div>
+  <div class="hero-float">📊</div>
+  <div class="hero-float">🔑</div>
+  <div class="hero-float">💰</div>
+
+  <div class="hero-badge"><span class="badge-dot"></span> Live auction data · updated daily</div>
+
+  <h1>Your unfair advantage<br>at <em>auction</em></h1>
 
   <p class="hero-sub">
-    AI scores every lot across the UK's biggest auction houses.
-    68 bridging lenders checked in one click.
+    AI scores every lot across 30+ UK auction houses.
+    Check bridging finance from 68 lenders in one click.
     Completely free.
   </p>
 
   <div class="cta-group">
-    <a href="/" class="cta-primary">🔍 Browse Auction Deals</a>
-    <a href="/check" class="cta-secondary">🧩 Check Finance on a Deal</a>
+    <a href="/" class="cta-primary">Browse Auction Deals →</a>
   </div>
 
   <div class="trust-line">
-    <strong>Free to use</strong> · No account needed · Updated daily
+    <span class="trust-item"><span class="trust-check">✓</span> Free to use</span>
+    <span class="trust-item"><span class="trust-check">✓</span> No account needed</span>
+    <span class="trust-item"><span class="trust-check">✓</span> Updated daily</span>
   </div>
 
   <div class="scroll-hint">
@@ -239,31 +361,46 @@ footer p{font-size:.78rem;color:var(--text3)}
   </div>
 </section>
 
-<!-- ═══════ HOW IT WORKS — 3 steps ═══════ -->
-<section class="section">
+<!-- ═══════ SOCIAL PROOF ═══════ -->
+<div class="social-proof">
+  <div class="social-proof-inner">
+    <span class="sp-item"><span class="sp-icon">🏛️</span> Savills</span>
+    <span class="sp-item"><span class="sp-icon">🏛️</span> Allsop</span>
+    <span class="sp-item"><span class="sp-icon">🏛️</span> SDL Auctions</span>
+    <span class="sp-item"><span class="sp-icon">🏛️</span> Network Auctions</span>
+    <span class="sp-item"><span class="sp-icon">🏛️</span> Bond Wolfe</span>
+    <span class="sp-item">+ 25 more</span>
+  </div>
+</div>
+
+<!-- ═══════ HOW IT WORKS ═══════ -->
+<section class="section reveal">
   <div class="section-label">How it works</div>
-  <h2>From browsing to broker in three clicks</h2>
+  <h2>Every UK auction lot,<br>scored by AI</h2>
 
   <div class="steps">
     <div class="step">
-      <div class="step-num blue">1</div>
+      <div class="step-icon">🔍</div>
+      <div class="step-num">1</div>
       <div class="step-content">
-        <h3>Search or browse</h3>
-        <p>Every lot from Savills, Allsop, SDL, Network, Bond Wolfe and more — all in one place. AI scores each lot and spots opportunities you'd miss, like title splits, land without planning, and underpriced refurb deals.</p>
+        <h3>Browse every auction</h3>
+        <p>30+ UK auction houses in one place — Savills, Allsop, SDL, Network, Bond Wolfe and more. Filter by price, location, type, and condition.</p>
       </div>
     </div>
-    <div class="step">
+    <div class="step highlight">
+      <div class="step-icon">🧠</div>
       <div class="step-num green">2</div>
       <div class="step-content">
-        <h3>BridgeMatch it</h3>
-        <p>See a deal you like? One tap checks it against 68 bridging lenders instantly. You'll know if the numbers work before you pick up the phone.</p>
+        <h3>AI scores every lot</h3>
+        <p>Each lot is analysed for investment potential — title splits, refurb opportunities, yield estimates, and comparable sales from the Land Registry.</p>
       </div>
     </div>
     <div class="step">
+      <div class="step-icon">⚡</div>
       <div class="step-num gold">3</div>
       <div class="step-content">
-        <h3>Speak to a broker</h3>
-        <p>Your deal details go straight to a specialist broker who'll find you the best rate, fastest completion, and highest advance from our full panel.</p>
+        <h3>Act fast, bid smart</h3>
+        <p>Spot deals others miss. Set your budget, check finance with our integrated BridgeMatch tool, and go into the auction room prepared.</p>
       </div>
     </div>
   </div>
@@ -271,39 +408,44 @@ footer p{font-size:.78rem;color:var(--text3)}
 
 <!-- ═══════ STATS ═══════ -->
 <div class="stats-bar">
-  <div class="stat">
-    <div class="stat-val">30+</div>
-    <div class="stat-label">Auction houses</div>
-  </div>
-  <div class="stat">
-    <div class="stat-val">68</div>
-    <div class="stat-label">Bridging lenders</div>
-  </div>
-  <div class="stat">
-    <div class="stat-val">2,000+</div>
-    <div class="stat-label">Lots scored</div>
-  </div>
-  <div class="stat">
-    <div class="stat-val">£0</div>
-    <div class="stat-label">Cost to use</div>
+  <div class="stats-inner">
+    <div class="stat">
+      <div class="stat-val" data-target="30" data-suffix="+">0</div>
+      <div class="stat-label">Auction houses</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val" data-target="68">0</div>
+      <div class="stat-label">Bridging lenders</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val" data-target="2000" data-suffix="+">0</div>
+      <div class="stat-label">Lots scored</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val stat-static">£0</div>
+      <div class="stat-label">Cost to use</div>
+    </div>
   </div>
 </div>
 
-<!-- ═══════ TOOLS ═══════ -->
-<section class="section">
-  <div class="section-label">Your tech power team</div>
-  <h2>Two tools, one mission: find you deals</h2>
-
-  <div class="tools">
-    <div class="tool-card ab">
-      <span class="tool-emoji">🧠</span>
-      <h3>Auction Brain</h3>
-      <p>Scans every catalogue, scores every lot, and spots opportunities you'd miss — title splits, refurb bargains, land without planning, high-yield investments. Like having a researcher who never sleeps.</p>
+<!-- ═══════ USE CASES ═══════ -->
+<section class="use-cases reveal">
+  <h2>Built for serious investors</h2>
+  <div class="uc-grid">
+    <div class="uc-card">
+      <span class="uc-icon">🏗️</span>
+      <h4>Refurb &amp; Flip</h4>
+      <p>Find properties flagged as "needs work" with comparable street data so you know the spread before you bid.</p>
     </div>
-    <div class="tool-card bm">
-      <span class="tool-emoji">🧩</span>
-      <h3>BridgeMatch</h3>
-      <p>Enter a price and your cash. Instantly see which lenders will fund it, at what LTV, and whether the deal stacks up.</p>
+    <div class="uc-card">
+      <span class="uc-icon">🏢</span>
+      <h4>Title Splitting</h4>
+      <p>AI identifies freehold blocks with multiple units — calculate per-unit values and zero-deposit potential.</p>
+    </div>
+    <div class="uc-card">
+      <span class="uc-icon">📈</span>
+      <h4>Yield Hunting</h4>
+      <p>Estimated gross yields, rental comparables, and vacancy flags — filter for 8%+ returns instantly.</p>
     </div>
   </div>
 </section>
@@ -312,15 +454,57 @@ footer p{font-size:.78rem;color:var(--text3)}
 <section class="final-cta">
   <h2>Ready to find your next deal?</h2>
   <p>Auction catalogues are live now. Start browsing — it's free, instant, and you don't need an account.</p>
-  <a href="/" class="cta-primary">🔍 Browse Auction Deals</a>
+  <div class="cta-group" style="opacity:1;animation:none">
+    <a href="/" class="cta-primary">Browse Auction Deals →</a>
+  </div>
 </section>
 
 <!-- ═══════ FOOTER ═══════ -->
 <footer>
-  <div class="brand-f">Bridge<span>match</span></div>
+  <div class="footer-brand">Auction <span>Brain</span></div>
+  <div class="footer-powered">powered by <b>Bridge<span>match</span></b></div>
   <p>UK Property Auction Directory & Deal Analyser · Not financial advice</p>
-  <p style="margin-top:8px;font-size:.78rem;"><a href="https://www.bridgematch.co.uk/privacy" style="color:inherit;text-decoration:none;margin:0 8px;">Privacy Policy</a><a href="https://www.bridgematch.co.uk/terms" style="color:inherit;text-decoration:none;margin:0 8px;">Terms of Service</a></p>
+  <p style="margin-top:8px;"><a href="https://www.bridgematch.co.uk/privacy">Privacy Policy</a><a href="https://www.bridgematch.co.uk/terms">Terms of Service</a></p>
 </footer>
+
+<script>
+// Nav scroll effect
+const nav = document.getElementById('mainNav');
+window.addEventListener('scroll', () => {
+  nav.classList.toggle('scrolled', window.scrollY > 40);
+});
+
+// Scroll-reveal
+const reveals = document.querySelectorAll('.reveal');
+const revealObserver = new IntersectionObserver((entries) => {
+  entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); revealObserver.unobserve(e.target); } });
+}, { threshold: 0.15 });
+reveals.forEach(el => revealObserver.observe(el));
+
+// Stats count-up
+const statsObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (!entry.isIntersecting) return;
+    statsObserver.disconnect();
+    document.querySelectorAll('.stat-val[data-target]').forEach(el => {
+      const target = parseInt(el.dataset.target);
+      const suffix = el.dataset.suffix || '';
+      const start = performance.now();
+      const duration = 900;
+      function tick(now) {
+        const t = Math.min((now - start) / duration, 1);
+        const ease = 1 - Math.pow(1 - t, 3);
+        const current = Math.round(target * ease);
+        el.textContent = current.toLocaleString() + (t >= 1 ? suffix : '');
+        if (t < 1) requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+    });
+  });
+}, { threshold: 0.3 });
+const statsBar = document.querySelector('.stats-bar');
+if (statsBar) statsObserver.observe(statsBar);
+</script>
 
 </body>
 </html>

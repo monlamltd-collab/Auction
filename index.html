@@ -3,18 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Bridgematch — UK Property Auction Directory & Deal Analyser</title>
-<meta name="description" content="Free UK property auction directory by Bridgematch. AI-powered catalogue analyser scores every lot, finds title splits, filters to your budget.">
+<title>Auction Brain — Find & Finance UK Auction Deals</title>
+<meta name="description" content="Auction Brain scores every UK auction lot for investment potential and checks 68 bridging lenders in one click. Free.">
 <link rel="canonical" href="https://bridgematch.co.uk">
-<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@400;600;700&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@400;600;700;800;900&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
   --bg:#faf8f4;--white:#ffffff;--cream:#f3f0ea;--cream2:#ece8e0;
   --surface:#ffffff;--surface2:#f7f5f0;
   --border:#e4dfd6;--border2:#d4cfc5;
   --text:#1a1714;--text2:#5c564d;--text3:#8a847a;--text4:#b0a99e;
-  --green:#0f8a5f;--green2:#0b7a52;--green-light:#e8f5ee;--green-pale:#f0faf4;
-  --navy:#1a2332;--navy-light:#2a3648;
+  --green:#2e7d32;--green2:#0b7a52;--green-light:#e8f5ee;--green-pale:#f0faf4;
+  --navy:#1a2332;--navy-light:#2a3648;--navy-accent:#1a3a5c;
   --amber:#c47a15;--amber-light:#fef6e8;
   --violet:#6e56cf;--violet-light:#f3f0ff;
   --red:#c4392a;--red-light:#fef0ee;
@@ -30,6 +30,7 @@ a{color:var(--green);text-decoration:none}a:hover{text-decoration:underline}
 .nav{background:var(--white);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:50}
 .nav-inner{max-width:1100px;margin:0 auto;padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;overflow:hidden}
 .logo{font-family:'Source Serif 4',serif;font-size:1.35rem;font-weight:700;color:var(--navy);flex-shrink:0}
+.logo-sub{font-family:'DM Sans',sans-serif;font-size:10px;color:var(--text3);display:block;line-height:1;margin-top:-2px}
 .logo span{color:var(--green)}
 .nav-right{display:flex;align-items:center;gap:10px;min-width:0}
 .nav-cta{padding:8px 20px;border-radius:var(--radius-sm);font-size:.85rem;font-weight:700;color:var(--white);background:var(--green);border:none;cursor:pointer;font-family:inherit;transition:all .15s;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -41,16 +42,30 @@ a{color:var(--green);text-decoration:none}a:hover{text-decoration:underline}
 .wrap{max-width:1100px;margin:0 auto;padding:0 24px}
 
 /* ── HERO ── */
-.hero{padding:48px 0 32px;text-align:center}
-.hero h1{font-family:'Source Serif 4',serif;font-size:2.5rem;font-weight:700;color:var(--navy);line-height:1.15;margin-bottom:12px}
-.hero h1 em{font-style:normal;color:var(--green)}
-.hero-sub{color:var(--text2);max-width:600px;margin:0 auto 28px;font-size:.95rem;line-height:1.7}
+.hero{padding:80px 0 56px;text-align:center;position:relative;overflow:hidden;background:linear-gradient(160deg,#faf8f4 0%,#f0faf4 40%,#eef6ff 100%)}
+.hero::before{content:'';position:absolute;top:-60%;right:-20%;width:600px;height:600px;border-radius:50%;background:radial-gradient(circle,rgba(46,125,50,.06) 0%,transparent 70%);pointer-events:none}
+.hero::after{content:'';position:absolute;bottom:-40%;left:-15%;width:500px;height:500px;border-radius:50%;background:radial-gradient(circle,rgba(26,35,50,.04) 0%,transparent 70%);pointer-events:none}
+.hero-badge{display:inline-flex;align-items:center;gap:6px;background:var(--white);border:1px solid var(--border);border-radius:24px;padding:6px 16px;font-size:.78rem;font-weight:600;color:var(--text2);margin-bottom:24px;box-shadow:0 1px 4px rgba(0,0,0,.04);animation:fadeUp .6s ease .1s both}
+.hero-badge .badge-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse-dot 2s ease infinite}
+@keyframes pulse-dot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(1.3)}}
+.hero h1{font-family:'Source Serif 4',serif;font-size:clamp(2.2rem,5.5vw,3.4rem);font-weight:800;color:var(--navy);line-height:1.08;margin-bottom:16px;letter-spacing:-0.03em;animation:fadeUp .7s ease .2s both}
+.hero h1 em{font-style:normal;background:linear-gradient(135deg,var(--green),#1a8a52);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero-sub{color:var(--text2);max-width:540px;margin:0 auto 28px;font-size:clamp(.9rem,2vw,1.05rem);line-height:1.7;animation:fadeUp .7s ease .35s both}
+.hero-ctas{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-bottom:20px;animation:fadeUp .7s ease .5s both}
+.cta-primary{display:inline-flex;align-items:center;gap:8px;padding:15px 36px;border-radius:var(--radius);font-size:1rem;font-weight:700;font-family:inherit;color:var(--white);background:linear-gradient(135deg,var(--green),#1a8a52);border:none;cursor:pointer;text-decoration:none!important;transition:all .2s;box-shadow:0 4px 16px rgba(46,125,50,.25)}
+.cta-primary:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(46,125,50,.35);text-decoration:none!important}
+.cta-secondary{display:inline-flex;align-items:center;gap:6px;padding:13px 28px;border-radius:var(--radius);font-size:.95rem;font-weight:600;font-family:inherit;color:var(--green);background:var(--white);border:2px solid rgba(46,125,50,.25);cursor:pointer;text-decoration:none!important;transition:all .2s;box-shadow:0 1px 4px rgba(0,0,0,.04)}
+.cta-secondary:hover{background:var(--green-light);border-color:var(--green);text-decoration:none!important}
+.trust-line{font-family:'DM Sans',sans-serif;font-size:12px;color:var(--text3);text-align:center;display:flex;justify-content:center;gap:16px;flex-wrap:wrap;animation:fadeUp .7s ease .65s both}
+.trust-line span{display:inline-flex;align-items:center;gap:5px}
+.trust-line .t-icon{font-size:14px}
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
 
 /* ── SEARCH PANEL ── */
 .search-panel{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:28px;margin-bottom:28px;box-shadow:0 1px 3px rgba(0,0,0,.03)}
 .search-row{display:flex;gap:10px;margin-bottom:18px}
 .search-input{flex:1;padding:13px 18px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:.93rem;font-family:inherit;outline:0;transition:border-color .15s}
-.search-input:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(15,138,95,.08)}
+.search-input:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(46,125,50,.08)}
 .search-input::placeholder{color:var(--text4)}
 .btn-main{padding:13px 28px;border-radius:var(--radius-sm);font-size:.9rem;font-weight:700;color:var(--white);background:var(--green);border:none;cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap}
 .btn-main:hover{background:var(--green2)}
@@ -160,7 +175,7 @@ a{color:var(--green);text-decoration:none}a:hover{text-decoration:underline}
 .lot-link{margin-top:0}.lot-link a{font-size:.82rem;color:var(--green);font-weight:600}
 .lot-actions{display:flex;align-items:center;gap:12px;margin-top:10px;flex-wrap:wrap}
 .bm-btn{display:inline-flex;align-items:center;gap:4px;font-size:.78rem;font-weight:700;color:var(--white);background:var(--green);padding:6px 14px;border-radius:var(--radius-sm);text-decoration:none!important;transition:all .15s;white-space:nowrap}
-.bm-btn:hover{background:var(--green2);text-decoration:none!important;transform:translateY(-1px);box-shadow:0 2px 6px rgba(15,138,95,.2)}
+.bm-btn:hover{background:var(--green2);text-decoration:none!important;transform:translateY(-1px);box-shadow:0 2px 6px rgba(46,125,50,.2)}
 
 /* Enrich panel */
 .enrich-panel{margin-top:10px;padding:10px 14px;background:var(--surface2);border-radius:var(--radius-sm);font-size:.82rem}
@@ -239,7 +254,167 @@ footer{text-align:center;padding:40px 0 24px;color:var(--text4);font-size:.78rem
 footer .logo-f{font-family:'Source Serif 4',serif;font-size:1rem;font-weight:700;color:var(--text3);margin-bottom:4px}
 footer .logo-f span{color:var(--green)}
 
+/* ── HOW IT WORKS ── */
+.how-section{padding:64px 0 48px;text-align:center}
+.section-label{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--green);margin-bottom:12px;display:flex;align-items:center;justify-content:center;gap:8px}
+.section-label::before,.section-label::after{content:'';width:24px;height:1px;background:var(--green);opacity:.4}
+.section-heading{font-family:'Source Serif 4',serif;font-size:clamp(1.5rem,3.5vw,2rem);font-weight:700;color:var(--navy);margin-bottom:48px;line-height:1.2}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;position:relative}
+.steps::before{content:'';position:absolute;top:44px;left:calc(16.67% + 20px);right:calc(16.67% + 20px);height:2px;background:linear-gradient(90deg,var(--border),var(--green),var(--border));opacity:.4;z-index:0}
+.step{display:flex;flex-direction:column;align-items:center;text-align:center;background:var(--white);border:1px solid var(--border);border-radius:16px;padding:32px 20px 28px;transition:all .25s;position:relative;z-index:1}
+.step:hover{box-shadow:0 8px 32px rgba(0,0,0,.08);transform:translateY(-4px)}
+.step.highlight{background:linear-gradient(180deg,#f0faf4,var(--white));border:1px solid rgba(46,125,50,0.2);box-shadow:0 4px 20px rgba(46,125,50,.08)}
+.step.highlight .step-content p{font-weight:500}
+.step-num{flex-shrink:0;width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:1.1rem;font-weight:700;background:var(--cream);color:var(--text2);margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.step-num.green{background:linear-gradient(135deg,var(--green),#1a8a52);color:var(--white);box-shadow:0 4px 12px rgba(46,125,50,.25)}
+.step-icon{font-size:1.6rem;margin-bottom:8px}
+.step-content h3{font-family:'Source Serif 4',serif;font-size:1rem;font-weight:700;color:var(--navy);margin-bottom:6px}
+.step-content p{font-size:.85rem;color:var(--text2);line-height:1.6;font-weight:400}
+.view-results .how-section{display:none}
+
+/* ── LANDING STATS BAR ── */
+.landing-stats{background:linear-gradient(135deg,#1a2332 0%,#1e3a4f 50%,#1a2332 100%);padding:56px 24px;margin:0 -24px;position:relative;overflow:hidden}
+.landing-stats::before{content:'';position:absolute;top:0;left:0;right:0;bottom:0;background:url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.02'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")}
+.landing-stats-inner{max-width:900px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr);gap:32px}
+.ls-stat{text-align:center;padding:16px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);transition:all .2s}
+.ls-stat:hover{background:rgba(255,255,255,.07);transform:translateY(-2px)}
+.ls-val{font-family:'JetBrains Mono',monospace;font-size:clamp(2rem,4.5vw,2.8rem);font-weight:700;color:#4ade80;line-height:1;text-shadow:0 0 30px rgba(74,222,128,.2)}
+.ls-label{font-size:.82rem;color:rgba(255,255,255,.55);margin-top:8px;font-family:'DM Sans',sans-serif;font-weight:500;text-transform:uppercase;letter-spacing:.05em;font-size:.7rem}
+.view-results .landing-stats{display:none}
+
+/* ── TWO TOOLS ── */
+.two-tools{padding:64px 0 48px;text-align:center}
+.tools-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+.tool-card{background:var(--white);border:1px solid var(--border);border-radius:16px;padding:36px 28px;text-align:left;position:relative;overflow:hidden;transition:all .25s}
+.tool-card:hover{box-shadow:0 12px 40px rgba(0,0,0,.08);transform:translateY(-4px)}
+.tool-card::before{content:'';position:absolute;top:0;left:0;right:0;height:4px}
+.tool-ab::before{background:linear-gradient(90deg,var(--green),#4ade80)}
+.tool-bm::before{background:linear-gradient(90deg,var(--navy-accent),#3b82f6)}
+.tool-card::after{content:'';position:absolute;top:-50%;right:-30%;width:200px;height:200px;border-radius:50%;opacity:.04;pointer-events:none}
+.tool-ab::after{background:var(--green)}
+.tool-bm::after{background:var(--navy-accent)}
+.tool-emoji-wrap{width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:1.6rem;margin-bottom:16px}
+.tool-ab .tool-emoji-wrap{background:var(--green-light)}
+.tool-bm .tool-emoji-wrap{background:#eef4ff}
+.tool-card h3{font-family:'Source Serif 4',serif;font-size:1.1rem;font-weight:700;color:var(--navy);margin-bottom:8px}
+.tool-card p{font-size:.88rem;color:var(--text2);line-height:1.6}
+.tool-features{list-style:none;margin-top:12px;padding:0}
+.tool-features li{font-size:.82rem;color:var(--text2);padding:3px 0;display:flex;align-items:center;gap:6px}
+.tool-features li::before{content:'✓';color:var(--green);font-weight:700;font-size:.7rem}
+.view-results .two-tools{display:none}
+
+/* ── BOTTOM CTA ── */
+.bottom-cta{text-align:center;padding:72px 24px;margin:0 -24px;background:linear-gradient(160deg,var(--navy) 0%,#1e3a4f 60%,#1a3a3a 100%);position:relative;overflow:hidden}
+.bottom-cta::before{content:'';position:absolute;top:-100px;right:-100px;width:300px;height:300px;border-radius:50%;background:radial-gradient(circle,rgba(46,125,50,.15),transparent 70%);pointer-events:none}
+.bottom-cta::after{content:'';position:absolute;bottom:-80px;left:-60px;width:250px;height:250px;border-radius:50%;background:radial-gradient(circle,rgba(59,130,246,.1),transparent 70%);pointer-events:none}
+.bottom-cta h2{font-family:'Source Serif 4',serif;font-size:clamp(1.5rem,3.5vw,2rem);font-weight:700;color:var(--white);margin-bottom:12px;position:relative}
+.bottom-cta p{font-size:1rem;color:rgba(255,255,255,.65);margin-bottom:28px;max-width:480px;margin-left:auto;margin-right:auto;line-height:1.7;position:relative}
+.bottom-cta .cta-primary{font-size:1.05rem;padding:16px 40px;position:relative}
+.view-results .bottom-cta{display:none}
+
+/* ── LOTS GRID ── */
+.lots-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:0}
+.lots-grid .section-header{grid-column:1/-1}
+
+/* ── PHOTO LOT CARD ── */
+.lot-card{background:var(--white);border:1px solid #d5dde5;border-radius:var(--radius);overflow:hidden;transition:all .15s ease;cursor:pointer}
+.lot-card:hover{box-shadow:0 4px 20px rgba(26,42,58,0.12);transform:translateY(-2px)}
+.card-image-wrapper{position:relative;height:200px;width:100%;overflow:hidden;background:#eef2f7}
+.card-image{width:100%;height:100%;object-fit:cover;object-position:center;display:block}
+.card-image-placeholder{height:200px;background:#eef2f7;display:flex;align-items:center;justify-content:center}
+.card-image-placeholder svg{width:32px;height:32px;fill:#d5dde5}
+@keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+.card-image-shimmer{position:absolute;inset:0;background:linear-gradient(90deg,#eef2f7 25%,#f5f7fa 50%,#eef2f7 75%);background-size:200% 100%;animation:shimmer 1.5s infinite}
+.card-badge{position:absolute;border-radius:20px;padding:4px 10px;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+.badge-house{top:10px;left:10px;background:rgba(255,255,255,0.92);color:#1a2a3a}
+.badge-score{top:10px;right:10px;font-family:'Source Serif 4',serif;font-weight:700;font-size:13px;border-radius:8px;padding:4px 10px}
+.badge-score.high{background:rgba(46,125,50,0.9);color:#fff}
+.badge-score.mid{background:rgba(230,126,34,0.9);color:#fff}
+.badge-score.low{background:rgba(192,57,43,0.9);color:#fff}
+.badge-vacant{position:absolute;bottom:10px;left:10px;background:rgba(46,125,50,0.85);color:#fff;font-size:10px;border-radius:20px;padding:3px 8px;font-family:'DM Sans',sans-serif}
+.badge-urgency{position:absolute;bottom:10px;right:10px;background:rgba(230,126,34,0.9);color:#fff;font-size:10px;font-weight:700;border-radius:20px;padding:3px 8px;font-family:'DM Sans',sans-serif}
+.card-body{padding:14px 16px}
+.card-row1{display:flex;justify-content:space-between;align-items:center}
+.card-lot-info{font-family:'DM Sans',sans-serif;font-size:11px;color:#6b7c8d}
+.card-price{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:16px;color:var(--green)}
+.card-address{font-family:'Source Serif 4',serif;font-weight:600;font-size:15px;color:#1a2a3a;margin-top:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.card-details{font-family:'DM Sans',sans-serif;font-size:12px;color:#6b7c8d;display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;align-items:center}
+.card-details .detail-pill{background:#eef2f7;padding:2px 8px;border-radius:12px}
+.card-chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
+.chip{font-size:11px;font-family:'DM Sans',sans-serif;padding:3px 8px;border-radius:20px}
+.chip-pos{background:#e8f5ee;color:#2e7d32}
+.chip-neg{background:#fdf0ee;color:#c0392b}
+.chip-neu{background:#eef2f7;color:#6b7c8d}
+.chip-more{background:#eef2f7;color:#6b7c8d;cursor:help}
+.card-footer{border-top:1px solid #f0f2f5;padding:10px 16px;display:flex;justify-content:space-between;align-items:center}
+.card-view-link{font-family:'DM Sans',sans-serif;font-size:13px;color:var(--green);text-decoration:underline;text-underline-offset:2px}
+.card-view-link:hover{color:var(--green2)}
+.card-bm-btn{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;font-family:'DM Sans',sans-serif;color:#fff;background:var(--green);padding:7px 14px;border-radius:8px;border:none;cursor:pointer;text-decoration:none!important;transition:all .15s;white-space:nowrap}
+.card-bm-btn:hover{background:var(--green2);transform:translateY(-1px);text-decoration:none!important}
+
+/* ── EXPANDED CARD PANEL ── */
+.expanded-panel{grid-column:1/-1;background:var(--white);border:1px solid #d5dde5;border-radius:0 0 var(--radius) var(--radius);padding:20px 24px;display:grid;grid-template-columns:60% 40%;gap:24px;animation:slideDown .25s ease}
+@keyframes slideDown{from{opacity:0;max-height:0}to{opacity:1;max-height:1000px}}
+.expanded-panel .exp-left{}
+.expanded-panel .exp-right{}
+.exp-large-img{width:100%;max-height:280px;object-fit:cover;border-radius:8px}
+.exp-large-img-placeholder{width:100%;height:180px;background:#eef2f7;border-radius:8px;display:flex;align-items:center;justify-content:center}
+.exp-analysis{margin-top:16px;background:#f5f7fa;border-radius:8px;padding:14px 16px}
+.exp-analysis-header{font-family:'Source Serif 4',serif;font-weight:600;font-size:13px;color:#1a2a3a;margin-bottom:8px}
+.exp-analysis-text{font-family:'DM Sans',sans-serif;font-size:14px;line-height:1.7;color:var(--text2)}
+.exp-signals{margin-top:12px}
+.exp-signal-row{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;font-family:'DM Sans',sans-serif;color:var(--text2)}
+.exp-signal-chip{font-family:'JetBrains Mono',monospace;font-size:11px;padding:2px 6px;border-radius:4px;font-weight:600}
+.exp-bullets{list-style:none;padding:0;margin-top:12px}
+.exp-bullets li{font-family:'DM Sans',sans-serif;font-size:13px;color:#1a2a3a;padding:4px 0 4px 12px;border-left:2px solid var(--border)}
+
+/* ── FINANCE WIDGET ── */
+.finance-widget{background:var(--white);border:1px solid #d5dde5;border-radius:var(--radius);padding:18px}
+.fw-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.fw-title{font-family:'Source Serif 4',serif;font-weight:600;font-size:14px;color:#1a2a3a}
+.fw-powered{font-family:'DM Sans',sans-serif;font-size:10px;color:#2e86c1}
+.fw-prefilled{margin-bottom:14px}
+.fw-field{margin-bottom:8px}
+.fw-field-label{font-size:10px;text-transform:uppercase;color:#6b7c8d;font-family:'DM Sans',sans-serif;letter-spacing:.03em}
+.fw-field-value{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:500;color:#1a2a3a}
+.fw-slider-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.fw-slider-label{font-family:'DM Sans',sans-serif;font-size:13px;color:#1a2a3a}
+.fw-slider-value{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:14px;color:#1a2a3a}
+.fw-range{width:100%;accent-color:var(--green);margin-bottom:14px}
+.fw-results{text-align:center;padding:16px 0}
+.fw-count{font-family:'Source Serif 4',serif;font-weight:700;font-size:36px;color:var(--green)}
+.fw-count-label{font-family:'DM Sans',sans-serif;font-size:13px;color:#6b7c8d;margin-top:4px}
+.fw-lenders{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:10px}
+.fw-lender-chip{background:#e8f5ee;color:#2e7d32;font-family:'DM Sans',sans-serif;font-size:11px;padding:3px 8px;border-radius:20px}
+.fw-cta{display:block;width:100%;text-align:center;background:var(--navy);color:#fff;font-family:'DM Sans',sans-serif;font-weight:600;font-size:14px;padding:10px;border-radius:8px;border:none;cursor:pointer;text-decoration:none!important;margin-top:14px;transition:all .15s}
+.fw-cta:hover{opacity:.9;text-decoration:none!important}
+.fw-loading{text-align:center;padding:20px 0}
+@keyframes fwPulse{0%,100%{opacity:.4}50%{opacity:1}}
+.fw-pulse{animation:fwPulse 1.2s ease infinite}
+.fw-empty{font-family:'DM Sans',sans-serif;font-size:12px;color:#6b7c8d;text-align:center;padding:16px 0}
+.fw-error{font-family:'DM Sans',sans-serif;font-size:12px;color:var(--red);text-align:center;padding:16px 0}
+
+/* ── SECTION HEADERS (grid) ── */
+.section-header{padding:16px 0 8px;border-bottom:2px solid var(--border);margin-bottom:12px;display:flex;justify-content:space-between;align-items:center}
+.section-header-left{display:flex;align-items:center;gap:8px}
+.section-header h3{font-family:'Source Serif 4',serif;font-weight:700;font-size:16px;color:#1a2a3a}
+.section-header .sh-badge{background:#fff8ee;color:#e67e22;font-family:'DM Sans',sans-serif;font-size:12px;padding:2px 10px;border-radius:20px;font-weight:600}
+.section-header .sh-toggle{font-family:'DM Sans',sans-serif;font-size:11px;color:#6b7c8d;background:none;border:none;cursor:pointer;padding:4px 8px}
+.section-header .sh-toggle:hover{color:var(--green)}
+
+/* ── FILTER BAR (sticky) ── */
+.filter-bar-sticky{background:var(--white);border-bottom:1px solid var(--border);padding:12px 0;position:sticky;top:56px;z-index:10;margin:0 -24px;padding-left:24px;padding-right:24px}
+.filter-bar-inner{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.filter-bar-sticky .tb-select{padding:8px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--white);font-size:.82rem;color:var(--text);font-family:inherit;cursor:pointer}
+.filter-bar-sticky .tb-select.active-filter{border-color:var(--green);color:var(--green)}
+.filter-bar-sticky .tb-search{padding:8px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--white);font-size:.82rem;color:var(--text);font-family:inherit;outline:0;flex:1;min-width:120px}
+.filter-bar-sticky .tb-search:focus{border-color:var(--green)}
+.filter-bar-sticky .filter-count{font-family:'DM Sans',sans-serif;font-size:12px;color:#6b7c8d}
+
 /* ── RESPONSIVE ── */
+@media(max-width:1024px){
+  .lots-grid{grid-template-columns:repeat(2,1fr)}
+}
 @media(max-width:768px){
   .hero h1{font-size:1.8rem}
   .filters{grid-template-columns:1fr 1fr}
@@ -255,6 +430,18 @@ footer .logo-f span{color:var(--green)}
   .deal-grid{grid-template-columns:1fr 1fr}
   .oc-text{min-width:0}
   .scan-steps{gap:12px}
+  .expanded-panel{grid-template-columns:1fr}
+}
+@media(max-width:640px){
+  .lots-grid{grid-template-columns:1fr}
+  .tools-grid{grid-template-columns:1fr}
+  .landing-stats-inner{grid-template-columns:repeat(2,1fr);gap:16px}
+  .hero-ctas{flex-direction:column;align-items:center}
+  .cta-primary,.cta-secondary{width:100%;justify-content:center}
+  .filter-bar-inner{flex-direction:column;align-items:stretch}
+  .steps{grid-template-columns:1fr}
+  .steps::before{display:none}
+  .step{flex-direction:column;gap:12px;text-align:center;align-items:center}
 }
 @media(max-width:480px){
   .wrap{padding:0 14px}
@@ -276,11 +463,6 @@ footer .logo-f span{color:var(--green)}
   .cal-date{display:flex;align-items:center;gap:8px}
   .cal-date .day{font-size:1.2rem}
   .modal{padding:24px 18px}
-  .lot-header{flex-direction:column;align-items:flex-start;gap:4px}
-  .lot-addr{font-size:.88rem}
-  .lot-details{font-size:.78rem}
-  .lot-actions{gap:8px}
-  .bm-btn{font-size:.72rem;padding:5px 10px}
   .deal-grid{grid-template-columns:1fr}
   .oc-inner{padding:14px;gap:8px}
   .oc-text{min-width:0}
@@ -288,6 +470,9 @@ footer .logo-f span{color:var(--green)}
   .scan-steps{gap:8px;font-size:.75rem}
   .scan-title{font-size:1rem}
   .tb-search{min-width:0}
+  .landing-stats{margin:0 -14px;padding:32px 14px}
+  .filter-bar-sticky{margin:0 -14px;padding-left:14px;padding-right:14px}
+  .card-image-wrapper{height:160px}
 }
 @media(max-width:360px){
   .nav-inner{padding:0 10px;gap:6px}
@@ -298,10 +483,10 @@ footer .logo-f span{color:var(--green)}
   .stats-grid{grid-template-columns:1fr 1fr;gap:4px}
   .hero h1{font-size:1.3rem}
   .hero h1 br{display:none}
+  .landing-stats-inner{grid-template-columns:repeat(2,1fr);gap:12px}
 }
 
-@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
-.hero{animation:fadeUp .5s ease both}
+.hero{animation:none}
 
 /* ── OWN CATALOGUE ── */
 .own-catalogue{margin-bottom:24px}
@@ -315,7 +500,7 @@ footer .logo-f span{color:var(--green)}
 @keyframes scanPulse{0%,100%{opacity:.6}50%{opacity:1}}
 @keyframes scanSlide{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
 .scan-animation{background:var(--navy);border-radius:var(--radius);padding:28px;color:var(--white);text-align:center;margin-bottom:20px;overflow:hidden;position:relative}
-.scan-animation::after{content:'';position:absolute;top:0;left:0;right:0;bottom:0;background:linear-gradient(90deg,transparent,rgba(15,138,95,.15),transparent);animation:scanSlide 2s ease-in-out infinite}
+.scan-animation::after{content:'';position:absolute;top:0;left:0;right:0;bottom:0;background:linear-gradient(90deg,transparent,rgba(46,125,50,.15),transparent);animation:scanSlide 2s ease-in-out infinite}
 .scan-title{font-family:'Source Serif 4',serif;font-size:1.2rem;font-weight:700;margin-bottom:16px}
 .scan-steps{display:flex;justify-content:center;gap:24px;flex-wrap:wrap;margin-bottom:16px}
 .scan-step{display:flex;align-items:center;gap:6px;font-size:.82rem;color:rgba(255,255,255,.7)}
@@ -340,7 +525,7 @@ footer .logo-f span{color:var(--green)}
 
 <nav class="nav">
   <div class="nav-inner">
-    <div class="logo">Bridge<span>match</span></div>
+    <div class="logo">Auction <span>Brain</span><span class="logo-sub">powered by Bridgematch</span></div>
     <div class="nav-right">
       <a href="/check" class="nav-link-bm" title="Check if you can finance a deal">🧩 Can I fund this?</a>
       <button class="nav-cta" id="navCta" onclick="requireSignup()">Sign in</button>
@@ -351,8 +536,17 @@ footer .logo-f span{color:var(--green)}
 <div class="wrap">
 
   <header class="hero">
-    <h1>Find your next property deal <br>at <em>auction</em></h1>
-    <p class="hero-sub">Search across every major UK auction house at once. AI-powered analysis scores every lot, flags key opportunities, and helps you find deals others miss.</p>
+    <div class="hero-badge"><span class="badge-dot"></span> Live auction data updated daily</div>
+    <h1>Your unfair advantage<br>at <em>auction</em></h1>
+    <p class="hero-sub">AI scores every lot across 30+ UK auction houses. Check bridging finance from 68 lenders in one click. Completely free.</p>
+    <div class="hero-ctas">
+      <a href="#calendarSection" class="cta-primary" onclick="event.preventDefault();document.getElementById('calendarSection').scrollIntoView({behavior:'smooth'})">Browse Auction Deals →</a>
+    </div>
+    <div class="trust-line">
+      <span><span class="t-icon">✓</span> Free to use</span>
+      <span><span class="t-icon">✓</span> No account needed</span>
+      <span><span class="t-icon">✓</span> Updated daily</span>
+    </div>
   </header>
 
   <!-- ═══════ AUTH MODAL (Magic Link) ═══════ -->
@@ -361,7 +555,7 @@ footer .logo-f span{color:var(--green)}
       <!-- Step 1: Email + consent -->
       <div id="authStep1">
         <div class="modal-icon">🔓</div>
-        <h2>Sign in to Bridgematch</h2>
+        <h2>Sign in to Auction Brain</h2>
         <p>Free to use — we'll email you a secure sign-in link.</p>
         <input id="signupEmail" placeholder="Email address" type="email">
         <div style="text-align:left;margin:10px 0 14px;font-size:.82rem;color:var(--text2)">
@@ -522,6 +716,55 @@ footer .logo-f span{color:var(--green)}
     </div>
   </div>
 
+  <!-- ═══════ HOW IT WORKS ═══════ -->
+  <section class="how-section" id="howSection">
+    <div class="section-label">HOW IT WORKS</div>
+    <h2 class="section-heading">Every UK auction lot, scored by AI</h2>
+    <div class="steps">
+      <div class="step">
+        <div class="step-icon">🔍</div>
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <h3>Browse every auction</h3>
+          <p>30+ UK auction houses in one place — Savills, Allsop, SDL, Network, Bond Wolfe and more. Filter by price, location, type, and condition.</p>
+        </div>
+      </div>
+      <div class="step highlight">
+        <div class="step-icon">🧠</div>
+        <div class="step-num green">2</div>
+        <div class="step-content">
+          <h3>AI scores every lot</h3>
+          <p>Each lot is analysed for investment potential — title splits, refurb opportunities, yield estimates, and comparable sales from the Land Registry.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-icon">⚡</div>
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <h3>Act fast, bid smart</h3>
+          <p>Spot deals others miss. Set your budget, check finance with our integrated BridgeMatch tool, and go into the auction room prepared.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════ STATS BAR ═══════ -->
+  <div class="landing-stats" id="landingStats">
+    <div class="landing-stats-inner">
+      <div class="ls-stat"><div class="ls-val" data-target="30" data-suffix="+">0</div><div class="ls-label">Auction Houses</div></div>
+      <div class="ls-stat"><div class="ls-val" data-target="68" data-suffix="">0</div><div class="ls-label">Bridging Lenders</div></div>
+      <div class="ls-stat"><div class="ls-val" data-target="2000" data-suffix="+">0</div><div class="ls-label">Lots Scored</div></div>
+      <div class="ls-stat"><div class="ls-val ls-static">£0</div><div class="ls-label">Cost to Use</div></div>
+    </div>
+  </div>
+
+  <!-- ═══════ BOTTOM CTA ═══════ -->
+  <section class="bottom-cta" id="bottomCta">
+    <h2>Ready to find your next deal?</h2>
+    <p>Auction catalogues are live now. Start browsing — it's free, instant, and you don't need an account.</p>
+    <a href="#" class="cta-primary" onclick="event.preventDefault();window.scrollTo({top:0,behavior:'smooth'})">Browse Auction Deals →</a>
+  </section>
+
   <!-- ═══════ BACK BUTTON (visible in results view) ═══════ -->
   <div class="back-bar" id="backBar">
     <button class="back-btn" onclick="backToAuctions()">← Back to auctions</button>
@@ -555,15 +798,17 @@ footer .logo-f span{color:var(--green)}
     <div id="reportView" class="report-view" style="display:none"></div>
 
     <div id="cardsView">
-      <div class="toolbar">
-        <select class="tb-select" id="fDeal" onchange="renderLots()"><option value="">All deals</option></select>
-        <select class="tb-select" id="fPropType" onchange="renderLots()"><option value="">All types</option></select>
-        <select class="tb-select" id="fConditionToolbar" onchange="renderLots()"><option value="">Any condition</option></select>
-        <select class="tb-select" id="fAfford" onchange="renderLots()" style="display:none"><option value="all">All lots</option><option value="affordable">Affordable</option><option value="in_budget">In budget only</option><option value="full_finance">Zero deposit only</option></select>
-        <select class="tb-select" id="fTS" onchange="renderLots()" style="display:none"><option value="">All lots</option><option value="ts">Title split opportunities</option></select>
-        <select class="tb-select" id="fSold" onchange="syncSoldFilter('toolbar');renderLots()"><option value="available">Available only</option><option value="all">All lots</option><option value="sold">Sold / STC only</option></select>
-        <label class="tb-toggle"><input type="checkbox" id="showROI" onchange="renderLots()"><span class="tb-toggle-label">📊 Deal Analysis</span></label>
-        <input class="tb-search" type="text" id="fSearch" placeholder="Search..." oninput="renderLots()">
+      <div class="filter-bar-sticky">
+        <div class="filter-bar-inner">
+          <select class="tb-select" id="fDeal" onchange="renderLots()"><option value="">All deals</option></select>
+          <select class="tb-select" id="fPropType" onchange="renderLots()"><option value="">All types</option></select>
+          <select class="tb-select" id="fConditionToolbar" onchange="renderLots()"><option value="">Any condition</option></select>
+          <select class="tb-select" id="fAfford" onchange="renderLots()" style="display:none"><option value="all">All lots</option><option value="affordable">Affordable</option><option value="in_budget">In budget only</option><option value="full_finance">Zero deposit only</option></select>
+          <select class="tb-select" id="fTS" onchange="renderLots()" style="display:none"><option value="">All lots</option><option value="ts">Title split opportunities</option></select>
+          <select class="tb-select" id="fSold" onchange="syncSoldFilter('toolbar');renderLots()"><option value="available">Available only</option><option value="all">All lots</option><option value="sold">Sold / STC only</option></select>
+          <input class="tb-search" type="text" id="fSearch" placeholder="Search lots..." oninput="renderLots()">
+          <span class="filter-count" id="filterBarCount"></span>
+        </div>
       </div>
       <div id="lotsOut"></div>
     </div>
@@ -582,7 +827,8 @@ footer .logo-f span{color:var(--green)}
   </div>
 
   <footer>
-    <div class="logo-f">Bridge<span>match</span></div>
+    <div class="logo-f" style="font-family:'Source Serif 4',serif">Auction <span>Brain</span></div>
+    <div style="font-size:.72rem;color:var(--text4);margin-bottom:8px">powered by <span style="font-family:'Source Serif 4',serif;font-weight:600;color:var(--text3)">Bridge<span style="color:var(--green)">match</span></span></div>
     <p>UK Property Auction Directory & Deal Analyser · Data from public auction house websites · Not financial advice</p>
     <p style="margin-top:8px;"><a href="https://www.bridgematch.co.uk/privacy" style="color:inherit;text-decoration:none;margin:0 8px;">Privacy Policy</a><a href="https://www.bridgematch.co.uk/terms" style="color:inherit;text-decoration:none;margin:0 8px;">Terms of Service</a></p>
   </footer>
@@ -1594,6 +1840,9 @@ function renderLots(){
   const aff=fp.aff;
   let lots=LOTS.slice();
 
+  // Assign stable index for card IDs
+  lots.forEach((l,i) => { l._idx = i; });
+
   // Tag every lot with affordability tier
   lots.forEach(l=>{l._affTag=getAffordabilityTag(l,aff)});
 
@@ -1633,113 +1882,79 @@ function renderLots(){
   }
   $('statsRow').innerHTML=statsHtml;
 
+  // Update filter count
+  const filterCountEl = document.getElementById('filterBarCount');
+  if (filterCountEl) filterCountEl.textContent = 'Showing ' + lots.length.toLocaleString() + ' of ' + LOTS.length.toLocaleString() + ' lots';
+
+  // Highlight active filters
+  document.querySelectorAll('.filter-bar-sticky .tb-select').forEach(sel => {
+    sel.classList.toggle('active-filter', sel.value !== '' && sel.value !== 'all' && sel.value !== 'available');
+  });
+
+  expandedLotId = null;
   const out=$('lotsOut');out.innerHTML='';
 
   // Only show Title Splits group for catalogue analyses or when user searched for them
   const showTSGroup = !SMART_RESULTS || /title.?split|multi.?unit|freehold.?block/i.test($('smartQuery')?.value||'');
+
+  function renderSection(emoji, title, sectionLots, badgeClass) {
+    if (!sectionLots.length) return;
+    const sectionId = 'sec-' + title.replace(/\s+/g, '-').toLowerCase();
+    out.innerHTML += '<div class="section-header" id="' + sectionId + '">' +
+      '<div class="section-header-left">' +
+        '<h3>' + emoji + ' ' + esc(title) + '</h3>' +
+        '<span class="sh-badge">' + sectionLots.length + '</span>' +
+      '</div>' +
+      '<button class="sh-toggle" onclick="toggleSection(\'' + sectionId + '-grid\')">▾ collapse</button>' +
+    '</div>';
+    out.innerHTML += '<div class="lots-grid" id="' + sectionId + '-grid">' + sectionLots.map(l => card(l)).join('') + '</div>';
+  }
+
   const tsL=lots.filter(l=>l.titleSplit&&l.score>=2);
-  if(tsL.length && showTSGroup){out.innerHTML+=`<div class="group-head">🏢 Title Split Opportunities <span class="badge badge-p">${tsL.length}</span></div>`;tsL.forEach(l=>out.innerHTML+=card(l))}
+  if(tsL.length && showTSGroup) renderSection('🏢', 'Title Split Opportunities', tsL, 'badge-p');
 
   const topL=lots.filter(l=>l.score>=3&&!(showTSGroup&&l.titleSplit&&l.score>=2));
-  if(topL.length){out.innerHTML+=`<div class="group-head">🔥 Top Picks <span class="badge badge-g">${topL.length}</span></div>`;topL.forEach(l=>out.innerHTML+=card(l))}
+  if(topL.length) renderSection('🔥', 'Top Picks', topL, 'badge-g');
 
   const midL=lots.filter(l=>l.score>=1.5&&l.score<3&&!(showTSGroup&&l.titleSplit&&l.score>=2));
-  if(midL.length){out.innerHTML+=`<div class="group-head">👀 Worth a Look <span class="badge badge-y">${midL.length}</span></div>`;midL.forEach(l=>out.innerHTML+=card(l))}
+  if(midL.length) renderSection('👀', 'Worth a Look', midL, 'badge-y');
 
   const rest=lots.filter(l=>l.score<1.5&&!(showTSGroup&&l.titleSplit&&l.score>=2));
-  if(rest.length){out.innerHTML+=`<div class="group-head">Other <span class="badge" style="background:var(--cream);color:var(--text4)">${rest.length}</span></div>`;rest.forEach(l=>out.innerHTML+=card(l))}
+  if(rest.length) renderSection('📋', 'Other', rest, '');
 }
 
 function card(l){
-  const dp=0.25; // deposit assumption for deal analysis
-  const sc=l.score>=3?'high':l.score>=1.5?'mid':'low';
-  let details=[];
-  if(l.priceText)details.push(`<span class="price">${esc(l.priceText)}</span>`);
-  else if(l.price)details.push(`<span class="price">Guide £${l.price.toLocaleString()}</span>`);
-  else details.push(`<span class="price">POA</span>`);
-  if(l.propType)details.push(esc(l.propType));
-  if(l.beds!=null)details.push(esc(l.beds)+' bed');
-  if(l.tenure)details.push(esc(l.tenure));
-  if(l.sqft)details.push(l.sqft.toLocaleString()+' sqft');
-  if(l.titleSplit&&l.price&&l.units)details.push(`£${Math.round(l.price/l.units).toLocaleString()}/unit`);
+  // Price display
+  let priceText = 'POA';
+  if (l.priceText) priceText = l.priceText;
+  else if (l.price) priceText = 'Guide £' + l.price.toLocaleString();
 
-  // Show source house for smart search results
-  const houseTag = l._house ? `<span class="tag" style="background:var(--cream);color:var(--text3)">${esc(l._house)}</span>` : '';
+  // Property details pills
+  let detailPills = [];
+  if (l.propType) detailPills.push(l.propType);
+  if (l.beds != null) detailPills.push(l.beds + ' bed');
+  if (l.tenure) detailPills.push(l.tenure);
 
-  let tags=houseTag;
-  if(l.titleSplit)tags+=`<span class="tag tag-t">TITLE SPLIT</span>`;
-  if(l.units)tags+=`<span class="tag tag-t">${esc(l.units)} units</span>`;
-  (l.opps||[]).filter(o=>!o.startsWith('Title split')).forEach(o=>tags+=`<span class="tag tag-o">${esc(o)}</span>`);
-  (l.risks||[]).forEach(r=>tags+=`<span class="tag tag-r">${esc(r)}</span>`);
-  const bul=(l.bullets||[]).slice(0,4).map(b=>`<li>${esc(b)}</li>`).join('');
+  // Signal chips (max 3 + overflow)
+  const chipsHtml = getSignalChips(l);
 
-  let enrichHtml='';
-  const hasLR=l.streetAvg||l.streetSalesCount>0;
-  const hasYield=l.estGrossYield;
-  if(hasLR||hasYield){
-    enrichHtml='<div class="enrich-panel">';
-    if(l.streetAvg){
-      const diffClass=l.belowMarket>10?'enrich-good':l.belowMarket<-10?'enrich-warn':'enrich-neutral';
-      const diffText=l.belowMarket>0?`${l.belowMarket}% below`:`${Math.abs(l.belowMarket||0)}% above`;
-      enrichHtml+=`<div class="enrich-item"><div class="enrich-label">🏘️ Street avg (${l.streetSalesCount} sales, 3yr)</div><div class="enrich-value">£${l.streetAvg.toLocaleString()} <span class="${diffClass}">${l.price?diffText:'—'}</span></div></div>`;
-    }
-    if(hasYield){
-      const yClass=l.estGrossYield>=7?'enrich-good':l.estGrossYield>=5?'enrich-neutral':'enrich-warn';
-      enrichHtml+=`<div class="enrich-item"><div class="enrich-label">📊 Est. gross yield</div><div class="enrich-value"><span class="${yClass}">${l.estGrossYield}%</span> (£${l.estMonthlyRent}/mo est.)</div></div>`;
-    }
-    if(l.streetSales&&l.streetSales.length>0){
-      enrichHtml+=`<details class="street-sales"><summary>View ${l.streetSales.length} recent street sales</summary><div class="ss-list">`;
-      l.streetSales.forEach(s=>{enrichHtml+=`<div class="ss-row"><span class="ss-addr">${esc(s.address)}</span><span class="ss-price">£${s.price.toLocaleString()}</span><span class="ss-date">${esc(s.date.slice(0,10))}</span><span class="ss-type">${esc(s.type||'')}</span></div>`;});
-      enrichHtml+=`</div></details>`;
-    }
-    enrichHtml+='</div>';
-  }
+  // Category label
+  const catLabel = 'Lot ' + esc(l.lot || '—') + ' · ' + esc(l.dealType || 'Standard');
 
-  // Deal Analysis panel (shown when toggle is on)
-  let dealHtml='';
-  const showROI=$('showROI')&&$('showROI').checked;
-  if(showROI&&l.price&&l.streetAvg){
-    const da=calcDealAnalysis(l.price,l.streetAvg,l.estGrossYield,l.estMonthlyRent);
-    dealHtml=`<div class="deal-panel">
-      <div class="deal-header">📊 Deal Analysis (estimated)</div>
-      <div class="deal-grid">
-        <div class="deal-item"><div class="dl">Guide Price</div><div class="dv neu">£${l.price.toLocaleString()}</div></div>
-        <div class="deal-item"><div class="dl">Comparable Value</div><div class="dv neu">£${l.streetAvg.toLocaleString()}</div></div>
-        <div class="deal-item"><div class="dl">Potential Uplift</div><div class="dv ${da.uplift>0?'pos':'neg'}">£${Math.abs(da.uplift).toLocaleString()} (${da.upliftPct>0?'+':''}${da.upliftPct}%)</div></div>
-        <div class="deal-item"><div class="dl">SDLT (investor)</div><div class="dv neu">£${da.sdlt.toLocaleString()}</div></div>
-        <div class="deal-item"><div class="dl">Est. Bridging (12mo)</div><div class="dv neu">£${da.bridgingCost.toLocaleString()}</div></div>
-        <div class="deal-item"><div class="dl">Legal/Survey/Fees</div><div class="dv neu">£${da.otherCosts.toLocaleString()}</div></div>
-        <div class="deal-item"><div class="dl">Total Cost In</div><div class="dv neu">£${da.totalCostIn.toLocaleString()}</div></div>
-        <div class="deal-item"><div class="dl">Est. Net Profit (flip)</div><div class="dv ${da.netProfit>0?'pos':'neg'}">£${Math.abs(da.netProfit).toLocaleString()}</div></div>
-        <div class="deal-item deal-full"><div class="dl">ROI on Cash Invested (${dp*100}% deposit)</div><div class="dv ${da.roi>0?'pos':da.roi<0?'neg':'neu'}">${da.roi>0?'+':''}${da.roi}%</div></div>
-        ${da.grossYield?`<div class="deal-item deal-full"><div class="dl">Gross Yield (hold)</div><div class="dv ${da.grossYield>=7?'pos':da.grossYield>=5?'neu':'neg'}">${da.grossYield}% (£${da.monthlyRent.toLocaleString()}/mo)</div></div>`:''}
-      </div>
-      <div class="deal-note">⚠️ Estimates only — based on comparable sales avg, standard bridging assumptions (0.75%/mo, 75% LTV), and investor SDLT rates. Not financial advice.</div>
-    </div>`;
-  } else if(showROI&&l.price&&!l.streetAvg){
-    dealHtml=`<div class="deal-panel"><div class="deal-header">📊 Deal Analysis</div><div class="deal-note">No comparable data available for this lot — ROI cannot be estimated.</div></div>`;
-  }
+  // Card footer links
+  const viewLink = l.url ? '<a href="' + safeHref(l.url) + '" target="_blank" rel="noopener noreferrer" class="card-view-link" onclick="event.stopPropagation()">View listing ↗</a>' : '<span></span>';
+  const bmBtn = l.price ? '<button class="card-bm-btn" onclick="bridgeMatchLot(' + l._idx + ',event)">🧩 BridgeMatch It</button>' : '';
 
-  const link=l.url?`<div class="lot-link"><a href="${safeHref(l.url)}" target="_blank" rel="noopener noreferrer">View listing ↗</a></div>`:'';
-  const fpCash=+($('fpCash')?.value)||0;
-  const fpTerm=$('fpTerm')?.value||'12';
-  const isRefurbCandidate=l.condition==='needs work'||l.condition==='poor'||l.dealType==='Refurb'||l.dealType==='Refurb+Extend'||l.dealType==='Development';
-  let bmUrl=`/check?price=${l.price}${l.address?'&address='+encodeURIComponent(l.address):''}${l.propType?'&type='+encodeURIComponent(l.propType):''}`;
-  if(fpCash)bmUrl+=`&cash=${fpCash}&term=${fpTerm}${isRefurbCandidate?'&refurb=1':''}`;
-  const bmLink=l.price?`<a href="${bmUrl}" class="bm-btn" target="_blank" rel="noopener noreferrer" title="Check bridging finance feasibility">🧩 BridgeMatch It</a>`:'';
-
-  const affBadge=fpCash?affBadgeHtml(l._affTag||'unknown'):'';
-
-  const imgHtml=l.imageUrl?`<img src="${esc(l.imageUrl)}" alt="" loading="lazy" style="width:100%;height:160px;object-fit:cover;border-radius:8px 8px 0 0" onerror="this.style.display='none'">`:'';
-
-  return`<div class="lot ${l.titleSplit?'ts':''}">
-    ${imgHtml}
-    <div class="lot-header"><div class="lot-title">Lot ${esc(l.lot)} · ${esc(l.dealType||'Standard')} ${affBadge}</div><div class="lot-score ${sc}">${l.score}</div></div>
-    <div class="lot-addr">${esc(l.address||'Address not available')}</div>
-    <div class="lot-details">${details.join(' <span class="sep">·</span> ')}</div>
-    <div class="tags">${tags}</div>
-    <ul class="lot-bullets">${bul}</ul>${enrichHtml}${dealHtml}
-    <div class="lot-actions">${link}${bmLink}</div></div>`;
+  return '<div class="lot-card" id="lot-' + l._idx + '" onclick="expandCard(LOTS[' + l._idx + '])">' +
+    getCardImageHtml(l) +
+    '<div class="card-body">' +
+      '<div class="card-row1"><span class="card-lot-info">' + catLabel + '</span><span class="card-price">' + esc(priceText) + '</span></div>' +
+      '<div class="card-address">' + esc(l.address || 'Address not available') + '</div>' +
+      '<div class="card-details">' + detailPills.map(d => '<span class="detail-pill">' + esc(d) + '</span>').join('') + '</div>' +
+      (chipsHtml ? '<div class="card-chips">' + chipsHtml + '</div>' : '') +
+    '</div>' +
+    '<div class="card-footer">' + viewLink + bmBtn + '</div>' +
+  '</div>';
 }
 
 // SDLT calculator (investor rates 2025/26 — includes 5% surcharge)
@@ -1777,6 +1992,238 @@ function dlCSV(){
 }
 function dlJSON(){dl(JSON.stringify(LOTS,null,2),'auction_analysis.json','application/json')}
 function dl(c,n,t){const b=new Blob([c],{type:t}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=n;a.click()}
+
+// ═══════════════════════════════
+// STATS COUNT-UP ANIMATION
+// ═══════════════════════════════
+(function(){
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (!entry.isIntersecting) return;
+      observer.disconnect();
+      document.querySelectorAll('.ls-val[data-target]').forEach(el => {
+        const target = parseInt(el.dataset.target);
+        const suffix = el.dataset.suffix || '';
+        const start = performance.now();
+        const duration = 800;
+        function tick(now) {
+          const t = Math.min((now - start) / duration, 1);
+          const ease = 1 - Math.pow(1 - t, 3); // ease-out cubic
+          const current = Math.round(target * ease);
+          el.textContent = current.toLocaleString() + (t >= 1 ? suffix : '');
+          if (t < 1) requestAnimationFrame(tick);
+        }
+        requestAnimationFrame(tick);
+      });
+    });
+  }, { threshold: 0.3 });
+  const stats = document.getElementById('landingStats');
+  if (stats) observer.observe(stats);
+})();
+
+// ═══════════════════════════════
+// EXPANDED CARD STATE + FINANCE WIDGET
+// ═══════════════════════════════
+let expandedLotId = null;
+
+function getPropertyTypeIcon(type) {
+  const icons = {
+    house: '<svg viewBox="0 0 24 24" fill="#d5dde5" width="32" height="32"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>',
+    flat: '<svg viewBox="0 0 24 24" fill="#d5dde5" width="32" height="32"><path d="M17 11V3H7v4H3v14h8v-4h2v4h8V11h-4zM7 19H5v-2h2v2zm0-4H5v-2h2v2zm0-4H5V9h2v2zm4 4H9v-2h2v2zm0-4H9V9h2v2zm0-4H9V5h2v2zm4 8h-2v-2h2v2zm0-4h-2V9h2v2zm0-4h-2V5h2v2zm4 12h-2v-2h2v2zm0-4h-2v-2h2v2z"/></svg>',
+    land: '<svg viewBox="0 0 24 24" fill="#d5dde5" width="32" height="32"><path d="M14 6l-3.75 5 2.85 3.8-1.6 1.2C9.81 13.75 7 10 7 10l-6 8h22L14 6z"/></svg>',
+    commercial: '<svg viewBox="0 0 24 24" fill="#d5dde5" width="32" height="32"><path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z"/></svg>'
+  };
+  return icons[type] || icons.house;
+}
+
+function getPlaceholderHtml(type) {
+  return '<div class="card-image-placeholder">' + getPropertyTypeIcon(type || 'house') + '</div>';
+}
+
+function getCardImageBadges(lot) {
+  let html = '';
+  if (lot._house) html += '<div class="card-badge badge-house">' + esc(lot._house) + '</div>';
+  const sc = lot.score >= 3 ? 'high' : lot.score >= 1 ? 'mid' : 'low';
+  const sign = lot.score > 0 ? '+' : '';
+  html += '<div class="card-badge badge-score ' + sc + '">' + sign + lot.score + '</div>';
+  if (lot.vacant) html += '<div class="badge-vacant">Vacant possession</div>';
+  // Urgency badge — check if auction is within 14 days
+  if (lot._auctionDate) {
+    const days = Math.ceil((new Date(lot._auctionDate) - new Date()) / 86400000);
+    if (days >= 0 && days <= 14) {
+      const text = days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : days + ' days left';
+      html += '<div class="badge-urgency">' + text + '</div>';
+    }
+  }
+  return html;
+}
+
+function getCardImageHtml(lot) {
+  if (!lot.imageUrl) {
+    return getPlaceholderHtml(lot.propType);
+  }
+  return '<div class="card-image-wrapper">' +
+    '<div class="card-image-shimmer"></div>' +
+    '<img class="card-image" src="' + esc(lot.imageUrl) + '" alt="' + esc(lot.address) + '" loading="lazy" ' +
+    'onload="this.previousElementSibling.style.display=\'none\'" ' +
+    'onerror="this.parentElement.innerHTML=getPlaceholderHtml(\'' + esc(lot.propType || 'house') + '\')">' +
+    getCardImageBadges(lot) +
+  '</div>';
+}
+
+function getSignalChips(lot) {
+  let chips = [];
+  (lot.opps || []).forEach(o => chips.push({text: '+ ' + o, type: 'pos'}));
+  (lot.risks || []).forEach(r => chips.push({text: '\u26a0 ' + r, type: 'neg'}));
+  if (lot.titleSplit) chips.unshift({text: '+ Title Split', type: 'pos'});
+  const max = 3;
+  let html = '';
+  chips.slice(0, max).forEach(c => {
+    html += '<span class="chip chip-' + c.type + '">' + esc(c.text) + '</span>';
+  });
+  if (chips.length > max) {
+    html += '<span class="chip chip-more">+' + (chips.length - max) + ' more</span>';
+  }
+  return html;
+}
+
+function expandCard(lot) {
+  // Close any existing expanded panel
+  const existing = document.querySelector('.expanded-panel');
+  if (existing) existing.remove();
+
+  const cardEl = document.getElementById('lot-' + lot._idx);
+  if (!cardEl) return;
+
+  if (expandedLotId === lot._idx) {
+    expandedLotId = null;
+    cardEl.classList.remove('expanded');
+    return;
+  }
+  expandedLotId = lot._idx;
+  cardEl.classList.add('expanded');
+
+  // Build expanded panel
+  const imgHtml = lot.imageUrl
+    ? '<img class="exp-large-img" src="' + esc(lot.imageUrl) + '" alt="' + esc(lot.address) + '">'
+    : '<div class="exp-large-img-placeholder">' + getPropertyTypeIcon(lot.propType) + '</div>';
+
+  const analysisText = (lot.bullets || []).join('. ');
+  const signalsHtml = (lot.opps || []).map(o =>
+    '<div class="exp-signal-row"><span class="exp-signal-chip" style="background:#e8f5ee;color:#2e7d32">+</span> ' + esc(o) + '</div>'
+  ).concat((lot.risks || []).map(r =>
+    '<div class="exp-signal-row"><span class="exp-signal-chip" style="background:#fdf0ee;color:#c0392b">\u26a0</span> ' + esc(r) + '</div>'
+  )).join('');
+
+  const bulletsHtml = (lot.bullets || []).slice(0, 6).map(b => '<li>' + esc(b) + '</li>').join('');
+
+  const panel = document.createElement('div');
+  panel.className = 'expanded-panel';
+  panel.id = 'expanded-' + lot._idx;
+  panel.innerHTML =
+    '<div class="exp-left">' +
+      imgHtml +
+      '<div class="exp-analysis">' +
+        '<div class="exp-analysis-header">AI Analysis</div>' +
+        '<div class="exp-analysis-text">' + esc(analysisText || 'No detailed analysis available.') + '</div>' +
+      '</div>' +
+      (signalsHtml ? '<div class="exp-signals">' + signalsHtml + '</div>' : '') +
+    '</div>' +
+    '<div class="exp-right">' +
+      '<div class="finance-widget" id="finance-widget-' + lot._idx + '">' +
+        '<div class="fw-header"><div class="fw-title">\ud83e\udde9 Finance Check</div><a class="fw-powered" href="https://www.bridgematch.co.uk" target="_blank">Powered by BridgeMatch</a></div>' +
+        '<div class="fw-prefilled">' +
+          '<div class="fw-field"><div class="fw-field-label">PURCHASE PRICE</div><div class="fw-field-value">' + (lot.price ? '\u00a3' + lot.price.toLocaleString() : 'TBA') + '</div></div>' +
+          '<div class="fw-field"><div class="fw-field-label">PROPERTY TYPE</div><div class="fw-field-value">' + esc(lot.propType || 'Residential') + '</div></div>' +
+        '</div>' +
+        '<div class="fw-slider-row"><span class="fw-slider-label">Loan to Value</span><span class="fw-slider-value" id="ltv-val-' + lot._idx + '">70%</span></div>' +
+        '<input type="range" class="fw-range" id="ltv-slider-' + lot._idx + '" min="50" max="80" step="5" value="70" oninput="updateLTV(' + lot._idx + ',this.value)">' +
+        '<div id="fw-results-' + lot._idx + '" class="fw-empty">Adjust LTV and tap Check</div>' +
+        (lot.price ? '<button class="fw-cta" onclick="triggerFinanceCheck(' + lot._idx + ')">Check finance →</button>' : '') +
+      '</div>' +
+      (bulletsHtml ? '<ul class="exp-bullets">' + bulletsHtml + '</ul>' : '') +
+    '</div>';
+
+  // Insert after the card
+  cardEl.after(panel);
+}
+
+function updateLTV(idx, val) {
+  const el = document.getElementById('ltv-val-' + idx);
+  if (el) el.textContent = val + '%';
+}
+
+let _financeDebounce = null;
+function triggerFinanceCheck(idx) {
+  clearTimeout(_financeDebounce);
+  const lot = LOTS.find(l => l._idx === idx);
+  if (!lot || !lot.price) return;
+
+  const ltv = parseInt(document.getElementById('ltv-slider-' + idx)?.value || 70);
+  const resultsEl = document.getElementById('fw-results-' + idx);
+  if (!resultsEl) return;
+
+  resultsEl.innerHTML = '<div class="fw-loading"><div class="fw-count fw-pulse">...</div><div class="fw-count-label">Checking lenders</div></div>';
+
+  const loanAmount = Math.round(lot.price * ltv / 100);
+  const propType = lot.propType || 'house';
+  const apiType = propType.includes('flat') ? 'flat' : propType.includes('commercial') ? 'commercial' : propType.includes('land') ? 'land' : 'house';
+
+  _financeDebounce = setTimeout(async () => {
+    try {
+      const r = await fetch('https://www.bridgematch.co.uk/api/filter?loan_amount=' + loanAmount + '&property_value=' + lot.price + '&property_type=' + apiType);
+      if (!r.ok) throw new Error('API error');
+      const data = await r.json();
+      const count = data.count || data.lenders?.length || 0;
+      const lenders = (data.lenders || []).slice(0, 3);
+
+      let html = '<div class="fw-results">' +
+        '<div class="fw-count">' + count + '</div>' +
+        '<div class="fw-count-label">lenders match at ' + ltv + '% LTV</div>';
+      if (lenders.length) {
+        html += '<div class="fw-lenders">' + lenders.map(l => '<span class="fw-lender-chip">' + esc(l.name || l.lender || l) + '</span>').join('') + '</div>';
+      }
+      html += '</div>';
+      html += '<a class="fw-cta" href="https://www.bridgematch.co.uk/brokers?loan=' + loanAmount + '&value=' + lot.price + '&type=' + apiType + '" target="_blank">See all ' + count + ' matches on BridgeMatch →</a>';
+      resultsEl.innerHTML = html;
+    } catch (e) {
+      resultsEl.innerHTML = '<div class="fw-error">Unable to check finance — try again later</div>';
+    }
+  }, 400);
+}
+
+function bridgeMatchLot(idx, event) {
+  if (event) { event.preventDefault(); event.stopPropagation(); }
+  const lot = LOTS.find(l => l._idx === idx);
+  if (!lot) return;
+
+  const isExpanded = expandedLotId === idx;
+  if (!isExpanded) {
+    expandCard(lot);
+    setTimeout(() => {
+      const widget = document.getElementById('finance-widget-' + idx);
+      if (widget) widget.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      triggerFinanceCheck(idx);
+    }, 300);
+  } else {
+    const widget = document.getElementById('finance-widget-' + idx);
+    if (widget) widget.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    triggerFinanceCheck(idx);
+  }
+}
+
+// ═══════════════════════════════
+// SECTION COLLAPSE TOGGLE
+// ═══════════════════════════════
+function toggleSection(sectionId) {
+  const section = document.getElementById(sectionId);
+  if (!section) return;
+  const cards = section.querySelectorAll('.lot-card');
+  const btn = section.querySelector('.sh-toggle');
+  const isHidden = cards[0]?.style.display === 'none';
+  cards.forEach(c => c.style.display = isHidden ? '' : 'none');
+  if (btn) btn.textContent = isHidden ? '\u25be collapse' : '\u25b8 expand';
+}
 
 // Init
 loadCalendar();
