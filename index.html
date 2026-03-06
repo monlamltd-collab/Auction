@@ -97,7 +97,7 @@ a{color:var(--green);text-decoration:none}a:hover{text-decoration:underline}
 .back-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--white);font-size:.85rem;font-weight:600;color:var(--text2);cursor:pointer;font-family:inherit;transition:all .15s}
 .back-btn:hover{border-color:var(--green);color:var(--green);background:var(--green-light)}
 .view-results .hero{display:none}
-.view-results #calendarSection{display:none}
+/* calendar section removed */
 .view-results .back-bar{display:block}
 .view-results .search-panel{display:none}
 
@@ -429,6 +429,20 @@ footer .logo-f span{color:var(--green)}
 .filter-bar-sticky .tb-search:focus{border-color:var(--green)}
 .filter-bar-sticky .filter-count{font-family:'DM Sans',sans-serif;font-size:12px;color:#6b7c8d}
 
+/* House dropdown popover */
+.house-dropdown{position:relative;display:inline-block}
+.house-dropdown-btn{padding:8px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--white);font-size:.82rem;color:var(--text);font-family:inherit;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:4px}
+.house-dropdown-btn.active-filter{border-color:var(--green);color:var(--green)}
+.house-dropdown-btn::after{content:'▾';font-size:.7rem;color:var(--text3)}
+.house-popover{display:none;position:absolute;top:100%;left:0;margin-top:4px;background:var(--white);border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:0 4px 16px rgba(0,0,0,.1);z-index:100;min-width:240px;max-height:320px;overflow-y:auto}
+.house-popover.open{display:block}
+.house-popover-search{width:100%;padding:8px 10px;border:none;border-bottom:1px solid var(--border);font-size:.82rem;font-family:inherit;outline:none;background:var(--surface2)}
+.house-popover label{display:flex;align-items:center;gap:8px;padding:6px 10px;font-size:.82rem;cursor:pointer;transition:background .1s}
+.house-popover label:hover{background:var(--surface2)}
+.house-popover label.all-label{font-weight:700;border-bottom:1px solid var(--border);padding:8px 10px}
+.house-popover input[type="checkbox"]{accent-color:var(--green);width:14px;height:14px}
+.house-popover .house-count{color:var(--text4);font-size:.75rem;margin-left:auto}
+
 /* ── RESPONSIVE ── */
 @media(max-width:1024px){
   .lots-grid{grid-template-columns:repeat(2,1fr)}
@@ -743,8 +757,8 @@ footer .logo-f span{color:var(--green)}
     <div class="oc-inner">
       <span class="oc-icon">🔗</span>
       <div class="oc-text">
-        <strong>Analyse any auction catalogue</strong>
-        <span>Paste any UK auction house URL or PDF catalogue — we'll extract and AI-score every lot. Works with 30+ houses and auto-detects new ones.</span>
+        <strong>Add an auction house</strong>
+        <span>Got a catalogue we don't cover yet? Paste the URL and we'll AI-score every lot.</span>
       </div>
       <div class="oc-input-row">
         <input id="ownUrl" class="search-input" placeholder="Paste any auction catalogue URL..." style="flex:1;margin:0">
@@ -837,12 +851,26 @@ footer .logo-f span{color:var(--green)}
     <div id="cardsView">
       <div class="filter-bar-sticky">
         <div class="filter-bar-inner">
+          <div class="house-dropdown" id="houseDropdown">
+            <button class="house-dropdown-btn" id="houseDropdownBtn" onclick="toggleHousePopover(event)">All houses</button>
+            <div class="house-popover" id="housePopover">
+              <input class="house-popover-search" type="text" placeholder="Search houses..." oninput="filterHouseList(this.value)">
+              <div id="houseCheckList"></div>
+            </div>
+          </div>
+          <select class="tb-select" id="fSort" onchange="renderLots()">
+            <option value="score">Score (high → low)</option>
+            <option value="price_asc">Price (low → high)</option>
+            <option value="price_desc">Price (high → low)</option>
+            <option value="yield">Yield (high → low)</option>
+          </select>
           <select class="tb-select" id="fDeal" onchange="renderLots()"><option value="">All deals</option></select>
           <select class="tb-select" id="fPropType" onchange="renderLots()"><option value="">All types</option></select>
           <select class="tb-select" id="fConditionToolbar" onchange="renderLots()"><option value="">Any condition</option></select>
           <select class="tb-select" id="fAfford" onchange="renderLots()" style="display:none"><option value="all">All lots</option><option value="affordable">Affordable</option><option value="in_budget">In budget only</option><option value="full_finance">Zero deposit only</option></select>
           <select class="tb-select" id="fTS" onchange="renderLots()" style="display:none"><option value="">All lots</option><option value="ts">Title split opportunities</option></select>
           <select class="tb-select" id="fSold" onchange="syncSoldFilter('toolbar');renderLots()"><option value="available">Available only</option><option value="all">All lots</option><option value="sold">Sold / STC only</option></select>
+          <label class="tb-toggle"><input type="checkbox" id="fExcludePOA" onchange="renderLots()"><span class="tb-toggle-label">Exclude POA</span></label>
           <input class="tb-search" type="text" id="fSearch" placeholder="Search lots..." oninput="renderLots()">
           <span class="filter-count" id="filterBarCount"></span>
         </div>
@@ -851,17 +879,7 @@ footer .logo-f span{color:var(--green)}
     </div>
   </div>
 
-  <!-- ═══════ UPCOMING AUCTIONS (hidden when results showing) ═══════ -->
-  <div id="calendarSection">
-    <div class="sh" style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:12px">
-      <div><h2>Upcoming auctions</h2><p>Click Analyse to AI-score every lot, or View to browse the catalogue yourself.</p></div>
-      <button class="btn-main" id="analyseAllBtn" onclick="analyseAll()" style="white-space:nowrap;margin-bottom:4px">🚀 Analyse all auctions</button>
-    </div>
-    <div class="house-filters" id="houseFilters"><button class="hf active" data-house="all">All</button></div>
-    <div class="cal-grid" id="calGrid">
-      <div style="text-align:center;padding:40px;color:var(--text4)">Loading auctions...</div>
-    </div>
-  </div>
+  <!-- Calendar section removed — lots are now shown directly -->
 
   <footer>
     <div class="logo-f" style="font-family:'Source Serif 4',serif">Auction <span>Brain</span></div>
@@ -903,7 +921,9 @@ function resetSearchState(){
   LOTS=[];
   SMART_RESULTS=null;
   // 5. Reset toolbar filter values so old filters don't silently exclude new results
-  const filterResets={fDeal:'',fType:'',fPropType:'',fConditionToolbar:'',fTS:'',fAfford:'all',fSold:'all',fSoldTop:'all',fSearch:''};
+  const filterResets={fDeal:'',fType:'',fPropType:'',fConditionToolbar:'',fTS:'',fAfford:'all',fSold:'all',fSoldTop:'all',fSearch:'',fSort:'score'};
+  if($('fExcludePOA')) $('fExcludePOA').checked=false;
+  _selectedHouses.clear();
   for(const[id,val] of Object.entries(filterResets)){const el=$(id);if(el)el.value=val}
   // 6. Clear UI
   $('resultsPanel').style.display='none';
@@ -926,6 +946,18 @@ async function loadAllLots(){
     ALL_LOTS=d.lots||[];
     ALL_SOURCES=d.sources||[];
     applyFilters();
+
+    // Auto-show all lots on page load
+    if(ALL_LOTS.length && !document.body.classList.contains('view-results')){
+      LOTS=ALL_LOTS;
+      $('resultsTitle').textContent=ALL_LOTS.length.toLocaleString()+' auction lots';
+      $('viewToggle').style.display='none';
+      $('reportView').style.display='none';
+      $('cardsView').style.display='block';
+      buildLotFilters();
+      renderLots();
+      $('resultsPanel').style.display='block';
+    }
   }catch(e){
     console.log('Failed to load lots:',e);
   }
@@ -1121,6 +1153,17 @@ function backToAuctions(){
   $('progressPanel').style.display='none';
   $('mainBtn').disabled=false;
   $('mainBtn').textContent=$('smartQuery').value.trim()?'AI Search':'Browse';
+  // Restore all-lots view
+  if(ALL_LOTS.length){
+    LOTS=ALL_LOTS;
+    $('resultsTitle').textContent=ALL_LOTS.length.toLocaleString()+' auction lots';
+    $('viewToggle').style.display='none';
+    $('reportView').style.display='none';
+    $('cardsView').style.display='block';
+    buildLotFilters();
+    renderLots();
+    $('resultsPanel').style.display='block';
+  }
   window.scrollTo({top:0,behavior:'smooth'});
 }
 
@@ -1320,80 +1363,18 @@ async function loadCalendar(){
       const cs=await cacheR.json();
       (cs.cached||[]).forEach(c=>{ const k=c.url?.trim().replace(/\/+$/,'').toLowerCase(); if(k) cacheStatus[k]=c; });
     }
-    buildHouseFilters();
-    renderCalendar();
   }catch(e){
-    $('calGrid').innerHTML='<div style="padding:20px;color:var(--red)">Failed to load. Refresh to retry.</div>';
+    console.warn('Failed to load calendar:', e);
   }
 }
 
-function buildHouseFilters(){
-  const houses=[...new Set(calendarData.map(a=>a.house))];
-  $('houseFilters').innerHTML=`<button class="hf active" data-house="all" onclick="filterHouse('all')">All</button>`+
-    houses.map(h=>`<button class="hf" data-house="${esc(h)}" onclick="filterHouse(this.dataset.house)">${esc(h)}</button>`).join('');
-}
-
-let activeHouse='all';
-function filterHouse(h){
-  activeHouse=h;
-  document.querySelectorAll('.hf').forEach(f=>f.classList.toggle('active',f.dataset.house===h));
-  renderCalendar();
-}
-
-function renderCalendar(){
-  let auctions=calendarData;
-  if(activeHouse!=='all')auctions=auctions.filter(a=>a.house===activeHouse);
-  if(!auctions.length){$('calGrid').innerHTML='<div style="padding:20px;color:var(--text4)">No auctions found.</div>';return}
-  $('calGrid').innerHTML=auctions.map(a=>{
-    const d=new Date(a.date);
-    const day=d.getDate();
-    const mon=d.toLocaleDateString('en-GB',{month:'short'}).toUpperCase();
-    const normUrl=a.url.trim().replace(/\/+$/,'').toLowerCase();
-    const cached=cacheStatus[normUrl];
-    const lotsText=cached?`${cached.total_lots} lots scored`:a.lots?`${a.lots} lots`:'Lots TBC';
-    const safeUrl=safeHref(a.url);
-    let actionBtn='';
-    if(cached && cached.total_lots>0){
-      actionBtn=`<button class="cal-btn cached" data-url="${esc(a.url)}" onclick="analyseFromCal(this.dataset.url)">✓ View ${cached.total_lots} results</button>`;
-    } else if(a.catalogueReady){
-      actionBtn=`<button class="cal-btn primary" data-url="${esc(a.url)}" onclick="analyseFromCal(this.dataset.url)">Analyse</button>`;
-    }
-    const badgeParts = [];
-    if(cached) {
-      badgeParts.push(`${cached.title_splits} title splits`);
-      badgeParts.push(`${cached.top_picks} top picks`);
-      if(cached.under_100k > 0) badgeParts.push(`${cached.under_100k} under £100k`);
-      if(cached.avg_yield) badgeParts.push(`avg ${cached.avg_yield}% yield`);
-      if(cached.dev_potential > 0) badgeParts.push(`${cached.dev_potential} dev potential`);
-      if(cached.vacant_count > 0) badgeParts.push(`${cached.vacant_count} vacant`);
-    }
-    const lotsBadge=cached?`<span class="cal-lots-badge">${badgeParts.join(' · ')}</span>`:'';
-    return`<div class="cal-card">
-      <div class="cal-date"><div class="day">${day}</div><div class="mon">${mon}</div></div>
-      <div class="cal-info">
-        <h3>${esc(a.logo)} ${esc(a.house)}</h3>
-        <div class="meta"><span>${esc(a.type)}</span><span>${esc(a.location)}</span><span>${lotsText}</span></div>
-        ${lotsBadge}
-      </div>
-      <div class="cal-actions">
-        ${actionBtn}
-        <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="cal-btn ghost">Catalogue ↗</a>
-      </div>
-    </div>`;
-  }).join('');
-}
-
+// Calendar rendering removed — lots are shown directly via ALL_LOTS
 function analyseFromCal(url){
   $('smartQuery').value = url;
   runAnalysis(url);
 }
 
 async function analyseAll(){
-  if(!requireSignup()) return;
-  const btn=$('analyseAllBtn');
-  btn.disabled=true;
-  btn.textContent='⏳ Analysing all...';
-
   try{
     const r=await fetch('/api/analyse-all',{
       method:'POST',
@@ -1402,22 +1383,9 @@ async function analyseAll(){
     });
     const d=await r.json();
     if(!r.ok) throw new Error(d.error||'Failed');
-
-    // Show progress updates
-    btn.textContent=`✓ ${d.analysed} analysed, ${d.skipped} cached, ${d.failed} failed`;
-    setTimeout(()=>{
-      btn.disabled=false;
-      btn.textContent='🚀 Analyse all auctions';
-    }, 5000);
-
-    // Refresh calendar to show updated status
     loadCalendar();
   }catch(e){
-    btn.textContent='✗ Analysis failed — please try again';
-    setTimeout(()=>{
-      btn.disabled=false;
-      btn.textContent='🚀 Analyse all auctions';
-    }, 3000);
+    console.warn('analyseAll failed:', e);
   }
 }
 
@@ -1963,7 +1931,80 @@ function buildLotFilters(){
 
   const hasCash=+($('fpCash')?.value)>0;
   $('fAfford').style.display=hasCash?'':'none';
+
+  // Build house checklist
+  buildHouseChecklist();
 }
+
+// ═══════════════════════════════
+// HOUSE MULTI-SELECT DROPDOWN
+// ═══════════════════════════════
+let _selectedHouses=new Set();
+
+function buildHouseChecklist(){
+  const counts={};
+  LOTS.forEach(l=>{ const h=l._house||'Unknown'; counts[h]=(counts[h]||0)+1; });
+  const houses=Object.keys(counts).sort();
+  const list=$('houseCheckList');
+  list.innerHTML='<label class="all-label"><input type="checkbox" checked onchange="toggleAllHouses(this.checked)"> All houses <span class="house-count">'+LOTS.length+'</span></label>'+
+    houses.map(h=>{
+      const checked=_selectedHouses.size===0||_selectedHouses.has(h);
+      return '<label data-house="'+esc(h)+'"><input type="checkbox" '+(checked?'checked':'')+' value="'+esc(h)+'" onchange="onHouseCheck()"> '+esc(h)+' <span class="house-count">'+counts[h]+'</span></label>';
+    }).join('');
+  updateHouseBtn();
+}
+
+function toggleHousePopover(e){
+  e.stopPropagation();
+  $('housePopover').classList.toggle('open');
+}
+
+function filterHouseList(q){
+  q=q.toLowerCase();
+  $('houseCheckList').querySelectorAll('label[data-house]').forEach(lbl=>{
+    lbl.style.display=lbl.dataset.house.toLowerCase().includes(q)?'':'none';
+  });
+}
+
+function toggleAllHouses(checked){
+  _selectedHouses.clear();
+  $('houseCheckList').querySelectorAll('input[type="checkbox"][value]').forEach(cb=>{ cb.checked=checked; });
+  updateHouseBtn();
+  renderLots();
+}
+
+function onHouseCheck(){
+  const cbs=$('houseCheckList').querySelectorAll('input[type="checkbox"][value]');
+  const allCb=$('houseCheckList').querySelector('.all-label input');
+  _selectedHouses.clear();
+  let allChecked=true;
+  cbs.forEach(cb=>{ if(cb.checked) _selectedHouses.add(cb.value); else allChecked=false; });
+  if(allChecked) _selectedHouses.clear(); // empty = all
+  if(allCb) allCb.checked=allChecked;
+  updateHouseBtn();
+  renderLots();
+}
+
+function updateHouseBtn(){
+  const btn=$('houseDropdownBtn');
+  if(_selectedHouses.size===0){
+    btn.textContent='All houses';
+    btn.classList.remove('active-filter');
+  } else {
+    btn.textContent=_selectedHouses.size+' house'+((_selectedHouses.size!==1)?'s':'');
+    btn.classList.add('active-filter');
+  }
+}
+
+function getSelectedHouses(){
+  return _selectedHouses.size>0?[..._selectedHouses]:[];
+}
+
+// Close house popover on outside click
+document.addEventListener('click',e=>{
+  const dd=$('houseDropdown');
+  if(dd && !dd.contains(e.target)) $('housePopover').classList.remove('open');
+});
 
 function renderLots(){
   const fp=updateFinanceProfile();
@@ -1996,6 +2037,19 @@ function renderLots(){
   if(fsold==='sold')lots=lots.filter(l=>(l.bullets||[]).some(b=>/\bSOLD\b|\bSTC\b|\bSALE.?AGREED\b|\bWITHDRAWN\b/i.test(b)));
   if(fs)lots=lots.filter(l=>(l.address||'').toLowerCase().includes(fs)||(l.bullets||[]).join(' ').toLowerCase().includes(fs));
 
+  // House filter
+  const selectedHouses=getSelectedHouses();
+  if(selectedHouses.length) lots=lots.filter(l=>selectedHouses.includes(l._house));
+
+  // Exclude POA
+  if($('fExcludePOA') && $('fExcludePOA').checked) lots=lots.filter(l=>l.price>0);
+
+  // Sort
+  const sortVal=$('fSort')?.value||'score';
+  if(sortVal==='price_asc') lots.sort((a,b)=>((a.price||Infinity)-(b.price||Infinity)));
+  else if(sortVal==='price_desc') lots.sort((a,b)=>((b.price||0)-(a.price||0)));
+  else if(sortVal==='yield') lots.sort((a,b)=>((b.estGrossYield||0)-(a.estGrossYield||0)));
+
   const top=lots.filter(l=>l.score>=3);
   let statsHtml=`
     <div class="stat-card"><div class="v g">${LOTS.length}</div><div class="l">Total lots</div></div>
@@ -2018,7 +2072,7 @@ function renderLots(){
 
   // Highlight active filters
   document.querySelectorAll('.filter-bar-sticky .tb-select').forEach(sel => {
-    sel.classList.toggle('active-filter', sel.value !== '' && sel.value !== 'all' && sel.value !== 'available');
+    sel.classList.toggle('active-filter', sel.value !== '' && sel.value !== 'all' && sel.value !== 'available' && sel.value !== 'score');
   });
 
   expandedLotId = null;
@@ -2040,17 +2094,22 @@ function renderLots(){
     out.innerHTML += '<div class="lots-grid" id="' + sectionId + '-grid">' + sectionLots.map(l => card(l)).join('') + '</div>';
   }
 
-  const tsL=lots.filter(l=>l.titleSplit&&l.score>=2);
-  if(tsL.length && showTSGroup) renderSection('🏢', 'Title Split Opportunities', tsL, 'badge-p');
+  // When sorting by non-score, render as flat list
+  if(sortVal!=='score'){
+    out.innerHTML='<div class="lots-grid">'+lots.map(l=>card(l)).join('')+'</div>';
+  } else {
+    const tsL=lots.filter(l=>l.titleSplit&&l.score>=2);
+    if(tsL.length && showTSGroup) renderSection('🏢', 'Title Split Opportunities', tsL, 'badge-p');
 
-  const topL=lots.filter(l=>l.score>=3&&!(showTSGroup&&l.titleSplit&&l.score>=2));
-  if(topL.length) renderSection('🔥', 'Top Picks', topL, 'badge-g');
+    const topL=lots.filter(l=>l.score>=3&&!(showTSGroup&&l.titleSplit&&l.score>=2));
+    if(topL.length) renderSection('🔥', 'Top Picks', topL, 'badge-g');
 
-  const midL=lots.filter(l=>l.score>=1.5&&l.score<3&&!(showTSGroup&&l.titleSplit&&l.score>=2));
-  if(midL.length) renderSection('👀', 'Worth a Look', midL, 'badge-y');
+    const midL=lots.filter(l=>l.score>=1.5&&l.score<3&&!(showTSGroup&&l.titleSplit&&l.score>=2));
+    if(midL.length) renderSection('👀', 'Worth a Look', midL, 'badge-y');
 
-  const rest=lots.filter(l=>l.score<1.5&&!(showTSGroup&&l.titleSplit&&l.score>=2));
-  if(rest.length) renderSection('📋', 'Other', rest, '');
+    const rest=lots.filter(l=>l.score<1.5&&!(showTSGroup&&l.titleSplit&&l.score>=2));
+    if(rest.length) renderSection('📋', 'Other', rest, '');
+  }
 }
 
 function card(l){
