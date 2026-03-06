@@ -2312,12 +2312,12 @@ function triggerFinanceCheck(idx) {
       });
       if (!r.ok) throw new Error('API error');
       const data = await r.json();
-      const count = data.count || data.lenders?.length || 0;
-      const lenders = (data.lenders || []).slice(0, 3);
+      const count = data.summary?.eligible || data.eligible?.length || 0;
+      const lenders = (data.eligible || []).slice(0, 3);
 
       let html = '<div class="fw-results">' +
         '<div class="fw-count">' + count + '</div>' +
-        '<div class="fw-count-label">lenders match at ' + ltv + '% LTV</div>';
+        '<div class="fw-count-label">lender' + (count !== 1 ? 's' : '') + ' match at ' + ltv + '% LTV</div>';
       if (lenders.length) {
         html += '<div class="fw-lenders">' + lenders.map(l => '<span class="fw-lender-chip">' + esc(l.name || l.lender || l) + '</span>').join('') + '</div>';
       }
