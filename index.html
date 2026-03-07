@@ -348,6 +348,22 @@ footer .logo-f span{color:var(--green)}
 .bottom-cta .cta-primary{font-size:.9rem;padding:12px 28px;position:relative}
 .view-results .bottom-cta{display:none}
 
+/* ── EMAIL CAPTURE ── */
+.email-capture{text-align:center;padding:44px 24px;margin:0 -24px;background:var(--surface2);border-top:1px solid var(--border);border-bottom:1px solid var(--border);position:relative}
+.email-capture h2{font-family:'Source Serif 4',serif;font-size:clamp(1.1rem,2.5vw,1.4rem);font-weight:700;color:var(--navy);margin-bottom:6px}
+.email-capture .ec-sub{font-size:.88rem;color:var(--text2);margin-bottom:20px;max-width:440px;margin-left:auto;margin-right:auto;line-height:1.5}
+.ec-form{display:flex;gap:8px;max-width:520px;margin:0 auto;flex-wrap:wrap;justify-content:center}
+.ec-form input{flex:1;min-width:140px;padding:11px 14px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--white);font-size:.88rem;font-family:inherit;color:var(--text);outline:0;transition:border-color .15s}
+.ec-form input:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(46,125,50,.08)}
+.ec-form input::placeholder{color:var(--text4)}
+.ec-form button{padding:11px 24px;border-radius:var(--radius-sm);font-size:.88rem;font-weight:700;color:var(--white);background:var(--green);border:none;cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap}
+.ec-form button:hover{background:var(--green2)}
+.ec-form button:disabled{opacity:.5;cursor:not-allowed}
+.ec-success{display:none;font-size:.9rem;color:var(--green);font-weight:600;padding:14px;background:var(--green-light);border-radius:var(--radius-sm);max-width:520px;margin:0 auto}
+.ec-error{display:none;font-size:.82rem;color:var(--red);margin-top:8px}
+.ec-note{font-size:.72rem;color:var(--text4);margin-top:12px}
+.view-results .email-capture{display:none}
+
 /* ── LOTS GRID ── */
 .lots-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:0}
 .lots-grid .section-divider{grid-column:1/-1}
@@ -361,8 +377,9 @@ footer .logo-f span{color:var(--green)}
 .lot-card.blurred::after{content:'🔒 Upgrade to see AI analysis';position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(255,255,255,.95) 40%);padding:32px 16px 16px;text-align:center;font-weight:600;font-size:.85rem;color:var(--accent);pointer-events:none}
 .card-image-wrapper{position:relative;height:200px;width:100%;overflow:hidden;background:#eef2f7}
 .card-image{width:100%;height:100%;object-fit:cover;object-position:center;display:block}
-.card-image-placeholder{height:200px;background:#eef2f7;display:flex;align-items:center;justify-content:center}
-.card-image-placeholder svg{width:32px;height:32px;fill:#d5dde5}
+.card-image-placeholder{height:100%;background:linear-gradient(135deg,#eef2f7 0%,#e4eaf2 50%,#dde5ef 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}
+.card-image-placeholder svg{width:48px;height:48px;fill:#c0cad6;opacity:.7}
+.card-image-placeholder .ph-label{font-size:.72rem;color:#a0aab4;font-weight:500;letter-spacing:.03em}
 @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
 .card-image-shimmer{position:absolute;inset:0;background:linear-gradient(90deg,#eef2f7 25%,#f5f7fa 50%,#eef2f7 75%);background-size:200% 100%;animation:shimmer 1.5s infinite}
 .card-badge{position:absolute;border-radius:20px;padding:4px 10px;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
@@ -519,7 +536,9 @@ footer .logo-f span{color:var(--green)}
   .landing-stats{margin:0 -14px;padding:32px 14px}
   .card-image-wrapper{height:160px}
   .price-pop.open{left:auto;right:0;min-width:220px;max-width:calc(100vw - 28px)}
-  .how-section,.two-tools,.bottom-cta{padding:24px 14px}
+  .how-section,.two-tools,.bottom-cta,.email-capture{padding:24px 14px}
+  .ec-form{flex-direction:column}
+  .ec-form input{min-width:0}
 }
 @media(max-width:360px){
   .nav-inner{padding:0 10px;gap:6px}
@@ -888,6 +907,20 @@ footer .logo-f span{color:var(--green)}
     <h2>Ready to find your next deal?</h2>
     <p>Auction catalogues are live now. Start browsing — it's free, instant, and you don't need an account.</p>
     <a href="#" class="cta-primary" onclick="event.preventDefault();window.scrollTo({top:0,behavior:'smooth'})">Browse Auction Deals →</a>
+  </section>
+
+  <!-- ═══════ EMAIL CAPTURE ═══════ -->
+  <section class="email-capture" id="emailCapture">
+    <h2>Get Weekly Auction Deal Alerts</h2>
+    <p class="ec-sub">We'll send you the top-scoring lots each week — high-yield, below-market, and development opportunities. No spam, unsubscribe anytime.</p>
+    <form class="ec-form" id="ecForm" onsubmit="return submitEmailCapture(event)">
+      <input type="text" name="name" placeholder="Your name" required autocomplete="name">
+      <input type="email" name="email" placeholder="Email address" required autocomplete="email">
+      <button type="submit" id="ecSubmitBtn">Subscribe</button>
+    </form>
+    <div class="ec-error" id="ecError"></div>
+    <div class="ec-success" id="ecSuccess">You're in! We'll send your first deal alert soon.</div>
+    <p class="ec-note">Free forever. We respect your privacy.</p>
   </section>
 
   <footer>
@@ -2206,16 +2239,16 @@ let expandedLotId = null;
 
 function getPropertyTypeIcon(type) {
   const icons = {
-    house: '<svg viewBox="0 0 24 24" fill="#d5dde5" width="32" height="32"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>',
-    flat: '<svg viewBox="0 0 24 24" fill="#d5dde5" width="32" height="32"><path d="M17 11V3H7v4H3v14h8v-4h2v4h8V11h-4zM7 19H5v-2h2v2zm0-4H5v-2h2v2zm0-4H5V9h2v2zm4 4H9v-2h2v2zm0-4H9V9h2v2zm0-4H9V5h2v2zm4 8h-2v-2h2v2zm0-4h-2V9h2v2zm0-4h-2V5h2v2zm4 12h-2v-2h2v2zm0-4h-2v-2h2v2z"/></svg>',
-    land: '<svg viewBox="0 0 24 24" fill="#d5dde5" width="32" height="32"><path d="M14 6l-3.75 5 2.85 3.8-1.6 1.2C9.81 13.75 7 10 7 10l-6 8h22L14 6z"/></svg>',
-    commercial: '<svg viewBox="0 0 24 24" fill="#d5dde5" width="32" height="32"><path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z"/></svg>'
+    house: '<svg viewBox="0 0 24 24" width="48" height="48"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>',
+    flat: '<svg viewBox="0 0 24 24" width="48" height="48"><path d="M17 11V3H7v4H3v14h8v-4h2v4h8V11h-4zM7 19H5v-2h2v2zm0-4H5v-2h2v2zm0-4H5V9h2v2zm4 4H9v-2h2v2zm0-4H9V9h2v2zm0-4H9V5h2v2zm4 8h-2v-2h2v2zm0-4h-2V9h2v2zm0-4h-2V5h2v2zm4 12h-2v-2h2v2zm0-4h-2v-2h2v2z"/></svg>',
+    land: '<svg viewBox="0 0 24 24" width="48" height="48"><path d="M14 6l-3.75 5 2.85 3.8-1.6 1.2C9.81 13.75 7 10 7 10l-6 8h22L14 6z"/></svg>',
+    commercial: '<svg viewBox="0 0 24 24" width="48" height="48"><path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z"/></svg>'
   };
   return icons[type] || icons.house;
 }
 
 function getPlaceholderHtml(type) {
-  return '<div class="card-image-placeholder">' + getPropertyTypeIcon(type || 'house') + '</div>';
+  return '<div class="card-image-placeholder">' + getPropertyTypeIcon(type || 'house') + '<span class="ph-label">No photo available</span></div>';
 }
 
 function getCardImageBadges(lot) {
@@ -2238,7 +2271,10 @@ function getCardImageBadges(lot) {
 
 function getCardImageHtml(lot) {
   if (!lot.imageUrl) {
-    return getPlaceholderHtml(lot.propType);
+    return '<div class="card-image-wrapper">' +
+      getPlaceholderHtml(lot.propType) +
+      getCardImageBadges(lot) +
+    '</div>';
   }
   return '<div class="card-image-wrapper">' +
     '<div class="card-image-shimmer"></div>' +
@@ -2405,6 +2441,46 @@ loadAllLots();
 $('smartQuery').addEventListener('input',()=>{
   $('mainBtn').textContent=$('smartQuery').value.trim()?'AI Search':'Browse';
 });
+// ═══════════════════════════════
+// EMAIL CAPTURE FORM
+// ═══════════════════════════════
+function submitEmailCapture(e) {
+  e.preventDefault();
+  const form = $('ecForm');
+  const btn = $('ecSubmitBtn');
+  const errEl = $('ecError');
+  const successEl = $('ecSuccess');
+  const name = form.name.value.trim();
+  const email = form.email.value.trim();
+
+  errEl.style.display = 'none';
+  if (!name || !email) { errEl.textContent = 'Please fill in both fields.'; errEl.style.display = 'block'; return false; }
+  if (!email.includes('@')) { errEl.textContent = 'Please enter a valid email.'; errEl.style.display = 'block'; return false; }
+
+  btn.disabled = true;
+  btn.textContent = 'Subscribing...';
+
+  fetch('/api/leads', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, email, source: 'landing-page' })
+  })
+  .then(r => r.json().then(d => ({ ok: r.ok, data: d })))
+  .then(({ ok, data }) => {
+    if (!ok) throw new Error(data.error || 'Something went wrong');
+    form.style.display = 'none';
+    successEl.style.display = 'block';
+    document.querySelector('.ec-note').style.display = 'none';
+  })
+  .catch(err => {
+    errEl.textContent = err.message || 'Something went wrong. Please try again.';
+    errEl.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Subscribe';
+  });
+  return false;
+}
+
 // ═══════════════════════════════
 // ADMIN DEBUG WIDGET v5 — minimal
 // Win+Shift+S → describe → save & copy path

@@ -615,10 +615,15 @@ app.post('/api/leads', async (req, res) => {
     name, email, phone, contactPref, isRegulated, occupancy,
     propertyPrice, loanAmount, ltvPercent, worksBudget,
     matchingLenders, propertyType, propertyAddress,
-    depositRange, experienceLevel, auctionUrl, dealData
+    depositRange, experienceLevel, auctionUrl, dealData,
+    source
   } = req.body || {};
 
-  if (!name || !email || !phone) {
+  if (!name || !email) {
+    return res.status(400).json({ error: 'Name and email are required' });
+  }
+  // Phone required unless it's a simple email capture (e.g. landing-page newsletter)
+  if (!phone && !source) {
     return res.status(400).json({ error: 'Name, email, and phone are required' });
   }
   if (!email.includes('@')) {
@@ -631,7 +636,7 @@ app.post('/api/leads', async (req, res) => {
       .insert({
         name,
         email: email.toLowerCase().trim(),
-        phone,
+        phone: phone || null,
         contact_pref: contactPref || 'email',
         is_regulated: !!isRegulated,
         occupancy: occupancy || null,
@@ -645,7 +650,7 @@ app.post('/api/leads', async (req, res) => {
         deposit_range: depositRange || null,
         experience_level: experienceLevel || null,
         auction_url: auctionUrl || null,
-        deal_data: dealData || null,
+        deal_data: source ? { source, ...(dealData || {}) } : (dealData || null),
         ip_address: req.ip || null,
         created_at: new Date().toISOString(),
       })
@@ -654,7 +659,7 @@ app.post('/api/leads', async (req, res) => {
 
     if (error) throw error;
 
-    logActivityEvent('lead_submit', { email, propertyPrice, loanAmount, isRegulated }, email, req.ip);
+    logActivityEvent('lead_submit', { email, propertyPrice, loanAmount, isRegulated, source: source || 'bridgematch-lite' }, email, req.ip);
 
     // Email notification via Resend
     const resendKey = process.env.RESEND_API_KEY;
@@ -2820,26 +2825,64 @@ function enrichAllsopLots(lots, pages) {
     }
   }
 
+  // Track which API items have been matched to prevent double-matching
+  const usedApiIds = new Set();
+
   let matched = 0;
   for (const lot of lots) {
-    // Extract postcode from lot address
+    let match = null;
+
+    // Strategy 1: Match by postcode (most reliable)
     const pcMatch = (lot.address || '').match(/[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}/i);
-    if (!pcMatch) continue;
-    // Normalise postcode: "EC4A3DQ" → "EC4A 3DQ"
-    const rawPc = pcMatch[0].toUpperCase().replace(/\s+/g, '');
-    const lotPc = rawPc.slice(0, -3) + ' ' + rawPc.slice(-3);
-    const candidates = byPostcode[lotPc] || byPostcode[rawPc] || [];
-    // If only one property at this postcode, it's a match
-    let match = candidates.length === 1 ? candidates[0] : null;
-    // If multiple, try matching by address text
-    if (!match && candidates.length > 1) {
-      const lotAddr = (lot.address || '').toLowerCase();
-      match = candidates.find(c => {
-        const apiAddr = (c.allsop_address || c.address1 || '').toLowerCase();
-        return lotAddr.includes(apiAddr.split(',')[0]) || apiAddr.includes(lotAddr.split(',')[0]);
-      });
+    if (pcMatch) {
+      // Normalise postcode: "EC4A3DQ" -> "EC4A 3DQ"
+      const rawPc = pcMatch[0].toUpperCase().replace(/\s+/g, '');
+      const lotPc = rawPc.slice(0, -3) + ' ' + rawPc.slice(-3);
+      const candidates = (byPostcode[lotPc] || byPostcode[rawPc] || []).filter(c => !usedApiIds.has(c.property_id));
+      // If only one property at this postcode, it's a match
+      match = candidates.length === 1 ? candidates[0] : null;
+      // If multiple, try matching by address text
+      if (!match && candidates.length > 1) {
+        const lotAddr = (lot.address || '').toLowerCase();
+        match = candidates.find(c => {
+          const apiAddr = (c.allsop_address || c.address1 || '').toLowerCase();
+          return lotAddr.includes(apiAddr.split(',')[0]) || apiAddr.includes(lotAddr.split(',')[0]);
+        });
+      }
     }
+
+    // Strategy 2: Fuzzy address match across ALL API items (for lots without postcodes)
+    if (!match) {
+      const lotAddr = (lot.address || '').toLowerCase().replace(/[,.\s]+/g, ' ').trim();
+      if (lotAddr.length > 5) {
+        // Extract street number + name for matching
+        const streetMatch = lotAddr.match(/(\d+[a-z]?)\s+(\w+)/);
+        if (streetMatch) {
+          const streetNum = streetMatch[1];
+          const streetWord = streetMatch[2];
+          match = apiItems.find(c => {
+            if (usedApiIds.has(c.property_id)) return false;
+            const apiAddr = (c.allsop_address || c.address1 || '').toLowerCase();
+            return apiAddr.includes(streetNum) && apiAddr.includes(streetWord);
+          });
+        }
+        // Try matching by first significant word in both addresses
+        if (!match) {
+          match = apiItems.find(c => {
+            if (usedApiIds.has(c.property_id)) return false;
+            const apiAddr = (c.allsop_address || c.address1 || '').toLowerCase().replace(/[,.\s]+/g, ' ').trim();
+            // Both addresses must share at least the first meaningful segment
+            const lotFirst = lotAddr.split(' ').filter(w => w.length > 2).slice(0, 3).join(' ');
+            const apiFirst = apiAddr.split(' ').filter(w => w.length > 2).slice(0, 3).join(' ');
+            return lotFirst.length > 5 && apiFirst.length > 5 &&
+              (lotAddr.includes(apiFirst) || apiAddr.includes(lotFirst));
+          });
+        }
+      }
+    }
+
     if (match) {
+      usedApiIds.add(match.property_id);
       lot.reference = match.reference;
       lot.allsopPropertyId = match.allsop_property_id;
       lot.imageFileId = match.image_file_id;
@@ -3232,45 +3275,58 @@ const DOM_EXTRACTORS = {
     (() => {
       const lots = [];
       const seen = new Set();
-      // Each lot card is inside a list item with image carousel + details
-      // The lot number appears as plain text "Lot X"
-      // Address is in a link with title attribute and href to lot detail page
-      // Price appears after "Guide Price" or "Hammer Price"
-      // Bullets are in nested li elements
-      const allLi = document.querySelectorAll('li');
-      for (const li of allLi) {
+      // Savills: lot cards are <li class="lot"> with id="lot-{id}"
+      // Each contains: lot-left (image carousel) + lot-right (details)
+      // Lot number in <p class="lot-number">Lot X</p>
+      // Address in <a class="lot-name" title="...">
+      // Images in <ul class="lot-image-list"> > <li class="lot-image"> > <a> > <img>
+      const lotCards = document.querySelectorAll('li.lot[id^="lot-"]');
+      for (const li of lotCards) {
         const text = li.textContent || '';
-        // Must contain "Lot" followed by a number
-        const lotMatch = text.match(/Lot\\s+(\\d+)/);
-        if (!lotMatch) continue;
-        const lotNum = parseInt(lotMatch[1]);
-        if (lotNum === 0 || seen.has(lotNum)) continue; // Skip lot 0 (commercial section header)
+        // Lot number from .lot-number element or text match
+        let lotNum = null;
+        const lotNumEl = li.querySelector('.lot-number');
+        if (lotNumEl) {
+          const lm = lotNumEl.textContent.match(/Lot\\s+(\\d+)/i);
+          if (lm) lotNum = parseInt(lm[1]);
+        }
+        if (lotNum === null) {
+          const lotMatch = text.match(/Lot\\s+(\\d+)/);
+          if (lotMatch) lotNum = parseInt(lotMatch[1]);
+        }
+        if (lotNum === null || lotNum === 0 || seen.has(lotNum)) continue;
         seen.add(lotNum);
-        // Address from link with title containing a postcode or street
+        // Address from lot-name link or any link with title containing a postcode
         let address = '';
         let url = '';
-        const links = li.querySelectorAll('a[href]');
-        for (const a of links) {
-          const title = a.getAttribute('title') || '';
-          const href = a.getAttribute('href') || '';
-          const linkText = a.textContent.trim();
-          // Address link has a meaningful title with location info
-          if (title && title.match(/[A-Z]{1,2}\\d/) && !address) {
-            address = title;
-            url = href;
-          } else if (linkText && linkText.match(/[A-Z]{1,2}\\d[A-Z\\d]?\\s*\\d[A-Z]{2}/i) && !address) {
-            address = linkText;
-            url = href;
+        const lotName = li.querySelector('a.lot-name[title]');
+        if (lotName) {
+          const title = lotName.getAttribute('title') || '';
+          if (title) { address = title; url = lotName.getAttribute('href') || ''; }
+        }
+        if (!address) {
+          const links = li.querySelectorAll('a[href]');
+          for (const a of links) {
+            const title = a.getAttribute('title') || '';
+            const href = a.getAttribute('href') || '';
+            const linkText = a.textContent.trim();
+            if (title && title.match(/[A-Z]{1,2}\\d/) && !address) {
+              address = title;
+              url = href;
+            } else if (linkText && linkText.match(/[A-Z]{1,2}\\d[A-Z\\d]?\\s*\\d[A-Z]{2}/i) && !address) {
+              address = linkText;
+              url = href;
+            }
           }
         }
         if (!address) {
-          // Try finding address in any text that looks like a street + postcode
           const addrMatch = text.match(/\\d+[a-z]?\\s+[A-Z][a-z]+[\\s\\S]*?[A-Z]{1,2}\\d[A-Z\\d]?\\s*\\d[A-Z]{2}/);
           if (addrMatch) address = addrMatch[0].trim();
         }
         if (!address) continue;
         // Full details link
         if (!url) {
+          const links = li.querySelectorAll('a[href]');
           for (const a of links) {
             if (a.textContent.includes('Full details')) {
               url = a.getAttribute('href') || '';
@@ -3286,9 +3342,9 @@ const DOM_EXTRACTORS = {
           const pm2 = text.match(/£([\\d,]+)/);
           if (pm2) price = parseInt(pm2[1].replace(/,/g, ''));
         }
-        // Bullets from nested list items
+        // Bullets from nested list items (skip lot-image items)
         const bullets = [];
-        const subLis = li.querySelectorAll('li');
+        const subLis = li.querySelectorAll('li:not(.lot-image)');
         for (const sub of subLis) {
           const t = sub.textContent.trim();
           if (t.length > 5 && t.length < 200 && !t.match(/^Lot\\s+\\d|^£|^Guide|^Hammer|Cancel proxy/i)) {
@@ -3299,12 +3355,23 @@ const DOM_EXTRACTORS = {
         if (text.match(/\\bSold\\b|\\bWithdrawn\\b/i)) {
           if (!bullets.some(b => b.match(/sold|withdrawn/i))) bullets.push('SOLD/STC');
         }
-        // Image from carousel in lot card
+        // Image: first real image from the lot-image-list carousel
         let imageUrl = '';
-        const lotImg = li.querySelector('img[src]');
-        if (lotImg) {
-          const s = lotImg.getAttribute('src') || lotImg.dataset.src || '';
-          if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) imageUrl = s;
+        const carouselImgs = li.querySelectorAll('.lot-image-list img[src], .lot-image img[src]');
+        for (const img of carouselImgs) {
+          const s = img.getAttribute('src') || img.dataset.src || '';
+          if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) {
+            imageUrl = s;
+            break;
+          }
+        }
+        // Fallback: any img inside the lot card
+        if (!imageUrl) {
+          const anyImg = li.querySelector('img[src]');
+          if (anyImg) {
+            const s = anyImg.getAttribute('src') || anyImg.dataset.src || '';
+            if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) imageUrl = s;
+          }
         }
         lots.push({ lot: lotNum, address, price, url, bullets, imageUrl: imageUrl || undefined });
       }
@@ -3780,24 +3847,35 @@ const DOM_EXTRACTORS = {
         if (text.match(/\\bSOLD\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) {
           if (!bullets.some(b => b.match(/SOLD|STC|WITHDRAWN/i))) bullets.push('SOLD/STC');
         }
-        // Image: Clive Emson uses background-image on .lotPic or .lotImgWrap elements, and data-image attrs
+        // Image: Clive Emson grid-view cards have data-mainpic (filename) and data-auc (auction number)
+        // Full URL pattern: https://www.cliveemson.co.uk/auc{data-auc}/pics/{data-mainpic}
         let imageUrl = '';
-        const lotPic = card.querySelector('.lotPic, .lotImgWrap, .lotImages [style*="background-image"]');
-        if (lotPic) {
-          const style = lotPic.getAttribute('style') || '';
-          const bgMatch = style.match(/background-image:\\s*url\\(['"]?([^'"\\)]+)/i);
-          if (bgMatch) imageUrl = bgMatch[1];
-          if (!imageUrl) {
-            const bg = getComputedStyle(lotPic).backgroundImage || '';
-            const bgm = bg.match(/url\\(['"]?([^'"\\)]+)/);
-            if (bgm) imageUrl = bgm[1];
+        const mainPic = card.getAttribute('data-mainpic') || '';
+        const aucNum = card.getAttribute('data-auc') || '';
+        if (mainPic && aucNum) {
+          imageUrl = 'https://www.cliveemson.co.uk/auc' + aucNum + '/pics/' + mainPic;
+        }
+        // Fallback: background-image on .lotPic (list-view) or .lotImgWrap elements
+        if (!imageUrl) {
+          const lotPic = card.querySelector('.lotPic, .lotImgWrap, .lotImages [style*="background-image"]');
+          if (lotPic) {
+            const style = lotPic.getAttribute('style') || '';
+            const bgMatch = style.match(/background-image:\\s*url\\(['"]?([^'"\\)]+)/i);
+            if (bgMatch) imageUrl = bgMatch[1];
+            if (!imageUrl) {
+              const bg = getComputedStyle(lotPic).backgroundImage || '';
+              const bgm = bg.match(/url\\(['"]?([^'"\\)]+)/);
+              if (bgm) imageUrl = bgm[1];
+            }
           }
         }
+        // Fallback: data-image on child elements (carousel items)
         if (!imageUrl) {
           const dataImg = card.querySelector('[data-image]');
           if (dataImg) {
             const di = dataImg.getAttribute('data-image') || '';
-            if (di) imageUrl = di; // Will be resolved to absolute URL later
+            if (di && aucNum) imageUrl = 'https://www.cliveemson.co.uk/auc' + aucNum + '/pics/' + di;
+            else if (di) imageUrl = di;
           }
         }
         lots.push({ lot: num, address, price, url, bullets, imageUrl: imageUrl || undefined });
@@ -5446,10 +5524,11 @@ async function _doAutoAnalyseAll() {
         const cachedLots = cached.lots || [];
         let needsUpdate = false;
 
-        // Allsop-specific: fix broken lot URLs and enrich with API data
+        // Allsop-specific: fix broken lot URLs and enrich with API data (including images)
         if (auction.house === 'allsop') {
           const brokenUrls = cachedLots.filter(l => l.url && /allsop\.co\.uk\/lot\/\d+/i.test(l.url)).length;
-          if (brokenUrls > 0) {
+          const missingAllsopImages = cachedLots.filter(l => !l.imageUrl).length;
+          if (brokenUrls > 0 || missingAllsopImages > 0) {
             try {
               const rewritten = rewriteUrl(auction.url, 'allsop');
               if (rewritten?.isApi) {
@@ -5462,8 +5541,9 @@ async function _doAutoAnalyseAll() {
                       lot.url = `https://www.allsop.co.uk/lot-overview/lot/${lot.reference}`;
                     }
                   }
+                  const newImagesGained = missingAllsopImages - cachedLots.filter(l => !l.imageUrl).length;
                   needsUpdate = true;
-                  console.log(`AUTO: ✓ ${auction.house} — fixed ${brokenUrls} broken lot URLs`);
+                  console.log(`AUTO: ✓ ${auction.house} — fixed ${brokenUrls} broken URLs, gained ${newImagesGained} images`);
                 }
               }
             } catch (e) {
