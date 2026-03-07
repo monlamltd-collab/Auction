@@ -1785,7 +1785,7 @@ app.post('/api/analyse', async (req, res) => {
       }
       // Puppeteer fallback if static scraping found nothing
       // Skip for houses where Puppeteer wastes memory (blocked, empty, or JS-only)
-      const SKIP_PUPPETEER = ['cottons','dedmangray','philliparnold'];
+      const SKIP_PUPPETEER = ['cottons','dedmangray','philliparnold','sdl'];
       if (rawLots.length === 0 && !SKIP_PUPPETEER.includes(house)) {
         console.log(`No lots from static HTML, trying Puppeteer for ${house}...`);
         const puppeteerPages = await scrapeWithPuppeteer(url, house);
@@ -3052,6 +3052,7 @@ async function extractLotsWithClaude(client, pages, house, onProgress, catalogue
   const seenLots = new Set();
   const batchSize = 3;
   for (let i = 0; i < pages.length; i += batchSize) {
+    if (creditExhausted) { console.log('Skipping remaining batches — API credits exhausted'); break; }
     const batch = pages.slice(i, i + batchSize);
     const strippedBatch = batch.map(p => ({ page: p.page, content: stripHtml(p.html) }));
     const totalStrippedLen = strippedBatch.reduce((sum, p) => sum + p.content.length, 0);
@@ -3110,6 +3111,11 @@ Return ONLY the JSON array:`;
       if (onProgress) onProgress(Math.floor(i/batchSize)+1, Math.ceil(pages.length/batchSize), allLots.length);
     } catch (err) {
       console.error(`Claude extraction failed for batch starting at page ${batch[0].page}:`, err.message);
+      if (err.status === 400 && /credit.*(balance|low)|insufficient.*credit/i.test(err.message)) {
+        creditExhausted = true;
+        console.error('API credits exhausted — stopping all extraction');
+        break;
+      }
     }
   }
   // Resolve relative URLs to absolute using the catalogue URL as base
@@ -5477,8 +5483,13 @@ app.listen(PORT, () => {
 // AUTO-ANALYSIS: Pre-analyse all catalogue-ready auctions
 // ═══════════════════════════════════════════════════════════════
 let _autoAnalysisRunning = false;
+let creditExhausted = false;
 
 async function autoAnalyseAll() {
+  if (creditExhausted) {
+    console.log('AUTO: Skipping — API credits exhausted');
+    return { skipped: true, reason: 'credits_exhausted' };
+  }
   if (_autoAnalysisRunning) {
     console.log('AUTO: Analysis already running, skipping this invocation');
     return { skipped: true, reason: 'already_running' };
@@ -5890,7 +5901,7 @@ async function autoAnalyseOne(url, apiKey) {
     const pages = await scrapeAllPages(scrapeUrl, house);
     if (pages && pages.length > 0) rawLots = await extractLotsWithClaude(client, pages, house, null, scrapeUrl);
     // Skip Puppeteer fallback for houses where it wastes memory (blocked, empty, or JS-only)
-    const SKIP_PUPPETEER = ['cottons','dedmangray','philliparnold'];
+    const SKIP_PUPPETEER = ['cottons','dedmangray','philliparnold','sdl'];
     if (rawLots.length === 0 && !SKIP_PUPPETEER.includes(house)) {
       const puppeteerPages = await scrapeWithPuppeteer(url, house);
       if (puppeteerPages.length > 0) rawLots = await extractLotsWithClaude(client, puppeteerPages, house, null, scrapeUrl);
