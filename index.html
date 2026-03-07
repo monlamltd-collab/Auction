@@ -911,6 +911,9 @@ function safeHref(u){if(!u)return '#';const s=String(u).trim();if(!/^https?:\/\/
 let LOTS=[], SMART_RESULTS=null;
 let ALL_LOTS=[], ALL_SOURCES=[];
 let LENDER_DATA=[];
+const BATCH_SIZE=60;
+let _pendingCards=[];
+let _batchObserver=null;
 const PREMIUM_ENABLED=true; // TODO: gate behind auth when auction tool gets subscriptions
 let _searchAbort=null; // AbortController for in-flight searches
 let _searchTimers=[]; // setTimeout IDs for step animations
@@ -2032,6 +2035,10 @@ function renderLots(){
   expandedLotId = null;
   const out=$('lotsOut');out.innerHTML='';
 
+  // Disconnect any existing batch observer
+  if(_batchObserver){_batchObserver.disconnect();_batchObserver=null}
+  _pendingCards=[];
+
   // Only show Title Splits group for catalogue analyses or when user searched for them
   const showTSGroup = !SMART_RESULTS || /title.?split|multi.?unit|freehold.?block/i.test($('smartQuery')?.value||'');
 
@@ -2040,22 +2047,56 @@ function renderLots(){
     return '<div class="section-divider"><span>'+esc(title)+' ('+count+')</span></div>';
   }
 
-  // When sorting by non-score, render as flat list
+  // Build flat list of {html, isSectionStart} items preserving section dividers
+  let allItems=[];
   if(sortVal!=='score'){
-    out.innerHTML='<div class="lots-grid">'+lots.map(l=>card(l)).join('')+'</div>';
+    lots.forEach(l=>allItems.push({html:card(l)}));
   } else {
     const tsL=lots.filter(l=>l.titleSplit&&l.score>=2);
     const topL=lots.filter(l=>l.score>=3&&!(showTSGroup&&l.titleSplit&&l.score>=2));
     const midL=lots.filter(l=>l.score>=1.5&&l.score<3&&!(showTSGroup&&l.titleSplit&&l.score>=2));
     const rest=lots.filter(l=>l.score<1.5&&!(showTSGroup&&l.titleSplit&&l.score>=2));
 
-    let html='<div class="lots-grid">';
-    if(tsL.length && showTSGroup) html+=divider('Title Splits',tsL.length)+tsL.map(l=>card(l)).join('');
-    if(topL.length) html+=divider('Top Picks',topL.length)+topL.map(l=>card(l)).join('');
-    if(midL.length) html+=divider('Worth a Look',midL.length)+midL.map(l=>card(l)).join('');
-    if(rest.length) html+=divider('Other',rest.length)+rest.map(l=>card(l)).join('');
-    html+='</div>';
-    out.innerHTML=html;
+    if(tsL.length && showTSGroup){allItems.push({html:divider('Title Splits',tsL.length),isDivider:true});tsL.forEach(l=>allItems.push({html:card(l)}))}
+    if(topL.length){allItems.push({html:divider('Top Picks',topL.length),isDivider:true});topL.forEach(l=>allItems.push({html:card(l)}))}
+    if(midL.length){allItems.push({html:divider('Worth a Look',midL.length),isDivider:true});midL.forEach(l=>allItems.push({html:card(l)}))}
+    if(rest.length){allItems.push({html:divider('Other',rest.length),isDivider:true});rest.forEach(l=>allItems.push({html:card(l)}))}
+  }
+
+  const totalLots=lots.length;
+
+  // Render first batch
+  const firstBatch=allItems.splice(0,BATCH_SIZE);
+  out.innerHTML='<div class="lots-grid" id="lotsGrid">'+firstBatch.map(i=>i.html).join('')+'</div>';
+  let renderedCount=firstBatch.filter(i=>!i.isDivider).length;
+
+  // Update filter count with rendered info
+  if(filterCountEl) filterCountEl.textContent='Showing '+renderedCount.toLocaleString()+' of '+totalLots.toLocaleString()+' lots';
+
+  // If more items remain, set up progressive loading
+  if(allItems.length){
+    _pendingCards=allItems;
+    const sentinel=document.createElement('div');
+    sentinel.id='loadMoreSentinel';
+    sentinel.style.height='1px';
+    out.appendChild(sentinel);
+
+    _batchObserver=new IntersectionObserver(entries=>{
+      if(!entries[0].isIntersecting)return;
+      const grid=$('lotsGrid');
+      if(!grid||!_pendingCards.length)return;
+      const batch=_pendingCards.splice(0,BATCH_SIZE);
+      const frag=document.createRange().createContextualFragment(batch.map(i=>i.html).join(''));
+      grid.appendChild(frag);
+      renderedCount+=batch.filter(i=>!i.isDivider).length;
+      if(filterCountEl) filterCountEl.textContent='Showing '+renderedCount.toLocaleString()+' of '+totalLots.toLocaleString()+' lots';
+      if(!_pendingCards.length){
+        _batchObserver.disconnect();_batchObserver=null;
+        sentinel.remove();
+        if(filterCountEl) filterCountEl.textContent='Showing '+totalLots.toLocaleString()+' of '+LOTS.length.toLocaleString()+' lots';
+      }
+    },{rootMargin:'200px'});
+    _batchObserver.observe(sentinel);
   }
 }
 
