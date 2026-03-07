@@ -228,3 +228,68 @@ See `BRIDGING_FINANCE_KNOWLEDGE_PACK.md` in this repo for comprehensive domain k
 - Common auction + bridging scenarios
 
 **Do not modify bridgematch-lite.html based on this knowledge right now** — it works. This appendix exists so future enhancements are built on correct domain logic rather than guesswork.
+
+---
+
+## Agent Skills Reference
+
+Each agent listed below owns specific parts of the codebase. Before making changes, Claude Code should identify which agent's domain is affected and apply the relevant skills. Gaps or issues discovered should be noted.
+
+### DevOps Agent
+Owns: autoAnalyseAll(), caching layer, Puppeteer orchestration, Railway config
+Must check before changes:
+- Pagination caps (MAX_PUPPETEER_PAGES, MAX_LOTS_PER_SCRAPE)
+- Lookahead limit (max 2 upcoming auctions per house)
+- Credit exhaustion guard (creditExhausted flag)
+- HTML change detection (contentHash comparison)
+- Tiered cache TTLs (CACHE_TIERS)
+- Puppeteer skip list (PUPPETEER_SKIP)
+- Cost per scrape cycle (estimate Claude API calls before running)
+
+### Frontend Agent
+Owns: index.html, welcome.html, all CSS and client-side JS
+Must check before changes:
+- Page load performance: lots per page should be configurable, default ≤ 100
+- Pagination UX: user should never wait for more than 100 lots to render
+- Lazy loading: images must lazy load
+- Filter/sort state: preserved across pagination
+- Mobile responsiveness: test at 375px width
+- SEO: meta title, description, OG tags, JSON-LD structured data per page
+- Lighthouse score awareness: flag anything scoring below 70
+- Design system: use existing CSS variables, do not introduce new colour values
+
+### Auction House Recruiter Agent
+Owns: DOM_EXTRACTORS object, HOUSE_ROOTS, detectAuctionHouse()
+Must check before changes:
+- DOM extractor returns > 0 lots on a live test before committing
+- Pagination detection: does the house paginate? How many pages?
+- Skip list: if extractor consistently returns 0, add to PUPPETEER_SKIP
+- Image URL extraction: at least one image URL per lot where available
+- Lot deduplication: no duplicate lot numbers in output
+- Fallback awareness: broken DOM extractor = Claude API fallback = costs money
+
+### AI Extraction Agent
+Owns: extractWithClaude(), batch logic, prompt templates
+Must check before changes:
+- Batch size: keep batches to ≤ 3 pages or ≤ 21000 chars
+- Model: use claude-haiku-4-5-20251001 for extraction (cheapest capable model)
+- Credit guard: check creditExhausted flag before every batch
+- Structured output: validate response has expected lot fields before caching
+- Cost estimate: log expected token usage before large extraction runs
+
+### Property Data Manager Agent
+Owns: enrichLots(), Land Registry calls, VOA calls, scoring logic
+Must check before changes:
+- Address normalisation before Land Registry lookup
+- Title split detection: false positive rate should stay below 5%
+- Yield calculation: uses guide price, not sold price
+- Score capping: score range 0-10, never exceed
+- EPC lookups: only call if not already cached
+
+### DI Manager (coordination)
+Reviews output of all other agents. Produces weekly quality report covering:
+- Houses with 0 lots (extractor broken)
+- Houses where Claude API fallback triggered > 3 times consecutively
+- Image coverage rate (target > 70%)
+- Cache hit rate (target > 60%)
+- Estimated weekly API cost vs $5 target
