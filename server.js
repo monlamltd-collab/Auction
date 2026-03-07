@@ -2827,6 +2827,10 @@ function enrichAllsopLots(lots, pages) {
       lot.reference = match.reference;
       lot.allsopPropertyId = match.allsop_property_id;
       lot.imageFileId = match.image_file_id;
+      // Construct image URL from image_file_id
+      if (match.image_file_id && !lot.imageUrl) {
+        lot.imageUrl = `https://as-prod-bau-object-storage.s3.eu-west-2.amazonaws.com/image_cache/${match.image_file_id}---auto--.jpg`;
+      }
       matched++;
     }
   }
@@ -3279,7 +3283,14 @@ const DOM_EXTRACTORS = {
         if (text.match(/\\bSold\\b|\\bWithdrawn\\b/i)) {
           if (!bullets.some(b => b.match(/sold|withdrawn/i))) bullets.push('SOLD/STC');
         }
-        lots.push({ lot: lotNum, address, price, url, bullets });
+        // Image from carousel in lot card
+        let imageUrl = '';
+        const lotImg = li.querySelector('img[src]');
+        if (lotImg) {
+          const s = lotImg.getAttribute('src') || lotImg.dataset.src || '';
+          if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) imageUrl = s;
+        }
+        lots.push({ lot: lotNum, address, price, url, bullets, imageUrl: imageUrl || undefined });
       }
       return lots;
     })()
@@ -3328,7 +3339,26 @@ const DOM_EXTRACTORS = {
         if (cardText.match(/\\bSOLD\\b|\\bSALEAGREED\\b|\\bSALE AGREED\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) {
           if (!bullets.some(b => b.match(/SOLD|STC|WITHDRAWN|SALE AGREED/i))) bullets.push('SOLD/STC');
         }
-        lots.push({ lot: lotNum, address, price, url, bullets });
+        // Image: look for <img> in card, or background-image on .auction-property-image
+        let imageUrl = '';
+        const cardImg = card.querySelector('img.main-image, img.img-responsive, .auction-property-image, .property-grid-image img');
+        if (cardImg) {
+          if (cardImg.tagName === 'IMG') {
+            imageUrl = cardImg.getAttribute('src') || cardImg.dataset.src || '';
+          } else {
+            const bg = cardImg.style.backgroundImage || getComputedStyle(cardImg).backgroundImage || '';
+            const bgMatch = bg.match(/url\\(['"]?([^'"\\)]+)/);
+            if (bgMatch) imageUrl = bgMatch[1];
+          }
+        }
+        if (!imageUrl) {
+          const anyImg = card.querySelector('img[src]');
+          if (anyImg) {
+            const s = anyImg.getAttribute('src') || '';
+            if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) imageUrl = s;
+          }
+        }
+        lots.push({ lot: lotNum, address, price, url, bullets, imageUrl: imageUrl || undefined });
         lotIndex++;
       }
       return lots;
@@ -3376,7 +3406,26 @@ const DOM_EXTRACTORS = {
         if (cardText.match(/\\bSOLD\\b|\\bSALE.?AGREED\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) {
           if (!bullets.some(b => b.match(/SOLD|STC|WITHDRAWN|SALE AGREED/i))) bullets.push('SOLD/STC');
         }
-        lots.push({ lot: lotNum, address, price, url, bullets });
+        // Image: look for <img> or background-image on .auction-property-image
+        let imageUrl = '';
+        const imgDiv = card.querySelector('.auction-property-image');
+        if (imgDiv) {
+          const bg = imgDiv.style.backgroundImage || imgDiv.getAttribute('style') || '';
+          const bgMatch = bg.match(/url\\(['"]?([^'"\\)]+)/);
+          if (bgMatch) imageUrl = bgMatch[1];
+        }
+        if (!imageUrl) {
+          const cardImg = card.querySelector('img.main-image, img.img-responsive, .property-grid-image img');
+          if (cardImg) imageUrl = cardImg.getAttribute('src') || cardImg.dataset.src || '';
+        }
+        if (!imageUrl) {
+          const anyImg = card.querySelector('img[src]');
+          if (anyImg) {
+            const s = anyImg.getAttribute('src') || '';
+            if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) imageUrl = s;
+          }
+        }
+        lots.push({ lot: lotNum, address, price, url, bullets, imageUrl: imageUrl || undefined });
         lotIndex++;
       }
       return lots;
@@ -3453,7 +3502,18 @@ const DOM_EXTRACTORS = {
         if (text.match(/\\bWithdrawn\\b|\\bSOLD\\b|\\bSTC\\b|\\bSale Agreed\\b/i)) {
           if (!bullets.some(b => b.match(/SOLD|STC|WITHDRAWN|SALE AGREED/i))) bullets.push('SOLD/STC');
         }
-        lots.push({ lot: lotNum, address, price, url, bullets });
+        // Image from card
+        let imageUrl = '';
+        const cardImg = card.querySelector('.auction-card--content-image-container img, img.grid-img, img[loading="lazy"]');
+        if (cardImg) imageUrl = cardImg.getAttribute('src') || cardImg.dataset.src || '';
+        if (!imageUrl) {
+          const anyImg = card.querySelector('img[src]');
+          if (anyImg) {
+            const s = anyImg.getAttribute('src') || '';
+            if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) imageUrl = s;
+          }
+        }
+        lots.push({ lot: lotNum, address, price, url, bullets, imageUrl: imageUrl || undefined });
         lotIndex++;
       }
       return lots;
@@ -3491,7 +3551,14 @@ const DOM_EXTRACTORS = {
         if (text.match(/\\bSOLD\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) {
           if (!bullets.some(b => b.match(/SOLD|STC|WITHDRAWN/i))) bullets.push('SOLD/STC');
         }
-        lots.push({ lot: lotNum, address, price, url, bullets });
+        // Image from card
+        let imageUrl = '';
+        const cardImg = card.querySelector('img[src]');
+        if (cardImg) {
+          const s = cardImg.getAttribute('src') || cardImg.dataset.src || '';
+          if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) imageUrl = s;
+        }
+        lots.push({ lot: lotNum, address, price, url, bullets, imageUrl: imageUrl || undefined });
       }
       return lots;
     })()
@@ -3526,7 +3593,14 @@ const DOM_EXTRACTORS = {
         if (text.match(/\\bSOLD\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) {
           if (!bullets.some(b => b.match(/SOLD|STC|WITHDRAWN/i))) bullets.push('SOLD/STC');
         }
-        lots.push({ lot: lotNum, address, price, url, bullets });
+        // Image from card
+        let imageUrl = '';
+        const cardImg = card.querySelector('img[src]');
+        if (cardImg) {
+          const s = cardImg.getAttribute('src') || cardImg.dataset.src || '';
+          if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) imageUrl = s;
+        }
+        lots.push({ lot: lotNum, address, price, url, bullets, imageUrl: imageUrl || undefined });
       }
       return lots;
     })()
@@ -3568,7 +3642,14 @@ const DOM_EXTRACTORS = {
         if (parent.textContent.match(/\\bSOLD\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) {
           if (!bullets.some(b => b.match(/SOLD|STC|WITHDRAWN/i))) bullets.push('SOLD/STC');
         }
-        if (address || price) lots.push({ lot: num, address, price, url, bullets });
+        // Image from parent container
+        let imageUrl = '';
+        const parentImg = parent.querySelector('img[src]');
+        if (parentImg) {
+          const s = parentImg.getAttribute('src') || parentImg.dataset.src || '';
+          if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) imageUrl = s;
+        }
+        if (address || price) lots.push({ lot: num, address, price, url, bullets, imageUrl: imageUrl || undefined });
       }
       return lots;
     })()
@@ -3595,7 +3676,12 @@ const DOM_EXTRACTORS = {
         const bullets = [];
         const desc = text.split('\\n').map(s=>s.trim()).filter(s=>s.length>10 && !s.match(/^LOT|^Guide|^£/i));
         if (desc.length > 0) bullets.push(desc[0]);
-        lots.push({ lot: num, address, price, url: href, bullets });
+        // Image from card or parent
+        let imageUrl = '';
+        let imgContainer = card;
+        for (let d = 0; d < 3 && imgContainer; d++) { imgContainer = imgContainer.parentElement; if (!imgContainer) break; const img = imgContainer.querySelector('img[src]'); if (img) { const s = img.getAttribute('src') || img.dataset.src || ''; if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) { imageUrl = s; break; } } }
+        if (!imageUrl) { const cardImg = card.querySelector('img[src]'); if (cardImg) { const s = cardImg.getAttribute('src') || ''; if (s.length > 10 && !s.includes('logo')) imageUrl = s; } }
+        lots.push({ lot: num, address, price, url: href, bullets, imageUrl: imageUrl || undefined });
       }
       return lots;
     })()
@@ -3634,20 +3720,27 @@ const DOM_EXTRACTORS = {
         if (text.match(/\\bSOLD\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) {
           if (!bullets.some(b => b.match(/SOLD|STC|WITHDRAWN/i))) bullets.push('SOLD/STC');
         }
-        lots.push({ lot: num, address, price, url, bullets });
+        // Image from card
+        let imageUrl = '';
+        const cardImg = card.querySelector('img[src]');
+        if (cardImg) {
+          const s = cardImg.getAttribute('src') || cardImg.dataset.src || '';
+          if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) imageUrl = s;
+        }
+        lots.push({ lot: num, address, price, url, bullets, imageUrl: imageUrl || undefined });
       }
       return lots;
     })()
   `,
 
   // ─── CLIVE EMSON ───────────────────────────────────────────
-  // cliveemson.co.uk — server-rendered catalogue
+  // cliveemson.co.uk — server-rendered catalogue with background-image and data-image
   cliveemson: `
     (() => {
       const lots = [];
       const seen = new Set();
-      // Clive Emson has lot cards with lot numbers, addresses, guide prices
-      const cards = document.querySelectorAll('[class*="lot"], [class*="property"], .search-result, article');
+      // Clive Emson: lots are in .lot elements with .lotPic (background-image), .LotHeading, .LotLocation
+      const cards = document.querySelectorAll('.lot, [class*="lot"], [class*="property"], .search-result, article');
       for (const card of cards) {
         const text = card.textContent || '';
         const lotMatch = text.match(/Lot\\s+(\\d+)/i);
@@ -3660,7 +3753,7 @@ const DOM_EXTRACTORS = {
         const priceMatch = text.match(/(?:Guide|Price)[^£]*£([\\d,]+)/i) || text.match(/£([\\d,]+)/);
         const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
         let address = '';
-        const heading = card.querySelector('h2, h3, h4, .address, .title');
+        const heading = card.querySelector('.LotHeading, .LotLocation, h2, h3, h4, .address, .title');
         if (heading) address = heading.textContent.trim();
         if (!address) continue;
         const bullets = [];
@@ -3671,7 +3764,27 @@ const DOM_EXTRACTORS = {
         if (text.match(/\\bSOLD\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) {
           if (!bullets.some(b => b.match(/SOLD|STC|WITHDRAWN/i))) bullets.push('SOLD/STC');
         }
-        lots.push({ lot: num, address, price, url, bullets });
+        // Image: Clive Emson uses background-image on .lotPic or .lotImgWrap elements, and data-image attrs
+        let imageUrl = '';
+        const lotPic = card.querySelector('.lotPic, .lotImgWrap, .lotImages [style*="background-image"]');
+        if (lotPic) {
+          const style = lotPic.getAttribute('style') || '';
+          const bgMatch = style.match(/background-image:\\s*url\\(['"]?([^'"\\)]+)/i);
+          if (bgMatch) imageUrl = bgMatch[1];
+          if (!imageUrl) {
+            const bg = getComputedStyle(lotPic).backgroundImage || '';
+            const bgm = bg.match(/url\\(['"]?([^'"\\)]+)/);
+            if (bgm) imageUrl = bgm[1];
+          }
+        }
+        if (!imageUrl) {
+          const dataImg = card.querySelector('[data-image]');
+          if (dataImg) {
+            const di = dataImg.getAttribute('data-image') || '';
+            if (di) imageUrl = di; // Will be resolved to absolute URL later
+          }
+        }
+        lots.push({ lot: num, address, price, url, bullets, imageUrl: imageUrl || undefined });
       }
       return lots;
     })()
@@ -3706,7 +3819,14 @@ const DOM_EXTRACTORS = {
         if (text.match(/\\bSOLD\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) {
           if (!bullets.some(b => b.match(/SOLD|STC|WITHDRAWN/i))) bullets.push('SOLD/STC');
         }
-        lots.push({ lot: num, address, price, url, bullets });
+        // Image from card
+        let imageUrl = '';
+        const cardImg = card.querySelector('img[src]');
+        if (cardImg) {
+          const s = cardImg.getAttribute('src') || cardImg.dataset.src || '';
+          if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) imageUrl = s;
+        }
+        lots.push({ lot: num, address, price, url, bullets, imageUrl: imageUrl || undefined });
       }
       return lots;
     })()
@@ -3741,7 +3861,14 @@ const DOM_EXTRACTORS = {
         if (text.match(/\\bSOLD\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) {
           if (!bullets.some(b => b.match(/SOLD|STC|WITHDRAWN/i))) bullets.push('SOLD/STC');
         }
-        lots.push({ lot: num, address, price, url, bullets });
+        // Image from card
+        let imageUrl = '';
+        const cardImg = card.querySelector('img[src]');
+        if (cardImg) {
+          const s = cardImg.getAttribute('src') || cardImg.dataset.src || '';
+          if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) imageUrl = s;
+        }
+        lots.push({ lot: num, address, price, url, bullets, imageUrl: imageUrl || undefined });
       }
       return lots;
     })()
@@ -3776,7 +3903,14 @@ const DOM_EXTRACTORS = {
         if (text.match(/\\bSOLD\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) {
           if (!bullets.some(b => b.match(/SOLD|STC|WITHDRAWN/i))) bullets.push('SOLD/STC');
         }
-        lots.push({ lot: num, address, price, url, bullets });
+        // Image from card
+        let imageUrl = '';
+        const cardImg = card.querySelector('img[src]');
+        if (cardImg) {
+          const s = cardImg.getAttribute('src') || cardImg.dataset.src || '';
+          if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) imageUrl = s;
+        }
+        lots.push({ lot: num, address, price, url, bullets, imageUrl: imageUrl || undefined });
       }
       return lots;
     })()
@@ -3796,7 +3930,14 @@ const DOM_EXTRACTORS = {
         const pcMatch = text.match(/[A-Z]{1,2}\\d{1,2}[A-Z]?\\s*\\d[A-Z]{2}/i);
         const address = text.replace(/lot\\s*\\d+/i, '').replace(/£[\\d,]+/g, '').replace(/guide\\s*price/i, '').trim().split('\\n')[0].trim();
         if (address && address.length > 5) {
-          lots.push({ lot: num, address: address.substring(0, 150), price, url: href, bullets: [] });
+          // Image from card
+          let imageUrl = '';
+          const elImg = el.querySelector('img[src]');
+          if (elImg) {
+            const s = elImg.getAttribute('src') || elImg.dataset.src || '';
+            if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) imageUrl = s;
+          }
+          lots.push({ lot: num, address: address.substring(0, 150), price, url: href, bullets: [], imageUrl: imageUrl || undefined });
         }
       });
       return lots;
@@ -3817,7 +3958,13 @@ const DOM_EXTRACTORS = {
         const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
         const address = text.split('\\n').find(l => l.trim().length > 10 && !l.match(/^(?:lot|starting|current|guide|£|bid)/i));
         if (address) {
-          lots.push({ lot: num, address: address.trim().substring(0, 150), price, url: href, bullets: [] });
+          let imageUrl = '';
+          const cardImg = card.querySelector('img[src]');
+          if (cardImg) {
+            const s = cardImg.getAttribute('src') || cardImg.dataset.src || '';
+            if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) imageUrl = s;
+          }
+          lots.push({ lot: num, address: address.trim().substring(0, 150), price, url: href, bullets: [], imageUrl: imageUrl || undefined });
         }
       });
       return lots;
@@ -3837,7 +3984,13 @@ const DOM_EXTRACTORS = {
         const lines = text.split('\\n').map(l => l.trim()).filter(l => l.length > 5);
         const address = lines.find(l => !l.match(/^(?:€|£|\\d+\\s*bed|guide|reserve|sold)/i));
         if (address) {
-          lots.push({ lot: lots.length + 1, address: address.substring(0, 150), price, url: href, bullets: [] });
+          let imageUrl = '';
+          const cardImg = card.querySelector('img[src]');
+          if (cardImg) {
+            const s = cardImg.getAttribute('src') || cardImg.dataset.src || '';
+            if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) imageUrl = s;
+          }
+          lots.push({ lot: lots.length + 1, address: address.substring(0, 150), price, url: href, bullets: [], imageUrl: imageUrl || undefined });
         }
       });
       return lots;
@@ -3858,7 +4011,13 @@ const DOM_EXTRACTORS = {
         const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
         const address = text.replace(/lot\\s*\\d+/i, '').replace(/guide\\s*price\\s*£[\\d,]+/i, '').replace(/£[\\d,]+/g, '').trim().split('\\n')[0].trim();
         if (address && address.length > 5) {
-          lots.push({ lot: num, address: address.substring(0, 150), price, url: href, bullets: [] });
+          let imageUrl = '';
+          const elImg = el.querySelector('img[src]');
+          if (elImg) {
+            const s = elImg.getAttribute('src') || elImg.dataset.src || '';
+            if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) imageUrl = s;
+          }
+          lots.push({ lot: num, address: address.substring(0, 150), price, url: href, bullets: [], imageUrl: imageUrl || undefined });
         }
       });
       return lots;
@@ -3883,7 +4042,17 @@ const DOM_EXTRACTORS = {
           const bullets = [];
           const beds = text.match(/(\\d+)\\s*bed/i);
           if (beds) bullets.push(beds[1] + ' bed');
-          lots.push({ lot: num, address: address.substring(0, 150), price, url: href, bullets });
+          // Image: Edward Mellor uses widget cards on auction page
+          let imageUrl = '';
+          const linkParent = link.parentElement;
+          if (linkParent) {
+            const parentImg = linkParent.querySelector('img[src]') || (linkParent.parentElement ? linkParent.parentElement.querySelector('img[src]') : null);
+            if (parentImg) {
+              const s = parentImg.getAttribute('src') || parentImg.dataset.src || '';
+              if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) imageUrl = s;
+            }
+          }
+          lots.push({ lot: num, address: address.substring(0, 150), price, url: href, bullets, imageUrl: imageUrl || undefined });
         }
       });
       return lots;
@@ -3904,7 +4073,13 @@ const DOM_EXTRACTORS = {
         const pcMatch = text.match(/[A-Z]{1,2}\\d{1,2}[A-Z]?\\s*\\d[A-Z]{2}/i);
         const address = text.replace(/lot\\s*\\d+/i, '').replace(/£[\\d,]+/g, '').trim().split('\\n')[0].trim();
         if (address && address.length > 5) {
-          lots.push({ lot: num, address: address.substring(0, 150), price, url: href, bullets: [] });
+          let imageUrl = '';
+          const elImg = el.querySelector('img[src]');
+          if (elImg) {
+            const s = elImg.getAttribute('src') || elImg.dataset.src || '';
+            if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) imageUrl = s;
+          }
+          lots.push({ lot: num, address: address.substring(0, 150), price, url: href, bullets: [], imageUrl: imageUrl || undefined });
         }
       });
       return lots;
@@ -3925,7 +4100,13 @@ const DOM_EXTRACTORS = {
         const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
         const address = text.split('\\n').find(l => l.trim().length > 10 && !l.match(/^(?:lot|guide|£|sold)/i));
         if (address) {
-          lots.push({ lot: num, address: address.trim().substring(0, 150), price, url: href, bullets: [] });
+          let imageUrl = '';
+          const cardImg = card.querySelector('img[src]');
+          if (cardImg) {
+            const s = cardImg.getAttribute('src') || cardImg.dataset.src || '';
+            if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) imageUrl = s;
+          }
+          lots.push({ lot: num, address: address.trim().substring(0, 150), price, url: href, bullets: [], imageUrl: imageUrl || undefined });
         }
       });
       return lots;
@@ -3946,7 +4127,13 @@ const DOM_EXTRACTORS = {
         const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
         const address = text.split('\\n').find(l => l.trim().length > 10 && !l.match(/^(?:lot|guide|£|sold)/i));
         if (address) {
-          lots.push({ lot: num, address: address.trim().substring(0, 150), price, url: href, bullets: [] });
+          let imageUrl = '';
+          const cardImg = card.querySelector('img[src]');
+          if (cardImg) {
+            const s = cardImg.getAttribute('src') || cardImg.dataset.src || '';
+            if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) imageUrl = s;
+          }
+          lots.push({ lot: num, address: address.trim().substring(0, 150), price, url: href, bullets: [], imageUrl: imageUrl || undefined });
         }
       });
       return lots;
@@ -3969,10 +4156,215 @@ const DOM_EXTRACTORS = {
         const address = lines.find(l => l.length > 10 && !l.match(/^(?:lot|guide|£|sold|property details|view|swipe)/i));
         // Description is the longest paragraph-like text
         const desc = lines.filter(l => l.length > 30 && !l.match(/^(?:lot|£)/i)).join(' ').substring(0, 300);
+        // Image from Swiper gallery
+        let imageUrl = '';
+        const swiperImg = card.querySelector('.swiper-slide img, .property-gallery img, img[src*="uploads"]');
+        if (swiperImg) {
+          imageUrl = swiperImg.getAttribute('src') || swiperImg.dataset.src || '';
+        }
+        if (!imageUrl) {
+          // Check for background-image on swiper slide divs
+          const slideDiv = card.querySelector('.swiper-slide [style*="background"]');
+          if (slideDiv) {
+            const bg = slideDiv.getAttribute('style') || '';
+            const bgMatch = bg.match(/background(?:-image)?:\\s*url\\(['"]?([^'"\\)]+)/i);
+            if (bgMatch) imageUrl = bgMatch[1];
+          }
+        }
+        if (!imageUrl) {
+          const anyImg = card.querySelector('img[src]');
+          if (anyImg) {
+            const s = anyImg.getAttribute('src') || '';
+            if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && !s.includes('arrow') && s.length > 10) imageUrl = s;
+          }
+        }
         if (address) {
-          lots.push({ lot: num, address: address.substring(0, 150), price, url: href, bullets: desc ? [desc] : [] });
+          lots.push({ lot: num, address: address.substring(0, 150), price, url: href, bullets: desc ? [desc] : [], imageUrl: imageUrl || undefined });
         }
       });
+      return lots;
+    })()
+  `,
+
+  // ── BRADLEY HALL (EIG platform with lot-panel cards) ──
+  bradleyhall: `
+    (() => {
+      const lots = [];
+      const seen = new Set();
+      document.querySelectorAll('.lot-panel').forEach(panel => {
+        const text = panel.textContent || '';
+        const lotMatch = text.match(/Lot\\s+(\\d+)/i);
+        if (!lotMatch) return;
+        const num = parseInt(lotMatch[1]);
+        if (seen.has(num)) return;
+        seen.add(num);
+        const link = panel.querySelector('a[href*="/lot/"]');
+        const url = link ? link.getAttribute('href') : '';
+        const priceMatch = text.match(/Guide Price[^£]*£([\\d,]+)/i) || text.match(/£([\\d,]+)/);
+        const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
+        const addrEl = panel.querySelector('.grid-address, h4');
+        let address = addrEl ? addrEl.textContent.trim() : '';
+        if (!address) return;
+        const taglineEl = panel.querySelector('.grid-tagline');
+        const bullets = [];
+        if (taglineEl) bullets.push(taglineEl.textContent.trim());
+        // Image from grid-img
+        let imageUrl = '';
+        const img = panel.querySelector('img.grid-img, img.img-responsive, img[src*="eigpropertyauctions"]');
+        if (img) {
+          const s = img.getAttribute('src') || img.dataset.src || '';
+          if (s && s.length > 10) imageUrl = s;
+        }
+        lots.push({ lot: num, address, price, url, bullets, imageUrl: imageUrl || undefined });
+      });
+      return lots;
+    })()
+  `,
+
+  // ── LANDWOOD (EIG platform) ──
+  landwood: `
+    (() => {
+      const lots = [];
+      const seen = new Set();
+      document.querySelectorAll('.lot-panel, .lot-card, [class*="lot-item"]').forEach(panel => {
+        const text = panel.textContent || '';
+        const lotMatch = text.match(/Lot\\s+(\\d+)/i);
+        if (!lotMatch) return;
+        const num = parseInt(lotMatch[1]);
+        if (seen.has(num)) return;
+        seen.add(num);
+        const link = panel.querySelector('a[href*="/lot/"]');
+        const url = link ? link.getAttribute('href') : '';
+        const priceMatch = text.match(/Guide Price[^£]*£([\\d,]+)/i) || text.match(/£([\\d,]+)/);
+        const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
+        const addrEl = panel.querySelector('.grid-address, h4, h3');
+        let address = addrEl ? addrEl.textContent.trim() : '';
+        if (!address) return;
+        const bullets = [];
+        const tagEl = panel.querySelector('.grid-tagline');
+        if (tagEl) bullets.push(tagEl.textContent.trim());
+        let imageUrl = '';
+        const img = panel.querySelector('img.grid-img, img.img-responsive, img[src*="eigpropertyauctions"]');
+        if (img) {
+          const s = img.getAttribute('src') || img.dataset.src || '';
+          if (s && s.length > 10) imageUrl = s;
+        }
+        lots.push({ lot: num, address, price, url, bullets, imageUrl: imageUrl || undefined });
+      });
+      return lots;
+    })()
+  `,
+
+  // ── CONNECT UK AUCTIONS ──
+  connectuk: `
+    (() => {
+      const lots = [];
+      const seen = new Set();
+      const cards = document.querySelectorAll('[class*="lot"], [class*="property"], .search-result, article, [class*="card"]');
+      for (const card of cards) {
+        const text = card.textContent || '';
+        const lotMatch = text.match(/Lot\\s+(\\d+)/i);
+        if (!lotMatch) continue;
+        const num = parseInt(lotMatch[1]);
+        if (seen.has(num)) continue;
+        seen.add(num);
+        const link = card.querySelector('a[href]');
+        const url = link ? link.getAttribute('href') : '';
+        const priceMatch = text.match(/(?:Guide|Price)[^£]*£([\\d,]+)/i) || text.match(/£([\\d,]+)/);
+        const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
+        let address = '';
+        const heading = card.querySelector('h2, h3, h4, .address, .title');
+        if (heading) address = heading.textContent.trim();
+        if (!address) continue;
+        const bullets = [];
+        card.querySelectorAll('li').forEach(li => {
+          const t = li.textContent.trim();
+          if (t.length > 5 && t.length < 200) bullets.push(t);
+        });
+        let imageUrl = '';
+        const cardImg = card.querySelector('img[src]');
+        if (cardImg) {
+          const s = cardImg.getAttribute('src') || cardImg.dataset.src || '';
+          if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) imageUrl = s;
+        }
+        lots.push({ lot: num, address, price, url, bullets, imageUrl: imageUrl || undefined });
+      }
+      return lots;
+    })()
+  `,
+
+  // ── AUCTION ESTATES ──
+  auctionestates: `
+    (() => {
+      const lots = [];
+      const seen = new Set();
+      const cards = document.querySelectorAll('[class*="lot"], [class*="property"], .search-result, article, [class*="card"]');
+      for (const card of cards) {
+        const text = card.textContent || '';
+        const lotMatch = text.match(/Lot\\s+(\\d+)/i);
+        if (!lotMatch) continue;
+        const num = parseInt(lotMatch[1]);
+        if (seen.has(num)) continue;
+        seen.add(num);
+        const link = card.querySelector('a[href]');
+        const url = link ? link.getAttribute('href') : '';
+        const priceMatch = text.match(/(?:Guide|Price)[^£]*£([\\d,]+)/i) || text.match(/£([\\d,]+)/);
+        const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
+        let address = '';
+        const heading = card.querySelector('h2, h3, h4, .address, .title');
+        if (heading) address = heading.textContent.trim();
+        if (!address) continue;
+        const bullets = [];
+        card.querySelectorAll('li').forEach(li => {
+          const t = li.textContent.trim();
+          if (t.length > 5 && t.length < 200) bullets.push(t);
+        });
+        let imageUrl = '';
+        const cardImg = card.querySelector('img[src]');
+        if (cardImg) {
+          const s = cardImg.getAttribute('src') || cardImg.dataset.src || '';
+          if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) imageUrl = s;
+        }
+        lots.push({ lot: num, address, price, url, bullets, imageUrl: imageUrl || undefined });
+      }
+      return lots;
+    })()
+  `,
+
+  // ── LOVEITTS ──
+  loveitts: `
+    (() => {
+      const lots = [];
+      const seen = new Set();
+      const cards = document.querySelectorAll('[class*="lot"], [class*="property"], .search-result, article, [class*="card"]');
+      for (const card of cards) {
+        const text = card.textContent || '';
+        const lotMatch = text.match(/Lot\\s+(\\d+)/i);
+        if (!lotMatch) continue;
+        const num = parseInt(lotMatch[1]);
+        if (seen.has(num)) continue;
+        seen.add(num);
+        const link = card.querySelector('a[href]');
+        const url = link ? link.getAttribute('href') : '';
+        const priceMatch = text.match(/(?:Guide|Price)[^£]*£([\\d,]+)/i) || text.match(/£([\\d,]+)/);
+        const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
+        let address = '';
+        const heading = card.querySelector('h2, h3, h4, .address, .title');
+        if (heading) address = heading.textContent.trim();
+        if (!address) continue;
+        const bullets = [];
+        card.querySelectorAll('li').forEach(li => {
+          const t = li.textContent.trim();
+          if (t.length > 5 && t.length < 200) bullets.push(t);
+        });
+        let imageUrl = '';
+        const cardImg = card.querySelector('img[src]');
+        if (cardImg) {
+          const s = cardImg.getAttribute('src') || cardImg.dataset.src || '';
+          if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) imageUrl = s;
+        }
+        lots.push({ lot: num, address, price, url, bullets, imageUrl: imageUrl || undefined });
+      }
       return lots;
     })()
   `,
@@ -3981,9 +4373,9 @@ const DOM_EXTRACTORS = {
   eigplatform: `
     (() => {
       const lots = [];
-      document.querySelectorAll('a[href*="/property/"], a[href*="/lot/"], .lot-card').forEach(el => {
+      document.querySelectorAll('a[href*="/property/"], a[href*="/lot/"], .lot-card, .lot-panel').forEach(el => {
         const text = el.textContent || '';
-        const href = el.getAttribute('href') || '';
+        const href = el.getAttribute('href') || el.querySelector('a[href]')?.getAttribute('href') || '';
         const lotMatch = text.match(/lot\\s*(\\d+)/i);
         const num = lotMatch ? parseInt(lotMatch[1]) : lots.length + 1;
         const priceMatch = text.match(/£([\\d,]+)/);
@@ -3991,7 +4383,14 @@ const DOM_EXTRACTORS = {
         const pcMatch = text.match(/[A-Z]{1,2}\\d{1,2}[A-Z]?\\s*\\d[A-Z]{2}/i);
         const address = text.replace(/lot\\s*\\d+/i, '').replace(/£[\\d,]+/g, '').trim().split('\\n')[0].trim();
         if (address && address.length > 5) {
-          lots.push({ lot: num, address: address.substring(0, 150), price, url: href, bullets: [] });
+          // Image from card
+          let imageUrl = '';
+          const cardImg = el.querySelector('img.grid-img, img.img-responsive, img[src*="eigpropertyauctions"], img[src]');
+          if (cardImg) {
+            const s = cardImg.getAttribute('src') || cardImg.dataset.src || '';
+            if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) imageUrl = s;
+          }
+          lots.push({ lot: num, address: address.substring(0, 150), price, url: href, bullets: [], imageUrl: imageUrl || undefined });
         }
       });
       return lots;
@@ -4173,12 +4572,32 @@ async function backfillImages(catalogueUrl, lots) {
       const src = resolveImg(m[2]);
       if (src && !hrefImgMap[href]) hrefImgMap[href] = src;
     }
+    // Also match <a href>...background-image:url(...) patterns
+    const linkBgRe = /<a[^>]+href="([^"]+)"[^>]*>[^]*?background(?:-image)?:\s*url\(['"]?([^'")\s]+)/gi;
+    while ((m = linkBgRe.exec(html)) !== null) {
+      const href = m[1];
+      const src = resolveImg(m[2]);
+      if (src && !hrefImgMap[href]) hrefImgMap[href] = src;
+    }
 
     // Strategy 2: Collect ALL property-like image URLs (both absolute and relative)
     const allImages = [];
     const imgRe = /<img[^>]+(?:src|data-src|data-lazy-src)="([^"]+)"/gi;
     while ((m = imgRe.exec(html)) !== null) {
       const src = resolveImg(m[1]);
+      if (src) allImages.push(src);
+    }
+    // Also collect background-image URLs
+    const bgRe = /background(?:-image)?:\s*url\(['"]?([^'")\s]+)/gi;
+    while ((m = bgRe.exec(html)) !== null) {
+      const src = resolveImg(m[1]);
+      if (src) allImages.push(src);
+    }
+    // Also collect srcset first entries
+    const srcsetRe = /srcset="([^"]+)"/gi;
+    while ((m = srcsetRe.exec(html)) !== null) {
+      const first = m[1].split(',')[0].trim().split(/\s+/)[0];
+      const src = resolveImg(first);
       if (src) allImages.push(src);
     }
 
@@ -4299,15 +4718,18 @@ async function extractWithDOM(page, house) {
   try {
     const hrefImageMap = await page.evaluate(() => {
       const map = {};
+      const skip = /logo|icon|arrow|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|loading|cookie|emoji/i;
       const links = document.querySelectorAll('a[href]');
       for (const link of links) {
         const rawHref = link.getAttribute('href') || '';
         const absHref = link.href; // browser-resolved absolute
         if (!rawHref || rawHref === '#') continue;
         if (map[rawHref] || map[absHref]) continue;
-        // Look for an image inside the link itself first
+
+        // Strategy 1: <img> inside the link itself
+        let imgSrc = '';
         let img = link.querySelector('img');
-        // Then walk up to parent container (up to 5 levels)
+        // Strategy 2: Walk up to parent container (up to 5 levels) and look for img
         if (!img) {
           let el = link;
           for (let depth = 0; depth < 5; depth++) {
@@ -4317,13 +4739,34 @@ async function extractWithDOM(page, house) {
             if (img) break;
           }
         }
-        if (!img) continue;
-        const src = img.getAttribute('src') || img.dataset.src
-          || img.getAttribute('data-lazy-src') || img.getAttribute('data-original')
-          || (img.srcset ? img.srcset.split(',')[0].trim().split(/\s+/)[0] : '');
-        if (!src || src.startsWith('data:') || src.length < 10) continue;
-        map[rawHref] = src;
-        map[absHref] = src;
+        if (img) {
+          imgSrc = img.getAttribute('src') || img.dataset.src
+            || img.getAttribute('data-lazy-src') || img.getAttribute('data-original')
+            || (img.srcset ? img.srcset.split(',')[0].trim().split(/\s+/)[0] : '');
+        }
+
+        // Strategy 3: background-image on elements near the link
+        if (!imgSrc || imgSrc.startsWith('data:')) {
+          let el = link;
+          for (let depth = 0; depth < 5; depth++) {
+            el = el.parentElement;
+            if (!el) break;
+            const bgEls = el.querySelectorAll('[style*="background"]');
+            for (const bgEl of bgEls) {
+              const style = bgEl.getAttribute('style') || '';
+              const bgMatch = style.match(/background(?:-image)?:\s*url\(['"]?([^'")\s]+)/i);
+              if (bgMatch && bgMatch[1] && !bgMatch[1].startsWith('data:')) {
+                imgSrc = bgMatch[1];
+                break;
+              }
+            }
+            if (imgSrc && !imgSrc.startsWith('data:')) break;
+          }
+        }
+
+        if (!imgSrc || imgSrc.startsWith('data:') || imgSrc.length < 10 || skip.test(imgSrc)) continue;
+        map[rawHref] = imgSrc;
+        map[absHref] = imgSrc;
       }
       return map;
     });
@@ -4344,6 +4787,13 @@ async function extractWithDOM(page, house) {
     }
   } catch (err) {
     console.log(`Image extraction error for ${house}: ${err.message}`);
+  }
+
+  // Resolve any relative imageUrls to absolute
+  for (const lot of lots) {
+    if (lot.imageUrl && !/^https?:\/\//i.test(lot.imageUrl)) {
+      try { lot.imageUrl = new URL(lot.imageUrl, baseUrl).href; } catch {}
+    }
   }
 
   return lots;
