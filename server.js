@@ -12,7 +12,7 @@ if (process.env.SENTRY_DSN) {
 import express from 'express';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { randomBytes, timingSafeEqual } from 'crypto';
+import { randomBytes, timingSafeEqual, createHash } from 'crypto';
 import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@supabase/supabase-js';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
@@ -179,7 +179,17 @@ app.use((req, res, next) => {
 // CONFIG
 // ═══════════════════════════════════════════════════════════════
 const RATE_LIMIT = 5;
-const CACHE_DAYS = 7;
+const CACHE_DAYS = 7; // fallback default
+const CACHE_TIERS = {
+  high:   { houses: ['allsop','savills','sdl','network','bidx1'], ttlHours: 12 },
+  medium: { houses: ['cliveemson','edwardmellor','bondwolfe','strettons'], ttlHours: 24 },
+  low:    { houses: [], ttlHours: 48 }  // everything else
+};
+function getCacheTTL(houseKey) {
+  if (CACHE_TIERS.high.houses.includes(houseKey)) return CACHE_TIERS.high.ttlHours * 3600000;
+  if (CACHE_TIERS.medium.houses.includes(houseKey)) return CACHE_TIERS.medium.ttlHours * 3600000;
+  return CACHE_TIERS.low.ttlHours * 3600000;
+}
 const HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
   'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -1824,7 +1834,7 @@ app.post('/api/analyse', async (req, res) => {
 
     // ── Cache results ──
     const displayName = getHouseDisplayName(house, url);
-    const expiresAt = new Date(Date.now() + CACHE_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    const expiresAt = new Date(Date.now() + getCacheTTL(house)).toISOString();
     const lotsWithPrice = analysed.filter(l => l.price && l.price > 0);
     const yieldsArr = analysed.map(l => l.estGrossYield).filter(y => y && y > 0);
 
@@ -1858,6 +1868,7 @@ app.post('/api/analyse', async (req, res) => {
       lots: analysed,
       created_at: new Date().toISOString(),
       expires_at: expiresAt,
+      last_scraped_at: new Date().toISOString(),
     }, { onConflict: 'url' });
 
     // Mark preset cache entries as partially stale (only the changed catalogue needs re-searching)
@@ -5752,6 +5763,30 @@ async function autoAnalyseOne(url, apiKey) {
   const house = detectAuctionHouse(url);
   const rewritten = rewriteUrl(url, house);
   const scrapeUrl = rewritten.baseUrl;
+  const normalisedUrl = url.trim().replace(/\/+$/, '').toLowerCase();
+
+  // HTML change detection — scrape first page and hash it
+  try {
+    const probeHtml = await fetchPage(scrapeUrl);
+    const contentHash = createHash('md5').update(probeHtml).digest('hex');
+    const { data: cached } = await supabase
+      .from('cached_analyses')
+      .select('content_hash, expires_at')
+      .eq('url', normalisedUrl)
+      .single();
+    if (cached && cached.content_hash === contentHash && cached.expires_at && new Date(cached.expires_at) > new Date()) {
+      // Extend cache TTL since content hasn't changed
+      const newExpiry = new Date(Date.now() + getCacheTTL(house)).toISOString();
+      await supabase.from('cached_analyses').update({ expires_at: newExpiry, last_scraped_at: new Date().toISOString() }).eq('url', normalisedUrl);
+      console.log(`Cache extended — content unchanged for ${house}`);
+      return;
+    }
+    // Store hash for later upsert
+    autoAnalyseOne._lastContentHash = contentHash;
+  } catch (e) {
+    autoAnalyseOne._lastContentHash = null;
+  }
+
   const client = new Anthropic({ apiKey });
   let rawLots = [];
 
@@ -5939,8 +5974,7 @@ async function autoAnalyseOne(url, apiKey) {
   const lots = rawLots.map(lot => analyseLot(lot)).sort((a, b) => b.score - a.score);
   await enrichLots(lots, house, url);
 
-  const normalisedUrl = url.trim().replace(/\/+$/, '').toLowerCase();
-  const expiresAt = new Date(Date.now() + CACHE_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const expiresAt = new Date(Date.now() + getCacheTTL(house)).toISOString();
   const lotsWithPrice = lots.filter(l => l.price && l.price > 0);
   const yieldsArr = lots.map(l => l.estGrossYield).filter(y => y && y > 0);
 
@@ -5972,6 +6006,8 @@ async function autoAnalyseOne(url, apiKey) {
     lots,
     created_at: new Date().toISOString(),
     expires_at: expiresAt,
+    content_hash: autoAnalyseOne._lastContentHash || null,
+    last_scraped_at: new Date().toISOString(),
   }, { onConflict: 'url' });
 
   // Mark preset cache entries as partially stale (only the changed catalogue needs re-searching)
