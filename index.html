@@ -2382,7 +2382,7 @@ function triggerFinanceCheck(idx) {
         html += '<div class="fw-lenders">' + lenders.map(l => '<span class="fw-lender-chip">' + esc(l.name || l.lender || l) + '</span>').join('') + '</div>';
       }
       html += '</div>';
-      html += '<div class="fw-cta-label">' + count + ' lender' + (count !== 1 ? 's' : '') + ' available — use BridgeMatch It for full details</div>';
+      html += '<a class="fw-cta" href="/check?loan=' + encodeURIComponent(loanAmount) + '&value=' + encodeURIComponent(lot.price) + '&type=' + encodeURIComponent(apiType) + '" target="_blank">See all ' + count + ' matches on BridgeMatch →</a>';
       resultsEl.innerHTML = html;
     } catch (e) {
       resultsEl.innerHTML = '<div class="fw-error">Unable to check finance — try again later</div>';
