@@ -186,6 +186,9 @@ const HEADERS = {
   'Accept-Language': 'en-GB,en;q=0.9',
 };
 const MAX_PAGES = 40;
+const MAX_PUPPETEER_PAGES = 15;
+const MAX_LOTS_PER_SCRAPE = 100;
+const MAX_AUCTIONS_PER_HOUSE = 2;
 const TIMEOUT = 25000;
 
 // ═══════════════════════════════════════════════════════════════
@@ -2768,7 +2771,8 @@ async function scrapeAllPages(baseUrl, house) {
   const html1 = await fetchPage(baseUrl);
   pages.push({ page: 1, html: html1 });
   const totalPages = detectTotalPages(html1, baseUrl, house);
-  for (let pg = 2; pg <= Math.min(totalPages, MAX_PAGES); pg++) {
+  const pageCap = Math.min(totalPages, MAX_PAGES);
+  for (let pg = 2; pg <= pageCap; pg++) {
     const pageUrl = buildPageUrl(baseUrl, pg, house);
     try {
       const html = await fetchPage(pageUrl);
@@ -2777,6 +2781,7 @@ async function scrapeAllPages(baseUrl, house) {
       await new Promise(r => setTimeout(r, 300));
     } catch (e) { break; }
   }
+  if (totalPages > MAX_PAGES) console.log(`${house} pagination cap reached at ${MAX_PAGES} pages`);
   return pages;
 }
 
@@ -3011,7 +3016,8 @@ async function scrapeWithPuppeteer(url, house) {
 
     // Check for pagination and scrape more pages
     const totalPages = detectTotalPages(html, url, house);
-    for (let pg = 2; pg <= Math.min(totalPages, MAX_PAGES); pg++) {
+    const puppeteerPageCap = Math.min(totalPages, MAX_PUPPETEER_PAGES);
+    for (let pg = 2; pg <= puppeteerPageCap; pg++) {
       try {
         const pageUrl = buildPageUrl(url, pg, house);
         await page.goto(pageUrl, { waitUntil: 'networkidle2', timeout: 30000 });
@@ -3036,6 +3042,7 @@ async function scrapeWithPuppeteer(url, house) {
         break;
       }
     }
+    if (totalPages > MAX_PUPPETEER_PAGES) console.log(`${house} pagination cap reached at ${MAX_PUPPETEER_PAGES} pages`);
 
     await page.close();
   } catch (err) {
@@ -3053,6 +3060,7 @@ async function extractLotsWithClaude(client, pages, house, onProgress, catalogue
   const batchSize = 3;
   for (let i = 0; i < pages.length; i += batchSize) {
     if (creditExhausted) { console.log('Skipping remaining batches — API credits exhausted'); break; }
+    if (allLots.length >= MAX_LOTS_PER_SCRAPE) { console.log(`${house} lots cap reached at ${MAX_LOTS_PER_SCRAPE}`); break; }
     const batch = pages.slice(i, i + batchSize);
     const strippedBatch = batch.map(p => ({ page: p.page, content: stripHtml(p.html) }));
     const totalStrippedLen = strippedBatch.reduce((sum, p) => sum + p.content.length, 0);
@@ -5514,8 +5522,23 @@ async function _doAutoAnalyseAll() {
   );
 
   // ── Step 2: Analyse all catalogue-ready auctions ──
-  const ready = await getCalendarAuctions();
-  console.log(`AUTO: ${ready.length} catalogue-ready auctions to check`);
+  const allReady = await getCalendarAuctions();
+  // Limit to nearest MAX_AUCTIONS_PER_HOUSE upcoming dates per house
+  const byHouse = {};
+  for (const a of allReady) {
+    const h = a.house || 'unknown';
+    if (!byHouse[h]) byHouse[h] = [];
+    byHouse[h].push(a);
+  }
+  const ready = [];
+  for (const [h, auctions] of Object.entries(byHouse)) {
+    auctions.sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0));
+    ready.push(...auctions.slice(0, MAX_AUCTIONS_PER_HOUSE));
+    for (const skippedA of auctions.slice(MAX_AUCTIONS_PER_HOUSE)) {
+      console.log(`Skipping ${h} ${skippedA.date || skippedA.url} — beyond ${MAX_AUCTIONS_PER_HOUSE}-auction lookahead limit`);
+    }
+  }
+  console.log(`AUTO: ${ready.length} catalogue-ready auctions to check (${allReady.length} total, limited to ${MAX_AUCTIONS_PER_HOUSE} per house)`);
 
   let analysed = 0, skipped = 0, failed = 0;
 
