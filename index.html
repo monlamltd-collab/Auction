@@ -733,13 +733,13 @@ footer .logo-f span{color:var(--green)}
         <option value="available">Available only</option><option value="all">All lots</option><option value="sold">Sold only</option>
       </select>
       <input class="tb-search" type="text" id="fPostcode" placeholder="Postcode..." style="min-width:80px;max-width:100px;flex:0" oninput="renderLots()">
-      <label class="tb-toggle"><input type="checkbox" id="fExcludePOA" onchange="renderLots()"><span class="tb-toggle-label">Excl. POA</span></label>
+      <select class="tb-select" id="fExcludePOA" onchange="renderLots()"><option value="">Inc. POA</option><option value="yes">Excl. POA</option></select>
       <div class="ub-sep"></div>
       <input class="tb-search" id="smartQuery" placeholder="AI search..." style="min-width:120px">
       <button class="btn-main" id="mainBtn" onclick="handleSearch()">Browse</button>
       <span class="filter-count" id="filterBarCount" style="font-size:.72rem;color:var(--text3);white-space:nowrap"></span>
       <select class="tb-select" id="fAfford" onchange="renderLots()" style="display:none"><option value="all">All lots</option><option value="affordable">Affordable</option><option value="in_budget">In budget only</option><option value="full_finance">Zero deposit only</option></select>
-      <select class="tb-select" id="fTS" onchange="renderLots()" style="display:none"><option value="">All lots</option><option value="ts">Title split opportunities</option></select>
+      <!-- fTS removed: title split filtering available via chip button / AI search -->
     </div>
     <div class="chip-row">
       <button class="ex-btn" onclick="setQ('Properties needing heavy refurbishment')">Heavy refurb</button>
@@ -920,7 +920,7 @@ footer .logo-f span{color:var(--green)}
     </form>
     <div class="ec-error" id="ecError"></div>
     <div class="ec-success" id="ecSuccess">You're in! We'll send your first deal alert soon.</div>
-    <p class="ec-note">Free forever. We respect your privacy.</p>
+    <p class="ec-note">We respect your privacy.</p>
   </section>
 
   <footer>
@@ -960,8 +960,8 @@ function resetSearchState(){
   _searchTimers=[];
   LOTS=[];
   SMART_RESULTS=null;
-  const filterResets={fDeal:'',fType:'',fCondition:'',fTenure:'',fLocation:'',fTS:'',fAfford:'all',fSoldTop:'all',fSearch:'',fSort:'score',fBeds:'',fPostcode:'',fMinPrice:'',fMaxPrice:''};
-  if($('fExcludePOA')) $('fExcludePOA').checked=false;
+  const filterResets={fDeal:'',fType:'',fCondition:'',fTenure:'',fLocation:'',fAfford:'all',fSoldTop:'all',fSearch:'',fSort:'score',fBeds:'',fPostcode:'',fMinPrice:'',fMaxPrice:''};
+  if($('fExcludePOA')) $('fExcludePOA').value='';
   _selectedHouses.clear();
   for(const[id,val] of Object.entries(filterResets)){const el=$(id);if(el)el.value=val}
   updatePriceBtn();
@@ -1908,8 +1908,7 @@ function buildLotFilters(){
   const deals=new Set(LOTS.map(l=>l.dealType).filter(Boolean));
   $('fDeal').innerHTML='<option value="">All deals</option>'+[...deals].sort().map(d=>`<option value="${esc(d)}">${esc(d)}</option>`).join('');
 
-  const hasTS=LOTS.some(l=>l.titleSplit);
-  if($('fTS')) $('fTS').style.display=hasTS?'':'none';
+  /* fTS dropdown removed — title splits shown inline via section dividers */
 
   const hasCash=+($('fpCash')?.value)>0;
   if($('fAfford')) $('fAfford').style.display=hasCash?'':'none';
@@ -2001,7 +2000,7 @@ function renderLots(){
   // ── All filters in one pass ──
   const minP=+$('fMinPrice').value, maxP=+$('fMaxPrice').value, minBeds=+$('fBeds').value;
   const ft=$('fType').value, fd=$('fDeal').value, fa=$('fAfford')?.value||'all';
-  const fts=$('fTS')?.value||'', fsold=$('fSoldTop')?.value||'';
+  const fsold=$('fSoldTop')?.value||'';
   const fs=$('fSearch').value.toLowerCase();
   const fco=$('fCondition')?.value||'', ften=$('fTenure')?.value||'';
   const floc=$('fLocation')?.value||'';
@@ -2022,7 +2021,6 @@ function renderLots(){
   if(fa==='affordable'&&fp.cash) lots=lots.filter(l=>l._affTag!=='out_of_reach');
   if(fa==='in_budget'&&fp.cash) lots=lots.filter(l=>l._affTag==='in_budget'||l._affTag==='unknown');
   if(fa==='full_finance'&&fp.cash) lots=lots.filter(l=>l._affTag==='full_finance');
-  if(fts==='ts') lots=lots.filter(l=>l.titleSplit);
   if(fsold==='available') lots=lots.filter(l=>!(l.bullets||[]).some(b=>/\bSOLD\b|\bSTC\b|\bSALE.?AGREED\b|\bWITHDRAWN\b/i.test(b)));
   if(fsold==='sold') lots=lots.filter(l=>(l.bullets||[]).some(b=>/\bSOLD\b|\bSTC\b|\bSALE.?AGREED\b|\bWITHDRAWN\b/i.test(b)));
   if(fs) lots=lots.filter(l=>(l.address||'').toLowerCase().includes(fs)||(l.bullets||[]).join(' ').toLowerCase().includes(fs));
@@ -2032,7 +2030,7 @@ function renderLots(){
   if(selectedHouses.length) lots=lots.filter(l=>selectedHouses.includes(l._house));
 
   // Exclude POA
-  if($('fExcludePOA') && $('fExcludePOA').checked) lots=lots.filter(l=>l.price>0);
+  if($('fExcludePOA') && $('fExcludePOA').value==='yes') lots=lots.filter(l=>l.price>0);
 
   // Sort
   const sortVal=$('fSort')?.value||'score';
