@@ -62,24 +62,33 @@ a{color:var(--green);text-decoration:none}a:hover{text-decoration:underline}
 @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
 
 /* ── SEARCH PANEL ── */
-.search-panel{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:28px;margin-bottom:28px;box-shadow:0 1px 3px rgba(0,0,0,.03)}
-.search-row{display:flex;gap:10px;margin-bottom:18px}
+.search-panel{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.03);position:sticky;top:56px;z-index:10}
+.unified-bar{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center}
+.unified-bar .tb-select,.unified-bar .tb-search{padding:7px 10px;font-size:.8rem}
+.unified-bar .tb-search{min-width:140px;flex:1}
+.ub-sep{width:1px;height:24px;background:var(--border);margin:0 2px;flex-shrink:0}
+.price-dd{position:relative;display:inline-block}
+.price-dd-btn{padding:7px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--white);font-size:.8rem;color:var(--text);font-family:inherit;cursor:pointer;white-space:nowrap}
+.price-dd-btn.active-filter{border-color:var(--green);color:var(--green)}
+.price-pop{display:none;position:absolute;top:100%;left:0;background:var(--white);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.12);padding:12px;z-index:20;min-width:260px}
+.price-pop.open{display:flex;gap:8px}
+.price-pop select{flex:1;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:.82rem;font-family:inherit}
+.price-pop label{display:block;font-size:.7rem;font-weight:600;color:var(--text3);margin-bottom:3px;text-transform:uppercase}
+.chip-row{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:6px}
+.chip-row .ex-btn{font-size:.7rem;padding:3px 8px}
+.chip-row .adv-toggle{font-size:.75rem}
 .search-input{flex:1;padding:13px 18px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:.93rem;font-family:inherit;outline:0;transition:border-color .15s}
 .search-input:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(46,125,50,.08)}
 .search-input::placeholder{color:var(--text4)}
-.btn-main{padding:13px 28px;border-radius:var(--radius-sm);font-size:.9rem;font-weight:700;color:var(--white);background:var(--green);border:none;cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap}
+.btn-main{padding:8px 18px;border-radius:var(--radius-sm);font-size:.82rem;font-weight:700;color:var(--white);background:var(--green);border:none;cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap}
 .btn-main:hover{background:var(--green2)}
 .btn-main:disabled{opacity:.5;cursor:not-allowed}
 
 /* ── FILTERS ── */
-.filters{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-bottom:16px}
 .filter-field label{display:block;font-size:.75rem;font-weight:600;color:var(--text3);margin-bottom:4px;text-transform:uppercase;letter-spacing:.03em}
 .filter-field select,.filter-field input{width:100%;padding:10px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:.85rem;font-family:inherit;outline:0}
 .filter-field select:focus,.filter-field input:focus{border-color:var(--green)}
 
-.filter-extras{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
-.example-prompts{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-.ex-label{font-size:.75rem;color:var(--text4)}
 .ex-btn{font-size:.73rem;padding:4px 10px;border-radius:16px;border:1px solid var(--border);background:var(--white);color:var(--text3);cursor:pointer;font-family:inherit;transition:all .15s}
 .ex-btn:hover{background:var(--green-light);color:var(--green);border-color:var(--green)}
 .adv-toggle{font-size:.8rem;color:var(--text3);cursor:pointer;border:none;background:none;font-family:inherit;text-decoration:underline;text-underline-offset:2px}
@@ -99,7 +108,7 @@ a{color:var(--green);text-decoration:none}a:hover{text-decoration:underline}
 .view-results .hero{display:none}
 /* calendar section removed */
 .view-results .back-bar{display:block}
-.view-results .search-panel{display:none}
+/* search-panel now stays visible in results view (unified filter bar) */
 
 /* ── RESULTS PANEL ── */
 #resultsPanel{display:none;margin-bottom:32px}
@@ -329,7 +338,7 @@ footer .logo-f span{color:var(--green)}
 
 /* ── LOTS GRID ── */
 .lots-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:0}
-.lots-grid .section-header{grid-column:1/-1}
+.lots-grid .section-divider{grid-column:1/-1}
 
 /* ── PHOTO LOT CARD ── */
 .lot-card{background:var(--white);border:1px solid #d5dde5;border-radius:var(--radius);overflow:hidden;transition:all .15s ease;cursor:pointer}
@@ -415,21 +424,12 @@ footer .logo-f span{color:var(--green)}
 .fw-error{font-family:'DM Sans',sans-serif;font-size:12px;color:var(--red);text-align:center;padding:16px 0}
 
 /* ── SECTION HEADERS (grid) ── */
-.section-header{padding:16px 0 8px;border-bottom:2px solid var(--border);margin-bottom:12px;display:flex;justify-content:space-between;align-items:center}
-.section-header-left{display:flex;align-items:center;gap:8px}
-.section-header h3{font-family:'Source Serif 4',serif;font-weight:700;font-size:16px;color:#1a2a3a}
-.section-header .sh-badge{background:#fff8ee;color:#e67e22;font-family:'DM Sans',sans-serif;font-size:12px;padding:2px 10px;border-radius:20px;font-weight:600}
-.section-header .sh-toggle{font-family:'DM Sans',sans-serif;font-size:11px;color:#6b7c8d;background:none;border:none;cursor:pointer;padding:4px 8px}
-.section-header .sh-toggle:hover{color:var(--green)}
+.section-divider{grid-column:1/-1;display:flex;align-items:center;gap:10px;padding:8px 0 4px;font-size:.78rem;color:var(--text3);font-family:'DM Sans',sans-serif;font-weight:600}
+.section-divider::before,.section-divider::after{content:'';flex:1;height:1px;background:var(--border)}
+.section-divider .sd-count{font-weight:400;color:var(--text4);font-size:.72rem}
 
 /* ── FILTER BAR (sticky) ── */
-.filter-bar-sticky{background:var(--white);border-bottom:1px solid var(--border);padding:12px 0;position:sticky;top:56px;z-index:10;margin:0 -24px;padding-left:24px;padding-right:24px}
-.filter-bar-inner{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.filter-bar-sticky .tb-select{padding:8px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--white);font-size:.82rem;color:var(--text);font-family:inherit;cursor:pointer}
-.filter-bar-sticky .tb-select.active-filter{border-color:var(--green);color:var(--green)}
-.filter-bar-sticky .tb-search{padding:8px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--white);font-size:.82rem;color:var(--text);font-family:inherit;outline:0;flex:1;min-width:120px}
-.filter-bar-sticky .tb-search:focus{border-color:var(--green)}
-.filter-bar-sticky .filter-count{font-family:'DM Sans',sans-serif;font-size:12px;color:#6b7c8d}
+.tb-select.active-filter{border-color:var(--green);color:var(--green)}
 
 /* House dropdown popover */
 .house-dropdown{position:relative;display:inline-block}
@@ -451,8 +451,8 @@ footer .logo-f span{color:var(--green)}
 }
 @media(max-width:768px){
   .hero h1{font-size:1.8rem}
-  .filters{grid-template-columns:1fr 1fr}
-  .search-row{flex-direction:column}
+  .unified-bar{gap:4px 6px}
+  .unified-bar .tb-select,.unified-bar .tb-search{font-size:.76rem;padding:6px 8px}
   .stats-grid{grid-template-columns:1fr 1fr}
   .budget-row{grid-template-columns:1fr}
   .fp-row{grid-template-columns:1fr}
@@ -472,7 +472,7 @@ footer .logo-f span{color:var(--green)}
   .landing-stats-inner{grid-template-columns:repeat(2,1fr);gap:16px}
   .hero-ctas{flex-direction:column;align-items:center}
   .cta-primary,.cta-secondary{width:100%;justify-content:center}
-  .filter-bar-inner{flex-direction:column;align-items:stretch}
+  .unified-bar{gap:4px}
   .steps{grid-template-columns:1fr}
   .steps::before{display:none}
   .step{flex-direction:column;gap:12px;text-align:center;align-items:center}
@@ -505,7 +505,6 @@ footer .logo-f span{color:var(--green)}
   .scan-title{font-size:1rem}
   .tb-search{min-width:0}
   .landing-stats{margin:0 -14px;padding:32px 14px}
-  .filter-bar-sticky{margin:0 -14px;padding-left:14px;padding-right:14px}
   .card-image-wrapper{height:160px}
 }
 @media(max-width:360px){
@@ -652,80 +651,74 @@ footer .logo-f span{color:var(--green)}
     <span class="dot"></span> <span id="userEmail"></span> &nbsp;·&nbsp; <a id="manageSubLink" onclick="openBillingPortal()" style="display:none;cursor:pointer">manage plan</a><span id="manageSubDot" style="display:none"> · </span><a onclick="signOut()">sign out</a>
   </div>
 
-  <!-- ═══════ SEARCH PANEL ═══════ -->
-  <div class="search-panel">
-
-    <div class="filters">
-      <div class="filter-field"><label>Min Price</label><select id="fMinPrice" onchange="applyFilters()">
-        <option value="">No min</option><option value="50000">£50,000</option><option value="100000">£100,000</option><option value="150000">£150,000</option><option value="200000">£200,000</option><option value="250000">£250,000</option><option value="300000">£300,000</option><option value="350000">£350,000</option><option value="400000">£400,000</option><option value="450000">£450,000</option><option value="500000">£500,000</option><option value="550000">£550,000</option><option value="600000">£600,000</option><option value="650000">£650,000</option><option value="700000">£700,000</option><option value="750000">£750,000</option><option value="800000">£800,000</option><option value="850000">£850,000</option><option value="900000">£900,000</option><option value="950000">£950,000</option><option value="1000000">£1,000,000</option><option value="1100000">£1,100,000</option><option value="1200000">£1,200,000</option><option value="1300000">£1,300,000</option><option value="1400000">£1,400,000</option><option value="1500000">£1,500,000</option><option value="1600000">£1,600,000</option><option value="1700000">£1,700,000</option><option value="1800000">£1,800,000</option><option value="1900000">£1,900,000</option><option value="2000000">£2,000,000</option><option value="2250000">£2,250,000</option><option value="2500000">£2,500,000</option><option value="2750000">£2,750,000</option><option value="3000000">£3,000,000</option>
-      </select></div>
-      <div class="filter-field"><label>Max Price</label><select id="fMaxPrice" onchange="applyFilters()">
-        <option value="">No max</option><option value="50000">£50,000</option><option value="100000">£100,000</option><option value="150000">£150,000</option><option value="200000">£200,000</option><option value="250000">£250,000</option><option value="300000">£300,000</option><option value="350000">£350,000</option><option value="400000">£400,000</option><option value="450000">£450,000</option><option value="500000">£500,000</option><option value="550000">£550,000</option><option value="600000">£600,000</option><option value="650000">£650,000</option><option value="700000">£700,000</option><option value="750000">£750,000</option><option value="800000">£800,000</option><option value="850000">£850,000</option><option value="900000">£900,000</option><option value="950000">£950,000</option><option value="1000000">£1,000,000</option><option value="1100000">£1,100,000</option><option value="1200000">£1,200,000</option><option value="1300000">£1,300,000</option><option value="1400000">£1,400,000</option><option value="1500000">£1,500,000</option><option value="1600000">£1,600,000</option><option value="1700000">£1,700,000</option><option value="1800000">£1,800,000</option><option value="1900000">£1,900,000</option><option value="2000000">£2,000,000</option><option value="2250000">£2,250,000</option><option value="2500000">£2,500,000</option><option value="2750000">£2,750,000</option><option value="3000000">£3,000,000</option>
-      </select></div>
-      <div class="filter-field"><label>Bedrooms</label><select id="fBeds" onchange="applyFilters()">
-        <option value="">Any</option><option value="1">1+</option><option value="2">2+</option><option value="3">3+</option><option value="4">4+</option><option value="5">5+</option><option value="6">6+</option><option value="7">7+</option><option value="8">8+</option><option value="9">9+</option><option value="10">10+</option><option value="11">11+</option><option value="12">12+</option><option value="13">13+</option><option value="14">14+</option><option value="15">15+</option>
-      </select></div>
-      <div class="filter-field"><label>Property Type</label><select id="fType" onchange="applyFilters()">
-        <option value="">All types</option><option value="house">House</option><option value="flat">Flat / Apartment</option><option value="bungalow">Bungalow</option><option value="commercial">Commercial</option><option value="land">Land / Development</option><option value="garage">Garage / Parking</option><option value="other">Other</option>
-      </select></div>
-    </div>
-    <div class="filters" style="margin-top:-8px">
-      <div class="filter-field"><label>Location</label><select id="fLocation" onchange="applyFilters()">
-        <option value="">Anywhere</option>
-        <optgroup label="Regions">
-          <option value="london">London</option>
-          <option value="south east">South East</option>
-          <option value="south west">South West</option>
-          <option value="east">East of England</option>
-          <option value="west midlands">West Midlands</option>
-          <option value="east midlands">East Midlands</option>
-          <option value="north west">North West</option>
-          <option value="north east">North East</option>
-          <option value="yorkshire">Yorkshire</option>
-          <option value="wales">Wales</option>
-          <option value="scotland">Scotland</option>
-        </optgroup>
-      </select></div>
-      <div class="filter-field"><label>Status</label><select id="fSoldTop" onchange="syncSoldFilter('top');applyFilters()">
-        <option value="available">Available only</option><option value="all">All lots</option><option value="sold">Sold / STC only</option>
-      </select></div>
-      <div class="filter-field"><label>Tenure</label><select id="fTenure" onchange="applyFilters()">
-        <option value="">Any</option><option value="Freehold">Freehold</option><option value="Leasehold">Leasehold</option><option value="Share of Freehold">Share of Freehold</option>
-      </select></div>
-      <div class="filter-field"><label>Condition</label><select id="fCondition" onchange="applyFilters()">
-        <option value="">Any</option><option value="needs work">Needs work</option><option value="good">Good / modernised</option><option value="vacant">Vacant</option><option value="tenanted">Tenanted</option>
-      </select></div>
-    </div>
-    <div class="filters" style="margin-top:-8px">
-      <div class="filter-field" style="flex:2"><label>Postcode (e.g. SW1, B15, CF10)</label><input id="fPostcode" placeholder="Any postcode area" oninput="applyFilters()" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:.88rem"></div>
-    </div>
-
-    <!-- Live filter count -->
-    <div id="filterCount" style="text-align:center;padding:10px 0;font-size:.88rem;color:var(--text3);display:none">
-      <span id="filterCountText"></span>
-    </div>
-
-    <!-- AI search bar -->
-    <div class="search-row" style="margin-top:4px">
-      <input id="smartQuery" class="search-input" placeholder="Now refine with AI: e.g. 'probate sales' or 'development potential near Birmingham'">
-      <button class="btn-main" id="mainBtn" onclick="handleSearch()">Browse</button>
-    </div>
-
-    <div class="filter-extras">
-      <div class="example-prompts">
-        <span class="ex-label">Or ask AI:</span>
-        <button class="ex-btn" onclick="setQ('Properties needing heavy refurbishment')">Heavy refurb</button>
-        <button class="ex-btn" onclick="setQ('Freehold multi-unit blocks for title splitting')">Title splits</button>
-        <button class="ex-btn" onclick="setQ('High yield investments over 8%')">High yield 8%+</button>
-        <button class="ex-btn" onclick="setQ('Development land with planning')">Dev land</button>
-        <button class="ex-btn" onclick="setQ('Probate or executor sales')">Probate</button>
-        <button class="ex-btn" onclick="setQ('Best scoring deals')">Top picks</button>
-        <button class="ex-btn" onclick="setQ('Vacant properties')">Vacant</button>
-        <button class="ex-btn" onclick="setQ('Properties under £100k')">Under 100k</button>
+  <!-- ═══════ UNIFIED FILTER BAR ═══════ -->
+  <div class="search-panel" id="filterBar">
+    <div class="unified-bar">
+      <input class="tb-search" type="text" id="fSearch" placeholder="Search lots..." oninput="renderLots()">
+      <div class="house-dropdown" id="houseDropdown">
+        <button class="house-dropdown-btn" id="houseDropdownBtn" onclick="toggleHousePopover(event)">All houses</button>
+        <div class="house-popover" id="housePopover">
+          <input class="house-popover-search" type="text" placeholder="Search houses..." oninput="filterHouseList(this.value)">
+          <div id="houseCheckList"></div>
+        </div>
       </div>
-      <button class="adv-toggle" onclick="toggleAdvanced()">💰 Finance profile</button>
+      <select class="tb-select" id="fSort" onchange="renderLots()">
+        <option value="score">Score (high → low)</option>
+        <option value="price_asc">Price (low → high)</option>
+        <option value="price_desc">Price (high → low)</option>
+        <option value="yield">Yield (high → low)</option>
+      </select>
+      <div class="price-dd" id="priceDropdown">
+        <button class="price-dd-btn" id="priceDdBtn" onclick="togglePricePopover(event)">Any price</button>
+        <div class="price-pop" id="pricePopover">
+          <div><label>Min</label><select id="fMinPrice" onchange="updatePriceBtn();renderLots()">
+            <option value="">No min</option><option value="50000">£50k</option><option value="100000">£100k</option><option value="150000">£150k</option><option value="200000">£200k</option><option value="250000">£250k</option><option value="300000">£300k</option><option value="400000">£400k</option><option value="500000">£500k</option><option value="750000">£750k</option><option value="1000000">£1m</option><option value="1500000">£1.5m</option><option value="2000000">£2m</option>
+          </select></div>
+          <div><label>Max</label><select id="fMaxPrice" onchange="updatePriceBtn();renderLots()">
+            <option value="">No max</option><option value="50000">£50k</option><option value="100000">£100k</option><option value="150000">£150k</option><option value="200000">£200k</option><option value="250000">£250k</option><option value="300000">£300k</option><option value="400000">£400k</option><option value="500000">£500k</option><option value="750000">£750k</option><option value="1000000">£1m</option><option value="1500000">£1.5m</option><option value="2000000">£2m</option><option value="3000000">£3m</option>
+          </select></div>
+        </div>
+      </div>
+      <select class="tb-select" id="fBeds" onchange="renderLots()">
+        <option value="">Beds: Any</option><option value="1">1+</option><option value="2">2+</option><option value="3">3+</option><option value="4">4+</option><option value="5">5+</option><option value="6">6+</option>
+      </select>
+      <select class="tb-select" id="fType" onchange="renderLots()">
+        <option value="">All types</option><option value="house">House</option><option value="flat">Flat</option><option value="bungalow">Bungalow</option><option value="commercial">Commercial</option><option value="land">Land</option><option value="garage">Garage</option><option value="other">Other</option>
+      </select>
+      <select class="tb-select" id="fLocation" onchange="renderLots()">
+        <option value="">Anywhere</option>
+        <option value="london">London</option><option value="south east">South East</option><option value="south west">South West</option><option value="east">East of England</option><option value="west midlands">West Midlands</option><option value="east midlands">East Midlands</option><option value="north west">North West</option><option value="north east">North East</option><option value="yorkshire">Yorkshire</option><option value="wales">Wales</option><option value="scotland">Scotland</option>
+      </select>
+      <select class="tb-select" id="fDeal" onchange="renderLots()"><option value="">All deals</option></select>
+      <select class="tb-select" id="fCondition" onchange="renderLots()">
+        <option value="">Any condition</option><option value="needs work">Needs work</option><option value="good">Good</option><option value="vacant">Vacant</option><option value="tenanted">Tenanted</option>
+      </select>
+      <select class="tb-select" id="fTenure" onchange="renderLots()">
+        <option value="">Any tenure</option><option value="Freehold">Freehold</option><option value="Leasehold">Leasehold</option><option value="Share of Freehold">Share of FH</option>
+      </select>
+      <select class="tb-select" id="fSoldTop" onchange="renderLots()">
+        <option value="available">Available only</option><option value="all">All lots</option><option value="sold">Sold only</option>
+      </select>
+      <input class="tb-search" type="text" id="fPostcode" placeholder="Postcode..." style="min-width:80px;max-width:100px;flex:0" oninput="renderLots()">
+      <label class="tb-toggle"><input type="checkbox" id="fExcludePOA" onchange="renderLots()"><span class="tb-toggle-label">Excl. POA</span></label>
+      <div class="ub-sep"></div>
+      <input class="tb-search" id="smartQuery" placeholder="AI search..." style="min-width:120px">
+      <button class="btn-main" id="mainBtn" onclick="handleSearch()">Browse</button>
+      <span class="filter-count" id="filterBarCount" style="font-size:.72rem;color:var(--text3);white-space:nowrap"></span>
+      <select class="tb-select" id="fAfford" onchange="renderLots()" style="display:none"><option value="all">All lots</option><option value="affordable">Affordable</option><option value="in_budget">In budget only</option><option value="full_finance">Zero deposit only</option></select>
+      <select class="tb-select" id="fTS" onchange="renderLots()" style="display:none"><option value="">All lots</option><option value="ts">Title split opportunities</option></select>
     </div>
-
+    <div class="chip-row">
+      <button class="ex-btn" onclick="setQ('Properties needing heavy refurbishment')">Heavy refurb</button>
+      <button class="ex-btn" onclick="setQ('Freehold multi-unit blocks for title splitting')">Title splits</button>
+      <button class="ex-btn" onclick="setQ('High yield investments over 8%')">High yield 8%+</button>
+      <button class="ex-btn" onclick="setQ('Development land with planning')">Dev land</button>
+      <button class="ex-btn" onclick="setQ('Probate or executor sales')">Probate</button>
+      <button class="ex-btn" onclick="setQ('Best scoring deals')">Top picks</button>
+      <button class="ex-btn" onclick="setQ('Vacant properties')">Vacant</button>
+      <button class="ex-btn" onclick="setQ('Properties under £100k')">Under 100k</button>
+      <button class="adv-toggle" onclick="toggleAdvanced()">Finance profile</button>
+    </div>
     <div class="advanced" id="advancedPanel">
       <div class="fp-row">
         <div class="filter-field"><label>Cash Available (£)</label><input id="fpCash" type="number" value="0" placeholder="Deposit + costs"></div>
@@ -739,9 +732,7 @@ footer .logo-f span{color:var(--green)}
       <div class="fp-ts-settings" id="fpTsSettings">
         <div class="fp-ts-row">
           <div class="filter-field">
-            <label>Split premium
-              <span class="fp-tip" title="How much more the individual units are worth than the whole block. Block at £400k, 4 flats worth £600k = 50% premium">?</span>
-            </label>
+            <label>Split premium <span class="fp-tip" title="How much more the individual units are worth than the whole block">?</span></label>
             <div class="fp-slider-group">
               <input type="range" id="fpSplitPremium" min="10" max="80" value="30" step="5">
               <span class="fp-slider-val" id="fpSplitPremiumVal">30%</span>
@@ -751,21 +742,6 @@ footer .logo-f span{color:var(--green)}
         </div>
       </div>
       <div class="fp-summary" id="fpSummary"></div>
-    </div>
-  </div>
-
-  <!-- ═══════ OWN CATALOGUE CTA ═══════ -->
-  <div class="own-catalogue" id="ownCatSection">
-    <div class="oc-inner">
-      <span class="oc-icon">🔗</span>
-      <div class="oc-text">
-        <strong>Add an auction house</strong>
-        <span>Got a catalogue we don't cover yet? Paste the URL and we'll AI-score every lot.</span>
-      </div>
-      <div class="oc-input-row">
-        <input id="ownUrl" class="search-input" placeholder="Paste any auction catalogue URL..." style="flex:1;margin:0">
-        <button class="btn-main" onclick="runAnalysis($('ownUrl').value.trim())">Analyse</button>
-      </div>
     </div>
   </div>
 
@@ -851,37 +827,24 @@ footer .logo-f span{color:var(--green)}
     <div id="reportView" class="report-view" style="display:none"></div>
 
     <div id="cardsView">
-      <div class="filter-bar-sticky">
-        <div class="filter-bar-inner">
-          <div class="house-dropdown" id="houseDropdown">
-            <button class="house-dropdown-btn" id="houseDropdownBtn" onclick="toggleHousePopover(event)">All houses</button>
-            <div class="house-popover" id="housePopover">
-              <input class="house-popover-search" type="text" placeholder="Search houses..." oninput="filterHouseList(this.value)">
-              <div id="houseCheckList"></div>
-            </div>
-          </div>
-          <select class="tb-select" id="fSort" onchange="renderLots()">
-            <option value="score">Score (high → low)</option>
-            <option value="price_asc">Price (low → high)</option>
-            <option value="price_desc">Price (high → low)</option>
-            <option value="yield">Yield (high → low)</option>
-          </select>
-          <select class="tb-select" id="fDeal" onchange="renderLots()"><option value="">All deals</option></select>
-          <select class="tb-select" id="fPropType" onchange="renderLots()"><option value="">All types</option></select>
-          <select class="tb-select" id="fConditionToolbar" onchange="renderLots()"><option value="">Any condition</option></select>
-          <select class="tb-select" id="fAfford" onchange="renderLots()" style="display:none"><option value="all">All lots</option><option value="affordable">Affordable</option><option value="in_budget">In budget only</option><option value="full_finance">Zero deposit only</option></select>
-          <select class="tb-select" id="fTS" onchange="renderLots()" style="display:none"><option value="">All lots</option><option value="ts">Title split opportunities</option></select>
-          <select class="tb-select" id="fSold" onchange="syncSoldFilter('toolbar');renderLots()"><option value="available">Available only</option><option value="all">All lots</option><option value="sold">Sold / STC only</option></select>
-          <label class="tb-toggle"><input type="checkbox" id="fExcludePOA" onchange="renderLots()"><span class="tb-toggle-label">Exclude POA</span></label>
-          <input class="tb-search" type="text" id="fSearch" placeholder="Search lots..." oninput="renderLots()">
-          <span class="filter-count" id="filterBarCount"></span>
-        </div>
-      </div>
       <div id="lotsOut"></div>
     </div>
   </div>
 
-  <!-- Calendar section removed — lots are now shown directly -->
+  <!-- ═══════ ADD AN AUCTION HOUSE ═══════ -->
+  <div class="own-catalogue" id="ownCatSection">
+    <div class="oc-inner">
+      <span class="oc-icon">🔗</span>
+      <div class="oc-text">
+        <strong>Add an auction house</strong>
+        <span>Got a catalogue we don't cover yet? Paste the URL and we'll AI-score every lot.</span>
+      </div>
+      <div class="oc-input-row">
+        <input id="ownUrl" class="search-input" placeholder="Paste any auction catalogue URL..." style="flex:1;margin:0">
+        <button class="btn-main" onclick="runAnalysis($('ownUrl').value.trim())">Analyse</button>
+      </div>
+    </div>
+  </div>
 
   <footer>
     <div class="logo-f" style="font-family:'Source Serif 4',serif">Auction <span>Brain</span></div>
@@ -902,7 +865,7 @@ const $=id=>document.getElementById(id);
 function esc(s){if(s==null)return '';const d=document.createElement('div');d.textContent=String(s);return d.innerHTML;}
 function safeHref(u){if(!u)return '#';const s=String(u).trim();if(!/^https?:\/\//i.test(s))return '#';if(/google\.\w+\/maps|maps\.google|maps\.app\.goo|waze\.com|bing\.com\/maps/i.test(s))return '#';return esc(s);}
 let LOTS=[], SMART_RESULTS=null;
-let ALL_LOTS=[], ALL_SOURCES=[], FILTERED_INDICES=[];
+let ALL_LOTS=[], ALL_SOURCES=[];
 let LENDER_DATA=[];
 const PREMIUM_ENABLED=true; // TODO: gate behind auth when auction tool gets subscriptions
 let _searchAbort=null; // AbortController for in-flight searches
@@ -910,32 +873,40 @@ let _searchTimers=[]; // setTimeout IDs for step animations
 let _searchReader=null; // SSE ReadableStreamDefaultReader (for cleanup on abort)
 
 // Reset ALL search state to a clean slate before each new search.
-// Prevents previous search data/filters leaking into the next one.
 function resetSearchState(){
-  // 1. Abort any in-flight request
   if(_searchAbort){_searchAbort.abort();_searchAbort=null}
-  // 2. Cancel any active SSE reader
   if(_searchReader){try{_searchReader.cancel()}catch(e){}_searchReader=null}
-  // 3. Clear all pending step-animation timers
   _searchTimers.forEach(id=>clearTimeout(id));
   _searchTimers=[];
-  // 4. Clear data arrays
   LOTS=[];
   SMART_RESULTS=null;
-  // 5. Reset toolbar filter values so old filters don't silently exclude new results
-  const filterResets={fDeal:'',fType:'',fPropType:'',fConditionToolbar:'',fTS:'',fAfford:'all',fSold:'all',fSoldTop:'all',fSearch:'',fSort:'score'};
+  const filterResets={fDeal:'',fType:'',fCondition:'',fTenure:'',fLocation:'',fTS:'',fAfford:'all',fSoldTop:'all',fSearch:'',fSort:'score',fBeds:'',fPostcode:'',fMinPrice:'',fMaxPrice:''};
   if($('fExcludePOA')) $('fExcludePOA').checked=false;
   _selectedHouses.clear();
   for(const[id,val] of Object.entries(filterResets)){const el=$(id);if(el)el.value=val}
-  // 6. Clear UI
+  updatePriceBtn();
   $('resultsPanel').style.display='none';
   $('logBox').innerHTML='';
   $('mainBtn').disabled=true;
 }
 
-function syncSoldFilter(source){
-  if(source==='top') { if($('fSold')) $('fSold').value=$('fSoldTop').value; }
-  else { if($('fSoldTop')) $('fSoldTop').value=$('fSold').value; }
+// Price popover toggle
+function togglePricePopover(e){
+  e.stopPropagation();
+  const pop=$('pricePopover');
+  pop.classList.toggle('open');
+  if(pop.classList.contains('open')){
+    const close=ev=>{if(!$('priceDropdown').contains(ev.target)){pop.classList.remove('open');document.removeEventListener('click',close)}};
+    setTimeout(()=>document.addEventListener('click',close),0);
+  }
+}
+function updatePriceBtn(){
+  const mn=$('fMinPrice').value,mx=$('fMaxPrice').value;
+  const fmt=v=>{const n=+v;if(n>=1000000)return '£'+(n/1000000)+'m';return '£'+(n/1000)+'k'};
+  if(!mn&&!mx) $('priceDdBtn').textContent='Any price';
+  else if(mn&&!mx) $('priceDdBtn').textContent=fmt(mn)+' +';
+  else if(!mn&&mx) $('priceDdBtn').textContent='Up to '+fmt(mx);
+  else $('priceDdBtn').textContent=fmt(mn)+' – '+fmt(mx);
 }
 
 // ═══════════════════════════════
@@ -947,7 +918,6 @@ async function loadAllLots(){
     const d=await r.json();
     ALL_LOTS=d.lots||[];
     ALL_SOURCES=d.sources||[];
-    applyFilters();
 
     // Auto-show all lots on page load
     if(ALL_LOTS.length && !document.body.classList.contains('view-results')){
@@ -1017,58 +987,7 @@ function matchesRegion(addr, region){
   return false;
 }
 
-function applyFilters(){
-  if(ALL_LOTS.length===0){
-    $('filterCount').style.display='none';
-    return;
-  }
-  const minP=+$('fMinPrice').value||0;
-  const maxP=+$('fMaxPrice').value||Infinity;
-  const beds=+$('fBeds').value||0;
-  const type=$('fType').value;
-  const sold=$('fSoldTop').value;
-  const tenure=$('fTenure').value;
-  const condition=$('fCondition').value;
-  const house='';
-  const location=$('fLocation').value;
-  const postcode=$('fPostcode').value.trim().toUpperCase();
-
-  FILTERED_INDICES=[];
-  let topPicks=0;
-
-  ALL_LOTS.forEach((l,i)=>{
-    if(l.price && l.price<minP) return;
-    if(l.price && maxP!==Infinity && l.price>maxP) return;
-    if(beds && (l.beds||0)<beds) return;
-    if(type && l.propType!==type) return;
-    const isSold=(l.bullets||[]).some(b=>/\bSOLD\b|\bSTC\b|\bSALE.?AGREED\b|\bWITHDRAWN\b/i.test(b));
-    if(sold==='available' && isSold) return;
-    if(sold==='sold' && !isSold) return;
-    if(tenure && l.tenure!==tenure) return;
-    if(condition==='needs work' && l.condition!=='needs work') return;
-    if(condition==='good' && l.condition==='needs work') return;
-    if(condition==='vacant' && !l.vacant) return;
-    if(condition==='tenanted' && l.vacant!==false) return;
-    if(house && l._house!==house) return;
-
-    // Location filter - match by postcode prefix OR town/city name
-    if(location){
-      if(!matchesRegion(l.address, location)) return;
-    }
-
-    // Postcode filter - freetext match against address
-    if(postcode){
-      const addr=(l.address||'').toUpperCase();
-      if(!addr.includes(postcode)) return;
-    }
-
-    FILTERED_INDICES.push(i);
-    if((l.score||0)>=3) topPicks++;
-  });
-
-  $('filterCount').style.display='block';
-  $('filterCountText').innerHTML=`<strong style="color:var(--green);font-size:1.1rem">${FILTERED_INDICES.length.toLocaleString()}</strong> lots match your filters out of <strong>${ALL_LOTS.length.toLocaleString()}</strong> total · ${topPicks} scored 3+`;
-}
+// applyFilters() removed — all filtering now handled in renderLots()
 
 // ═══════════════════════════════
 // SMART DETECTION: URL or search query?
@@ -1113,23 +1032,8 @@ function detectHouseFromUrl(url) {
 function handleSearch(){
   const q = $('smartQuery').value.trim();
   if(!q){
-    // No AI query — just show the filtered lots directly
-    if(FILTERED_INDICES.length===0) return alert('No lots match your filters. Try adjusting them.');
-    LOTS=FILTERED_INDICES.map(i=>ALL_LOTS[i]);
-    SMART_RESULTS=null;
-    showResultsView();
-    $('resultsTitle').textContent=`${LOTS.length} lots matching your filters`;
-    $('viewToggle').style.display='none';
-    $('reportView').style.display='none';
-    $('cardsView').style.display='block';
-    buildLotFilters();
+    // No AI query — filters are live, just re-render
     renderLots();
-    $('resultsPanel').style.display='block';
-    $('statsRow').innerHTML=`
-      <div class="stat-card"><div class="v g">${LOTS.length}</div><div class="l">Lots</div></div>
-      <div class="stat-card"><div class="v g">${LOTS.filter(l=>(l.score||0)>=3).length}</div><div class="l">Score 3+</div></div>
-      <div class="stat-card"><div class="v y">${[...new Set(LOTS.map(l=>l._house))].length}</div><div class="l">Catalogues</div></div>
-      <div class="stat-card"><div class="v p">${LOTS.filter(l=>l.vacant).length}</div><div class="l">Vacant</div></div>`;
     return;
   }
   if(isUrl(q)){
@@ -1814,7 +1718,7 @@ async function runSmartSearch(query) {
   // Show search animation
   $('progressPanel').style.display = 'block';
   $('progressPanel').innerHTML=`<div class="scan-animation">
-    <div class="scan-title">🔍 AI is searching ${ALL_LOTS.length > 0 ? (FILTERED_INDICES.length < ALL_LOTS.length ? FILTERED_INDICES.length + ' filtered lots' : ALL_LOTS.length + ' lots') : 'all cached catalogues'}</div>
+    <div class="scan-title">🔍 AI is searching ${ALL_LOTS.length > 0 ? ALL_LOTS.length + ' lots' : 'all cached catalogues'}</div>
     <div class="scan-steps">
       <div class="scan-step active" id="sq1"><span class="spinner"></span><span class="check">✓</span> Understanding query</div>
       <div class="scan-step waiting" id="sq2"><span class="spinner"></span><span class="check">✓</span> Searching cached lots</div>
@@ -1846,7 +1750,7 @@ async function runSmartSearch(query) {
     const resp = await fetch('/api/smart-search', {
       method: 'POST',
       headers: authHeaders(),
-      body: JSON.stringify({ query, filteredIndices: FILTERED_INDICES.length > 0 && FILTERED_INDICES.length < ALL_LOTS.length ? FILTERED_INDICES : null, soldFilter: $('fSoldTop')?.value || 'all' }),
+      body: JSON.stringify({ query, soldFilter: $('fSoldTop')?.value || 'all' }),
       signal
     });
     const data = await resp.json();
@@ -1920,21 +1824,12 @@ function buildLotFilters(){
   const deals=new Set(LOTS.map(l=>l.dealType).filter(Boolean));
   $('fDeal').innerHTML='<option value="">All deals</option>'+[...deals].sort().map(d=>`<option value="${esc(d)}">${esc(d)}</option>`).join('');
 
-  const types=new Set(LOTS.map(l=>l.propType).filter(Boolean));
-  $('fPropType').innerHTML='<option value="">All types</option>'+[...types].sort().map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('');
-  $('fPropType').style.display=types.size>1?'':'none';
-
-  const conds=new Set(LOTS.map(l=>l.condition).filter(Boolean));
-  $('fConditionToolbar').innerHTML='<option value="">Any condition</option>'+[...conds].sort().map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
-  $('fConditionToolbar').style.display=conds.size>1?'':'none';
-
   const hasTS=LOTS.some(l=>l.titleSplit);
-  $('fTS').style.display=hasTS?'':'none';
+  if($('fTS')) $('fTS').style.display=hasTS?'':'none';
 
   const hasCash=+($('fpCash')?.value)>0;
-  $('fAfford').style.display=hasCash?'':'none';
+  if($('fAfford')) $('fAfford').style.display=hasCash?'':'none';
 
-  // Build house checklist
   buildHouseChecklist();
 }
 
@@ -2019,25 +1914,34 @@ function renderLots(){
   // Tag every lot with affordability tier
   lots.forEach(l=>{l._affTag=getAffordabilityTag(l,aff)});
 
-  // Apply standard filters
+  // ── All filters in one pass ──
   const minP=+$('fMinPrice').value, maxP=+$('fMaxPrice').value, minBeds=+$('fBeds').value;
+  const ft=$('fType').value, fd=$('fDeal').value, fa=$('fAfford')?.value||'all';
+  const fts=$('fTS')?.value||'', fsold=$('fSoldTop')?.value||'';
+  const fs=$('fSearch').value.toLowerCase();
+  const fco=$('fCondition')?.value||'', ften=$('fTenure')?.value||'';
+  const floc=$('fLocation')?.value||'';
+  const fpc=$('fPostcode')?.value.trim().toUpperCase()||'';
+
   if(minP) lots=lots.filter(l=>!l.price||l.price>=minP);
   if(maxP) lots=lots.filter(l=>!l.price||l.price<=maxP);
   if(minBeds) lots=lots.filter(l=>!l.beds||l.beds>=minBeds);
-
-  const ft=$('fType').value,fd=$('fDeal').value,fa=$('fAfford')?.value||'all',fts=$('fTS')?.value||$('fTSTop')?.value||'',fsold=$('fSold')?.value||$('fSoldTop')?.value||'',fs=$('fSearch').value.toLowerCase();
-  const fpt=$('fPropType')?.value||'',fco=$('fConditionToolbar')?.value||'';
-  if(ft)lots=lots.filter(l=>l.propType===ft);
-  if(fpt)lots=lots.filter(l=>l.propType===fpt);
-  if(fco)lots=lots.filter(l=>l.condition===fco);
-  if(fd)lots=lots.filter(l=>l.dealType===fd);
-  if(fa==='affordable'&&fp.cash)lots=lots.filter(l=>l._affTag!=='out_of_reach');
-  if(fa==='in_budget'&&fp.cash)lots=lots.filter(l=>l._affTag==='in_budget'||l._affTag==='unknown');
-  if(fa==='full_finance'&&fp.cash)lots=lots.filter(l=>l._affTag==='full_finance');
-  if(fts==='ts')lots=lots.filter(l=>l.titleSplit);
-  if(fsold==='available')lots=lots.filter(l=>!(l.bullets||[]).some(b=>/\bSOLD\b|\bSTC\b|\bSALE.?AGREED\b|\bWITHDRAWN\b/i.test(b)));
-  if(fsold==='sold')lots=lots.filter(l=>(l.bullets||[]).some(b=>/\bSOLD\b|\bSTC\b|\bSALE.?AGREED\b|\bWITHDRAWN\b/i.test(b)));
-  if(fs)lots=lots.filter(l=>(l.address||'').toLowerCase().includes(fs)||(l.bullets||[]).join(' ').toLowerCase().includes(fs));
+  if(ft) lots=lots.filter(l=>l.propType===ft);
+  if(fd) lots=lots.filter(l=>l.dealType===fd);
+  if(ften) lots=lots.filter(l=>l.tenure===ften);
+  if(fco==='needs work') lots=lots.filter(l=>l.condition==='needs work');
+  else if(fco==='good') lots=lots.filter(l=>l.condition!=='needs work');
+  else if(fco==='vacant') lots=lots.filter(l=>l.vacant);
+  else if(fco==='tenanted') lots=lots.filter(l=>l.vacant===false);
+  if(floc) lots=lots.filter(l=>matchesRegion(l.address, floc));
+  if(fpc) lots=lots.filter(l=>(l.address||'').toUpperCase().includes(fpc));
+  if(fa==='affordable'&&fp.cash) lots=lots.filter(l=>l._affTag!=='out_of_reach');
+  if(fa==='in_budget'&&fp.cash) lots=lots.filter(l=>l._affTag==='in_budget'||l._affTag==='unknown');
+  if(fa==='full_finance'&&fp.cash) lots=lots.filter(l=>l._affTag==='full_finance');
+  if(fts==='ts') lots=lots.filter(l=>l.titleSplit);
+  if(fsold==='available') lots=lots.filter(l=>!(l.bullets||[]).some(b=>/\bSOLD\b|\bSTC\b|\bSALE.?AGREED\b|\bWITHDRAWN\b/i.test(b)));
+  if(fsold==='sold') lots=lots.filter(l=>(l.bullets||[]).some(b=>/\bSOLD\b|\bSTC\b|\bSALE.?AGREED\b|\bWITHDRAWN\b/i.test(b)));
+  if(fs) lots=lots.filter(l=>(l.address||'').toLowerCase().includes(fs)||(l.bullets||[]).join(' ').toLowerCase().includes(fs));
 
   // House filter
   const selectedHouses=getSelectedHouses();
@@ -2069,12 +1973,12 @@ function renderLots(){
   $('statsRow').innerHTML=statsHtml;
 
   // Update filter count
-  const filterCountEl = document.getElementById('filterBarCount');
-  if (filterCountEl) filterCountEl.textContent = 'Showing ' + lots.length.toLocaleString() + ' of ' + LOTS.length.toLocaleString() + ' lots';
+  const filterCountEl=$('filterBarCount');
+  if(filterCountEl) filterCountEl.textContent='Showing '+lots.length.toLocaleString()+' of '+LOTS.length.toLocaleString()+' lots';
 
-  // Highlight active filters
-  document.querySelectorAll('.filter-bar-sticky .tb-select').forEach(sel => {
-    sel.classList.toggle('active-filter', sel.value !== '' && sel.value !== 'all' && sel.value !== 'available' && sel.value !== 'score');
+  // Highlight active filters in unified bar
+  document.querySelectorAll('.unified-bar .tb-select').forEach(sel=>{
+    sel.classList.toggle('active-filter',sel.value!==''&&sel.value!=='all'&&sel.value!=='available'&&sel.value!=='score');
   });
 
   expandedLotId = null;
@@ -2083,17 +1987,9 @@ function renderLots(){
   // Only show Title Splits group for catalogue analyses or when user searched for them
   const showTSGroup = !SMART_RESULTS || /title.?split|multi.?unit|freehold.?block/i.test($('smartQuery')?.value||'');
 
-  function renderSection(emoji, title, sectionLots, badgeClass) {
-    if (!sectionLots.length) return;
-    const sectionId = 'sec-' + title.replace(/\s+/g, '-').toLowerCase();
-    out.innerHTML += '<div class="section-header" id="' + sectionId + '">' +
-      '<div class="section-header-left">' +
-        '<h3>' + emoji + ' ' + esc(title) + '</h3>' +
-        '<span class="sh-badge">' + sectionLots.length + '</span>' +
-      '</div>' +
-      '<button class="sh-toggle" onclick="toggleSection(\'' + sectionId + '-grid\')">▾ collapse</button>' +
-    '</div>';
-    out.innerHTML += '<div class="lots-grid" id="' + sectionId + '-grid">' + sectionLots.map(l => card(l)).join('') + '</div>';
+  // Thin section divider (no collapse/expand)
+  function divider(title, count){
+    return '<div class="section-divider"><span>'+esc(title)+' ('+count+')</span></div>';
   }
 
   // When sorting by non-score, render as flat list
@@ -2101,16 +1997,17 @@ function renderLots(){
     out.innerHTML='<div class="lots-grid">'+lots.map(l=>card(l)).join('')+'</div>';
   } else {
     const tsL=lots.filter(l=>l.titleSplit&&l.score>=2);
-    if(tsL.length && showTSGroup) renderSection('🏢', 'Title Split Opportunities', tsL, 'badge-p');
-
     const topL=lots.filter(l=>l.score>=3&&!(showTSGroup&&l.titleSplit&&l.score>=2));
-    if(topL.length) renderSection('🔥', 'Top Picks', topL, 'badge-g');
-
     const midL=lots.filter(l=>l.score>=1.5&&l.score<3&&!(showTSGroup&&l.titleSplit&&l.score>=2));
-    if(midL.length) renderSection('👀', 'Worth a Look', midL, 'badge-y');
-
     const rest=lots.filter(l=>l.score<1.5&&!(showTSGroup&&l.titleSplit&&l.score>=2));
-    if(rest.length) renderSection('📋', 'Other', rest, '');
+
+    let html='<div class="lots-grid">';
+    if(tsL.length && showTSGroup) html+=divider('Title Splits',tsL.length)+tsL.map(l=>card(l)).join('');
+    if(topL.length) html+=divider('Top Picks',topL.length)+topL.map(l=>card(l)).join('');
+    if(midL.length) html+=divider('Worth a Look',midL.length)+midL.map(l=>card(l)).join('');
+    if(rest.length) html+=divider('Other',rest.length)+rest.map(l=>card(l)).join('');
+    html+='</div>';
+    out.innerHTML=html;
   }
 }
 
@@ -2411,18 +2308,7 @@ function bridgeMatchLot(idx, event) {
   }
 }
 
-// ═══════════════════════════════
-// SECTION COLLAPSE TOGGLE
-// ═══════════════════════════════
-function toggleSection(sectionId) {
-  const section = document.getElementById(sectionId);
-  if (!section) return;
-  const cards = section.querySelectorAll('.lot-card');
-  const btn = section.querySelector('.sh-toggle');
-  const isHidden = cards[0]?.style.display === 'none';
-  cards.forEach(c => c.style.display = isHidden ? '' : 'none');
-  if (btn) btn.textContent = isHidden ? '\u25be collapse' : '\u25b8 expand';
-}
+// toggleSection() removed — flat dividers, no collapse/expand
 
 // Init
 loadCalendar();
