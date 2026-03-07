@@ -244,9 +244,9 @@ const HOUSE_ROOTS = {
   savills:            'https://auctions.savills.co.uk/upcoming-auctions',
   allsop:             'https://www.allsop.co.uk/auction-calendar/',
   sdl:                'https://www.sdlauctions.co.uk/property-auctions/upcoming-auctions/',
-  network:            'https://www.networkauctions.co.uk/auctions/',
+  network:            'https://www.networkauctions.co.uk/auctions/next-auction/',
   bondwolfe:          'https://www.bondwolfe.com/auctions/properties/',
-  barnardmarcus:      'https://www.barnardmarcusauctions.co.uk/auction-dates/',
+  barnardmarcus:      'https://www.barnardmarcusauctions.co.uk/',
   auctionhouselondon: 'https://www.auctionhouselondon.co.uk/next-auction/',
   auctionhouse:       'https://www.auctionhouse.co.uk/auction/search',
   cliveemson:         'https://www.cliveemson.co.uk/properties/',
@@ -255,21 +255,21 @@ const HOUSE_ROOTS = {
   hollismorgan:       'https://www.hollismorgan.co.uk/search-auction/',
   maggsandallen:      'https://www.maggsandallen.co.uk/search-auction/',
   mchughandco:        'https://www.mchughandco.com/pages/auctions',
-  knightfrank:        'https://www.knightfrankauctions.com/',
+  knightfrank:        'https://www.knightfrankauctions.com/forthcoming-auctions/',
   pattinson:          'https://www.pattinson.co.uk/auction',
   bidx1:              'https://www.bidx1.com/en-gb/properties',
-  philliparnold:      'https://www.philliparnoldauctions.co.uk/',
+  philliparnold:      'https://www.philliparnoldauctions.co.uk/current-lots',
   edwardmellor:       'https://www.edwardmellor.co.uk/auction/',
-  paulfosh:           'https://www.paulfosh.com/auction/',
-  cottons:            'https://www.cottons.co.uk/auction/',
+  // paulfosh: REMOVED — site down (Squarespace parking page), no DOM extractor
+  cottons:            'https://www.cottons.co.uk/',
   dedmangray:         'https://www.dedmangray.co.uk/auction/',
-  barnettross:        'https://www.barnettross.co.uk/auction/',
+  barnettross:        'https://www.barnettross.co.uk/lotlist.php?a=&countryid=1',
   bradleyhall:        'https://auction.bradleyhall.co.uk/',
   connectuk:          'https://www.connectukauctions.co.uk/',
   auctionestates:     'https://www.auctionestates.co.uk/',
   landwood:           'https://www.landwoodpropertyauctions.com/',
   loveitts:           'https://www.loveitts.co.uk/auction/',
-  hunters:            'https://www.hunters.com/auction',
+  // hunters: REMOVED — auction service discontinued, no DOM extractor
   probateauction:     'https://probate.auction/auctions/',
 };
 
@@ -1107,14 +1107,7 @@ const FALLBACK_CALENDAR = [
       catalogueReady: true,
     },
 
-    // ── PAUL FOSH ──
-    {
-      house: 'Paul Fosh', houseSlug: 'paulfosh', logo: '🏴󠁧󠁢󠁷󠁬󠁳󠁿',
-      date: '2026-03-11', title: '11 March 2026', lots: null,
-      url: 'https://www.paulfosh.com/auction-lots/',
-      location: 'Newport', type: 'Residential & Commercial', status: 'upcoming',
-      catalogueReady: true,
-    },
+    // paulfosh: REMOVED — site down (Squarespace parking page)
 
     // ── COTTONS ──
     {
@@ -1188,14 +1181,7 @@ const FALLBACK_CALENDAR = [
       catalogueReady: true,
     },
 
-    // ── HUNTERS ──
-    {
-      house: 'Hunters', houseSlug: 'hunters', logo: '🎯',
-      date: '2026-03-05', title: '5 March 2026', lots: null,
-      url: 'https://www.hunters.com/auction-search',
-      location: 'Yorkshire', type: 'Residential', status: 'upcoming',
-      catalogueReady: true,
-    },
+    // hunters: REMOVED — auction service discontinued
 ];
 
 async function getAuctionCalendar() {
@@ -1794,8 +1780,7 @@ app.post('/api/analyse', async (req, res) => {
       }
       // Puppeteer fallback if static scraping found nothing
       // Skip for houses where Puppeteer wastes memory (blocked, empty, or JS-only)
-      const SKIP_PUPPETEER = ['knightfrank','paulfosh','cottons','dedmangray',
-        'barnettross','philliparnold'];
+      const SKIP_PUPPETEER = ['cottons','dedmangray','philliparnold'];
       if (rawLots.length === 0 && !SKIP_PUPPETEER.includes(house)) {
         console.log(`No lots from static HTML, trying Puppeteer for ${house}...`);
         const puppeteerPages = await scrapeWithPuppeteer(url, house);
@@ -2347,20 +2332,51 @@ app.get('/api/all-lots', async (req, res) => {
 
     const lots = [];
     const sources = [];
-    const seenAddrs = new Set();
     for (const c of cached) {
-      if (c.lots && Array.isArray(c.lots)) {
-        let dedupCount = 0;
-        for (const lot of c.lots) {
-          // Deduplicate by normalised address across all sources
-          const addrKey = ((lot.address || '') + '|' + (lot.url || '')).toLowerCase().replace(/[\s,]+/g, ' ').trim();
-          if (addrKey.length > 5 && seenAddrs.has(addrKey)) continue;
-          if (addrKey.length > 5) seenAddrs.add(addrKey);
-          lots.push({ ...lot, _house: c.house, _sourceUrl: c.url });
-          dedupCount++;
+      if (!c.lots || !Array.isArray(c.lots)) continue;
+      const houseLots = c.lots.map(l => ({ ...l, _house: c.house, _sourceUrl: c.url }));
+
+      // Phase 1: Within-house dedup by URL (keep lot with richer data)
+      const byUrl = new Map();
+      for (const lot of houseLots) {
+        const url = (lot.url || '').trim().replace(/\/+$/, '').toLowerCase();
+        if (url.length > 5) {
+          const existing = byUrl.get(url);
+          if (existing) {
+            // Keep the one with more data: imageUrl > more bullets
+            const richness = (l) => (l.imageUrl ? 10 : 0) + (l.bullets?.length || 0) + (l.price ? 1 : 0);
+            if (richness(lot) > richness(existing)) byUrl.set(url, lot);
+          } else {
+            byUrl.set(url, lot);
+          }
+        } else {
+          byUrl.set(`__no_url_${byUrl.size}`, lot);
         }
-        sources.push({ house: c.house, url: c.url, count: dedupCount });
       }
+
+      // Phase 2: Within-house dedup by normalised address + price
+      const byAddr = new Map();
+      for (const lot of byUrl.values()) {
+        const normAddr = (lot.address || '').toLowerCase().replace(/[\s,]+/g, ' ').replace(/^(lot\s*\d+\s*[-:]?\s*)/i, '').trim();
+        const addrKey = normAddr + '|' + (lot.price || '');
+        if (normAddr.length > 5) {
+          const existing = byAddr.get(addrKey);
+          if (existing) {
+            const richness = (l) => (l.imageUrl ? 10 : 0) + (l.bullets?.length || 0);
+            if (richness(lot) > richness(existing)) byAddr.set(addrKey, lot);
+          } else {
+            byAddr.set(addrKey, lot);
+          }
+        } else {
+          byAddr.set(`__short_${byAddr.size}`, lot);
+        }
+      }
+
+      const dedupedLots = [...byAddr.values()];
+      const removed = houseLots.length - dedupedLots.length;
+      if (removed > 0) console.log(`Dedup ${c.house}: ${houseLots.length} → ${dedupedLots.length} (removed ${removed})`);
+      lots.push(...dedupedLots);
+      sources.push({ house: c.house, url: c.url, count: dedupedLots.length });
     }
 
     res.json({ lots: shouldBlur ? stripAIFields(lots) : lots, sources, blurred: !!shouldBlur });
@@ -4796,6 +4812,14 @@ async function extractWithDOM(page, house) {
     }
   }
 
+  // Post-processing: filter out non-property images (logos, icons, placeholders)
+  const imgBlocklist = /logo|icon|placeholder|no-image|default|blank|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|1x1|noimage/i;
+  for (const lot of lots) {
+    if (lot.imageUrl && imgBlocklist.test(lot.imageUrl)) {
+      lot.imageUrl = undefined;
+    }
+  }
+
   return lots;
 }
 
@@ -4805,13 +4829,17 @@ async function extractWithDOM(page, house) {
 const W2N = { one:1, two:2, three:3, four:4, five:5, six:6, seven:7, eight:8, nine:9, ten:10, eleven:11, twelve:12 };
 
 function analyseLot(raw) {
-  const t = (raw.bullets.join(' ') + ' ' + raw.address).toLowerCase();
+  // Strip Strettons date prefix (e.g. "19 Feb 26  -  Lot 25Flat 6 Noble House...")
+  let cleanAddress = raw.address;
+  cleanAddress = cleanAddress.replace(/^\d{1,2}\s+\w{3}\s+\d{2}\s*-\s*(?:Lot\s*\d+)?/i, '').trim();
+  const t = (raw.bullets.join(' ') + ' ' + cleanAddress).toLowerCase();
   const L = { ...raw, score: 0, opps: [], risks: [], dealType: 'Standard', propType: '', beds: null,
-    tenure: '', condition: '', vacant: true, sqft: null, titleSplit: false, units: 0 };
+    tenure: '', condition: '', vacant: null, sqft: null, titleSplit: false, units: 0 };
 
-  if (/flat|apartment|maisonette/.test(t)) L.propType = 'flat';
+  if (/\bflt\b|flat|apartment|maisonette/.test(t)) L.propType = 'flat';
   else if (/bungalow/.test(t)) L.propType = 'bungalow';
   else if (/semi[- ]?detached|terraced?|terrace house|detached house|town\s?house|end of terrace|mid[- ]terrace/.test(t)) L.propType = 'house';
+  else if (/\bdetached\b|period\s+property|residential\s+property|chalet|cottage|lodge|villa|mansion/.test(t)) L.propType = 'house';
   else if (/\bhouse\b/.test(t)) L.propType = 'house';
   else if (/shop|office|commercial|retail|industrial|warehouse|investment|ground rent/.test(t)) L.propType = 'commercial';
   else if (/\bland\b|plot|site|church|hall|chapel/.test(t)) L.propType = 'land';
@@ -4819,18 +4847,22 @@ function analyseLot(raw) {
   else L.propType = 'other';
 
   const bm = t.match(/(\w+)\s*[-\s]?bed/);
-  if (bm) { const v = bm[1].toLowerCase(); L.beds = W2N[v] || (v.match(/^\d+$/) ? +v : null); }
+  if (bm) {
+    const v = bm[1].toLowerCase(); L.beds = W2N[v] || (v.match(/^\d+$/) ? +v : null);
+    // Cap residential bed count at 10 — higher counts are student blocks/HMOs/hotels
+    if (L.beds > 10 && ['house', 'flat', 'bungalow'].includes(L.propType)) L.beds = null;
+  }
   if (/studio/.test(t) && L.beds === null) L.beds = 0;
 
   if (/share of freehold/.test(t)) L.tenure = 'Share of Freehold';
   else if (/freehold/.test(t) && !/leasehold/.test(t)) L.tenure = 'Freehold';
   else if (/leasehold/.test(t)) L.tenure = 'Leasehold';
 
-  if (/modernis|refurbishment|renovation|updating|in need of/.test(t)) L.condition = 'needs work';
+  if (/modernis|refurbishment|renovation|updating|in need of|improvement|for improve/.test(t)) L.condition = 'needs work';
   else if (/good order|good decorative|well maintained|recently refurbished/.test(t)) L.condition = 'good';
   else if (/derelict|dilapidated|fire damage/.test(t)) L.condition = 'poor';
 
-  if (/vacant/.test(t)) L.vacant = true;
+  if (/vacant possession|\bvp\b|vacant property/.test(t)) L.vacant = true;
   else if (/tenant|let to|tenanted|occupied|sitting tenant/.test(t)) L.vacant = false;
 
   const executor = /executor|probate|estate of|personal representative/.test(t);
@@ -4846,11 +4878,11 @@ function analyseLot(raw) {
   const bk = t.match(/block\s+of\s+(\d+)/); if (bk) uc = Math.max(uc, +bk[1]);
   const mx = [...t.matchAll(/(\d+)\s*x\s*(?:one|two|three|1|2|3)\s*[-\s]?bed/g)];
   if (mx.length) uc = Math.max(uc, mx.reduce((s, m) => s + +m[1], 0));
-  const fr = raw.address.toLowerCase().match(/flats?\s*([a-z])\s*[-–&]\s*([a-z])/);
+  const fr = cleanAddress.toLowerCase().match(/flats?\s*([a-z])\s*[-–&]\s*([a-z])/);
   if (fr) uc = Math.max(uc, fr[2].charCodeAt(0) - fr[1].charCodeAt(0) + 1);
-  const ar = raw.address.match(/^(\d+)\s*[-–]\s*(\d+)\s/);
+  const ar = cleanAddress.match(/^(\d+)\s*[-–]\s*(\d+)\s/);
   if (ar) { const d = +ar[2] - +ar[1] + 1; if (d >= 2 && d <= 20) uc = Math.max(uc, d); }
-  if (/gff|fff|sff|tff/.test(raw.address.toLowerCase())) uc = Math.max(uc, 2);
+  if (/gff|fff|sff|tff/.test(cleanAddress.toLowerCase())) uc = Math.max(uc, 2);
   const apt = t.match(/(\d+)\s*(?:self[- ]contained\s+)?apartments/); if (apt) uc = Math.max(uc, +apt[1]);
   const isFH = /freehold/.test(t), hasFlats = /flats|apartments|self[- ]contained|arranged as/.test(t);
   const indivSales = /individual flat sales|individual sales/.test(t);
@@ -5064,14 +5096,22 @@ const VOA_RENTS = {
   '_default': { 0: 550, 1: 675, 2: 825, 3: 1025, 4: 1275 },
 };
 
+// Rent inflation factors — VOA baseline values are from mid-2024, apply uplifts for 2026 market
+const RENT_UPLIFT = { bristol: 1.25, bath: 1.20, london: 1.10, _default: 1.10 };
+
 function estimateMonthlyRent(address, beds) {
   const a = (address || '').toLowerCase();
   // Try specific towns/cities first, then regions
   for (const [key, rents] of Object.entries(VOA_RENTS)) {
     if (key === '_default') continue;
-    if (a.includes(key)) return rents[Math.min(beds ?? 2, 4)];
+    if (a.includes(key)) {
+      const base = rents[Math.min(beds ?? 2, 4)];
+      const uplift = RENT_UPLIFT[key] || RENT_UPLIFT._default;
+      return Math.round(base * uplift);
+    }
   }
-  return VOA_RENTS._default[Math.min(beds ?? 2, 4)];
+  const base = VOA_RENTS._default[Math.min(beds ?? 2, 4)];
+  return Math.round(base * RENT_UPLIFT._default);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -5770,8 +5810,7 @@ async function autoAnalyseOne(url, apiKey) {
     const pages = await scrapeAllPages(scrapeUrl, house);
     if (pages && pages.length > 0) rawLots = await extractLotsWithClaude(client, pages, house, null, scrapeUrl);
     // Skip Puppeteer fallback for houses where it wastes memory (blocked, empty, or JS-only)
-    const SKIP_PUPPETEER = ['knightfrank','paulfosh','cottons','dedmangray',
-      'barnettross','philliparnold'];
+    const SKIP_PUPPETEER = ['cottons','dedmangray','philliparnold'];
     if (rawLots.length === 0 && !SKIP_PUPPETEER.includes(house)) {
       const puppeteerPages = await scrapeWithPuppeteer(url, house);
       if (puppeteerPages.length > 0) rawLots = await extractLotsWithClaude(client, puppeteerPages, house, null, scrapeUrl);
