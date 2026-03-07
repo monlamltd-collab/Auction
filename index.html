@@ -2447,13 +2447,6 @@ $('smartQuery').addEventListener('input',()=>{
     if (!currentUser || (currentUser.email || '').toLowerCase() !== ADMIN_EMAIL) return;
     if (document.getElementById('debugWidget')) return;
 
-    // Load html2canvas
-    if (typeof html2canvas === 'undefined') {
-      const sc = document.createElement('script');
-      sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
-      document.head.appendChild(sc);
-    }
-
     const fab = document.createElement('button');
     fab.id = 'debugWidget';
     fab.innerHTML = '&#x1F41B;';
@@ -2466,9 +2459,8 @@ $('smartQuery').addEventListener('input',()=>{
   }
 
   function openPanel() {
-    console.log('[Debug] openPanel called');
     const existing = document.getElementById('debugPanel');
-    if (existing) { console.log('[Debug] panel exists, removing'); existing.remove(); return; }
+    if (existing) { existing.remove(); return; }
 
     _baseImg = null;
     _annotations = [];
@@ -2498,11 +2490,10 @@ $('smartQuery').addEventListener('input',()=>{
     const btnRow = document.createElement('div');
     btnRow.style.cssText = 'display:flex;gap:8px';
 
-    const captureBtn = document.createElement('button');
-    captureBtn.id = 'debugCapture';
-    captureBtn.innerHTML = '&#x1F4F7; Capture Page';
-    captureBtn.style.cssText = 'flex:1;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--cream);cursor:pointer;font-size:.82rem;font-weight:600';
-    captureBtn.onclick = doCapture;
+    const pasteBtn = document.createElement('button');
+    pasteBtn.innerHTML = '&#x1F4CB; Paste Screenshot';
+    pasteBtn.style.cssText = 'flex:1;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--cream);cursor:pointer;font-size:.82rem;font-weight:600';
+    pasteBtn.onclick = doPaste;
 
     const uploadLabel = document.createElement('label');
     uploadLabel.style.cssText = 'flex:1;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--cream);cursor:pointer;font-size:.82rem;font-weight:600;text-align:center';
@@ -2520,7 +2511,7 @@ $('smartQuery').addEventListener('input',()=>{
     };
     uploadLabel.appendChild(fileInput);
 
-    btnRow.appendChild(captureBtn);
+    btnRow.appendChild(pasteBtn);
     btnRow.appendChild(uploadLabel);
     step1.appendChild(header);
     step1.appendChild(desc);
@@ -2548,18 +2539,39 @@ $('smartQuery').addEventListener('input',()=>{
     status.id = 'debugStatus';
     status.style.cssText = 'font-size:.78rem;color:var(--text3);margin-top:6px;text-align:center';
 
+    const hint = document.createElement('div');
+    hint.style.cssText = 'font-size:.72rem;color:var(--text3);margin-top:6px;text-align:center';
+    hint.textContent = 'Tip: Press Win+Shift+S to capture, then click "Paste Screenshot"';
+    step1.appendChild(hint);
+
     panel.appendChild(step1);
     panel.appendChild(step2);
     panel.appendChild(status);
     document.body.appendChild(panel);
-    console.log('[Debug] panel appended, step1 visible');
+
+    // Also allow Ctrl+V paste directly into the panel
+    panel.addEventListener('paste', function(e) {
+      const items = (e.clipboardData || {}).items || [];
+      for (const item of items) {
+        if (item.type.indexOf('image') !== -1) {
+          e.preventDefault();
+          const blob = item.getAsFile();
+          const reader = new FileReader();
+          reader.onload = () => showAnnotator(reader.result);
+          reader.readAsDataURL(blob);
+          return;
+        }
+      }
+    });
+    // Make panel focusable for paste events
+    panel.tabIndex = -1;
+
     desc.focus();
   }
 
   function showAnnotator(dataUrl) {
     const img = new Image();
     img.onload = () => {
-      console.log('[Debug] image loaded for annotator, size:', img.width, 'x', img.height);
       _baseImg = img;
       _annotations = [];
       _tool = 'circle';
@@ -2639,7 +2651,6 @@ $('smartQuery').addEventListener('input',()=>{
   }
 
   function wireCanvas(canvas) {
-    console.log('[Debug] wireCanvas called, canvas:', canvas.width, 'x', canvas.height);
     function getPos(e) {
       const r = canvas.getBoundingClientRect();
       if (r.width === 0 || r.height === 0) return {x:0,y:0};
@@ -2691,41 +2702,23 @@ $('smartQuery').addEventListener('input',()=>{
     };
   }
 
-  async function doCapture() {
-    console.log('[Debug] doCapture called, html2canvas:', typeof html2canvas);
-    const btn = document.getElementById('debugCapture');
-    const panel = document.getElementById('debugPanel');
-    const fab = document.getElementById('debugWidget');
+  async function doPaste() {
     const status = document.getElementById('debugStatus');
-    if (btn) { btn.textContent = 'Capturing...'; btn.disabled = true; }
-
     try {
-      if (panel) panel.style.visibility = 'hidden';
-      if (fab) fab.style.visibility = 'hidden';
-      await new Promise(r => setTimeout(r, 200));
-
-      if (typeof html2canvas === 'undefined') throw new Error('html2canvas not loaded yet — try again in a moment');
-      const srcCanvas = await html2canvas(document.body, { useCORS:true, allowTaint:true, scale:1, logging:false });
-
-      // allowTaint means toDataURL may throw — catch separately
-      let dataUrl;
-      try { dataUrl = srcCanvas.toDataURL('image/png'); }
-      catch(taintErr) {
-        // Tainted — re-render without cross-origin images
-        const srcCanvas2 = await html2canvas(document.body, { useCORS:false, allowTaint:false, scale:1, logging:false });
-        dataUrl = srcCanvas2.toDataURL('image/png');
+      const clip = await navigator.clipboard.read();
+      for (const item of clip) {
+        const imgType = item.types.find(t => t.startsWith('image/'));
+        if (imgType) {
+          const blob = await item.getType(imgType);
+          const reader = new FileReader();
+          reader.onload = () => showAnnotator(reader.result);
+          reader.readAsDataURL(blob);
+          return;
+        }
       }
-
-      if (panel) panel.style.visibility = '';
-      if (fab) fab.style.visibility = '';
-      if (btn) { btn.innerHTML = '&#x1F4F7; Capture Page'; btn.disabled = false; }
-      showAnnotator(dataUrl);
+      if (status) status.textContent = 'No image in clipboard. Use Win+Shift+S first, then paste.';
     } catch(e) {
-      console.error('[Debug] capture failed:', e);
-      if (panel) panel.style.visibility = '';
-      if (fab) fab.style.visibility = '';
-      if (btn) { btn.innerHTML = '&#x1F4F7; Capture Page'; btn.disabled = false; }
-      if (status) status.textContent = 'Capture failed: ' + e.message + ' — use Upload instead';
+      if (status) status.textContent = 'Clipboard access denied — try Ctrl+V in the panel instead.';
     }
   }
 
