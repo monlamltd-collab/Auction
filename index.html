@@ -291,7 +291,7 @@ footer .logo-f{font-family:'Source Serif 4',serif;font-size:1rem;font-weight:700
 footer .logo-f span{color:var(--green)}
 
 /* ── HOW IT WORKS ── */
-.how-section{padding:32px 0 24px;text-align:center;display:none}
+.how-section{padding:32px 0 24px;text-align:center}
 .section-label{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--green);margin-bottom:12px;display:flex;align-items:center;justify-content:center;gap:8px}
 .section-label::before,.section-label::after{content:'';width:24px;height:1px;background:var(--green);opacity:.4}
 .section-heading{font-family:'Source Serif 4',serif;font-size:clamp(1.2rem,2.5vw,1.5rem);font-weight:700;color:var(--navy);margin-bottom:24px;line-height:1.2}
@@ -306,17 +306,17 @@ footer .logo-f span{color:var(--green)}
 .step-icon{font-size:1.6rem;margin-bottom:8px}
 .step-content h3{font-family:'Source Serif 4',serif;font-size:1rem;font-weight:700;color:var(--navy);margin-bottom:6px}
 .step-content p{font-size:.85rem;color:var(--text2);line-height:1.6;font-weight:400}
-/* .view-results .how-section — hidden globally now */
+.view-results .how-section{display:none}
 
 /* ── LANDING STATS BAR ── */
-.landing-stats{background:linear-gradient(135deg,#1a2332 0%,#1e3a4f 50%,#1a2332 100%);padding:28px 24px;margin:0 -24px;position:relative;overflow:hidden;display:none}
+.landing-stats{background:linear-gradient(135deg,#1a2332 0%,#1e3a4f 50%,#1a2332 100%);padding:28px 24px;margin:0 -24px;position:relative;overflow:hidden}
 .landing-stats::before{content:'';position:absolute;top:0;left:0;right:0;bottom:0;background:url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.02'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")}
 .landing-stats-inner{max-width:900px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
 .ls-stat{text-align:center;padding:10px;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);transition:all .2s}
 .ls-stat:hover{background:rgba(255,255,255,.07);transform:translateY(-2px)}
 .ls-val{font-family:'JetBrains Mono',monospace;font-size:clamp(1.4rem,3vw,1.8rem);font-weight:700;color:#4ade80;line-height:1;text-shadow:0 0 30px rgba(74,222,128,.2)}
 .ls-label{font-size:.82rem;color:rgba(255,255,255,.55);margin-top:8px;font-family:'DM Sans',sans-serif;font-weight:500;text-transform:uppercase;letter-spacing:.05em;font-size:.7rem}
-/* .view-results .landing-stats — hidden globally now */
+.view-results .landing-stats{display:none}
 
 /* ── TWO TOOLS ── */
 .two-tools{padding:32px 0 24px;text-align:center}
@@ -337,17 +337,16 @@ footer .logo-f span{color:var(--green)}
 .tool-features{list-style:none;margin-top:12px;padding:0}
 .tool-features li{font-size:.82rem;color:var(--text2);padding:3px 0;display:flex;align-items:center;gap:6px}
 .tool-features li::before{content:'✓';color:var(--green);font-weight:700;font-size:.7rem}
-.two-tools{display:none}
-/* .view-results .two-tools — hidden globally now */
+.view-results .two-tools{display:none}
 
 /* ── BOTTOM CTA ── */
-.bottom-cta{text-align:center;padding:36px 24px;margin:0 -24px;background:linear-gradient(160deg,var(--navy) 0%,#1e3a4f 60%,#1a3a3a 100%);position:relative;overflow:hidden;display:none}
+.bottom-cta{text-align:center;padding:36px 24px;margin:0 -24px;background:linear-gradient(160deg,var(--navy) 0%,#1e3a4f 60%,#1a3a3a 100%);position:relative;overflow:hidden}
 .bottom-cta::before{content:'';position:absolute;top:-100px;right:-100px;width:300px;height:300px;border-radius:50%;background:radial-gradient(circle,rgba(46,125,50,.15),transparent 70%);pointer-events:none}
 .bottom-cta::after{content:'';position:absolute;bottom:-80px;left:-60px;width:250px;height:250px;border-radius:50%;background:radial-gradient(circle,rgba(59,130,246,.1),transparent 70%);pointer-events:none}
 .bottom-cta h2{font-family:'Source Serif 4',serif;font-size:clamp(1.2rem,2.5vw,1.5rem);font-weight:700;color:var(--white);margin-bottom:8px;position:relative}
 .bottom-cta p{font-size:.88rem;color:rgba(255,255,255,.65);margin-bottom:16px;max-width:480px;margin-left:auto;margin-right:auto;line-height:1.5;position:relative}
 .bottom-cta .cta-primary{font-size:.9rem;padding:12px 28px;position:relative}
-/* .view-results .bottom-cta — hidden globally now */
+.view-results .bottom-cta{display:none}
 
 /* ── LOTS GRID ── */
 .lots-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:0}
@@ -758,55 +757,6 @@ footer .logo-f span{color:var(--green)}
     </div>
   </div>
 
-  <!-- ═══════ HOW IT WORKS ═══════ -->
-  <section class="how-section" id="howSection">
-    <div class="section-label">HOW IT WORKS</div>
-    <h2 class="section-heading">Every UK auction lot, scored by AI</h2>
-    <div class="steps">
-      <div class="step">
-        <div class="step-icon">🔍</div>
-        <div class="step-num">1</div>
-        <div class="step-content">
-          <h3>Browse every auction</h3>
-          <p>30+ UK auction houses in one place — Savills, Allsop, SDL, Network, Bond Wolfe and more. Filter by price, location, type, and condition.</p>
-        </div>
-      </div>
-      <div class="step highlight">
-        <div class="step-icon">🧠</div>
-        <div class="step-num green">2</div>
-        <div class="step-content">
-          <h3>AI scores every lot</h3>
-          <p>Each lot is analysed for investment potential — title splits, refurb opportunities, yield estimates, and comparable sales from the Land Registry.</p>
-        </div>
-      </div>
-      <div class="step">
-        <div class="step-icon">⚡</div>
-        <div class="step-num">3</div>
-        <div class="step-content">
-          <h3>Act fast, bid smart</h3>
-          <p>Spot deals others miss. Set your budget, check finance with our integrated BridgeMatch tool, and go into the auction room prepared.</p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ═══════ STATS BAR ═══════ -->
-  <div class="landing-stats" id="landingStats">
-    <div class="landing-stats-inner">
-      <div class="ls-stat"><div class="ls-val" data-target="30" data-suffix="+">0</div><div class="ls-label">Auction Houses</div></div>
-      <div class="ls-stat"><div class="ls-val" data-target="68" data-suffix="">0</div><div class="ls-label">Bridging Lenders</div></div>
-      <div class="ls-stat"><div class="ls-val" data-target="2000" data-suffix="+">0</div><div class="ls-label">Lots Scored</div></div>
-      <div class="ls-stat"><div class="ls-val ls-static">£0</div><div class="ls-label">Cost to Use</div></div>
-    </div>
-  </div>
-
-  <!-- ═══════ BOTTOM CTA ═══════ -->
-  <section class="bottom-cta" id="bottomCta">
-    <h2>Ready to find your next deal?</h2>
-    <p>Auction catalogues are live now. Start browsing — it's free, instant, and you don't need an account.</p>
-    <a href="#" class="cta-primary" onclick="event.preventDefault();window.scrollTo({top:0,behavior:'smooth'})">Browse Auction Deals →</a>
-  </section>
-
   <!-- ═══════ BACK BUTTON (visible in results view) ═══════ -->
   <div class="back-bar" id="backBar">
     <button class="back-btn" onclick="backToAuctions()">← Back to auctions</button>
@@ -858,6 +808,85 @@ footer .logo-f span{color:var(--green)}
       </div>
     </div>
   </div>
+
+  <!-- ═══════ HOW IT WORKS ═══════ -->
+  <section class="how-section" id="howSection">
+    <div class="section-label">HOW IT WORKS</div>
+    <h2 class="section-heading">Every UK auction lot, scored by AI</h2>
+    <div class="steps">
+      <div class="step">
+        <div class="step-icon">🔍</div>
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <h3>Browse every auction</h3>
+          <p>30+ UK auction houses in one place — Savills, Allsop, SDL, Network, Bond Wolfe and more. Filter by price, location, type, and condition.</p>
+        </div>
+      </div>
+      <div class="step highlight">
+        <div class="step-icon">🧠</div>
+        <div class="step-num green">2</div>
+        <div class="step-content">
+          <h3>AI scores every lot</h3>
+          <p>Each lot is analysed for investment potential — title splits, refurb opportunities, yield estimates, and comparable sales from the Land Registry.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-icon">⚡</div>
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <h3>Act fast, bid smart</h3>
+          <p>Spot deals others miss. Set your budget, check finance with our integrated BridgeMatch tool, and go into the auction room prepared.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════ STATS BAR ═══════ -->
+  <div class="landing-stats" id="landingStats">
+    <div class="landing-stats-inner">
+      <div class="ls-stat"><div class="ls-val" data-target="30" data-suffix="+">0</div><div class="ls-label">Auction Houses</div></div>
+      <div class="ls-stat"><div class="ls-val" data-target="68" data-suffix="">0</div><div class="ls-label">Bridging Lenders</div></div>
+      <div class="ls-stat"><div class="ls-val" data-target="2000" data-suffix="+">0</div><div class="ls-label">Lots Scored</div></div>
+      <div class="ls-stat"><div class="ls-val ls-static">£0</div><div class="ls-label">Cost to Use</div></div>
+    </div>
+  </div>
+
+  <!-- ═══════ TWO TOOLS ═══════ -->
+  <section class="two-tools" id="twoTools">
+    <div class="section-label">TWO POWERFUL TOOLS</div>
+    <h2 class="section-heading">Everything you need to find and fund auction deals</h2>
+    <div class="tools-grid">
+      <div class="tool-card tool-ab">
+        <div class="tool-emoji-wrap">🧠</div>
+        <h3>Auction Brain</h3>
+        <p>AI-powered auction lot scoring across 30+ UK auction houses. Every lot analysed for investment signals.</p>
+        <ul class="tool-features">
+          <li>Title split detection</li>
+          <li>Refurb opportunity flags</li>
+          <li>Yield estimates & comps</li>
+          <li>Budget & affordability filters</li>
+        </ul>
+      </div>
+      <div class="tool-card tool-bm">
+        <div class="tool-emoji-wrap">🧩</div>
+        <h3>BridgeMatch</h3>
+        <p>Instantly check finance from 68 bridging lenders. See who will fund your deal and on what terms.</p>
+        <ul class="tool-features">
+          <li>68 UK bridging lenders</li>
+          <li>Instant LTV matching</li>
+          <li>Integrated with every lot</li>
+          <li>Always free</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════ BOTTOM CTA ═══════ -->
+  <section class="bottom-cta" id="bottomCta">
+    <h2>Ready to find your next deal?</h2>
+    <p>Auction catalogues are live now. Start browsing — it's free, instant, and you don't need an account.</p>
+    <a href="#" class="cta-primary" onclick="event.preventDefault();window.scrollTo({top:0,behavior:'smooth'})">Browse Auction Deals →</a>
+  </section>
 
   <footer>
     <div class="logo-f" style="font-family:'Source Serif 4',serif">Auction <span>Brain</span></div>
@@ -931,6 +960,10 @@ async function loadAllLots(){
     const d=await r.json();
     ALL_LOTS=d.lots||[];
     ALL_SOURCES=d.sources||[];
+
+    // Update dynamic stats
+    const lsEl = document.querySelector('.ls-val[data-target="2000"]');
+    if(lsEl) lsEl.dataset.target = ALL_LOTS.length;
 
     // Auto-show all lots on page load
     if(ALL_LOTS.length && !document.body.classList.contains('view-results')){
