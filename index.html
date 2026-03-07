@@ -406,6 +406,7 @@ footer .logo-f span{color:var(--green)}
 .fw-lender-chip{background:#e8f5ee;color:#2e7d32;font-family:'DM Sans',sans-serif;font-size:11px;padding:3px 8px;border-radius:20px}
 .fw-cta{display:block;width:100%;text-align:center;background:var(--navy);color:#fff;font-family:'DM Sans',sans-serif;font-weight:600;font-size:14px;padding:10px;border-radius:8px;border:none;cursor:pointer;text-decoration:none!important;margin-top:14px;transition:all .15s}
 .fw-cta:hover{opacity:.9;text-decoration:none!important}
+.fw-cta-label{text-align:center;font-size:12px;color:var(--text3);margin-top:14px;padding:8px}
 .fw-loading{text-align:center;padding:20px 0}
 @keyframes fwPulse{0%,100%{opacity:.4}50%{opacity:1}}
 .fw-pulse{animation:fwPulse 1.2s ease infinite}
@@ -898,7 +899,7 @@ const AUTH_ENABLED = window.__AUTH_ENABLED__ || false;
 <script>
 const $=id=>document.getElementById(id);
 function esc(s){if(s==null)return '';const d=document.createElement('div');d.textContent=String(s);return d.innerHTML;}
-function safeHref(u){if(!u)return '#';const s=String(u).trim();if(/^https?:\/\//i.test(s))return esc(s);return '#';}
+function safeHref(u){if(!u)return '#';const s=String(u).trim();if(!/^https?:\/\//i.test(s))return '#';if(/google\.\w+\/maps|maps\.google|maps\.app\.goo|waze\.com|bing\.com\/maps/i.test(s))return '#';return esc(s);}
 let LOTS=[], SMART_RESULTS=null;
 let ALL_LOTS=[], ALL_SOURCES=[], FILTERED_INDICES=[];
 let LENDER_DATA=[];
@@ -2324,7 +2325,7 @@ function expandCard(lot) {
     '</div>' +
     '<div class="exp-right">' +
       '<div class="finance-widget" id="finance-widget-' + lot._idx + '">' +
-        '<div class="fw-header"><div class="fw-title">\ud83e\udde9 Finance Check</div><a class="fw-powered" href="https://www.bridgematch.co.uk" target="_blank">Powered by BridgeMatch</a></div>' +
+        '<div class="fw-header"><div class="fw-title">\ud83e\udde9 Finance Check</div><span class="fw-powered">Powered by BridgeMatch</span></div>' +
         '<div class="fw-prefilled">' +
           '<div class="fw-field"><div class="fw-field-label">PURCHASE PRICE</div><div class="fw-field-value">' + (lot.price ? '\u00a3' + lot.price.toLocaleString() : 'TBA') + '</div></div>' +
           '<div class="fw-field"><div class="fw-field-label">PROPERTY TYPE</div><div class="fw-field-value">' + esc(lot.propType || 'Residential') + '</div></div>' +
@@ -2381,7 +2382,7 @@ function triggerFinanceCheck(idx) {
         html += '<div class="fw-lenders">' + lenders.map(l => '<span class="fw-lender-chip">' + esc(l.name || l.lender || l) + '</span>').join('') + '</div>';
       }
       html += '</div>';
-      html += '<a class="fw-cta" href="https://www.bridgematch.co.uk/brokers?loan=' + encodeURIComponent(loanAmount) + '&value=' + encodeURIComponent(lot.price) + '&type=' + encodeURIComponent(apiType) + '" target="_blank">See all ' + count + ' matches on BridgeMatch →</a>';
+      html += '<div class="fw-cta-label">' + count + ' lender' + (count !== 1 ? 's' : '') + ' available — use BridgeMatch It for full details</div>';
       resultsEl.innerHTML = html;
     } catch (e) {
       resultsEl.innerHTML = '<div class="fw-error">Unable to check finance — try again later</div>';
@@ -2429,19 +2430,13 @@ $('smartQuery').addEventListener('input',()=>{
   $('mainBtn').textContent=$('smartQuery').value.trim()?'AI Search':'Browse';
 });
 // ═══════════════════════════════
-// ADMIN DEBUG WIDGET v4
+// ADMIN DEBUG WIDGET v5 — minimal
+// Win+Shift+S → describe → save & copy path
 // ═══════════════════════════════
 (function initDebugWidget() {
   const ADMIN_EMAIL = 'simon.deeming@gmail.com';
   const DL_PATH = 'C:\\Users\\SimonDeeming\\Downloads\\';
-
-  // State
-  let _baseImg = null;
-  let _annotations = [];
-  let _tool = 'circle';
-  let _drawing = false;
-  let _startPos = null;
-  let _freePath = [];
+  let _imgDataUrl = null;
 
   function boot() {
     if (!currentUser || (currentUser.email || '').toLowerCase() !== ADMIN_EMAIL) return;
@@ -2450,7 +2445,7 @@ $('smartQuery').addEventListener('input',()=>{
     const fab = document.createElement('button');
     fab.id = 'debugWidget';
     fab.innerHTML = '&#x1F41B;';
-    fab.title = 'Debug: send screenshot to Claude Code';
+    fab.title = 'Bug report';
     fab.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:9999;width:48px;height:48px;border-radius:50%;border:2px solid var(--border);background:var(--white);font-size:1.4rem;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.12);transition:transform .15s';
     fab.onmouseenter = () => fab.style.transform = 'scale(1.1)';
     fab.onmouseleave = () => fab.style.transform = '';
@@ -2461,320 +2456,159 @@ $('smartQuery').addEventListener('input',()=>{
   function openPanel() {
     const existing = document.getElementById('debugPanel');
     if (existing) { existing.remove(); return; }
-
-    _baseImg = null;
-    _annotations = [];
+    _imgDataUrl = null;
 
     const panel = document.createElement('div');
     panel.id = 'debugPanel';
-    panel.style.cssText = 'position:fixed;bottom:80px;right:20px;z-index:9999;width:360px;background:var(--white);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.15);padding:20px;font-family:"DM Sans",sans-serif';
-
-    // Step 1: Description + capture/upload
-    const step1 = document.createElement('div');
-    step1.id = 'debugStep1';
+    panel.style.cssText = 'position:fixed;bottom:80px;right:20px;z-index:9999;width:340px;background:var(--white);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.15);padding:16px;font-family:"DM Sans",sans-serif';
 
     const header = document.createElement('div');
-    header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:12px';
-    header.innerHTML = '<b style="font-size:.95rem">Bug Report</b>';
+    header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:10px';
+    header.innerHTML = '<b style="font-size:.9rem">Bug Report</b>';
     const closeBtn = document.createElement('button');
     closeBtn.textContent = '\u2715';
-    closeBtn.style.cssText = 'background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--text3)';
-    closeBtn.onclick = () => panel.remove();
+    closeBtn.style.cssText = 'background:none;border:none;font-size:1.1rem;cursor:pointer;color:var(--text3)';
+    closeBtn.onclick = () => { panel.remove(); document.removeEventListener('paste', handlePaste); };
     header.appendChild(closeBtn);
+
+    const info = document.createElement('div');
+    info.style.cssText = 'font-size:.78rem;color:var(--text3);margin-bottom:10px;line-height:1.4';
+    info.innerHTML = '1. <b>Win+Shift+S</b> to screenshot the issue<br>2. <b>Ctrl+V</b> here (or Upload)<br>3. Describe the bug, then <b>Save</b>';
 
     const desc = document.createElement('textarea');
     desc.id = 'debugDesc';
-    desc.placeholder = 'Describe the issue...';
-    desc.style.cssText = 'width:100%;height:80px;border:1px solid var(--border);border-radius:8px;padding:10px;font-family:inherit;font-size:.85rem;resize:vertical;margin-bottom:8px';
+    desc.placeholder = 'What\u2019s the bug?';
+    desc.style.cssText = 'width:100%;height:60px;border:1px solid var(--border);border-radius:8px;padding:8px;font-family:inherit;font-size:.85rem;resize:vertical;margin-bottom:8px;box-sizing:border-box';
+
+    const preview = document.createElement('div');
+    preview.id = 'debugPreview';
+    preview.style.cssText = 'display:none;margin-bottom:8px;border:1px solid var(--border);border-radius:8px;overflow:hidden;max-height:180px';
 
     const btnRow = document.createElement('div');
     btnRow.style.cssText = 'display:flex;gap:8px';
 
-    const pasteBtn = document.createElement('button');
-    pasteBtn.innerHTML = '&#x1F4CB; Paste Screenshot';
-    pasteBtn.style.cssText = 'flex:1;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--cream);cursor:pointer;font-size:.82rem;font-weight:600';
-    pasteBtn.onclick = doPaste;
+    const saveBtn = document.createElement('button');
+    saveBtn.textContent = 'Save & Copy Path';
+    saveBtn.style.cssText = 'flex:1;padding:10px;border:none;border-radius:8px;background:var(--green);color:white;font-weight:600;font-size:.85rem;cursor:pointer';
+    saveBtn.onclick = doSave;
 
     const uploadLabel = document.createElement('label');
-    uploadLabel.style.cssText = 'flex:1;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--cream);cursor:pointer;font-size:.82rem;font-weight:600;text-align:center';
-    uploadLabel.innerHTML = '&#x1F4C1; Upload';
+    uploadLabel.style.cssText = 'padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--cream);cursor:pointer;font-size:.82rem;font-weight:600;text-align:center;white-space:nowrap';
+    uploadLabel.textContent = 'Upload';
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
     fileInput.accept = 'image/*';
     fileInput.style.display = 'none';
     fileInput.onchange = function() {
-      const file = this.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = () => showAnnotator(reader.result);
-      reader.readAsDataURL(file);
+      const f = this.files[0];
+      if (!f) return;
+      const r = new FileReader();
+      r.onload = () => setPreview(r.result);
+      r.readAsDataURL(f);
     };
     uploadLabel.appendChild(fileInput);
 
-    btnRow.appendChild(pasteBtn);
+    btnRow.appendChild(saveBtn);
     btnRow.appendChild(uploadLabel);
-    step1.appendChild(header);
-    step1.appendChild(desc);
-    step1.appendChild(btnRow);
 
-    // Step 2: Annotate + send (hidden initially)
-    const step2 = document.createElement('div');
-    step2.id = 'debugStep2';
-    step2.style.display = 'none';
-    step2.innerHTML =
-      '<div style="font-size:.8rem;color:var(--text3);margin-bottom:6px">Draw on the screenshot to highlight the issue, then hit Send.</div>' +
-      '<div style="margin-bottom:10px;border-radius:8px;overflow:hidden;border:1px solid var(--border)">' +
-        '<canvas id="debugCanvas" style="width:100%;display:block;cursor:crosshair"></canvas>' +
-        '<div id="debugToolbar" style="display:flex;gap:4px;padding:6px;background:#f5f5f5;border-top:1px solid var(--border);align-items:center"></div>' +
-      '</div>';
-
-    const sendBtn = document.createElement('button');
-    sendBtn.textContent = 'Send to Claude Code';
-    sendBtn.style.cssText = 'width:100%;padding:10px;border:none;border-radius:8px;background:var(--green);color:white;font-weight:600;font-size:.85rem;cursor:pointer';
-    sendBtn.onclick = doSend;
-    step2.appendChild(sendBtn);
-
-    // Status line
     const status = document.createElement('div');
     status.id = 'debugStatus';
-    status.style.cssText = 'font-size:.78rem;color:var(--text3);margin-top:6px;text-align:center';
+    status.style.cssText = 'font-size:.78rem;color:var(--text3);margin-top:8px;text-align:center';
 
-    const hint = document.createElement('div');
-    hint.style.cssText = 'font-size:.72rem;color:var(--text3);margin-top:6px;text-align:center';
-    hint.textContent = 'Tip: Press Win+Shift+S to capture, then click "Paste Screenshot"';
-    step1.appendChild(hint);
-
-    panel.appendChild(step1);
-    panel.appendChild(step2);
+    panel.appendChild(header);
+    panel.appendChild(info);
+    panel.appendChild(desc);
+    panel.appendChild(preview);
+    panel.appendChild(btnRow);
     panel.appendChild(status);
     document.body.appendChild(panel);
 
-    // Also allow Ctrl+V paste directly into the panel
-    panel.addEventListener('paste', function(e) {
-      const items = (e.clipboardData || {}).items || [];
-      for (const item of items) {
-        if (item.type.indexOf('image') !== -1) {
-          e.preventDefault();
-          const blob = item.getAsFile();
-          const reader = new FileReader();
-          reader.onload = () => showAnnotator(reader.result);
-          reader.readAsDataURL(blob);
-          return;
-        }
-      }
-    });
-    // Make panel focusable for paste events
-    panel.tabIndex = -1;
-
+    document.addEventListener('paste', handlePaste);
     desc.focus();
   }
 
-  function showAnnotator(dataUrl) {
+  function handlePaste(e) {
+    if (!document.getElementById('debugPanel')) return;
+    const items = (e.clipboardData || {}).items || [];
+    for (const item of items) {
+      if (item.type.indexOf('image') !== -1) {
+        e.preventDefault();
+        const blob = item.getAsFile();
+        const r = new FileReader();
+        r.onload = () => setPreview(r.result);
+        r.readAsDataURL(blob);
+        return;
+      }
+    }
+  }
+
+  function setPreview(dataUrl) {
+    _imgDataUrl = dataUrl;
+    const preview = document.getElementById('debugPreview');
+    if (preview) {
+      preview.style.display = '';
+      preview.innerHTML = '';
+      const img = document.createElement('img');
+      img.src = dataUrl;
+      img.style.cssText = 'width:100%;display:block';
+      preview.appendChild(img);
+    }
+    const status = document.getElementById('debugStatus');
+    if (status) status.textContent = 'Screenshot loaded.';
+  }
+
+  function doSave() {
+    const status = document.getElementById('debugStatus');
+    const descEl = document.getElementById('debugDesc');
+    const desc = descEl ? descEl.value.trim() : '';
+    if (!desc) { if (status) status.textContent = 'Please describe the bug.'; return; }
+    if (!_imgDataUrl) { if (status) status.textContent = 'No screenshot — Win+Shift+S then Ctrl+V here.'; return; }
+    if (status) status.textContent = 'Saving...';
+
     const img = new Image();
     img.onload = () => {
-      _baseImg = img;
-      _annotations = [];
-      _tool = 'circle';
-
-      const step1 = document.getElementById('debugStep1');
-      const step2 = document.getElementById('debugStep2');
-      if (step1) step1.style.display = 'none';
-      if (step2) step2.style.display = '';
-
-      // Size canvas
-      const canvas = document.getElementById('debugCanvas');
-      if (!canvas) return;
+      const canvas = document.createElement('canvas');
+      const bh = 50;
       canvas.width = img.width;
-      canvas.height = img.height;
-      redraw(canvas);
-
-      // Build toolbar buttons
-      const tb = document.getElementById('debugToolbar');
-      if (tb) {
-        tb.innerHTML = '';
-        const tools = [['circle','Circle'],['arrow','Arrow'],['draw','Draw']];
-        tools.forEach(([t,label]) => {
-          const b = document.createElement('button');
-          b.textContent = label;
-          b.dataset.tool = t;
-          b.style.cssText = 'padding:3px 8px;border:1px solid var(--border);border-radius:6px;font-size:.75rem;cursor:pointer;' + (t === 'circle' ? 'background:var(--green);color:white' : 'background:white');
-          b.onclick = () => {
-            _tool = t;
-            tb.querySelectorAll('button').forEach(x => { x.style.background = x.dataset.tool === t ? 'var(--green)' : 'white'; x.style.color = x.dataset.tool === t ? 'white' : ''; });
-          };
-          tb.appendChild(b);
-        });
-        const spacer = document.createElement('span');
-        spacer.style.flex = '1';
-        tb.appendChild(spacer);
-        const undo = document.createElement('button');
-        undo.textContent = 'Undo';
-        undo.style.cssText = 'padding:3px 8px;border:1px solid var(--border);border-radius:6px;font-size:.75rem;cursor:pointer;background:white';
-        undo.onclick = () => { _annotations.pop(); redraw(document.getElementById('debugCanvas')); };
-        tb.appendChild(undo);
-      }
-
-      // Wire canvas mouse events (fresh each time — no stale closures)
-      wireCanvas(canvas);
-    };
-    img.src = dataUrl;
-  }
-
-  function redraw(canvas) {
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    if (_baseImg) ctx.drawImage(_baseImg, 0, 0);
-    const lw = Math.max(3, canvas.width / 120);
-    for (const a of _annotations) {
-      ctx.strokeStyle = '#ff2222';
-      ctx.lineWidth = lw;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      if (a.type === 'circle') {
-        const rx = Math.abs(a.x2 - a.x1) / 2, ry = Math.abs(a.y2 - a.y1) / 2;
-        ctx.beginPath();
-        ctx.ellipse((a.x1+a.x2)/2, (a.y1+a.y2)/2, Math.max(rx,5), Math.max(ry,5), 0, 0, Math.PI*2);
-        ctx.stroke();
-      } else if (a.type === 'arrow') {
-        const angle = Math.atan2(a.y2-a.y1, a.x2-a.x1);
-        const hl = Math.max(15, canvas.width/40);
-        ctx.beginPath(); ctx.moveTo(a.x1,a.y1); ctx.lineTo(a.x2,a.y2); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(a.x2,a.y2); ctx.lineTo(a.x2-hl*Math.cos(angle-.4),a.y2-hl*Math.sin(angle-.4)); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(a.x2,a.y2); ctx.lineTo(a.x2-hl*Math.cos(angle+.4),a.y2-hl*Math.sin(angle+.4)); ctx.stroke();
-      } else if (a.type === 'draw' && a.path.length > 1) {
-        ctx.beginPath(); ctx.moveTo(a.path[0].x, a.path[0].y);
-        for (let i=1;i<a.path.length;i++) ctx.lineTo(a.path[i].x,a.path[i].y);
-        ctx.stroke();
-      }
-    }
-  }
-
-  function wireCanvas(canvas) {
-    function getPos(e) {
-      const r = canvas.getBoundingClientRect();
-      if (r.width === 0 || r.height === 0) return {x:0,y:0};
-      const s = (e.touches && e.touches.length) ? e.touches[0] : (e.changedTouches && e.changedTouches.length) ? e.changedTouches[0] : e;
-      return { x: (s.clientX-r.left)*(canvas.width/r.width), y: (s.clientY-r.top)*(canvas.height/r.height) };
-    }
-    canvas.onmousedown = canvas.ontouchstart = function(e) {
-      e.preventDefault();
-      _drawing = true;
-      _startPos = getPos(e);
-      _freePath = [_startPos];
-    };
-    canvas.onmousemove = canvas.ontouchmove = function(e) {
-      if (!_drawing) return;
-      e.preventDefault();
-      const pos = getPos(e);
-      if (_tool === 'draw') _freePath.push(pos);
-      // Live preview: redraw base + saved annotations + current in-progress shape
-      redraw(canvas);
+      canvas.height = img.height + bh;
       const ctx = canvas.getContext('2d');
-      ctx.strokeStyle = '#ff2222';
-      ctx.lineWidth = Math.max(3, canvas.width/120);
-      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-      if (_tool === 'circle') {
-        const rx=Math.abs(pos.x-_startPos.x)/2, ry=Math.abs(pos.y-_startPos.y)/2;
-        ctx.beginPath(); ctx.ellipse((_startPos.x+pos.x)/2,(_startPos.y+pos.y)/2,Math.max(rx,2),Math.max(ry,2),0,0,Math.PI*2); ctx.stroke();
-      } else if (_tool === 'arrow') {
-        const angle=Math.atan2(pos.y-_startPos.y,pos.x-_startPos.x), hl=Math.max(15,canvas.width/40);
-        ctx.beginPath(); ctx.moveTo(_startPos.x,_startPos.y); ctx.lineTo(pos.x,pos.y); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(pos.x,pos.y); ctx.lineTo(pos.x-hl*Math.cos(angle-.4),pos.y-hl*Math.sin(angle-.4)); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(pos.x,pos.y); ctx.lineTo(pos.x-hl*Math.cos(angle+.4),pos.y-hl*Math.sin(angle+.4)); ctx.stroke();
-      } else if (_tool === 'draw' && _freePath.length > 1) {
-        ctx.beginPath(); ctx.moveTo(_freePath[0].x,_freePath[0].y);
-        for (let i=1;i<_freePath.length;i++) ctx.lineTo(_freePath[i].x,_freePath[i].y);
-        ctx.stroke();
-      }
+      ctx.fillStyle = '#1a1714';
+      ctx.fillRect(0, 0, canvas.width, bh);
+      ctx.fillStyle = '#ff4444';
+      ctx.font = 'bold ' + Math.max(14, Math.round(canvas.width / 50)) + 'px sans-serif';
+      ctx.fillText('BUG: ' + desc, 10, bh / 2 + 5);
+      ctx.fillStyle = '#999';
+      ctx.font = Math.max(10, Math.round(canvas.width / 70)) + 'px sans-serif';
+      ctx.fillText(location.href + '  ' + new Date().toLocaleString(), 10, bh - 6);
+      ctx.drawImage(img, 0, bh);
+
+      const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const filename = 'debug-' + ts + '.png';
+      const filepath = DL_PATH + filename;
+
+      canvas.toBlob(blob => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = filename; a.click();
+        URL.revokeObjectURL(url);
+
+        navigator.clipboard.writeText(filepath).then(() => {
+          if (status) status.innerHTML = '<span style="color:var(--green)">Saved! Path copied — Ctrl+V in Claude Code.</span>';
+        }).catch(() => {
+          const ta = document.createElement('textarea');
+          ta.value = filepath; document.body.appendChild(ta); ta.select();
+          document.execCommand('copy'); ta.remove();
+          if (status) status.innerHTML = '<span style="color:var(--green)">Saved! Path copied — Ctrl+V in Claude Code.</span>';
+        });
+        setTimeout(() => {
+          document.removeEventListener('paste', handlePaste);
+          document.getElementById('debugPanel')?.remove();
+          _imgDataUrl = null;
+        }, 3000);
+      }, 'image/png');
     };
-    canvas.onmouseup = canvas.onmouseleave = canvas.ontouchend = function(e) {
-      if (!_drawing) return;
-      _drawing = false;
-      const pos = getPos(e);
-      if (_tool === 'circle' || _tool === 'arrow') {
-        _annotations.push({type:_tool, x1:_startPos.x, y1:_startPos.y, x2:pos.x, y2:pos.y});
-      } else if (_tool === 'draw') {
-        _freePath.push(pos);
-        _annotations.push({type:'draw', path:[..._freePath]});
-      }
-      redraw(canvas);
-    };
+    img.src = _imgDataUrl;
   }
-
-  async function doPaste() {
-    const status = document.getElementById('debugStatus');
-    try {
-      const clip = await navigator.clipboard.read();
-      for (const item of clip) {
-        const imgType = item.types.find(t => t.startsWith('image/'));
-        if (imgType) {
-          const blob = await item.getType(imgType);
-          const reader = new FileReader();
-          reader.onload = () => showAnnotator(reader.result);
-          reader.readAsDataURL(blob);
-          return;
-        }
-      }
-      if (status) status.textContent = 'No image in clipboard. Use Win+Shift+S first, then paste.';
-    } catch(e) {
-      if (status) status.textContent = 'Clipboard access denied — try Ctrl+V in the panel instead.';
-    }
-  }
-
-  function doSend() {
-    const descEl = document.getElementById('debugDesc');
-    const statusEl = document.getElementById('debugStatus');
-    const desc = descEl ? descEl.value.trim() : '';
-    if (!desc) { if (statusEl) statusEl.textContent = 'Please add a description'; return; }
-
-    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    const filename = 'debug-' + ts + '.png';
-    const filepath = DL_PATH + filename;
-
-    const srcCanvas = document.getElementById('debugCanvas');
-    if (!srcCanvas) return;
-    const finalCanvas = document.createElement('canvas');
-    const bannerHeight = 60;
-    finalCanvas.width = srcCanvas.width;
-    finalCanvas.height = srcCanvas.height + bannerHeight;
-    const fctx = finalCanvas.getContext('2d');
-
-    fctx.fillStyle = '#1a1714';
-    fctx.fillRect(0, 0, finalCanvas.width, bannerHeight);
-    fctx.fillStyle = '#ff4444';
-    fctx.font = 'bold ' + Math.max(16, Math.round(finalCanvas.width / 40)) + 'px sans-serif';
-    fctx.fillText('BUG: ' + desc, 12, bannerHeight / 2 + 6);
-    fctx.fillStyle = '#aaaaaa';
-    fctx.font = Math.max(11, Math.round(finalCanvas.width / 60)) + 'px sans-serif';
-    fctx.fillText(window.location.href, 12, bannerHeight - 8);
-    fctx.drawImage(srcCanvas, 0, bannerHeight);
-
-    finalCanvas.toBlob(blob => {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(url);
-
-      const clipText = filepath;
-      navigator.clipboard.writeText(clipText).then(() => {
-        const s = document.getElementById('debugStatus');
-        if (s) s.innerHTML = '<span style="color:var(--green)">Sent! Ctrl+V in Claude Code.</span>';
-        setTimeout(() => { document.getElementById('debugPanel')?.remove(); }, 2500);
-      }).catch(() => {
-        const ta = document.createElement('textarea');
-        ta.value = clipText;
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand('copy');
-        ta.remove();
-        document.getElementById('debugStatus').innerHTML = '<span style="color:var(--green)">Sent! Ctrl+V in Claude Code.</span>';
-        setTimeout(() => { document.getElementById('debugPanel')?.remove(); }, 2500);
-      });
-    }, 'image/png');
-  };
 
   // Boot when auth state changes
   const _origSignIn = onSignIn;
@@ -2782,7 +2616,6 @@ $('smartQuery').addEventListener('input',()=>{
     _origSignIn(session);
     setTimeout(boot, 500);
   };
-  // Also try on load in case already signed in
   setTimeout(boot, 2000);
 })();
 </script>
