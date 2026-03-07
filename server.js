@@ -2457,7 +2457,49 @@ app.get('/api/all-lots', async (req, res) => {
       sources.push({ house: c.house, url: c.url, count: dedupedLots.length });
     }
 
-    res.json({ lots: shouldBlur ? stripAIFields(lots) : lots, sources, blurred: !!shouldBlur });
+    // ── Attach _auctionDate from FALLBACK_CALENDAR URL→date map ──
+    const urlDateMap = {};
+    for (const a of FALLBACK_CALENDAR) {
+      const nu = a.url.trim().replace(/\/+$/, '').toLowerCase();
+      if (!urlDateMap[nu] || a.date < urlDateMap[nu]) urlDateMap[nu] = a.date;
+    }
+    for (const lot of lots) {
+      const su = (lot._sourceUrl || '').trim().replace(/\/+$/, '').toLowerCase();
+      lot._auctionDate = urlDateMap[su] || null;
+    }
+
+    // ── Phase 3: Cross-auction dedup by normalised address ──
+    const crossAddrMap = new Map();
+    for (const lot of lots) {
+      const normAddr = (lot.address || '').toLowerCase().replace(/[\s,]+/g, ' ').replace(/^(lot\s*\d+\s*[-:]?\s*)/i, '').trim();
+      if (normAddr.length <= 5) continue;
+      const entry = crossAddrMap.get(normAddr);
+      if (entry) {
+        entry.count++;
+        const entryDate = entry.lot._auctionDate || '9999-12-31';
+        const lotDate = lot._auctionDate || '9999-12-31';
+        if (lotDate < entryDate) entry.lot = lot;
+      } else {
+        crossAddrMap.set(normAddr, { lot, count: 1 });
+      }
+    }
+    const keptLots = new Set();
+    const dupAddrs = new Set();
+    for (const [addr, entry] of crossAddrMap) {
+      keptLots.add(entry.lot);
+      if (entry.count > 1) dupAddrs.add(addr);
+    }
+    const beforeCross = lots.length;
+    const finalLots = lots.filter(l => {
+      const normAddr = (l.address || '').toLowerCase().replace(/[\s,]+/g, ' ').replace(/^(lot\s*\d+\s*[-:]?\s*)/i, '').trim();
+      if (normAddr.length <= 5) { l._alsoInFutureAuctions = false; return true; }
+      if (keptLots.has(l)) { l._alsoInFutureAuctions = dupAddrs.has(normAddr); return true; }
+      return false;
+    });
+    const crossRemoved = beforeCross - finalLots.length;
+    if (crossRemoved > 0) console.log(`Cross-auction dedup: removed ${crossRemoved} duplicate lots across auction dates`);
+
+    res.json({ lots: shouldBlur ? stripAIFields(finalLots) : finalLots, sources, blurred: !!shouldBlur });
   } catch (e) {
     log.error('All lots error', { error: e.message });
     res.status(500).json({ error: 'Internal server error' });

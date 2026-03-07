@@ -367,6 +367,10 @@ footer .logo-f span{color:var(--green)}
 /* ── LOTS GRID ── */
 .lots-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:0}
 .lots-grid .section-divider{grid-column:1/-1}
+.btn-page{padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:.8rem;font-family:inherit;cursor:pointer;transition:all .12s}
+.btn-page:hover:not(.disabled):not(.active){background:var(--surface3);border-color:var(--green)}
+.btn-page.active{background:var(--green);color:var(--white);border-color:var(--green)}
+.btn-page.disabled{opacity:.4;cursor:default}
 
 /* ── PHOTO LOT CARD ── */
 .lot-card{background:var(--white);border:1px solid #d5dde5;border-radius:var(--radius);overflow:hidden;transition:all .15s ease;cursor:pointer}
@@ -734,6 +738,8 @@ footer .logo-f span{color:var(--green)}
       </select>
       <input class="tb-search" type="text" id="fPostcode" placeholder="Postcode..." style="min-width:80px;max-width:100px;flex:0" oninput="renderLots()">
       <select class="tb-select" id="fExcludePOA" onchange="renderLots()"><option value="">Inc. POA</option><option value="yes">Excl. POA</option></select>
+      <select class="tb-select" id="fLookahead" onchange="saveLookahead();renderLots()"><option value="1">Next auction</option><option value="2">Next 2 auctions</option><option value="all" selected>All upcoming</option></select>
+      <select class="tb-select" id="fPerPage" onchange="savePerPage();_currentPage=1;renderLots()"><option value="20">20 / page</option><option value="30">30 / page</option><option value="50" selected>50 / page</option><option value="100">100 / page</option></select>
       <div class="ub-sep"></div>
       <input class="tb-search" id="smartQuery" placeholder="AI search..." style="min-width:120px">
       <button class="btn-main" id="mainBtn" onclick="handleSearch()">Browse</button>
@@ -965,9 +971,9 @@ function resetSearchState(){
   _selectedHouses.clear();
   for(const[id,val] of Object.entries(filterResets)){const el=$(id);if(el)el.value=val}
   updatePriceBtn();
-  $('resultsPanel').style.display='none';
-  $('logBox').innerHTML='';
-  $('mainBtn').disabled=true;
+  const _rp=$('resultsPanel'); if(_rp) _rp.style.display='none';
+  const _lb=$('logBox'); if(_lb) _lb.innerHTML='';
+  const _mb=$('mainBtn'); if(_mb) _mb.disabled=true;
 }
 
 // Price popover toggle
@@ -988,6 +994,20 @@ function updatePriceBtn(){
   else if(!mn&&mx) $('priceDdBtn').textContent='Up to '+fmt(mx);
   else $('priceDdBtn').textContent=fmt(mn)+' – '+fmt(mx);
 }
+
+// ═══════════════════════════════
+// LOOKAHEAD FILTER PERSISTENCE
+// ═══════════════════════════════
+function saveLookahead(){try{localStorage.setItem('bm_lookahead',$('fLookahead').value)}catch(e){}}
+function restoreLookahead(){try{const v=localStorage.getItem('bm_lookahead');if(v&&$('fLookahead'))$('fLookahead').value=v}catch(e){}}
+restoreLookahead();
+
+let _currentPage=1;
+function savePerPage(){try{localStorage.setItem('bm_per_page',$('fPerPage').value)}catch(e){}}
+function restorePerPage(){try{const v=localStorage.getItem('bm_per_page');if(v&&$('fPerPage'))$('fPerPage').value=v}catch(e){}}
+restorePerPage();
+let _pageFromGoPage=false;
+function goPage(p){_pageFromGoPage=true;_currentPage=p;renderLots();window.scrollTo({top:$('filterBar')?.offsetTop||0,behavior:'smooth'})}
 
 // ═══════════════════════════════
 // LOAD ALL LOTS FOR FILTERING
@@ -1343,16 +1363,9 @@ let cacheStatus={};
 
 async function loadCalendar(){
   try{
-    const [calR, cacheR]=await Promise.all([
-      fetch('/api/auctions'),
-      fetch('/api/cache-status').catch(()=>({ok:false}))
-    ]);
+    const calR=await fetch('/api/auctions');
     const d=await calR.json();
     calendarData=d.auctions||[];
-    if(cacheR.ok){
-      const cs=await cacheR.json();
-      (cs.cached||[]).forEach(c=>{ const k=c.url?.trim().replace(/\/+$/,'').toLowerCase(); if(k) cacheStatus[k]=c; });
-    }
   }catch(e){
     console.warn('Failed to load calendar:', e);
   }
@@ -1841,9 +1854,9 @@ async function runSmartSearch(query) {
     if (!resp.ok) {
       if (data.error === 'signup_required') { requireSignup(); throw new Error('Please sign up first'); }
       if (data.error === 'premium_required') {
-        $('progressPanel').style.display='none';
+        const _pp=$('progressPanel'); if(_pp) _pp.style.display='none';
         showPaywall('Custom AI search requires a Pro subscription.');
-        $('mainBtn').disabled=false;$('mainBtn').textContent='Search';
+        const _sb=$('mainBtn'); if(_sb){_sb.disabled=false;_sb.textContent='Search';}
         return;
       }
       throw new Error(data.error || 'Search failed');
@@ -1987,6 +2000,8 @@ document.addEventListener('click',e=>{
 });
 
 function renderLots(){
+  if(!_pageFromGoPage) _currentPage=1;
+  _pageFromGoPage=false;
   const fp=updateFinanceProfile();
   const aff=fp.aff;
   let lots=LOTS.slice();
@@ -2032,6 +2047,28 @@ function renderLots(){
   // Exclude POA
   if($('fExcludePOA') && $('fExcludePOA').value==='yes') lots=lots.filter(l=>l.price>0);
 
+  // Lookahead filter — limit to N upcoming auctions per house
+  const fLook=$('fLookahead')?.value||'all';
+  if(fLook!=='all'){
+    const maxAuctions=parseInt(fLook)||1;
+    // Build per-house sorted list of unique auction dates
+    const houseDates={};
+    for(const l of lots){
+      if(!l._auctionDate||!l._house) continue;
+      if(!houseDates[l._house]) houseDates[l._house]=new Set();
+      houseDates[l._house].add(l._auctionDate);
+    }
+    const houseAllowed={};
+    for(const[h,dates] of Object.entries(houseDates)){
+      const sorted=[...dates].sort();
+      houseAllowed[h]=new Set(sorted.slice(0,maxAuctions));
+    }
+    lots=lots.filter(l=>{
+      if(!l._auctionDate||!l._house) return true;
+      return houseAllowed[l._house]?.has(l._auctionDate);
+    });
+  }
+
   // Sort
   const sortVal=$('fSort')?.value||'score';
   if(sortVal==='price_asc') lots.sort((a,b)=>((a.price||Infinity)-(b.price||Infinity)));
@@ -2053,6 +2090,21 @@ function renderLots(){
     statsHtml+=`<div class="stat-card" style="grid-column:1/-1"><div class="aff-stats"><span class="aff-stat as-ok">${cOk} in budget</span>${cStr?`<span class="aff-stat as-str">${cStr} stretch</span>`:''}${cFull?`<span class="aff-stat" style="background:var(--violet-light);color:var(--violet)">${cFull} zero deposit</span>`:''}${cOor?`<span class="aff-stat as-oor">${cOor} out of reach</span>`:''}</div></div>`;
   }
   $('statsRow').innerHTML=statsHtml;
+
+  // Lookahead warning banner
+  const dupCount=lots.filter(l=>l._alsoInFutureAuctions).length;
+  let bannerEl=$('lookaheadBanner');
+  if(fLook!=='1'&&dupCount>0&&!sessionStorage.getItem('bm_dismiss_lookahead')){
+    if(!bannerEl){
+      bannerEl=document.createElement('div');
+      bannerEl.id='lookaheadBanner';
+      bannerEl.style.cssText='background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:8px;padding:8px 12px;margin:8px 0;font-size:.85rem;display:flex;align-items:center;justify-content:space-between';
+      const sr=$('statsRow');if(sr)sr.parentNode.insertBefore(bannerEl,sr.nextSibling);
+    }
+    if(bannerEl)bannerEl.innerHTML='⚠️ Showing multiple auction dates — '+dupCount+' lots appear in more than one catalogue. <button onclick="sessionStorage.setItem(\'bm_dismiss_lookahead\',\'1\');this.parentNode.remove()" style="background:none;border:none;cursor:pointer;font-size:1rem;color:#856404">✕</button>';
+  }else if(bannerEl){
+    bannerEl.remove();
+  }
 
   // Update filter count
   const filterCountEl=$('filterBarCount');
@@ -2088,46 +2140,54 @@ function renderLots(){
     const midL=lots.filter(l=>l.score>=1.5&&l.score<3&&!(showTSGroup&&l.titleSplit&&l.score>=2));
     const rest=lots.filter(l=>l.score<1.5&&!(showTSGroup&&l.titleSplit&&l.score>=2));
 
-    if(tsL.length && showTSGroup){allItems.push({html:divider('Title Splits',tsL.length),isDivider:true});tsL.forEach(l=>allItems.push({html:card(l)}))}
     if(topL.length){allItems.push({html:divider('Top Picks',topL.length),isDivider:true});topL.forEach(l=>allItems.push({html:card(l)}))}
+    if(tsL.length && showTSGroup){allItems.push({html:divider('Title Splits',tsL.length),isDivider:true});tsL.forEach(l=>allItems.push({html:card(l)}))}
     if(midL.length){allItems.push({html:divider('Worth a Look',midL.length),isDivider:true});midL.forEach(l=>allItems.push({html:card(l)}))}
     if(rest.length){allItems.push({html:divider('Other',rest.length),isDivider:true});rest.forEach(l=>allItems.push({html:card(l)}))}
   }
 
   const totalLots=lots.length;
+  const perPage=parseInt($('fPerPage')?.value)||50;
+  const totalPages=Math.max(1,Math.ceil(allItems.filter(i=>!i.isDivider).length/perPage));
+  if(_currentPage>totalPages) _currentPage=totalPages;
 
-  // Render first batch
-  const firstBatch=allItems.splice(0,BATCH_SIZE);
-  out.innerHTML='<div class="lots-grid" id="lotsGrid">'+firstBatch.map(i=>i.html).join('')+'</div>';
-  let renderedCount=firstBatch.filter(i=>!i.isDivider).length;
+  // Paginate: find items for current page (counting only non-divider items)
+  let itemCount=0, startIdx=0, endIdx=allItems.length;
+  const pageStart=((_currentPage-1)*perPage);
+  const pageEnd=pageStart+perPage;
+  let lotsSeen=0;
+  const pageItems=[];
+  let lastDivider=null;
+  for(let i=0;i<allItems.length;i++){
+    if(allItems[i].isDivider){lastDivider=allItems[i];continue}
+    if(lotsSeen>=pageStart&&lotsSeen<pageEnd){
+      if(lastDivider){pageItems.push(lastDivider);lastDivider=null}
+      pageItems.push(allItems[i]);
+    }
+    lotsSeen++;
+    if(lotsSeen>=pageEnd) break;
+  }
 
-  // Update filter count with rendered info
-  if(filterCountEl) filterCountEl.textContent='Showing '+renderedCount.toLocaleString()+' of '+totalLots.toLocaleString()+' lots';
+  out.innerHTML='<div class="lots-grid" id="lotsGrid">'+pageItems.map(i=>i.html).join('')+'</div>';
+  const renderedCount=pageItems.filter(i=>!i.isDivider).length;
 
-  // If more items remain, set up progressive loading
-  if(allItems.length){
-    _pendingCards=allItems;
-    const sentinel=document.createElement('div');
-    sentinel.id='loadMoreSentinel';
-    sentinel.style.height='1px';
-    out.appendChild(sentinel);
+  // Update filter count with page info
+  if(filterCountEl) filterCountEl.textContent='Page '+_currentPage+' of '+totalPages+' · '+totalLots.toLocaleString()+' lots';
 
-    _batchObserver=new IntersectionObserver(entries=>{
-      if(!entries[0].isIntersecting)return;
-      const grid=$('lotsGrid');
-      if(!grid||!_pendingCards.length)return;
-      const batch=_pendingCards.splice(0,BATCH_SIZE);
-      const frag=document.createRange().createContextualFragment(batch.map(i=>i.html).join(''));
-      grid.appendChild(frag);
-      renderedCount+=batch.filter(i=>!i.isDivider).length;
-      if(filterCountEl) filterCountEl.textContent='Showing '+renderedCount.toLocaleString()+' of '+totalLots.toLocaleString()+' lots';
-      if(!_pendingCards.length){
-        _batchObserver.disconnect();_batchObserver=null;
-        sentinel.remove();
-        if(filterCountEl) filterCountEl.textContent='Showing '+totalLots.toLocaleString()+' of '+LOTS.length.toLocaleString()+' lots';
-      }
-    },{rootMargin:'200px'});
-    _batchObserver.observe(sentinel);
+  // Pagination controls
+  if(totalPages>1){
+    let pgHtml='<div style="display:flex;justify-content:center;align-items:center;gap:6px;padding:16px 0;flex-wrap:wrap">';
+    pgHtml+='<button class="btn-page'+((_currentPage<=1)?' disabled':'')+'" onclick="goPage('+(_currentPage-1)+')"'+((_currentPage<=1)?' disabled':'')+'>← Prev</button>';
+    const maxBtns=7;
+    let startP=Math.max(1,_currentPage-Math.floor(maxBtns/2));
+    let endP=Math.min(totalPages,startP+maxBtns-1);
+    if(endP-startP<maxBtns-1) startP=Math.max(1,endP-maxBtns+1);
+    if(startP>1) pgHtml+='<button class="btn-page" onclick="goPage(1)">1</button><span style="color:var(--text3)">…</span>';
+    for(let p=startP;p<=endP;p++) pgHtml+='<button class="btn-page'+(p===_currentPage?' active':'')+'" onclick="goPage('+p+')">'+p+'</button>';
+    if(endP<totalPages) pgHtml+='<span style="color:var(--text3)">…</span><button class="btn-page" onclick="goPage('+totalPages+')">'+totalPages+'</button>';
+    pgHtml+='<button class="btn-page'+((_currentPage>=totalPages)?' disabled':'')+'" onclick="goPage('+(_currentPage+1)+')"'+((_currentPage>=totalPages)?' disabled':'')+'>Next →</button>';
+    pgHtml+='</div>';
+    out.insertAdjacentHTML('beforeend',pgHtml);
   }
 }
 
