@@ -2549,6 +2549,40 @@ app.get('/api/admin/daily-stats', async (req, res) => {
   }
 });
 
+app.get('/api/cost-monitor', async (req, res) => {
+  const token = req.headers['x-admin-secret'] || req.query.token || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
+    return res.status(403).json({ error: 'Invalid admin token' });
+  }
+  try {
+    const { data: cached } = await supabase.from('cached_analyses').select('house, expires_at');
+    const now = new Date();
+    const houses = cached || [];
+    const freshCount = houses.filter(h => h.expires_at && new Date(h.expires_at) > now).length;
+    const SKIP_PUPPETEER_LIST = ['cottons','dedmangray','philliparnold','sdl'];
+    res.json({
+      weeklyEstimate: {
+        claudeApiCalls: apiCallCount,
+        estimatedCost: +(apiCallCount * 0.00025).toFixed(4),
+        creditExhausted,
+        lastResetAt: serverStartTime
+      },
+      cacheStats: {
+        totalHouses: houses.length,
+        housesWithFreshCache: freshCount,
+        housesWithStaleCache: houses.length - freshCount,
+        contentHashHits: hashHitCount
+      },
+      puppeteerSkipList: SKIP_PUPPETEER_LIST,
+      lookaheadLimit: MAX_AUCTIONS_PER_HOUSE,
+      pageCapLimit: MAX_PUPPETEER_PAGES,
+      lotsCapLimit: MAX_LOTS_PER_SCRAPE
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('*', (req, res) => {
   try {
     let html = readFileSync(join(__dirname, 'index.html'), 'utf-8');
@@ -3101,6 +3135,7 @@ ${strippedBatch.map(p => `=== PAGE ${p.page} ===\n${p.content}`).join('\n\n')}
 
 Return ONLY the JSON array:`;
     try {
+      apiCallCount++;
       const response = await client.messages.create({
         model,
         max_tokens: 16000,
@@ -5503,6 +5538,9 @@ app.listen(PORT, () => {
 // ═══════════════════════════════════════════════════════════════
 let _autoAnalysisRunning = false;
 let creditExhausted = false;
+let apiCallCount = 0;
+let hashHitCount = 0;
+const serverStartTime = new Date().toISOString();
 
 async function autoAnalyseAll() {
   if (creditExhausted) {
@@ -5778,6 +5816,7 @@ async function autoAnalyseOne(url, apiKey) {
       // Extend cache TTL since content hasn't changed
       const newExpiry = new Date(Date.now() + getCacheTTL(house)).toISOString();
       await supabase.from('cached_analyses').update({ expires_at: newExpiry, last_scraped_at: new Date().toISOString() }).eq('url', normalisedUrl);
+      hashHitCount++;
       console.log(`Cache extended — content unchanged for ${house}`);
       return;
     }
