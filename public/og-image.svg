@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1a2332"/>
+      <stop offset="50%" stop-color="#1e3a4f"/>
+      <stop offset="100%" stop-color="#1a2332"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#2e7d32"/>
+      <stop offset="100%" stop-color="#4ade80"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="6" fill="url(#accent)"/>
+  <circle cx="950" cy="200" r="250" fill="#2e7d32" opacity="0.06"/>
+  <circle cx="250" cy="450" r="200" fill="#3b82f6" opacity="0.04"/>
+  <text x="600" y="260" text-anchor="middle" font-family="Georgia,serif" font-size="72" font-weight="700" fill="#ffffff">Auction <tspan fill="#4ade80">Brain</tspan></text>
+  <text x="600" y="340" text-anchor="middle" font-family="Arial,sans-serif" font-size="32" fill="rgba(255,255,255,0.7)">Find &amp; Finance UK Auction Deals</text>
+  <rect x="400" y="390" width="400" height="2" fill="url(#accent)" opacity="0.4"/>
+  <text x="600" y="450" text-anchor="middle" font-family="Arial,sans-serif" font-size="22" fill="rgba(255,255,255,0.45)">30+ Auction Houses · 68 Bridging Lenders · AI Scoring</text>
+  <text x="600" y="560" text-anchor="middle" font-family="Arial,sans-serif" font-size="20" fill="rgba(255,255,255,0.3)">auctions.bridgematch.co.uk</text>
+</svg>
