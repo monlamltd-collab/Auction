@@ -230,7 +230,7 @@ const HOUSE_EXTRACTION_HINTS = {
   network:            'Network Auctions. EIG platform. Lot divs with class current-lots-single, lot-number span, guide-price paragraph, and detail links.',
   pattinson:          'Pattinson React SPA. Property cards with lot number, address, starting/current bid price, and auction detail links.',
   savills:            'Savills auctions. Lot cards with lot number, address, guide price, tenure, property type, and detail links on auctions.savills.co.uk.',
-  sdl:                'SDL Auctions / BTG Eddisons. Property cards with lot number, address, guide price, property type, auction date, and detail links.',
+  sdl:                'BTG Eddisons Property Auctions (formerly SDL). Tailwind property-card divs with lot number, address, guide price, auction type/date, and links to /properties/ detail pages.',
   bondwolfe:          'Bond Wolfe auctions. Lot listings with lot number, address, guide price, property type, tenure, and detail page links.',
   barnardmarcus:      'Barnard Marcus auctions. Property cards with lot number, address, guide price, property type, and detail links.',
   auctionhouselondon: 'Auction House London. Lot listings with lot number, address, guide price, property type, tenure, and detail links.',
@@ -256,7 +256,7 @@ function getExtractionModel(house) {
 const HOUSE_ROOTS = {
   savills:            'https://auctions.savills.co.uk/upcoming-auctions',
   allsop:             'https://www.allsop.co.uk/auction-calendar/',
-  sdl:                'https://www.sdlauctions.co.uk/property-auctions/upcoming-auctions/',
+  sdl:                'https://www.btgeddisonspropertyauctions.com/properties/',
   network:            'https://www.networkauctions.co.uk/auctions/next-auction/',
   bondwolfe:          'https://www.bondwolfe.com/auctions/properties/',
   barnardmarcus:      'https://www.barnardmarcusauctions.co.uk/',
@@ -885,47 +885,13 @@ const FALLBACK_CALENDAR = [
       location: 'Online', type: 'Residential', status: 'upcoming',
       catalogueReady: false,
     },
-    // ── SDL AUCTIONS / BTG EDDISONS ──
+    // ── BTG EDDISONS (formerly SDL Auctions) ──
+    // BTG Eddisons runs rolling timed auctions — all current lots on /properties/
     {
-      house: 'SDL Auctions', houseSlug: 'sdl', logo: '⚡',
-      date: '2026-02-24', title: '24 February 2026 — Timed', lots: null,
-      url: 'https://www.sdlauctions.co.uk/auction/1310/multi-lot-timed-auction-2026-02-24/',
+      house: 'BTG Eddisons', houseSlug: 'sdl', logo: '⚡',
+      date: '2026-03-25', title: 'Multi-Lot Timed Auction — March 2026', lots: null,
+      url: 'https://www.btgeddisonspropertyauctions.com/properties/',
       location: 'Online (Timed)', type: 'Residential & Commercial', status: 'upcoming',
-      catalogueReady: true,
-    },
-    {
-      house: 'SDL Auctions', houseSlug: 'sdl', logo: '⚡',
-      date: '2026-02-26', title: '26 February 2026 — Live Stream', lots: null,
-      url: 'https://www.sdlauctions.co.uk/auction/1292/live-streamed-auction-2026-02-26/',
-      location: 'Online (Live Stream)', type: 'Residential & Commercial', status: 'upcoming',
-      catalogueReady: true,
-    },
-    {
-      house: 'SDL Auctions', houseSlug: 'sdl', logo: '⚡',
-      date: '2026-03-24', title: '24 March 2026 — Timed', lots: null,
-      url: 'https://www.sdlauctions.co.uk/auction/1311/multi-lot-timed-auction-2026-03-24/',
-      location: 'Online (Timed)', type: 'Residential & Commercial', status: 'upcoming',
-      catalogueReady: true,
-    },
-    {
-      house: 'SDL Auctions', houseSlug: 'sdl', logo: '⚡',
-      date: '2026-03-26', title: '26 March 2026 — Live Stream', lots: null,
-      url: 'https://www.sdlauctions.co.uk/auction/1297/live-streamed-auction-2026-03-26/',
-      location: 'Online (Live Stream)', type: 'Residential & Commercial', status: 'upcoming',
-      catalogueReady: true,
-    },
-    {
-      house: 'SDL Auctions', houseSlug: 'sdl', logo: '⚡',
-      date: '2026-04-28', title: '28 April 2026 — Timed', lots: null,
-      url: 'https://www.sdlauctions.co.uk/auction/1312/multi-lot-timed-auction-2026-04-28/',
-      location: 'Online (Timed)', type: 'Residential & Commercial', status: 'upcoming',
-      catalogueReady: true,
-    },
-    {
-      house: 'SDL Auctions', houseSlug: 'sdl', logo: '⚡',
-      date: '2026-04-30', title: '30 April 2026 — Live Stream', lots: null,
-      url: 'https://www.sdlauctions.co.uk/auction/1298/live-streamed-auction-2026-04-30/',
-      location: 'Online (Live Stream)', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: true,
     },
     // ── BOND WOLFE ──
@@ -1798,7 +1764,7 @@ app.post('/api/analyse', async (req, res) => {
       }
       // Puppeteer fallback if static scraping found nothing
       // Skip for houses where Puppeteer wastes memory (blocked, empty, or JS-only)
-      const SKIP_PUPPETEER = ['cottons','dedmangray','philliparnold','sdl'];
+      const SKIP_PUPPETEER = ['cottons','dedmangray','philliparnold'];
       if (rawLots.length === 0 && !SKIP_PUPPETEER.includes(house)) {
         console.log(`No lots from static HTML, trying Puppeteer for ${house}...`);
         const puppeteerPages = await scrapeWithPuppeteer(url, house);
@@ -2559,7 +2525,7 @@ app.get('/api/cost-monitor', async (req, res) => {
     const now = new Date();
     const houses = cached || [];
     const freshCount = houses.filter(h => h.expires_at && new Date(h.expires_at) > now).length;
-    const SKIP_PUPPETEER_LIST = ['cottons','dedmangray','philliparnold','sdl'];
+    const SKIP_PUPPETEER_LIST = ['cottons','dedmangray','philliparnold'];
     res.json({
       weeklyEstimate: {
         claudeApiCalls: apiCallCount,
@@ -2641,7 +2607,7 @@ function detectAuctionHouse(url) {
 }
 
 const HOUSE_DISPLAY_NAMES = {
-  savills: 'Savills', allsop: 'Allsop', sdl: 'SDL Auctions',
+  savills: 'Savills', allsop: 'Allsop', sdl: 'BTG Eddisons',
   network: 'Network Auctions', bondwolfe: 'Bond Wolfe', barnardmarcus: 'Barnard Marcus',
   auctionhouselondon: 'Auction House London', auctionhouse: 'Auction House UK',
   cliveemson: 'Clive Emson', strettons: 'Strettons', acuitus: 'Acuitus',
@@ -3575,89 +3541,68 @@ const DOM_EXTRACTORS = {
     })()
   `,
 
-  // ─── SDL / BTG EDDISONS ────────────────────────────────────
-  // sdlauctions.co.uk — WordPress + EIG. Lot cards are div.auction-card
-  // Each has: data-id, auction-card--content, content-title, auction-meta,
-  // content-list with "Find out more" link, content-image-container with href
+  // ─── BTG EDDISONS (formerly SDL Auctions) ──────────────────
+  // btgeddisonspropertyauctions.com — Tailwind + Swiper. Cards are div.property-card
+  // Each has: lot number as plain text, address in link text, guide price in
+  // .text-btg-blue, images from asta.btgeddisonspropertyauctions.com, and
+  // property links to /properties/{id}/for-auction-{slug}
   sdl: `
     (() => {
       const lots = [];
       const seen = new Set();
-      const cards = document.querySelectorAll('.auction-card, div[class*="auction-card"]');
-      let lotIndex = 1;
+      const cards = document.querySelectorAll('.property-card');
       for (const card of cards) {
-        const dataId = card.getAttribute('data-id') || '';
-        if (seen.has(dataId) && dataId) continue;
-        if (dataId) seen.add(dataId);
         const text = card.textContent || '';
-        // URL from image container link or "Find out more" link
-        let url = '';
-        const imgLink = card.querySelector('a.auction-card--content-image-container, a[href*="/property/"]');
-        if (imgLink) url = imgLink.getAttribute('href') || '';
-        const findMore = card.querySelector('a.btn, a[href*="/property/"]');
-        if (!url && findMore) url = findMore.getAttribute('href') || '';
-        // Address: look for content-title and address text
-        let address = '';
-        const titleEl = card.querySelector('.auction-card--content-title, p[class*="content-title"]');
-        // Full address is usually below title in plain text with postcode
-        const contentEl = card.querySelector('.auction-card--content, div[class*="auction-card--content"]');
-        if (contentEl) {
-          // Get all text lines that look like address parts
-          const lines = contentEl.innerText.split('\\n').map(s => s.trim()).filter(s => s.length > 0);
-          // Find the line with a postcode
-          for (const line of lines) {
-            if (line.match(/[A-Z]{1,2}\\d[A-Z\\d]?\\s*\\d[A-Z]{2}/i)) {
-              address = line;
-              break;
-            }
-          }
-          // If no postcode line, use title + next lines
-          if (!address && titleEl) {
-            address = titleEl.textContent.trim();
-            // Append subsequent address lines
-            const addrLines = lines.filter(l => l.length > 5 && l.length < 100 && !l.match(/Guide|Price|Auction|Find out|plus fees|Withdrawn|Sold/i));
-            if (addrLines.length > 1) address = addrLines.slice(0, 3).join(', ');
-          }
-        }
-        if (!address && titleEl) address = titleEl.textContent.trim();
-        if (!address) continue;
-        // Price
-        let price = null;
-        const priceMatch = text.match(/(?:Guide price|Price)[^£]*£([\\d,]+)/i) || text.match(/£([\\d,]+)/);
-        if (priceMatch) price = parseInt(priceMatch[1].replace(/,/g, ''));
-        // Lot number from text or sequential
-        let lotNum = lotIndex;
-        const lotMatch = text.match(/Lot\\s+(\\d+)/i);
+        // Lot number — plain 3-digit text like "001", "002" at start of card
+        let lotNum = 0;
+        const lotMatch = text.match(/^\\s*(\\d{1,4})\\s/);
         if (lotMatch) lotNum = parseInt(lotMatch[1]);
-        // Bullets from auction-meta list items and property type
-        const bullets = [];
-        card.querySelectorAll('.auction-meta li, .property-type, li').forEach(el => {
-          const t = el.textContent.trim();
-          if (t.length > 1 && t.length < 200) bullets.push(t);
-        });
-        // Property type
-        const typeEl = card.querySelector('.property-type');
-        if (typeEl) {
-          const pt = typeEl.textContent.trim();
-          if (pt && !bullets.includes(pt)) bullets.unshift(pt);
-        }
-        // Detect status
-        if (text.match(/\\bWithdrawn\\b|\\bSOLD\\b|\\bSTC\\b|\\bSale Agreed\\b/i)) {
-          if (!bullets.some(b => b.match(/SOLD|STC|WITHDRAWN|SALE AGREED/i))) bullets.push('SOLD/STC');
-        }
-        // Image from card
-        let imageUrl = '';
-        const cardImg = card.querySelector('.auction-card--content-image-container img, img.grid-img, img[loading="lazy"]');
-        if (cardImg) imageUrl = cardImg.getAttribute('src') || cardImg.dataset.src || '';
-        if (!imageUrl) {
-          const anyImg = card.querySelector('img[src]');
-          if (anyImg) {
-            const s = anyImg.getAttribute('src') || '';
-            if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) imageUrl = s;
+        // URL from property link
+        let url = '';
+        const propLink = card.querySelector('a[href*="/properties/"]');
+        if (propLink) url = propLink.getAttribute('href') || '';
+        if (seen.has(url) && url) continue;
+        if (url) seen.add(url);
+        // Address from the link text (contains full address with postcode)
+        let address = '';
+        if (propLink) address = propLink.textContent.trim();
+        // If multiple links, find the one with substantive text (not just whitespace overlay)
+        if (!address || address.length < 5) {
+          const allLinks = card.querySelectorAll('a[href*="/properties/"]');
+          for (const link of allLinks) {
+            const t = link.textContent.trim();
+            if (t.length > 5 && t.match(/[A-Z]{1,2}\\d/i)) { address = t; break; }
           }
         }
-        lots.push({ lot: lotNum, address, price, url, bullets, imageUrl: imageUrl || undefined });
-        lotIndex++;
+        if (!address) continue;
+        // Deduplicate address if it repeats (site duplicates it in overlay + content)
+        address = address.replace(/(.{20,})\\1/g, '$1').trim();
+        // Price from "Guide Price: £X+" pattern
+        let price = null;
+        const priceMatch = text.match(/Guide\\s*Price[^£]*£([\\d,]+)/i) || text.match(/£([\\d,]+)/);
+        if (priceMatch) price = parseInt(priceMatch[1].replace(/,/g, ''));
+        // Bullets — auction type, end date, property type
+        const bullets = [];
+        const typeMatch = text.match(/(Multi-Lot Timed|Single-Lot Timed|Live Stream)\\s*Auction/i);
+        if (typeMatch) bullets.push(typeMatch[0]);
+        const endMatch = text.match(/Auction\\s*Ends?:\\s*(\\d{2}\\/\\d{2}\\/\\d{4})/i);
+        if (endMatch) bullets.push('Auction Ends: ' + endMatch[1]);
+        // Detect sold/withdrawn status
+        if (text.match(/\\bWithdrawn\\b|\\bSOLD\\b|\\bSTC\\b|\\bSale Agreed\\b/i)) {
+          bullets.push('SOLD/STC');
+        }
+        // Image — first real property image from swiper or img tag
+        let imageUrl = '';
+        const imgs = card.querySelectorAll('img[src]');
+        for (const img of imgs) {
+          const s = img.getAttribute('src') || '';
+          if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg')
+              && !s.includes('placeholder') && s.length > 10) {
+            imageUrl = s;
+            break;
+          }
+        }
+        lots.push({ lot: lotNum || lots.length + 1, address, price, url, bullets, imageUrl: imageUrl || undefined });
       }
       return lots;
     })()
@@ -5272,17 +5217,13 @@ function buildLotUrl(lot, house, sourceUrl) {
       if (lot.reference) return `https://www.allsop.co.uk/lot-overview/lot/${lot.reference}`;
       return `https://www.allsop.co.uk/find-a-property/`;
     case 'sdl':
-      // SDL/BTG Eddisons: individual property pages are /property/{id}/slug
-      // If we have a property ID from Claude extraction, construct the URL
-      if (lot.propertyId) {
-        return `https://www.sdlauctions.co.uk/property/${lot.propertyId}/`;
-      }
-      // If lot URL was extracted as relative, make absolute
+      // BTG Eddisons (formerly SDL): property pages are /properties/{id}/for-auction-{slug}
+      if (lot.url && lot.url.startsWith('http')) return lot.url;
       if (lot.url && lot.url.startsWith('/')) {
-        if (sourceUrl.includes('btgeddisonspropertyauctions')) {
-          return `https://www.btgeddisonspropertyauctions.com${lot.url}`;
-        }
-        return `https://www.sdlauctions.co.uk${lot.url}`;
+        return `https://www.btgeddisonspropertyauctions.com${lot.url}`;
+      }
+      if (lot.propertyId) {
+        return `https://www.btgeddisonspropertyauctions.com/properties/${lot.propertyId}/`;
       }
       break;
     case 'bondwolfe':
@@ -5998,7 +5939,7 @@ async function autoAnalyseOne(url, apiKey) {
     const pages = await scrapeAllPages(scrapeUrl, house);
     if (pages && pages.length > 0) rawLots = await extractLotsWithClaude(client, pages, house, null, scrapeUrl);
     // Skip Puppeteer fallback for houses where it wastes memory (blocked, empty, or JS-only)
-    const SKIP_PUPPETEER = ['cottons','dedmangray','philliparnold','sdl'];
+    const SKIP_PUPPETEER = ['cottons','dedmangray','philliparnold'];
     if (rawLots.length === 0 && !SKIP_PUPPETEER.includes(house)) {
       const puppeteerPages = await scrapeWithPuppeteer(url, house);
       if (puppeteerPages.length > 0) rawLots = await extractLotsWithClaude(client, puppeteerPages, house, null, scrapeUrl);
