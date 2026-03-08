@@ -19,6 +19,12 @@
 <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"WebApplication","name":"Auction Brain","description":"Auction Brain scores every UK auction lot for investment potential and checks 68 bridging lenders in one click. Browse free.","url":"https://auctions.bridgematch.co.uk","applicationCategory":"FinanceApplication","offers":{"@type":"AggregateOffer","lowPrice":"0","highPrice":"9.99","priceCurrency":"GBP","offerCount":"3","offers":[{"@type":"Offer","name":"Free","price":"0","priceCurrency":"GBP","description":"Browse 2000+ auction lots and BridgeMatch finance matching"},{"@type":"Offer","name":"Day Pass","price":"1.99","priceCurrency":"GBP","description":"24-hour unlimited AI analysis"},{"@type":"Offer","name":"Pro","price":"9.99","priceCurrency":"GBP","description":"Unlimited AI analysis, custom search, CSV exports"}]}}
 </script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Organization","name":"BridgeMatch","url":"https://www.bridgematch.co.uk","logo":"https://auctions.bridgematch.co.uk/public/favicon.svg","contactPoint":{"@type":"ContactPoint","email":"hello@bridgematch.co.uk","contactType":"customer service"},"sameAs":[]}
+</script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://auctions.bridgematch.co.uk/"},{"@type":"ListItem","position":2,"name":"Auction Lots","item":"https://auctions.bridgematch.co.uk/auctions"},{"@type":"ListItem","position":3,"name":"BridgeMatch Finance Check","item":"https://auctions.bridgematch.co.uk/check"}]}
+</script>
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@400;600;700;800;900&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -106,6 +112,11 @@ a{color:var(--green);text-decoration:none}a:hover{text-decoration:underline}
 .ex-btn:hover{background:var(--green-light);color:var(--green);border-color:var(--green)}
 .adv-toggle{font-size:.8rem;color:var(--text3);cursor:pointer;border:none;background:none;font-family:inherit;text-decoration:underline;text-underline-offset:2px}
 .adv-toggle:hover{color:var(--green)}
+
+/* ── ACCESSIBILITY: focus-visible for all interactive elements ── */
+.tb-select:focus-visible,.ex-btn:focus-visible,.adv-toggle:focus-visible,.btn-main:focus-visible,.nav-cta:focus-visible,.card-bm-btn:focus-visible,.cta-primary:focus-visible,.lot-card:focus-visible{outline:2px solid var(--green);outline-offset:2px;box-shadow:0 0 0 4px rgba(46,125,50,.15)}
+.skip-link{position:absolute;top:-100%;left:16px;background:var(--green);color:var(--white);padding:8px 16px;border-radius:var(--radius-sm);font-weight:700;font-size:.85rem;z-index:100;text-decoration:none;transition:top .15s}
+.skip-link:focus{top:8px}
 
 /* ── ADVANCED SETTINGS ── */
 .advanced{display:none;margin-top:16px;padding-top:16px;border-top:1px solid var(--border)}
@@ -598,17 +609,19 @@ footer .logo-f span{color:var(--green)}
 </head>
 <body>
 
-<nav class="nav">
+<a href="#resultsPanel" class="skip-link">Skip to auction lots</a>
+
+<nav class="nav" aria-label="Main navigation">
   <div class="nav-inner">
-    <div class="logo">Auction <span>Brain</span><span class="logo-sub">powered by BridgeMatch</span></div>
+    <div class="logo" role="img" aria-label="Auction Brain — powered by BridgeMatch">Auction <span>Brain</span><span class="logo-sub">powered by BridgeMatch</span></div>
     <div class="nav-right">
       <a href="/check" class="nav-link-bm" title="Check if you can finance a deal">🧩 Can I fund this?</a>
-      <button class="nav-cta" id="navCta" onclick="requireSignup()">Sign in</button>
+      <button class="nav-cta" id="navCta" onclick="requireSignup()" aria-label="Sign in to Auction Brain">Sign in</button>
     </div>
   </div>
 </nav>
 
-<div class="wrap">
+<main class="wrap">
 
   <header class="hero">
     <div class="hero-badge"><span class="badge-dot"></span> Live auction data updated daily</div>
@@ -625,14 +638,14 @@ footer .logo-f span{color:var(--green)}
   </header>
 
   <!-- ═══════ AUTH MODAL (Magic Link) ═══════ -->
-  <div class="modal-bg" id="signupModal">
+  <div class="modal-bg" id="signupModal" role="dialog" aria-modal="true" aria-labelledby="authModalTitle">
     <div class="modal">
       <!-- Step 1: Email + consent -->
       <div id="authStep1">
         <div class="modal-icon">🔓</div>
-        <h2>Sign in to Auction Brain</h2>
+        <h2 id="authModalTitle">Sign in to Auction Brain</h2>
         <p>We'll email you a secure sign-in link. No payment needed.</p>
-        <input id="signupEmail" placeholder="Email address" type="email">
+        <input id="signupEmail" placeholder="Email address" type="email" aria-label="Email address for sign-in">
         <div style="text-align:left;margin:10px 0 14px;font-size:.82rem;color:var(--text2)">
           <label style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;cursor:pointer">
             <input type="checkbox" id="consentAlerts" checked style="margin-top:3px;accent-color:var(--green)">
@@ -698,13 +711,13 @@ footer .logo-f span{color:var(--green)}
     <div class="unified-bar">
       <input class="tb-search" type="text" id="fSearch" placeholder="Search lots..." oninput="renderLots()">
       <div class="house-dropdown" id="houseDropdown">
-        <button class="house-dropdown-btn" id="houseDropdownBtn" onclick="toggleHousePopover(event)">All houses</button>
+        <button class="house-dropdown-btn" id="houseDropdownBtn" onclick="toggleHousePopover(event)" aria-label="Select auction houses" aria-expanded="false" aria-haspopup="listbox">All houses</button>
         <div class="house-popover" id="housePopover">
-          <input class="house-popover-search" type="text" placeholder="Search houses..." oninput="filterHouseList(this.value)">
+          <input class="house-popover-search" type="text" placeholder="Search houses..." oninput="filterHouseList(this.value)" aria-label="Search auction houses">
           <div id="houseCheckList"></div>
         </div>
       </div>
-      <select class="tb-select" id="fSort" onchange="renderLots()">
+      <select class="tb-select" id="fSort" onchange="renderLots()" aria-label="Sort lots by">
         <option value="score">Score (high → low)</option>
         <option value="price_asc">Price (low → high)</option>
         <option value="price_desc">Price (high → low)</option>
@@ -721,33 +734,33 @@ footer .logo-f span{color:var(--green)}
           </select></div>
         </div>
       </div>
-      <select class="tb-select" id="fBeds" onchange="renderLots()">
+      <select class="tb-select" id="fBeds" onchange="renderLots()" aria-label="Minimum bedrooms">
         <option value="">Beds: Any</option><option value="1">1+</option><option value="2">2+</option><option value="3">3+</option><option value="4">4+</option><option value="5">5+</option><option value="6">6+</option>
       </select>
-      <select class="tb-select" id="fType" onchange="renderLots()">
+      <select class="tb-select" id="fType" onchange="renderLots()" aria-label="Property type">
         <option value="">All types</option><option value="house">House</option><option value="flat">Flat</option><option value="bungalow">Bungalow</option><option value="commercial">Commercial</option><option value="land">Land</option><option value="garage">Garage</option><option value="other">Other</option>
       </select>
-      <select class="tb-select" id="fLocation" onchange="renderLots()">
+      <select class="tb-select" id="fLocation" onchange="renderLots()" aria-label="Location">
         <option value="">Anywhere</option>
         <option value="london">London</option><option value="south east">South East</option><option value="south west">South West</option><option value="east">East of England</option><option value="west midlands">West Midlands</option><option value="east midlands">East Midlands</option><option value="north west">North West</option><option value="north east">North East</option><option value="yorkshire">Yorkshire</option><option value="wales">Wales</option><option value="scotland">Scotland</option>
       </select>
-      <select class="tb-select" id="fDeal" onchange="renderLots()"><option value="">All deals</option></select>
-      <select class="tb-select" id="fCondition" onchange="renderLots()">
+      <select class="tb-select" id="fDeal" onchange="renderLots()" aria-label="Deal type"><option value="">All deals</option></select>
+      <select class="tb-select" id="fCondition" onchange="renderLots()" aria-label="Property condition">
         <option value="">Any condition</option><option value="needs work">Needs work</option><option value="good">Good</option><option value="vacant">Vacant</option><option value="tenanted">Tenanted</option>
       </select>
-      <select class="tb-select" id="fTenure" onchange="renderLots()">
+      <select class="tb-select" id="fTenure" onchange="renderLots()" aria-label="Tenure type">
         <option value="">Any tenure</option><option value="Freehold">Freehold</option><option value="Leasehold">Leasehold</option><option value="Share of Freehold">Share of FH</option>
       </select>
-      <select class="tb-select" id="fSoldTop" onchange="renderLots()">
+      <select class="tb-select" id="fSoldTop" onchange="renderLots()" aria-label="Lot status">
         <option value="available">Available only</option><option value="all">All lots</option><option value="sold">Sold only</option>
       </select>
-      <input class="tb-search" type="text" id="fPostcode" placeholder="Postcode..." style="min-width:80px;max-width:100px;flex:0" oninput="renderLots()">
-      <select class="tb-select" id="fExcludePOA" onchange="renderLots()"><option value="">Inc. POA</option><option value="yes">Excl. POA</option></select>
-      <select class="tb-select" id="fLookahead" onchange="saveLookahead();renderLots()"><option value="1" selected>Next auction</option><option value="2">Next 2 auctions</option><option value="all">All upcoming (may include duplicates)</option></select>
-      <select class="tb-select" id="fPerPage" onchange="savePerPage();_currentPage=1;renderLots()"><option value="20">20 / page</option><option value="30">30 / page</option><option value="50" selected>50 / page</option><option value="100">100 / page</option></select>
+      <input class="tb-search" type="text" id="fPostcode" placeholder="Postcode..." style="min-width:80px;max-width:100px;flex:0" oninput="renderLots()" aria-label="Filter by postcode">
+      <select class="tb-select" id="fExcludePOA" onchange="renderLots()" aria-label="Include or exclude POA lots"><option value="">Inc. POA</option><option value="yes">Excl. POA</option></select>
+      <select class="tb-select" id="fLookahead" onchange="saveLookahead();renderLots()" aria-label="Auction lookahead"><option value="1" selected>Next auction</option><option value="2">Next 2 auctions</option><option value="all">All upcoming (may include duplicates)</option></select>
+      <select class="tb-select" id="fPerPage" onchange="savePerPage();_currentPage=1;renderLots()" aria-label="Lots per page"><option value="20">20 / page</option><option value="30">30 / page</option><option value="50" selected>50 / page</option><option value="100">100 / page</option></select>
       <div class="ub-sep"></div>
-      <input class="tb-search" id="smartQuery" placeholder="AI search..." style="min-width:120px">
-      <button class="btn-main" id="mainBtn" onclick="handleSearch()">Browse</button>
+      <input class="tb-search" id="smartQuery" placeholder="AI search..." style="min-width:120px" aria-label="AI-powered search query">
+      <button class="btn-main" id="mainBtn" onclick="handleSearch()" aria-label="Search auction lots">Browse</button>
       <span class="filter-count" id="filterBarCount" style="font-size:.72rem;color:var(--text3);white-space:nowrap"></span>
       <select class="tb-select" id="fAfford" onchange="renderLots()" style="display:none"><option value="all">All lots</option><option value="affordable">Affordable</option><option value="in_budget">In budget only</option><option value="full_finance">Zero deposit only</option></select>
       <!-- fTS removed: title split filtering available via chip button / AI search -->
@@ -809,7 +822,7 @@ footer .logo-f span{color:var(--green)}
   <!-- ═══════ RESULTS ═══════ -->
   <div id="resultsPanel">
     <div class="result-header">
-      <h2 id="resultsTitle">Results</h2>
+      <h2 id="resultsTitle" aria-live="polite">Results</h2>
       <div style="display:flex;gap:8px;align-items:center">
         <div class="view-toggle" id="viewToggle" style="display:none">
           <button class="vtog active" onclick="showView('report')">📝 Report</button>
@@ -927,9 +940,9 @@ footer .logo-f span{color:var(--green)}
   <section class="email-capture" id="emailCapture">
     <h2>Get Weekly Auction Deal Alerts</h2>
     <p class="ec-sub">We'll send you the top-scoring lots each week — high-yield, below-market, and development opportunities. No spam, unsubscribe anytime.</p>
-    <form class="ec-form" id="ecForm" onsubmit="return submitEmailCapture(event)">
-      <input type="text" name="name" placeholder="Your name" required autocomplete="name">
-      <input type="email" name="email" placeholder="Email address" required autocomplete="email">
+    <form class="ec-form" id="ecForm" onsubmit="return submitEmailCapture(event)" aria-label="Subscribe to auction deal alerts">
+      <input type="text" name="name" placeholder="Your name" required autocomplete="name" aria-label="Your name">
+      <input type="email" name="email" placeholder="Email address" required autocomplete="email" aria-label="Email address">
       <button type="submit" id="ecSubmitBtn">Subscribe</button>
     </form>
     <div class="ec-error" id="ecError"></div>
@@ -943,7 +956,7 @@ footer .logo-f span{color:var(--green)}
     <p>UK Property Auction Directory & Deal Analyser · Data from public auction house websites · Not financial advice</p>
     <p style="margin-top:8px;"><a href="/privacy" style="color:inherit;text-decoration:none;margin:0 8px;">Privacy Policy</a><a href="/terms" style="color:inherit;text-decoration:none;margin:0 8px;">Terms of Service</a></p>
   </footer>
-</div>
+</main>
 
 <script src="/public/supabase.min.js"></script>
 <script>
@@ -1991,7 +2004,9 @@ function buildHouseChecklist(){
 
 function toggleHousePopover(e){
   e.stopPropagation();
-  $('housePopover').classList.toggle('open');
+  const pop=$('housePopover');
+  pop.classList.toggle('open');
+  $('houseDropdownBtn').setAttribute('aria-expanded', pop.classList.contains('open'));
 }
 
 function filterHouseList(q){
@@ -2257,7 +2272,7 @@ function card(l){
   const bmBtn = l.price ? '<button class="card-bm-btn" onclick="bridgeMatchLot(' + l._idx + ',event)">🧩 BridgeMatch It</button>' : '';
 
   const blurClass = l.blurred ? ' blurred' : '';
-  return '<div class="lot-card' + blurClass + '" id="lot-' + l._idx + '" onclick="' + (l.blurred ? 'showPaywall()' : 'expandCard(LOTS[' + l._idx + '])') + '">' +
+  return '<div class="lot-card' + blurClass + '" id="lot-' + l._idx + '" tabindex="0" role="article" aria-label="Lot ' + esc(l.lot || '') + ' — ' + esc(l.address || 'Address not available') + '" onclick="' + (l.blurred ? 'showPaywall()' : 'expandCard(LOTS[' + l._idx + '])') + '" onkeydown="if(event.key===\'Enter\'){this.click()}">' +
     getCardImageHtml(l) +
     '<div class="card-body">' +
       '<div class="card-row1"><span class="card-lot-info">' + catLabel + '</span><span class="card-price">' + esc(priceText) + '</span></div>' +
@@ -2379,7 +2394,7 @@ function getCardImageHtml(lot) {
   }
   return '<div class="card-image-wrapper">' +
     '<div class="card-image-shimmer"></div>' +
-    '<img class="card-image" src="' + esc(lot.imageUrl) + '" alt="' + esc(lot.address) + '" loading="lazy" ' +
+    '<img class="card-image" src="' + esc(lot.imageUrl) + '" alt="' + esc((lot.address || 'Auction property') + ' — ' + (lot.house || 'auction lot')) + '" loading="lazy" ' +
     'onload="this.previousElementSibling.style.display=\'none\'" ' +
     'onerror="this.parentElement.innerHTML=getPlaceholderHtml(this.dataset.proptype)"' +
     ' data-proptype="' + esc(lot.propType || 'house') + '">' +

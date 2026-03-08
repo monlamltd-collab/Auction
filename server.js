@@ -395,7 +395,7 @@ app.post('/api/signup', async (req, res) => {
     sendWelcomeEmail(newUser.email, newUser.name).catch(() => {});
     return res.json({ user: newUser, token, returning: false });
   } catch (err) {
-    console.error('Signup error:', err);
+    log.error('Signup error', { error: err.message });
     return res.status(500).json({ error: 'Signup failed' });
   }
 });
@@ -1380,7 +1380,7 @@ app.get('/api/auctions', async (req, res) => {
     const auctions = await getAuctionCalendar();
     res.json({ updated: new Date().toISOString(), count: auctions.length, auctions });
   } catch (e) {
-    console.error('Calendar endpoint error:', e.message);
+    log.error('Calendar endpoint error', { error: e.message });
     res.status(500).json({ error: 'Failed to load auction calendar' });
   }
 });
@@ -2053,7 +2053,7 @@ app.post('/api/analyse', async (req, res) => {
     });
     return res.end();
   } catch (err) {
-    console.error(err);
+    log.error('Analysis SSE error', { error: err.message });
     sseWrite(res, 'error', { message: 'Analysis failed' });
     return res.end();
   }
@@ -2309,7 +2309,7 @@ Only return lots that genuinely match the query.` }]
           cached: true,
         });
       } catch (err) {
-        console.error('Incremental preset refresh failed, falling through to full search:', err.message);
+        log.warn('Incremental preset refresh failed, falling through to full search', { error: err.message });
         // Fall through to full search below
       }
     }
@@ -2666,7 +2666,7 @@ app.post('/api/admin/backfill-images', async (req, res) => {
     res.json({ message: `Backfill complete. ${totalGained} images added across ${cached.length} catalogues.`, results });
   } catch (err) {
     log.error('Image backfill error', { error: err.message });
-    res.status(500).json({ error: 'Backfill failed: ' + err.message });
+    res.status(500).json({ error: 'Image backfill failed. Check server logs.' });
   }
 });
 
@@ -2766,7 +2766,8 @@ app.get('/api/cost-monitor', async (req, res) => {
       lotsCapLimit: MAX_LOTS_PER_SCRAPE
     });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    log.error('Cost monitor error', { error: e.message });
+    res.status(500).json({ error: 'Cost monitor failed. Check server logs.' });
   }
 });
 
@@ -2814,7 +2815,8 @@ app.get('/api/quality-report', async (req, res) => {
     report.summary = { totalHouses: (cached || []).length, totalLots, housesWithZero, staleHouses, totalDupes };
     res.json(report);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    log.error('Quality report error', { error: e.message });
+    res.status(500).json({ error: 'Quality report failed. Check server logs.' });
   }
 });
 
@@ -5582,7 +5584,7 @@ async function backfillImages(catalogueUrl, lots) {
     console.log(`Image backfill for ${catalogueUrl.substring(0, 60)}: ${updated}/${lots.filter(l => !l.imageUrl).length + updated} matched`);
     return updated > 0 ? lots : null;
   } catch (err) {
-    console.log(`Image backfill error for ${catalogueUrl}: ${err.message}`);
+    log.warn('Image backfill error', { catalogueUrl, error: err.message });
     return null;
   }
 }
@@ -5600,7 +5602,7 @@ async function extractWithDOM(page, house) {
         lots = result;
       }
     } catch (err) {
-      console.log(`DOM extractor error for ${house}: ${err.message}`);
+      log.warn('DOM extractor error', { house, error: err.message });
     }
   }
 
@@ -5613,7 +5615,7 @@ async function extractWithDOM(page, house) {
         lots = result;
       }
     } catch (err) {
-      console.log(`Universal DOM extractor error for ${house}: ${err.message}`);
+      log.warn('Universal DOM extractor error', { house, error: err.message });
     }
   }
 
@@ -5708,7 +5710,7 @@ async function extractWithDOM(page, house) {
       console.log(`Image extraction for ${house}: ${lots.filter(l => l.imageUrl).length}/${lots.length} lots got images`);
     }
   } catch (err) {
-    console.log(`Image extraction error for ${house}: ${err.message}`);
+    log.warn('Image extraction error', { house, error: err.message });
   }
 
   // Resolve any relative imageUrls to absolute

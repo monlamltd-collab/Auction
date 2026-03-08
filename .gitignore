@@ -1,3 +1,29 @@
 node_modules/
 .env
+.env.*
 .vercel/
+
+# Claude Code / internal
+.claude/
+
+# Internal docs (not production)
+AGENT_ORGANISATION_COMPLETE.md
+LAUNCH-BRAINSTORM.md
+TEAM-REVIEW.md
+INSTALLATION.md
+audit-*.md
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
