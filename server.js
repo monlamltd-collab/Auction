@@ -6785,6 +6785,8 @@ async function autoAnalyseOne(url, apiKey) {
               rawLots.push(...pageLots);
               consecutiveFails = 0;
             }
+            // Clear DOM after extraction to free memory before next navigation
+            try { await page.evaluate(() => { document.body.innerHTML = ''; }); } catch {}
           } catch (e) {
             console.log(`AUTO: Page ${p} failed: ${e.message}`);
             consecutiveFails++;
@@ -6898,17 +6900,21 @@ async function autoAnalyseOne(url, apiKey) {
           });
 
           if (detectedPages.max > 1) {
-            const maxPages = Math.min(detectedPages.max, 25);
+            // Per-house page caps — some houses have massive duplication across dates
+            const PAGE_CAPS = { probateauction: 12, auctionhouselondon: 10 };
+            const pageCap = PAGE_CAPS[house] || 25;
+            const maxPages = Math.min(detectedPages.max, pageCap);
             console.log(`AUTO: ${house}: detected ${detectedPages.max} pages (${detectedPages.pattern}), loading up to ${maxPages}`);
             let consecutiveFails = 0;
+            const RECYCLE_EVERY = 3; // aggressive — generic pages can be very heavy (150+ lots)
             for (let p = 2; p <= maxPages; p++) {
               let pageUrl;
               if (detectedPages.pattern === 'path-dash') pageUrl = scrapeUrl.replace(/\/page-\d+/, '') + `/page-${p}`;
               else if (detectedPages.pattern === 'path-slash') pageUrl = scrapeUrl.replace(/\/page\/\d+/, '') + `/page/${p}`;
               else { const sep = scrapeUrl.includes('?') ? '&' : '?'; pageUrl = `${scrapeUrl}${sep}page=${p}`; }
               try {
-                // Recycle page every 10 pages to prevent OOM
-                if ((p - 1) % 10 === 0) {
+                // Recycle page aggressively to prevent OOM on heavy pages
+                if ((p - 1) % RECYCLE_EVERY === 0) {
                   try { await page.close(); } catch {}
                   const freshBrowser = await getBrowser();
                   page = await freshBrowser.newPage();
@@ -6928,6 +6934,8 @@ async function autoAnalyseOne(url, apiKey) {
                   console.log(`AUTO: ${house} Page ${p}: ${pageLots.length} lots`);
                   consecutiveFails = 0;
                 } else { console.log(`AUTO: ${house} Page ${p}: 0 lots — stopping`); break; }
+                // Clear DOM after extraction to free memory before next navigation
+                try { await page.evaluate(() => { document.body.innerHTML = ''; }); } catch {}
               } catch (e) {
                 console.log(`AUTO: ${house} Page ${p} failed: ${e.message}`);
                 consecutiveFails++;
