@@ -2575,15 +2575,28 @@ app.get('/api/all-lots', async (req, res) => {
     const crossRemoved = beforeCross - finalLots.length;
     if (crossRemoved > 0) console.log(`Cross-auction dedup: removed ${crossRemoved} duplicate lots across auction dates`);
 
+    // Sanitise junk lots — remove non-property entries (email addresses, field labels, etc.)
+    const junkAddr = /^(enquiries|info|sales|contact|admin|hello)@|^£[\d,]+|^Properties?$/i;
+    const junkAddr2 = /^(Lot|View|More|See|Click|Browse)\s|^Property Type$/i;
+    const beforeJunkLot = finalLots.length;
+    const cleanLots = finalLots.filter(l => {
+      const addr = (l.address || '').trim();
+      if (addr.length < 5) return false;
+      if (junkAddr.test(addr) || junkAddr2.test(addr)) return false;
+      return true;
+    });
+    const junkLotRemoved = beforeJunkLot - cleanLots.length;
+    if (junkLotRemoved > 0) console.log(`Lot sanitiser: removed ${junkLotRemoved} junk lots (non-property entries)`);
+
     // Sanitise image URLs — strip junk images (logos, council branding, ad trackers, placeholders)
-    const junkImg = /logo|icon|\.svg|favicon|banner|flannels|kirklees|\brdw\b|council\.gov|\.gov\.uk\/|googleads|doubleclick|spacer|pixel|1x1|placeholder|no-image|noimage|spinner|badge|modal\.png|_NYC\.|_LCC\.|_BMDC\.|United?_?Utilit|Cardwells|themes\/.*assets\/images\/|download_\(\d+\)\./i;
+    const junkImg = /logo|icon|\.svg|favicon|banner|flannels|kirklees|\brdw\b|council\.gov|\.gov\.uk\/|googleads|doubleclick|spacer|pixel|1x1|placeholder|no-image|noimage|spinner|badge|modal\.png|_NYC\.|_LCC\.|_BMDC\.|Unit[ie]*d?_?Utilit|Cardwells|themes\/.*assets\/images\/|download_\(\d+\)\./i;
     let imgStripped = 0;
-    for (const lot of finalLots) {
+    for (const lot of cleanLots) {
       if (lot.imageUrl && junkImg.test(lot.imageUrl)) { lot.imageUrl = undefined; imgStripped++; }
     }
     if (imgStripped > 0) console.log(`Image sanitiser: stripped ${imgStripped} junk images`);
 
-    res.json({ lots: shouldBlur ? stripAIFields(finalLots) : finalLots, sources, blurred: !!shouldBlur });
+    res.json({ lots: shouldBlur ? stripAIFields(cleanLots) : cleanLots, sources, blurred: !!shouldBlur });
   } catch (e) {
     log.error('All lots error', { error: e.message });
     res.status(500).json({ error: 'Internal server error' });
@@ -3926,10 +3939,10 @@ const DOM_EXTRACTORS = {
         // Image — first real property image from swiper or img tag
         let imageUrl = '';
         const imgs = card.querySelectorAll('img[src]');
+        const imgJunk = /logo|icon|\\.svg|placeholder|modal\\.png|_NYC\\.|_LCC\\.|_BMDC\\.|council|utilit|cardwell|download_\\(/i;
         for (const img of imgs) {
           const s = img.getAttribute('src') || '';
-          if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg')
-              && !s.includes('placeholder') && s.length > 10) {
+          if (s && s.length > 10 && !imgJunk.test(s)) {
             imageUrl = s;
             break;
           }
@@ -5729,7 +5742,7 @@ async function extractWithDOM(page, house) {
   }
 
   // Post-processing: filter out non-property images (logos, icons, placeholders, known junk)
-  const imgBlocklist = /logo|icon|placeholder|no-image|default|blank|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|1x1|noimage|favicon|banner|advert|sponsor|newsletter|widget|thumb_generic|modal\.png|_NYC\.|_LCC\.|_BMDC\.|United?_?Utilit|Cardwells|themes\/.*assets\/images\/|download_\(\d+\)\./i;
+  const imgBlocklist = /logo|icon|placeholder|no-image|default|blank|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|1x1|noimage|favicon|banner|advert|sponsor|newsletter|widget|thumb_generic|modal\.png|_NYC\.|_LCC\.|_BMDC\.|Unit[ie]*d?_?Utilit|Cardwells|themes\/.*assets\/images\/|download_\(\d+\)\./i;
   // Known non-property domains and brand names that appear as junk images
   const imgDomainBlock = /flannels|kirklees|rdw\b|council\.gov|\.gov\.uk\/|googleads|doubleclick|analytics|hotjar|intercom|crisp\.chat|tawk\.to|zendesk|hubspot|mailchimp|sendgrid/i;
   for (const lot of lots) {
