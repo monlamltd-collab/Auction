@@ -777,7 +777,7 @@ footer .logo-f span{color:var(--green)}
       <button class="ex-btn" onclick="setQ('Properties needing heavy refurbishment')">AI: Heavy refurb</button>
       <button class="ex-btn" onclick="setQ('Best scoring deals')">AI: Top picks</button>
       <button class="ex-btn" onclick="setQ('Probate or executor sales')">AI: Probate</button>
-      <button class="adv-toggle" onclick="toggleAdvanced()">Finance profile</button>
+      <button class="ex-btn" onclick="toggleAdvanced()" id="fpToggleBtn">💰 Finance profile</button>
     </div>
     <div class="advanced" id="advancedPanel">
       <div class="fp-row">
@@ -1062,6 +1062,7 @@ async function loadAllLots(){
       $('reportView').style.display='none';
       $('cardsView').style.display='block';
       buildLotFilters();
+      if($('fAfford'))$('fAfford').value='all'; // Never silently filter on page load
       renderLots();
       $('resultsPanel').style.display='block';
     }
