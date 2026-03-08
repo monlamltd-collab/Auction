@@ -2479,7 +2479,7 @@ app.get('/api/all-lots', async (req, res) => {
 
     const { data: cached } = await supabase
       .from('cached_analyses')
-      .select('house, url, lots, updated_at')
+      .select('house, url, lots, created_at')
       .gt('expires_at', new Date().toISOString());
 
     if (!cached || cached.length === 0) return res.json({ lots: [], sources: [] });
@@ -2530,7 +2530,7 @@ app.get('/api/all-lots', async (req, res) => {
       const removed = houseLots.length - dedupedLots.length;
       if (removed > 0) console.log(`Dedup ${c.house}: ${houseLots.length} → ${dedupedLots.length} (removed ${removed})`);
       lots.push(...dedupedLots);
-      sources.push({ house: c.house, url: c.url, count: dedupedLots.length, updatedAt: c.updated_at });
+      sources.push({ house: c.house, url: c.url, count: dedupedLots.length, updatedAt: c.created_at });
     }
 
     // ── Attach _auctionDate from FALLBACK_CALENDAR URL→date map ──
@@ -2777,7 +2777,7 @@ app.get('/api/quality-report', async (req, res) => {
     return res.status(403).json({ error: 'Invalid admin token' });
   }
   try {
-    const { data: cached } = await supabase.from('cached_analyses').select('house, lots, expires_at, updated_at, content_hash');
+    const { data: cached } = await supabase.from('cached_analyses').select('house, lots, expires_at, created_at, content_hash');
     const now = new Date();
     const report = { houses: [], issues: [], summary: {} };
     let totalLots = 0, housesWithZero = 0, staleHouses = 0, totalDupes = 0;
@@ -2785,7 +2785,7 @@ app.get('/api/quality-report', async (req, res) => {
     for (const row of (cached || [])) {
       const lots = row.lots || [];
       const isStale = row.expires_at && new Date(row.expires_at) < now;
-      const ageHours = row.updated_at ? Math.round((now - new Date(row.updated_at)) / 3600000) : null;
+      const ageHours = row.created_at ? Math.round((now - new Date(row.created_at)) / 3600000) : null;
       const withImage = lots.filter(l => l.imageUrl).length;
       const imgCoverage = lots.length ? Math.round((withImage / lots.length) * 100) : 0;
 
