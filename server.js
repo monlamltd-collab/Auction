@@ -6733,7 +6733,7 @@ async function autoAnalyseOne(url, apiKey) {
 
   } else if (rewritten.preferPuppeteer) {
     const browser = await getBrowser();
-    const page = await browser.newPage();
+    let page = await browser.newPage();
     await page.setUserAgent(HEADERS['User-Agent']);
     await page.setViewport({ width: 1280, height: 900 });
     await page.setRequestInterception(true);
@@ -6759,13 +6759,52 @@ async function autoAnalyseOne(url, apiKey) {
         const firstPageLots = await extractWithDOM(page, house);
         if (firstPageLots && firstPageLots.length > 0) rawLots.push(...firstPageLots);
         const maxPages = Math.min(totalPages, 50);
+        const PAGE_RECYCLE_INTERVAL = 10; // recycle page every N pages to prevent OOM
+        let consecutiveFails = 0;
         for (let p = 2; p <= maxPages; p++) {
           try {
+            // Recycle the page periodically to free accumulated DOM/JS heap
+            if ((p - 1) % PAGE_RECYCLE_INTERVAL === 0) {
+              try { await page.close(); } catch {}
+              const browser = await getBrowser();
+              page = await browser.newPage();
+              await page.setUserAgent(HEADERS['User-Agent']);
+              await page.setViewport({ width: 1280, height: 900 });
+              await page.setRequestInterception(true);
+              page.on('request', req => {
+                const type = req.resourceType();
+                if (['image', 'font', 'media'].includes(type)) req.abort();
+                else req.continue();
+              });
+              console.log(`AUTO: Savills — recycled page at page ${p}`);
+            }
             await page.goto(`${scrapeUrl}/page-${p}`, { waitUntil: 'networkidle2', timeout: 30000 });
             await new Promise(r => setTimeout(r, 1500));
             const pageLots = await extractWithDOM(page, house);
-            if (pageLots && pageLots.length > 0) rawLots.push(...pageLots);
-          } catch (e) { console.log(`AUTO: Page ${p} failed: ${e.message}`); }
+            if (pageLots && pageLots.length > 0) {
+              rawLots.push(...pageLots);
+              consecutiveFails = 0;
+            }
+          } catch (e) {
+            console.log(`AUTO: Page ${p} failed: ${e.message}`);
+            consecutiveFails++;
+            // If page/browser died, get a fresh one before retrying
+            if (/closed|detached|disposed|crashed|protocol/i.test(e.message)) {
+              try { await page.close(); } catch {}
+              const browser = await getBrowser();
+              page = await browser.newPage();
+              await page.setUserAgent(HEADERS['User-Agent']);
+              await page.setViewport({ width: 1280, height: 900 });
+              await page.setRequestInterception(true);
+              page.on('request', req => {
+                const type = req.resourceType();
+                if (['image', 'font', 'media'].includes(type)) req.abort();
+                else req.continue();
+              });
+              console.log(`AUTO: Savills — recovered page after crash at page ${p}`);
+            }
+            if (consecutiveFails >= 3) { console.log(`AUTO: Savills — stopping after ${consecutiveFails} consecutive failures`); break; }
+          }
         }
         console.log(`AUTO: Savills total: ${rawLots.length} lots from ${maxPages} pages`);
 
@@ -6861,20 +6900,49 @@ async function autoAnalyseOne(url, apiKey) {
           if (detectedPages.max > 1) {
             const maxPages = Math.min(detectedPages.max, 25);
             console.log(`AUTO: ${house}: detected ${detectedPages.max} pages (${detectedPages.pattern}), loading up to ${maxPages}`);
+            let consecutiveFails = 0;
             for (let p = 2; p <= maxPages; p++) {
               let pageUrl;
               if (detectedPages.pattern === 'path-dash') pageUrl = scrapeUrl.replace(/\/page-\d+/, '') + `/page-${p}`;
               else if (detectedPages.pattern === 'path-slash') pageUrl = scrapeUrl.replace(/\/page\/\d+/, '') + `/page/${p}`;
               else { const sep = scrapeUrl.includes('?') ? '&' : '?'; pageUrl = `${scrapeUrl}${sep}page=${p}`; }
               try {
+                // Recycle page every 10 pages to prevent OOM
+                if ((p - 1) % 10 === 0) {
+                  try { await page.close(); } catch {}
+                  const freshBrowser = await getBrowser();
+                  page = await freshBrowser.newPage();
+                  await page.setUserAgent(HEADERS['User-Agent']);
+                  await page.setViewport({ width: 1280, height: 900 });
+                  await page.setRequestInterception(true);
+                  page.on('request', req => { const t = req.resourceType(); if (['image','font','media'].includes(t)) req.abort(); else req.continue(); });
+                  console.log(`AUTO: ${house} — recycled page at page ${p}`);
+                }
                 await page.goto(pageUrl, { waitUntil: 'networkidle2', timeout: 30000 });
                 await new Promise(r => setTimeout(r, 2000));
                 await page.evaluate(async () => { for (let i = 0; i < 10; i++) { window.scrollBy(0, window.innerHeight); await new Promise(r => setTimeout(r, 400)); } window.scrollTo(0, 0); });
                 await new Promise(r => setTimeout(r, 1500));
                 const pageLots = await extractWithDOM(page, house);
-                if (pageLots && pageLots.length > 0) { rawLots.push(...pageLots); console.log(`AUTO: ${house} Page ${p}: ${pageLots.length} lots`); }
-                else { console.log(`AUTO: ${house} Page ${p}: 0 lots — stopping`); break; }
-              } catch (e) { console.log(`AUTO: ${house} Page ${p} failed: ${e.message}`); break; }
+                if (pageLots && pageLots.length > 0) {
+                  rawLots.push(...pageLots);
+                  console.log(`AUTO: ${house} Page ${p}: ${pageLots.length} lots`);
+                  consecutiveFails = 0;
+                } else { console.log(`AUTO: ${house} Page ${p}: 0 lots — stopping`); break; }
+              } catch (e) {
+                console.log(`AUTO: ${house} Page ${p} failed: ${e.message}`);
+                consecutiveFails++;
+                if (/closed|detached|disposed|crashed|protocol/i.test(e.message)) {
+                  try { await page.close(); } catch {}
+                  const freshBrowser = await getBrowser();
+                  page = await freshBrowser.newPage();
+                  await page.setUserAgent(HEADERS['User-Agent']);
+                  await page.setViewport({ width: 1280, height: 900 });
+                  await page.setRequestInterception(true);
+                  page.on('request', req => { const t = req.resourceType(); if (['image','font','media'].includes(t)) req.abort(); else req.continue(); });
+                  console.log(`AUTO: ${house} — recovered page after crash at page ${p}`);
+                }
+                if (consecutiveFails >= 3) { console.log(`AUTO: ${house} — stopping after ${consecutiveFails} consecutive failures`); break; }
+              }
             }
           }
           console.log(`AUTO: ${house} total: ${rawLots.length} lots`);
