@@ -1809,7 +1809,7 @@ app.post('/api/analyse', async (req, res) => {
           console.log(`SDL Page 1: ${sdlFirstLots ? sdlFirstLots.length : 0} lots`);
 
           // Load remaining pages
-          const sdlMaxPages = Math.min(sdlTotalPages, 20);
+          const sdlMaxPages = Math.min(sdlTotalPages, 40);
           for (let p = 2; p <= sdlMaxPages; p++) {
             const sep = scrapeUrl.includes('?') ? '&' : '?';
             const pageUrl = `${scrapeUrl}${sep}page=${p}`;
