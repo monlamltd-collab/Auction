@@ -2575,6 +2575,14 @@ app.get('/api/all-lots', async (req, res) => {
     const crossRemoved = beforeCross - finalLots.length;
     if (crossRemoved > 0) console.log(`Cross-auction dedup: removed ${crossRemoved} duplicate lots across auction dates`);
 
+    // Sanitise image URLs — strip junk images (logos, council branding, ad trackers) from cached data
+    const junkImg = /logo|icon|\.svg|favicon|banner|flannels|kirklees|rdw\b|council\.gov|\.gov\.uk\/|googleads|doubleclick|spacer|pixel|1x1|placeholder|no-image|noimage|spinner|badge/i;
+    let imgStripped = 0;
+    for (const lot of finalLots) {
+      if (lot.imageUrl && junkImg.test(lot.imageUrl)) { lot.imageUrl = undefined; imgStripped++; }
+    }
+    if (imgStripped > 0) console.log(`Image sanitiser: stripped ${imgStripped} junk images`);
+
     res.json({ lots: shouldBlur ? stripAIFields(finalLots) : finalLots, sources, blurred: !!shouldBlur });
   } catch (e) {
     log.error('All lots error', { error: e.message });
@@ -5720,10 +5728,12 @@ async function extractWithDOM(page, house) {
     }
   }
 
-  // Post-processing: filter out non-property images (logos, icons, placeholders)
-  const imgBlocklist = /logo|icon|placeholder|no-image|default|blank|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|1x1|noimage/i;
+  // Post-processing: filter out non-property images (logos, icons, placeholders, known junk)
+  const imgBlocklist = /logo|icon|placeholder|no-image|default|blank|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|1x1|noimage|favicon|banner|advert|sponsor|newsletter|widget|thumb_generic/i;
+  // Known non-property domains and brand names that appear as junk images
+  const imgDomainBlock = /flannels|kirklees|rdw\b|council\.gov|\.gov\.uk\/|googleads|doubleclick|analytics|hotjar|intercom|crisp\.chat|tawk\.to|zendesk|hubspot|mailchimp|sendgrid/i;
   for (const lot of lots) {
-    if (lot.imageUrl && imgBlocklist.test(lot.imageUrl)) {
+    if (lot.imageUrl && (imgBlocklist.test(lot.imageUrl) || imgDomainBlock.test(lot.imageUrl))) {
       lot.imageUrl = undefined;
     }
   }

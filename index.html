@@ -2396,7 +2396,7 @@ function getCardImageHtml(lot) {
   return '<div class="card-image-wrapper">' +
     '<div class="card-image-shimmer"></div>' +
     '<img class="card-image" src="' + esc(lot.imageUrl) + '" alt="' + esc((lot.address || 'Auction property') + ' — ' + (lot.house || 'auction lot')) + '" loading="lazy" ' +
-    'onload="this.previousElementSibling.style.display=\'none\'" ' +
+    'onload="this.previousElementSibling.style.display=\'none\';if(this.naturalWidth<120||this.naturalHeight<90){this.parentElement.innerHTML=getPlaceholderHtml(this.dataset.proptype)}" ' +
     'onerror="this.parentElement.innerHTML=getPlaceholderHtml(this.dataset.proptype)"' +
     ' data-proptype="' + esc(lot.propType || 'house') + '">' +
     getCardImageBadges(lot) +
