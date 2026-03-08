@@ -2674,9 +2674,18 @@ app.post('/api/admin/backfill-images', async (req, res) => {
       }
 
       const updated = await backfillImages(entry.url, lots);
+      let gained = 0;
       if (updated) {
-        const gained = updated.filter(l => l.imageUrl).length - (lots.length - missing);
-        await supabase.from('cached_analyses').update({ lots: updated }).eq('url', entry.url);
+        gained = updated.filter(l => l.imageUrl).length - (lots.length - missing);
+      }
+      // Deep backfill: fetch individual lot pages for lots still missing images
+      const stillMissing = lots.filter(l => l.url && !l.imageUrl).length;
+      if (stillMissing > 0) {
+        const deepGained = await backfillImagesFromLotPages(lots);
+        gained += deepGained;
+      }
+      if (gained > 0) {
+        await supabase.from('cached_analyses').update({ lots }).eq('url', entry.url);
         results.push({ house: entry.house, url: entry.url, total: lots.length, missing, gained, status: 'updated' });
       } else {
         results.push({ house: entry.house, url: entry.url, total: lots.length, missing, gained: 0, status: 'no matches found' });
@@ -5610,6 +5619,50 @@ async function backfillImages(catalogueUrl, lots) {
   }
 }
 
+// Deep image backfill — fetch individual lot pages for lots still missing images
+// Used when catalogue page has junk/placeholder images that get stripped
+async function backfillImagesFromLotPages(lots, concurrency = 5) {
+  const missing = lots.filter(l => l.url && !l.imageUrl && /^https?:\/\//i.test(l.url));
+  if (missing.length === 0) return 0;
+
+  const junk = /logo|icon|\.svg|placeholder|no-image|modal\.png|_NYC\.|_LCC\.|_BMDC\.|council|utilit|cardwell|badge|spacer|pixel|facebook|twitter|1x1/i;
+
+  let filled = 0;
+  // Process in batches to limit concurrency
+  for (let i = 0; i < missing.length; i += concurrency) {
+    const batch = missing.slice(i, i + concurrency);
+    const results = await Promise.allSettled(batch.map(async (lot) => {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15000);
+        const resp = await fetch(lot.url, { headers: HEADERS, signal: controller.signal, redirect: 'follow' });
+        clearTimeout(timeout);
+        if (!resp.ok) return null;
+        const html = await resp.text();
+        // Find first non-junk property image (new regex per call to avoid shared lastIndex)
+        const imgRe = /<img[^>]+(?:src|data-src|data-lazy-src)="([^"]+)"/gi;
+        let m;
+        while ((m = imgRe.exec(html)) !== null) {
+          const src = m[1];
+          if (src && src.length > 20 && !src.startsWith('data:') && !junk.test(src)) {
+            // Resolve relative URL
+            let imgUrl = src;
+            if (!/^https?:\/\//i.test(imgUrl)) {
+              try { imgUrl = new URL(imgUrl, resp.url || lot.url).href; } catch { continue; }
+            }
+            lot.imageUrl = imgUrl;
+            filled++;
+            return imgUrl;
+          }
+        }
+        return null;
+      } catch { return null; }
+    }));
+  }
+  if (filled > 0) console.log(`Deep image backfill (lot pages): ${filled}/${missing.length} lots got images`);
+  return filled;
+}
+
 async function extractWithDOM(page, house) {
   let lots = null;
 
@@ -6478,7 +6531,14 @@ async function _doAutoAnalyseAll() {
             needsUpdate = true;
             const gained = updated.filter(l => l.imageUrl).length;
             console.log(`AUTO: ✓ ${auction.house} already cached (${cached.total_lots} lots) — backfilled ${gained} images`);
-          } else if (!needsUpdate) {
+          }
+          // Deep backfill: fetch individual lot pages for lots still missing images
+          const stillMissing = cachedLots.filter(l => l.url && !l.imageUrl).length;
+          if (stillMissing > 0) {
+            const deepFilled = await backfillImagesFromLotPages(cachedLots);
+            if (deepFilled > 0) needsUpdate = true;
+          }
+          if (!needsUpdate) {
             console.log(`AUTO: ✓ ${auction.house} already cached (${cached.total_lots} lots)`);
           }
         } else if (!needsUpdate) {
@@ -6847,6 +6907,12 @@ async function autoAnalyseOne(url, apiKey) {
 
   const lots = rawLots.map(lot => analyseLot(lot)).sort((a, b) => b.score - a.score);
   await enrichLots(lots, house, url);
+
+  // Deep backfill: fetch individual lot pages for lots still missing images
+  const lotsMissingImg = lots.filter(l => l.url && !l.imageUrl).length;
+  if (lotsMissingImg > 0) {
+    await backfillImagesFromLotPages(lots);
+  }
 
   const expiresAt = new Date(Date.now() + getCacheTTL(house)).toISOString();
   const lotsWithPrice = lots.filter(l => l.price && l.price > 0);
