@@ -71,12 +71,16 @@ app.use((req, res, next) => {
     "img-src 'self' data: https:; " +
     "connect-src 'self' https://*.supabase.co https://www.bridgematch.co.uk https://checkout.stripe.com; " +
     "frame-src https://checkout.stripe.com; " +
-    "frame-ancestors 'none'"
+    "frame-ancestors 'none'; " +
+    "form-action 'self'; " +
+    "upgrade-insecure-requests"
   );
   res.setHeader('Strict-Transport-Security', 'max-age=63072000; includeSubDomains');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(self)');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
   next();
 });
 
@@ -388,6 +392,7 @@ app.post('/api/signup', async (req, res) => {
       .single();
 
     if (error) throw error;
+    sendWelcomeEmail(newUser.email, newUser.name).catch(() => {});
     return res.json({ user: newUser, token, returning: false });
   } catch (err) {
     console.error('Signup error:', err);
@@ -737,6 +742,51 @@ app.post('/api/leads', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
+// WELCOME EMAIL (via Resend)
+// ═══════════════════════════════════════════════════════════════
+async function sendWelcomeEmail(email, name) {
+  const resendKey = process.env.RESEND_API_KEY;
+  if (!resendKey) return;
+  const firstName = (name || '').split(' ')[0] || 'there';
+  const html = `
+    <div style="font-family:'DM Sans',Helvetica,Arial,sans-serif;max-width:560px;margin:0 auto;color:#1a1714">
+      <div style="background:linear-gradient(135deg,#1a3a5c,#2a5a8c);padding:32px 24px;border-radius:12px 12px 0 0;text-align:center">
+        <span style="font-family:Georgia,serif;font-size:24px;font-weight:700;color:#fff">Auction <span style="color:#8bc34a">Brain</span></span>
+      </div>
+      <div style="background:#ffffff;padding:32px 24px;border:1px solid #e4dfd6;border-top:none;border-radius:0 0 12px 12px">
+        <h1 style="font-size:20px;margin:0 0 16px;color:#1a2332">Welcome, ${firstName}!</h1>
+        <p style="line-height:1.7;color:#5c564d;margin:0 0 16px">You're in. Here's what you can do right now:</p>
+        <ul style="line-height:1.8;color:#5c564d;margin:0 0 20px;padding-left:20px">
+          <li><strong>Browse 2,000+ auction lots</strong> — every major UK auction house in one place</li>
+          <li><strong>BridgeMatch finance check</strong> — see which of 68 bridging lenders would fund any lot</li>
+          <li><strong>Filter by score, yield, price, type</strong> — find deals that match your criteria</li>
+        </ul>
+        <p style="line-height:1.7;color:#5c564d;margin:0 0 20px">Want the full picture? <strong>AI investment scores</strong>, opportunity/risk flags, and full addresses are available with a Day Pass (£1.99 for 24 hours) or Pro (£9.99/month).</p>
+        <div style="text-align:center;margin:24px 0">
+          <a href="https://auctions.bridgematch.co.uk/" style="display:inline-block;background:#2e7d32;color:#fff;font-weight:700;font-size:15px;padding:14px 32px;border-radius:10px;text-decoration:none">Browse Auction Deals →</a>
+        </div>
+        <p style="font-size:13px;color:#8a847a;margin:20px 0 0;text-align:center">Questions? Just reply to this email.</p>
+      </div>
+    </div>
+  `;
+  try {
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: 'Auction Brain <hello@bridgematch.co.uk>',
+        to: [email],
+        subject: `Welcome to Auction Brain — your unfair advantage at auction`,
+        html,
+      }),
+    });
+    log.info('Welcome email sent', { email });
+  } catch (e) {
+    log.warn('Welcome email failed', { email, error: e.message });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
 // AUTH HELPER: validate user via Supabase JWT or legacy token
 // ═══════════════════════════════════════════════════════════════
 async function validateUserFromReq(req) {
@@ -791,7 +841,10 @@ async function validateUserFromReq(req) {
         .insert({ email: (email || '').toLowerCase().trim(), supabase_auth_id: authId })
         .select('id, email, name, tier, analyses_count, stripe_customer_id, tier_expires_at, stripe_subscription_id')
         .single();
-      if (!insertErr && newUser) return newUser;
+      if (!insertErr && newUser) {
+        sendWelcomeEmail(newUser.email, newUser.name).catch(() => {});
+        return newUser;
+      }
       return null;
     }
 
@@ -811,8 +864,31 @@ async function validateUserFromReq(req) {
 
 const FREE_SCAN_LIMIT = 3;
 
+const FREE_PREVIEW_LOTS = 6; // Show full AI data on first N lots even for free users over limit
+
+function truncateAddress(address) {
+  if (!address) return 'Address available with upgrade';
+  // Show only area/town — strip street number and name, keep postcode area + town
+  const parts = address.split(',').map(s => s.trim());
+  if (parts.length >= 3) return parts.slice(-2).join(', '); // Last 2 parts (town, county/postcode)
+  if (parts.length === 2) return parts[1]; // Just the town/area
+  // Single part — try to extract just the town/postcode area
+  const pcMatch = address.match(/[A-Z]{1,2}\d/);
+  if (pcMatch) return pcMatch[0] + '*** area';
+  return 'Location available with upgrade';
+}
+
 function stripAIFields(lots) {
-  return lots.map(lot => ({ ...lot, score: null, opps: [], risks: [], bullets: [], dealType: null, blurred: true }));
+  return lots.map((lot, i) => {
+    if (i < FREE_PREVIEW_LOTS) return lot; // Let them see the value
+    return {
+      ...lot,
+      score: null, opps: [], risks: [], scoreBreakdown: [], bullets: [], dealType: null,
+      url: null,                              // Hide auction house link
+      address: truncateAddress(lot.address),   // Truncate to area only
+      blurred: true
+    };
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2403,7 +2479,7 @@ app.get('/api/all-lots', async (req, res) => {
 
     const { data: cached } = await supabase
       .from('cached_analyses')
-      .select('house, url, lots')
+      .select('house, url, lots, updated_at')
       .gt('expires_at', new Date().toISOString());
 
     if (!cached || cached.length === 0) return res.json({ lots: [], sources: [] });
@@ -2454,7 +2530,7 @@ app.get('/api/all-lots', async (req, res) => {
       const removed = houseLots.length - dedupedLots.length;
       if (removed > 0) console.log(`Dedup ${c.house}: ${houseLots.length} → ${dedupedLots.length} (removed ${removed})`);
       lots.push(...dedupedLots);
-      sources.push({ house: c.house, url: c.url, count: dedupedLots.length });
+      sources.push({ house: c.house, url: c.url, count: dedupedLots.length, updatedAt: c.updated_at });
     }
 
     // ── Attach _auctionDate from FALLBACK_CALENDAR URL→date map ──
@@ -2617,6 +2693,16 @@ app.get('/welcome', (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
+// LEGAL PAGES
+// ═══════════════════════════════════════════════════════════════
+app.get('/privacy', (req, res) => {
+  res.sendFile(join(__dirname, 'privacy.html'));
+});
+app.get('/terms', (req, res) => {
+  res.sendFile(join(__dirname, 'terms.html'));
+});
+
+// ═══════════════════════════════════════════════════════════════
 // BRIDGEMATCH LITE
 // ═══════════════════════════════════════════════════════════════
 app.get('/check', (req, res) => {
@@ -2679,6 +2765,54 @@ app.get('/api/cost-monitor', async (req, res) => {
       pageCapLimit: MAX_PUPPETEER_PAGES,
       lotsCapLimit: MAX_LOTS_PER_SCRAPE
     });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/quality-report', async (req, res) => {
+  const token = req.headers['x-admin-secret'] || req.query.token || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
+    return res.status(403).json({ error: 'Invalid admin token' });
+  }
+  try {
+    const { data: cached } = await supabase.from('cached_analyses').select('house, lots, expires_at, updated_at, content_hash');
+    const now = new Date();
+    const report = { houses: [], issues: [], summary: {} };
+    let totalLots = 0, housesWithZero = 0, staleHouses = 0, totalDupes = 0;
+
+    for (const row of (cached || [])) {
+      const lots = row.lots || [];
+      const isStale = row.expires_at && new Date(row.expires_at) < now;
+      const ageHours = row.updated_at ? Math.round((now - new Date(row.updated_at)) / 3600000) : null;
+      const withImage = lots.filter(l => l.imageUrl).length;
+      const imgCoverage = lots.length ? Math.round((withImage / lots.length) * 100) : 0;
+
+      // Duplicate check
+      const urls = new Set();
+      let dupes = 0;
+      for (const l of lots) {
+        const key = l.url || l.address;
+        if (urls.has(key)) dupes++;
+        else urls.add(key);
+      }
+
+      totalLots += lots.length;
+      totalDupes += dupes;
+      if (lots.length === 0) housesWithZero++;
+      if (isStale) staleHouses++;
+
+      const entry = { house: row.house, lots: lots.length, images: withImage, imgCoverage, dupes, ageHours, stale: !!isStale };
+      report.houses.push(entry);
+
+      if (lots.length === 0) report.issues.push({ severity: 'critical', house: row.house, msg: 'Zero lots — extractor may be broken' });
+      if (dupes > 0) report.issues.push({ severity: 'warn', house: row.house, msg: `${dupes} duplicate lots` });
+      if (imgCoverage < 30 && lots.length > 0) report.issues.push({ severity: 'warn', house: row.house, msg: `Low image coverage: ${imgCoverage}%` });
+      if (isStale) report.issues.push({ severity: 'info', house: row.house, msg: `Cache stale (${ageHours}h old)` });
+    }
+
+    report.summary = { totalHouses: (cached || []).length, totalLots, housesWithZero, staleHouses, totalDupes };
+    res.json(report);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -5661,39 +5795,41 @@ function analyseLot(raw) {
   if (uc >= 2 || ((isFH && hasFlats) || indivSales)) { L.titleSplit = true; L.units = uc || 2; }
 
   let s = 0;
-  if (L.condition === 'needs work') { s += 2; L.opps.push('Needs modernisation'); }
-  if (L.condition === 'poor') { s += 2.5; L.opps.push('Poor condition'); }
-  if (executor) { s += 1.5; L.opps.push('Executor/probate'); }
-  if (receivership) { s += 2; L.opps.push('Receivership'); }
-  if (devP) { s += 2; L.opps.push('Development potential'); }
-  if (extP) { s += 1.5; L.opps.push('Extension/HMO potential'); }
-  if (L.vacant && ['house', 'bungalow', 'flat', 'land'].includes(L.propType)) { s += 1; L.opps.push('Vacant'); }
-  if (L.tenure === 'Freehold' && ['house', 'bungalow'].includes(L.propType)) { s += 0.5; L.opps.push('Freehold'); }
+  const sb = []; // scoreBreakdown: tracks each signal's contribution
+  if (L.condition === 'needs work') { s += 2; sb.push({ signal: 'Needs modernisation', pts: 2 }); L.opps.push('Needs modernisation'); }
+  if (L.condition === 'poor') { s += 2.5; sb.push({ signal: 'Poor condition', pts: 2.5 }); L.opps.push('Poor condition'); }
+  if (executor) { s += 1.5; sb.push({ signal: 'Executor/probate', pts: 1.5 }); L.opps.push('Executor/probate'); }
+  if (receivership) { s += 2; sb.push({ signal: 'Receivership', pts: 2 }); L.opps.push('Receivership'); }
+  if (devP) { s += 2; sb.push({ signal: 'Development potential', pts: 2 }); L.opps.push('Development potential'); }
+  if (extP) { s += 1.5; sb.push({ signal: 'Extension/HMO potential', pts: 1.5 }); L.opps.push('Extension/HMO potential'); }
+  if (L.vacant && ['house', 'bungalow', 'flat', 'land'].includes(L.propType)) { s += 1; sb.push({ signal: 'Vacant', pts: 1 }); L.opps.push('Vacant'); }
+  if (L.tenure === 'Freehold' && ['house', 'bungalow'].includes(L.propType)) { s += 0.5; sb.push({ signal: 'Freehold', pts: 0.5 }); L.opps.push('Freehold'); }
   if (L.sqft && L.price) {
     const p = L.price / L.sqft;
-    if (p < 200) { s += 2; L.opps.push(`£${Math.round(p)}/sqft`); }
-    else if (p < 300) { s += 1; L.opps.push(`£${Math.round(p)}/sqft`); }
+    if (p < 200) { s += 2; sb.push({ signal: `£${Math.round(p)}/sqft`, pts: 2 }); L.opps.push(`£${Math.round(p)}/sqft`); }
+    else if (p < 300) { s += 1; sb.push({ signal: `£${Math.round(p)}/sqft`, pts: 1 }); L.opps.push(`£${Math.round(p)}/sqft`); }
   }
 
   const rm = t.match(/(?:let\s+at|rent\s+of|income\s+of|producing)\s+£?([\d,]+)\s*(?:p\.?a|per\s*annum)/);
   if (rm && L.price) {
     const rent = parseInt(rm[1].replace(/,/g, '')); const gy = (rent / L.price) * 100;
-    if (gy > 8) { s += 2.5; L.opps.push(`${gy.toFixed(1)}% GIY`); }
-    else if (gy > 6) { s += 1.5; L.opps.push(`${gy.toFixed(1)}% GIY`); }
+    if (gy > 8) { s += 2.5; sb.push({ signal: `${gy.toFixed(1)}% GIY`, pts: 2.5 }); L.opps.push(`${gy.toFixed(1)}% GIY`); }
+    else if (gy > 6) { s += 1.5; sb.push({ signal: `${gy.toFixed(1)}% GIY`, pts: 1.5 }); L.opps.push(`${gy.toFixed(1)}% GIY`); }
   }
 
-  if (/(?:4|5|6)\s*week\s*completion|six week/.test(t)) { s += 0.5; L.opps.push('Quick completion'); }
-  if (/by order of/.test(t) && !executor && !receivership) { s += 0.5; L.opps.push('Motivated seller'); }
-  if (L.titleSplit) { s += 1; L.opps.push(`Title split (${L.units} units)`); }
+  if (/(?:4|5|6)\s*week\s*completion|six week/.test(t)) { s += 0.5; sb.push({ signal: 'Quick completion', pts: 0.5 }); L.opps.push('Quick completion'); }
+  if (/by order of/.test(t) && !executor && !receivership) { s += 0.5; sb.push({ signal: 'Motivated seller', pts: 0.5 }); L.opps.push('Motivated seller'); }
+  if (L.titleSplit) { s += 1; sb.push({ signal: `Title split (${L.units} units)`, pts: 1 }); L.opps.push(`Title split (${L.units} units)`); }
 
-  if (/sitting tenant/.test(t)) { s -= 2; L.risks.push('Sitting tenant'); }
-  if (/knotweed/.test(t)) { s -= 2; L.risks.push('Knotweed'); }
-  if (/flying freehold/.test(t)) { s -= 1; L.risks.push('Flying freehold'); }
-  if (/non[- ]?standard|timber frame|prefab|prc/.test(t)) { s -= 1; L.risks.push('Non-std construction'); }
-  if (/flood risk|flood zone/.test(t)) { s -= 1; L.risks.push('Flood risk'); }
-  if (/asbestos|contamination/.test(t)) { s -= 1; L.risks.push('Contamination'); }
+  if (/sitting tenant/.test(t)) { s -= 2; sb.push({ signal: 'Sitting tenant', pts: -2 }); L.risks.push('Sitting tenant'); }
+  if (/knotweed/.test(t)) { s -= 2; sb.push({ signal: 'Knotweed', pts: -2 }); L.risks.push('Knotweed'); }
+  if (/flying freehold/.test(t)) { s -= 1; sb.push({ signal: 'Flying freehold', pts: -1 }); L.risks.push('Flying freehold'); }
+  if (/non[- ]?standard|timber frame|prefab|prc/.test(t)) { s -= 1; sb.push({ signal: 'Non-std construction', pts: -1 }); L.risks.push('Non-std construction'); }
+  if (/flood risk|flood zone/.test(t)) { s -= 1; sb.push({ signal: 'Flood risk', pts: -1 }); L.risks.push('Flood risk'); }
+  if (/asbestos|contamination/.test(t)) { s -= 1; sb.push({ signal: 'Contamination', pts: -1 }); L.risks.push('Contamination'); }
   if (/grade ii|listed/.test(t)) L.risks.push('Listed building');
   if (!L.price) L.risks.push('Guide TBA');
+  L.scoreBreakdown = sb;
 
   if (devP) L.dealType = 'Development';
   else if ((L.condition === 'needs work' || L.condition === 'poor') && extP) L.dealType = 'Refurb+Extend';

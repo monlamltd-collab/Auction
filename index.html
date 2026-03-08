@@ -4,20 +4,20 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Auction Brain — Find & Finance UK Auction Deals</title>
-<meta name="description" content="Auction Brain scores every UK auction lot for investment potential and checks 68 bridging lenders in one click. Free.">
+<meta name="description" content="Auction Brain scores every UK auction lot for investment potential and checks 68 bridging lenders in one click. Browse free.">
 <link rel="canonical" href="https://auctions.bridgematch.co.uk">
 <link rel="icon" href="/public/favicon.svg" type="image/svg+xml">
 <meta property="og:title" content="Auction Brain — Find & Finance UK Auction Deals">
-<meta property="og:description" content="Auction Brain scores every UK auction lot for investment potential and checks 68 bridging lenders in one click. Free.">
+<meta property="og:description" content="Auction Brain scores every UK auction lot for investment potential and checks 68 bridging lenders in one click. Browse free.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://auctions.bridgematch.co.uk">
 <meta property="og:image" content="https://auctions.bridgematch.co.uk/public/og-image.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Auction Brain — Find & Finance UK Auction Deals">
-<meta name="twitter:description" content="Auction Brain scores every UK auction lot for investment potential and checks 68 bridging lenders in one click. Free.">
+<meta name="twitter:description" content="Auction Brain scores every UK auction lot for investment potential and checks 68 bridging lenders in one click. Browse free.">
 <meta name="twitter:image" content="https://auctions.bridgematch.co.uk/public/og-image.png">
 <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"WebApplication","name":"Auction Brain","description":"Auction Brain scores every UK auction lot for investment potential and checks 68 bridging lenders in one click. Free.","url":"https://auctions.bridgematch.co.uk","applicationCategory":"FinanceApplication","offers":{"@type":"Offer","price":"0","priceCurrency":"GBP"}}
+{"@context":"https://schema.org","@type":"WebApplication","name":"Auction Brain","description":"Auction Brain scores every UK auction lot for investment potential and checks 68 bridging lenders in one click. Browse free.","url":"https://auctions.bridgematch.co.uk","applicationCategory":"FinanceApplication","offers":{"@type":"AggregateOffer","lowPrice":"0","highPrice":"9.99","priceCurrency":"GBP","offerCount":"3","offers":[{"@type":"Offer","name":"Free","price":"0","priceCurrency":"GBP","description":"Browse 2000+ auction lots and BridgeMatch finance matching"},{"@type":"Offer","name":"Day Pass","price":"1.99","priceCurrency":"GBP","description":"24-hour unlimited AI analysis"},{"@type":"Offer","name":"Pro","price":"9.99","priceCurrency":"GBP","description":"Unlimited AI analysis, custom search, CSV exports"}]}}
 </script>
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@400;600;700;800;900&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -376,9 +376,9 @@ footer .logo-f span{color:var(--green)}
 .lot-card{background:var(--white);border:1px solid #d5dde5;border-radius:var(--radius);overflow:hidden;transition:all .15s ease;cursor:pointer}
 .lot-card:hover{box-shadow:0 4px 20px rgba(26,42,58,0.12);transform:translateY(-2px)}
 .lot-card.blurred .card-body{filter:blur(6px);pointer-events:none;user-select:none}
-.lot-card.blurred .card-footer{filter:blur(4px);pointer-events:none}
+.lot-card.blurred .card-footer .card-view-link{display:none}
 .lot-card.blurred{position:relative}
-.lot-card.blurred::after{content:'🔒 Upgrade to see AI analysis';position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(255,255,255,.95) 40%);padding:32px 16px 16px;text-align:center;font-weight:600;font-size:.85rem;color:var(--accent);pointer-events:none}
+.lot-card.blurred::after{content:'Upgrade for full address, AI scores & listing link';position:absolute;bottom:44px;left:0;right:0;background:linear-gradient(transparent,rgba(255,255,255,.95) 40%);padding:32px 16px 4px;text-align:center;font-weight:600;font-size:.8rem;color:var(--accent);pointer-events:none;z-index:1}
 .card-image-wrapper{position:relative;height:200px;width:100%;overflow:hidden;background:#eef2f7}
 .card-image{width:100%;height:100%;object-fit:cover;object-position:center;display:block}
 .card-image-placeholder{height:100%;background:linear-gradient(135deg,#eef2f7 0%,#e4eaf2 50%,#dde5ef 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}
@@ -386,6 +386,11 @@ footer .logo-f span{color:var(--green)}
 .card-image-placeholder .ph-label{font-size:.72rem;color:#a0aab4;font-weight:500;letter-spacing:.03em}
 @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
 .card-image-shimmer{position:absolute;inset:0;background:linear-gradient(90deg,#eef2f7 25%,#f5f7fa 50%,#eef2f7 75%);background-size:200% 100%;animation:shimmer 1.5s infinite}
+.skel-card{background:var(--white);border:1px solid #d5dde5;border-radius:var(--radius);overflow:hidden}
+.skel-card .skel-img{height:200px;background:linear-gradient(90deg,#eef2f7 25%,#f5f7fa 50%,#eef2f7 75%);background-size:200% 100%;animation:shimmer 1.5s infinite}
+.skel-card .skel-body{padding:16px;display:flex;flex-direction:column;gap:10px}
+.skel-card .skel-line{height:14px;border-radius:4px;background:linear-gradient(90deg,#eef2f7 25%,#f5f7fa 50%,#eef2f7 75%);background-size:200% 100%;animation:shimmer 1.5s infinite}
+.skel-card .skel-line.w80{width:80%}.skel-card .skel-line.w60{width:60%}.skel-card .skel-line.w40{width:40%}
 .card-badge{position:absolute;border-radius:20px;padding:4px 10px;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
 .badge-house{top:10px;left:10px;background:rgba(255,255,255,0.92);color:#1a2a3a}
 .badge-score{top:10px;right:10px;font-family:'Source Serif 4',serif;font-weight:700;font-size:13px;border-radius:8px;padding:4px 10px}
@@ -595,7 +600,7 @@ footer .logo-f span{color:var(--green)}
 
 <nav class="nav">
   <div class="nav-inner">
-    <div class="logo">Auction <span>Brain</span><span class="logo-sub">powered by Bridgematch</span></div>
+    <div class="logo">Auction <span>Brain</span><span class="logo-sub">powered by BridgeMatch</span></div>
     <div class="nav-right">
       <a href="/check" class="nav-link-bm" title="Check if you can finance a deal">🧩 Can I fund this?</a>
       <button class="nav-cta" id="navCta" onclick="requireSignup()">Sign in</button>
@@ -608,12 +613,12 @@ footer .logo-f span{color:var(--green)}
   <header class="hero">
     <div class="hero-badge"><span class="badge-dot"></span> Live auction data updated daily</div>
     <h1>Your unfair advantage<br>at <em>auction</em></h1>
-    <p class="hero-sub">AI scores every lot across 30+ UK auction houses. Check bridging finance from 68 lenders in one click. Completely free.</p>
+    <p class="hero-sub">AI scores every lot across 30+ UK auction houses. Check bridging finance from 68 lenders in one click. Free to browse — Pro unlocks full AI analysis.</p>
     <div class="hero-ctas">
       <a href="#calendarSection" class="cta-primary" onclick="event.preventDefault();document.getElementById('calendarSection').scrollIntoView({behavior:'smooth'})">Browse Auction Deals →</a>
     </div>
     <div class="trust-line">
-      <span><span class="t-icon">✓</span> Free to use</span>
+      <span><span class="t-icon">✓</span> Free to browse</span>
       <span><span class="t-icon">✓</span> No account needed</span>
       <span><span class="t-icon">✓</span> Updated daily</span>
     </div>
@@ -626,7 +631,7 @@ footer .logo-f span{color:var(--green)}
       <div id="authStep1">
         <div class="modal-icon">🔓</div>
         <h2>Sign in to Auction Brain</h2>
-        <p>Free to use — we'll email you a secure sign-in link.</p>
+        <p>We'll email you a secure sign-in link. No payment needed.</p>
         <input id="signupEmail" placeholder="Email address" type="email">
         <div style="text-align:left;margin:10px 0 14px;font-size:.82rem;color:var(--text2)">
           <label style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;cursor:pointer">
@@ -738,7 +743,7 @@ footer .logo-f span{color:var(--green)}
       </select>
       <input class="tb-search" type="text" id="fPostcode" placeholder="Postcode..." style="min-width:80px;max-width:100px;flex:0" oninput="renderLots()">
       <select class="tb-select" id="fExcludePOA" onchange="renderLots()"><option value="">Inc. POA</option><option value="yes">Excl. POA</option></select>
-      <select class="tb-select" id="fLookahead" onchange="saveLookahead();renderLots()"><option value="1">Next auction</option><option value="2">Next 2 auctions</option><option value="all" selected>All upcoming</option></select>
+      <select class="tb-select" id="fLookahead" onchange="saveLookahead();renderLots()"><option value="1" selected>Next auction</option><option value="2">Next 2 auctions</option><option value="all">All upcoming (may include duplicates)</option></select>
       <select class="tb-select" id="fPerPage" onchange="savePerPage();_currentPage=1;renderLots()"><option value="20">20 / page</option><option value="30">30 / page</option><option value="50" selected>50 / page</option><option value="100">100 / page</option></select>
       <div class="ub-sep"></div>
       <input class="tb-search" id="smartQuery" placeholder="AI search..." style="min-width:120px">
@@ -748,14 +753,17 @@ footer .logo-f span{color:var(--green)}
       <!-- fTS removed: title split filtering available via chip button / AI search -->
     </div>
     <div class="chip-row">
-      <button class="ex-btn" onclick="setQ('Properties needing heavy refurbishment')">Heavy refurb</button>
-      <button class="ex-btn" onclick="setQ('Freehold multi-unit blocks for title splitting')">Title splits</button>
-      <button class="ex-btn" onclick="setQ('High yield investments over 8%')">High yield 8%+</button>
-      <button class="ex-btn" onclick="setQ('Development land with planning')">Dev land</button>
-      <button class="ex-btn" onclick="setQ('Probate or executor sales')">Probate</button>
-      <button class="ex-btn" onclick="setQ('Best scoring deals')">Top picks</button>
-      <button class="ex-btn" onclick="setQ('Vacant properties')">Vacant</button>
-      <button class="ex-btn" onclick="setQ('Properties under £100k')">Under 100k</button>
+      <button class="ex-btn" onclick="applyPreset('refurb150')">Refurb under £150k</button>
+      <button class="ex-btn" onclick="applyPreset('titlesplit')">Title splits</button>
+      <button class="ex-btn" onclick="applyPreset('highyield')">Yield 8%+</button>
+      <button class="ex-btn" onclick="applyPreset('devland')">Dev land</button>
+      <button class="ex-btn" onclick="applyPreset('under100')">Under £100k</button>
+      <button class="ex-btn" onclick="applyPreset('vacant')">Vacant</button>
+      <button class="ex-btn" onclick="applyPreset('reset')">Reset filters</button>
+      <span class="ub-sep"></span>
+      <button class="ex-btn" onclick="setQ('Properties needing heavy refurbishment')">AI: Heavy refurb</button>
+      <button class="ex-btn" onclick="setQ('Best scoring deals')">AI: Top picks</button>
+      <button class="ex-btn" onclick="setQ('Probate or executor sales')">AI: Probate</button>
       <button class="adv-toggle" onclick="toggleAdvanced()">Finance profile</button>
     </div>
     <div class="advanced" id="advancedPanel">
@@ -874,7 +882,7 @@ footer .logo-f span{color:var(--green)}
       <div class="ls-stat"><div class="ls-val" data-target="30" data-suffix="+">0</div><div class="ls-label">Auction Houses</div></div>
       <div class="ls-stat"><div class="ls-val" data-target="68" data-suffix="">0</div><div class="ls-label">Bridging Lenders</div></div>
       <div class="ls-stat"><div class="ls-val" data-target="2000" data-suffix="+">0</div><div class="ls-label">Lots Scored</div></div>
-      <div class="ls-stat"><div class="ls-val ls-static">£0</div><div class="ls-label">Cost to Use</div></div>
+      <div class="ls-stat"><div class="ls-val ls-static">£0</div><div class="ls-label">Cost to Browse</div></div>
     </div>
   </div>
 
@@ -911,7 +919,7 @@ footer .logo-f span{color:var(--green)}
   <!-- ═══════ BOTTOM CTA ═══════ -->
   <section class="bottom-cta" id="bottomCta">
     <h2>Ready to find your next deal?</h2>
-    <p>Auction catalogues are live now. Start browsing — it's free, instant, and you don't need an account.</p>
+    <p>Auction catalogues are live now. Start browsing — no account needed, results in seconds.</p>
     <a href="#" class="cta-primary" onclick="event.preventDefault();window.scrollTo({top:0,behavior:'smooth'})">Browse Auction Deals →</a>
   </section>
 
@@ -933,7 +941,7 @@ footer .logo-f span{color:var(--green)}
     <div class="logo-f" style="font-family:'Source Serif 4',serif">Auction <span>Brain</span></div>
     <div style="font-size:.72rem;color:var(--text4);margin-bottom:8px">powered by <span style="font-family:'Source Serif 4',serif;font-weight:600;color:var(--text3)">Bridge<span style="color:var(--green)">match</span></span></div>
     <p>UK Property Auction Directory & Deal Analyser · Data from public auction house websites · Not financial advice</p>
-    <p style="margin-top:8px;"><a href="https://www.bridgematch.co.uk/privacy" style="color:inherit;text-decoration:none;margin:0 8px;">Privacy Policy</a><a href="https://www.bridgematch.co.uk/terms" style="color:inherit;text-decoration:none;margin:0 8px;">Terms of Service</a></p>
+    <p style="margin-top:8px;"><a href="/privacy" style="color:inherit;text-decoration:none;margin:0 8px;">Privacy Policy</a><a href="/terms" style="color:inherit;text-decoration:none;margin:0 8px;">Terms of Service</a></p>
   </footer>
 </div>
 
@@ -1012,7 +1020,17 @@ function goPage(p){_pageFromGoPage=true;_currentPage=p;renderLots();window.scrol
 // ═══════════════════════════════
 // LOAD ALL LOTS FOR FILTERING
 // ═══════════════════════════════
+function showSkeletonCards(n){
+  const rp=$('resultsPanel');if(!rp)return;
+  rp.style.display='block';
+  const out=$('cardsView');if(!out)return;
+  out.style.display='block';
+  const skelHtml=Array(n).fill('<div class="skel-card"><div class="skel-img"></div><div class="skel-body"><div class="skel-line w80"></div><div class="skel-line w60"></div><div class="skel-line w40"></div></div></div>').join('');
+  out.innerHTML='<div class="lots-grid" id="lotsGrid">'+skelHtml+'</div>';
+}
+
 async function loadAllLots(){
+  showSkeletonCards(12);
   try{
     const r=await fetch('/api/all-lots',{headers:getAuthHeaders()});
     const d=await r.json();
@@ -1148,6 +1166,22 @@ function handleSearch(){
 }
 
 function setQ(q){ $('smartQuery').value = q; }
+function applyPreset(name){
+  // Reset all filters first
+  const resets={fDeal:'',fType:'',fCondition:'',fTenure:'',fLocation:'',fSoldTop:'available',fSearch:'',fSort:'score',fBeds:'',fPostcode:'',fMinPrice:'',fMaxPrice:'',fExcludePOA:''};
+  for(const[id,val] of Object.entries(resets)){const el=$(id);if(el)el.value=val}
+  $('smartQuery').value='';
+  if(name==='refurb150'){$('fCondition').value='needs work';$('fMaxPrice').value='150000'}
+  else if(name==='titlesplit'){$('fDeal').value='Title Split'}
+  else if(name==='highyield'){$('fSort').value='yield'}
+  else if(name==='devland'){$('fType').value='land';$('fDeal').value='Development'}
+  else if(name==='under100'){$('fMaxPrice').value='100000'}
+  else if(name==='vacant'){$('fCondition').value='vacant'}
+  updatePriceBtn();
+  LOTS=ALL_LOTS;SMART_RESULTS=null;
+  $('resultsTitle').textContent=ALL_LOTS.length.toLocaleString()+' auction lots';
+  renderLots();
+}
 
 // ═══════════════════════════════
 // VIEW SWITCHING
@@ -1934,6 +1968,14 @@ function buildLotFilters(){
 // ═══════════════════════════════
 let _selectedHouses=new Set();
 
+function houseFreshness(slug){
+  const src=ALL_SOURCES.find(s=>s.house===slug);
+  if(!src||!src.updatedAt) return '';
+  const hrs=Math.round((Date.now()-new Date(src.updatedAt).getTime())/3600000);
+  if(hrs<1) return ' <span style="color:var(--green);font-size:.65rem">just now</span>';
+  if(hrs<24) return ' <span style="color:var(--green);font-size:.65rem">'+hrs+'h ago</span>';
+  return ' <span style="color:var(--warn,#e67e22);font-size:.65rem">'+Math.round(hrs/24)+'d ago</span>';
+}
 function buildHouseChecklist(){
   const counts={};
   LOTS.forEach(l=>{ const h=l._house||'Unknown'; counts[h]=(counts[h]||0)+1; });
@@ -1942,7 +1984,7 @@ function buildHouseChecklist(){
   list.innerHTML='<label class="all-label"><input type="checkbox" checked onchange="toggleAllHouses(this.checked)"> All houses <span class="house-count">'+LOTS.length+'</span></label>'+
     houses.map(h=>{
       const checked=_selectedHouses.size===0||_selectedHouses.has(h);
-      return '<label data-house="'+esc(h)+'"><input type="checkbox" '+(checked?'checked':'')+' value="'+esc(h)+'" onchange="onHouseCheck()"> '+esc(h)+' <span class="house-count">'+counts[h]+'</span></label>';
+      return '<label data-house="'+esc(h)+'"><input type="checkbox" '+(checked?'checked':'')+' value="'+esc(h)+'" onchange="onHouseCheck()"> '+esc(h)+' <span class="house-count">'+counts[h]+'</span>'+houseFreshness(h)+'</label>';
     }).join('');
   updateHouseBtn();
 }
@@ -2189,6 +2231,7 @@ function renderLots(){
     pgHtml+='</div>';
     out.insertAdjacentHTML('beforeend',pgHtml);
   }
+  if(typeof syncFiltersToURL==='function') syncFiltersToURL();
 }
 
 function card(l){
@@ -2210,7 +2253,7 @@ function card(l){
   const catLabel = 'Lot ' + esc(l.lot || '—') + ' · ' + esc(l.dealType || 'Standard');
 
   // Card footer links
-  const viewLink = l.url ? '<a href="' + safeHref(l.url) + '" target="_blank" rel="noopener noreferrer" class="card-view-link" onclick="event.stopPropagation()">View listing ↗</a>' : '<span></span>';
+  const viewLink = (l.url && !l.blurred) ? '<a href="' + safeHref(l.url) + '" target="_blank" rel="noopener noreferrer" class="card-view-link" onclick="event.stopPropagation()">View listing ↗</a>' : '<span></span>';
   const bmBtn = l.price ? '<button class="card-bm-btn" onclick="bridgeMatchLot(' + l._idx + ',event)">🧩 BridgeMatch It</button>' : '';
 
   const blurClass = l.blurred ? ' blurred' : '';
@@ -2476,6 +2519,33 @@ function bridgeMatchLot(idx, event) {
   const lot = LOTS.find(l => l._idx === idx);
   if (!lot) return;
 
+  if (lot.blurred) {
+    // For blurred lots: show finance-only panel (no AI data, no address, no listing link)
+    const existing = document.getElementById('finance-mini-' + idx);
+    if (existing) { existing.remove(); return; }
+    const cardEl = document.getElementById('lot-' + idx);
+    if (!cardEl) return;
+    const panel = document.createElement('div');
+    panel.id = 'finance-mini-' + idx;
+    panel.className = 'expanded-panel';
+    panel.innerHTML =
+      '<div class="finance-widget" id="finance-widget-' + idx + '" style="width:100%">' +
+        '<div class="fw-header"><div class="fw-title">🧩 Finance Check</div><span class="fw-powered">Powered by BridgeMatch</span></div>' +
+        '<div class="fw-prefilled">' +
+          '<div class="fw-field"><div class="fw-field-label">PURCHASE PRICE</div><div class="fw-field-value">' + (lot.price ? '\u00a3' + lot.price.toLocaleString() : 'TBA') + '</div></div>' +
+          '<div class="fw-field"><div class="fw-field-label">PROPERTY TYPE</div><div class="fw-field-value">' + esc(lot.propType || 'Residential') + '</div></div>' +
+        '</div>' +
+        '<div class="fw-slider-row"><span class="fw-slider-label">Loan to Value</span><span class="fw-slider-value" id="ltv-val-' + idx + '">70%</span></div>' +
+        '<input type="range" class="fw-range" id="ltv-slider-' + idx + '" min="50" max="80" step="5" value="70" oninput="updateLTV(' + idx + ',this.value)">' +
+        '<div id="fw-results-' + idx + '" class="fw-empty">Adjust LTV and tap Check</div>' +
+        '<button class="fw-cta" onclick="triggerFinanceCheck(' + idx + ')">Check finance →</button>' +
+        '<div style="text-align:center;margin-top:8px;font-size:.78rem;color:var(--text3)">Upgrade to see full address, AI analysis, and auction house listing</div>' +
+      '</div>';
+    cardEl.after(panel);
+    setTimeout(() => { panel.scrollIntoView({ behavior: 'smooth', block: 'center' }); triggerFinanceCheck(idx); }, 200);
+    return;
+  }
+
   const isExpanded = expandedLotId === idx;
   if (!isExpanded) {
     expandCard(lot);
@@ -2492,6 +2562,24 @@ function bridgeMatchLot(idx, event) {
 }
 
 // toggleSection() removed — flat dividers, no collapse/expand
+
+// ═══════════════════════════════
+// SHAREABLE FILTER URLs (#65)
+// ═══════════════════════════════
+const FILTER_PARAMS=['fSearch','fSort','fMinPrice','fMaxPrice','fBeds','fType','fLocation','fDeal','fCondition','fTenure','fSoldTop','fPostcode','fExcludePOA'];
+function restoreFiltersFromURL(){
+  const p=new URLSearchParams(window.location.search);
+  for(const id of FILTER_PARAMS){const v=p.get(id);if(v&&$(id))$(id).value=v}
+  updatePriceBtn();
+}
+function syncFiltersToURL(){
+  const p=new URLSearchParams();
+  for(const id of FILTER_PARAMS){const el=$(id);if(el&&el.value&&el.value!==el.querySelector('option')?.value)p.set(id,el.value)}
+  const qs=p.toString();
+  const url=qs?window.location.pathname+'?'+qs:window.location.pathname;
+  if(url!==window.location.pathname+window.location.search) history.replaceState(null,'',url);
+}
+restoreFiltersFromURL();
 
 // Init
 loadCalendar();
