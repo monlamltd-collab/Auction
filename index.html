@@ -1036,8 +1036,8 @@ function goPage(p){_pageFromGoPage=true;_currentPage=p;renderLots();window.scrol
 function showSkeletonCards(n){
   const rp=$('resultsPanel');if(!rp)return;
   rp.style.display='block';
-  const out=$('cardsView');if(!out)return;
-  out.style.display='block';
+  const cv=$('cardsView');if(cv)cv.style.display='block';
+  const out=$('lotsOut');if(!out)return;
   const skelHtml=Array(n).fill('<div class="skel-card"><div class="skel-img"></div><div class="skel-body"><div class="skel-line w80"></div><div class="skel-line w60"></div><div class="skel-line w40"></div></div></div>').join('');
   out.innerHTML='<div class="lots-grid" id="lotsGrid">'+skelHtml+'</div>';
 }
