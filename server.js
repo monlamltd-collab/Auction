@@ -2576,7 +2576,7 @@ app.get('/api/all-lots', async (req, res) => {
     if (crossRemoved > 0) console.log(`Cross-auction dedup: removed ${crossRemoved} duplicate lots across auction dates`);
 
     // Sanitise image URLs — strip junk images (logos, council branding, ad trackers, placeholders)
-    const junkImg = /logo|icon|\.svg|favicon|banner|flannels|kirklees|\brdw\b|council\.gov|\.gov\.uk\/|googleads|doubleclick|spacer|pixel|1x1|placeholder|no-image|noimage|spinner|badge|modal\.png|_NYC\.|_LCC\.|United?_?Utilit|themes\/.*assets\/images\//i;
+    const junkImg = /logo|icon|\.svg|favicon|banner|flannels|kirklees|\brdw\b|council\.gov|\.gov\.uk\/|googleads|doubleclick|spacer|pixel|1x1|placeholder|no-image|noimage|spinner|badge|modal\.png|_NYC\.|_LCC\.|_BMDC\.|United?_?Utilit|Cardwells|themes\/.*assets\/images\/|download_\(\d+\)\./i;
     let imgStripped = 0;
     for (const lot of finalLots) {
       if (lot.imageUrl && junkImg.test(lot.imageUrl)) { lot.imageUrl = undefined; imgStripped++; }
@@ -5729,7 +5729,7 @@ async function extractWithDOM(page, house) {
   }
 
   // Post-processing: filter out non-property images (logos, icons, placeholders, known junk)
-  const imgBlocklist = /logo|icon|placeholder|no-image|default|blank|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|1x1|noimage|favicon|banner|advert|sponsor|newsletter|widget|thumb_generic|modal\.png|_NYC\.|_LCC\.|United?_?Utilit|themes\/.*assets\/images\//i;
+  const imgBlocklist = /logo|icon|placeholder|no-image|default|blank|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|1x1|noimage|favicon|banner|advert|sponsor|newsletter|widget|thumb_generic|modal\.png|_NYC\.|_LCC\.|_BMDC\.|United?_?Utilit|Cardwells|themes\/.*assets\/images\/|download_\(\d+\)\./i;
   // Known non-property domains and brand names that appear as junk images
   const imgDomainBlock = /flannels|kirklees|rdw\b|council\.gov|\.gov\.uk\/|googleads|doubleclick|analytics|hotjar|intercom|crisp\.chat|tawk\.to|zendesk|hubspot|mailchimp|sendgrid/i;
   for (const lot of lots) {
