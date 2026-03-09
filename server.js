@@ -6783,6 +6783,47 @@ async function enrichLots(lots, house, sourceUrl, onProgress) {
   console.log(`Enrichment complete. ${Object.values(lrCache).flat().length} total Land Registry sales found.`);
   return lots;
 }
+// ═══════════════════════════════════════════════════════════════
+// STARTUP SYNC: Calendar + house-name migrations
+// ═══════════════════════════════════════════════════════════════
+const HOUSE_NAME_MIGRATIONS = {
+  'SDL Auctions': 'BTG Eddisons',
+};
+
+async function syncCalendarAndHouseNames() {
+  if (!supabase) return;
+  try {
+    // 1) Upsert all FALLBACK_CALENDAR entries into auction_calendar
+    const rows = FALLBACK_CALENDAR.map(a => ({
+      house: a.house, house_slug: a.houseSlug, logo: a.logo,
+      date: a.date, date_end: a.dateEnd || null, title: a.title,
+      lots: a.lots || null, url: a.url, location: a.location,
+      type: a.type, status: a.status, catalogue_ready: a.catalogueReady,
+      updated_at: new Date().toISOString(),
+    }));
+    const { error: calErr } = await supabase.from('auction_calendar').upsert(rows, { onConflict: 'url,date' });
+    if (calErr) console.error('Calendar sync error:', calErr.message);
+    else console.log(`Calendar sync: upserted ${rows.length} entries`);
+
+    // 2) Fix stale house names in cached_analyses
+    for (const [oldName, newName] of Object.entries(HOUSE_NAME_MIGRATIONS)) {
+      const { data, error } = await supabase
+        .from('cached_analyses')
+        .update({ house: newName })
+        .eq('house', oldName);
+      if (error) console.error(`House rename ${oldName} → ${newName} error:`, error.message);
+      else console.log(`House rename: ${oldName} → ${newName}`);
+    }
+
+    // 3) Purge stale calendar entries for past dates
+    const today = new Date().toISOString().slice(0, 10);
+    await supabase.from('auction_calendar').delete().lt('date', today);
+    console.log('Calendar sync: purged past-date entries');
+  } catch (e) {
+    console.error('syncCalendarAndHouseNames error:', e.message);
+  }
+}
+
 // Sentry error handler — must be after all routes, before app.listen
 if (process.env.SENTRY_DSN) {
   Sentry.setupExpressErrorHandler(app);
@@ -6793,6 +6834,9 @@ app.listen(PORT, () => {
   if (!process.env.SUPABASE_URL) log.warn('missing_env', { var: 'SUPABASE_URL' });
   if (!process.env.SUPABASE_SERVICE_KEY) log.warn('missing_env', { var: 'SUPABASE_SERVICE_KEY' });
   if (!process.env.ANTHROPIC_API_KEY) log.warn('missing_env', { var: 'ANTHROPIC_API_KEY' });
+
+  // ── Sync calendar + fix stale house names on startup ──
+  setTimeout(() => syncCalendarAndHouseNames(), 5000);
 
   // ── Auto-analyse all catalogue-ready auctions ──
   // Run 30s after startup (let everything initialise), then every 6 hours
