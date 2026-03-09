@@ -1144,14 +1144,18 @@ const FALLBACK_CALENDAR = [
     },
 
     // ── KNIGHT FRANK ──
-    // Note: forthcoming-auctions is a discovery/index page, NOT a catalogue.
-    // Real catalogue URLs like /auction/3833/... are discovered by discoverAndUpdateCalendar.
-    // catalogueReady: false so auto-analyse doesn't waste time on this index page.
     {
       house: 'Knight Frank', houseSlug: 'knightfrank', logo: '👑',
-      date: '2026-03-12', title: '12 March 2026', lots: null,
-      url: 'https://www.knightfrankauctions.com/forthcoming-auctions/',
-      location: 'Online', type: 'Residential & Commercial', status: 'upcoming',
+      date: '2026-03-19', title: '19 March 2026', lots: null,
+      url: 'https://www.knightfrankauctions.com/auction/3833/knight-frank-auctions-2026-03-19/',
+      location: 'Online (Live Stream)', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
+    {
+      house: 'Knight Frank', houseSlug: 'knightfrank', logo: '👑',
+      date: '2026-05-07', title: '7 May 2026', lots: null,
+      url: 'https://www.knightfrankauctions.com/auction/3834/knight-frank-auctions-2026-05-07/',
+      location: 'Online (Live Stream)', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: false,
     },
 
@@ -3086,6 +3090,11 @@ function rewriteUrl(url, house) {
 
   if (house === 'probateauction') {
     // Probate Auction: WordPress with Swiper galleries, property-list-card containers
+    return { baseUrl: url, isApi: false, paginateAs: null, preferPuppeteer: true };
+  }
+
+  if (house === 'knightfrank') {
+    // Knight Frank: JS-rendered SPA, loads lots via AJAX. Needs Puppeteer.
     return { baseUrl: url, isApi: false, paginateAs: null, preferPuppeteer: true };
   }
 
