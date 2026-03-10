@@ -5827,9 +5827,28 @@ const UNIVERSAL_DOM_EXTRACTOR = `
         if (!bullets.some(b => b.match(/SOLD|STC|WITHDRAWN|SALE AGREED/i))) bullets.push('SOLD/STC');
       }
       
-      lots.push({ lot: lotNum, address, price, url: href, bullets: bullets.slice(0, 8) });
+      // Extract image from card
+      let imageUrl = '';
+      const junkImg = /\\.svg|icon|logo|facebook|linkedin|twitter|spacer|pixel|badge|placeholder|no-image|1x1/i;
+      const img = card.querySelector('img[src], img[data-src], img[data-lazy-src]');
+      if (img) {
+        const imgSrc = img.getAttribute('src') || img.getAttribute('data-src') || img.getAttribute('data-lazy-src') || '';
+        if (imgSrc && imgSrc.length > 10 && !imgSrc.startsWith('data:') && !junkImg.test(imgSrc)) {
+          imageUrl = imgSrc;
+        }
+      }
+      // Also check for background-image on card or immediate children
+      if (!imageUrl) {
+        const bgEl = card.querySelector('[style*="background"]');
+        if (bgEl) {
+          const bgMatch = (bgEl.getAttribute('style') || '').match(/url\\(['"]?([^'"\\)]+)/);
+          if (bgMatch && bgMatch[1] && !junkImg.test(bgMatch[1])) imageUrl = bgMatch[1];
+        }
+      }
+
+      lots.push({ lot: lotNum, address, price, url: href, imageUrl: imageUrl || undefined, bullets: bullets.slice(0, 8) });
     }
-    
+
     // Strategy 2: If no property links found, look for repeated card-like elements
     if (lots.length === 0) {
       // Find the most common class pattern that appears 5+ times with £ prices
@@ -5867,10 +5886,28 @@ const UNIVERSAL_DOM_EXTRACTOR = `
           if (!bullets.some(b => b.match(/SOLD|STC|WITHDRAWN/i))) bullets.push('SOLD/STC');
         }
         
-        lots.push({ lot: lotMatch ? parseInt(lotMatch[1]) : lots.length + 1, address, price, url, bullets: bullets.slice(0, 8) });
+        // Extract image from card
+        let imageUrl = '';
+        const junkImg2 = /\\.svg|icon|logo|facebook|linkedin|twitter|spacer|pixel|badge|placeholder|no-image|1x1/i;
+        const img2 = card.querySelector('img[src], img[data-src], img[data-lazy-src]');
+        if (img2) {
+          const imgSrc2 = img2.getAttribute('src') || img2.getAttribute('data-src') || img2.getAttribute('data-lazy-src') || '';
+          if (imgSrc2 && imgSrc2.length > 10 && !imgSrc2.startsWith('data:') && !junkImg2.test(imgSrc2)) {
+            imageUrl = imgSrc2;
+          }
+        }
+        if (!imageUrl) {
+          const bgEl2 = card.querySelector('[style*="background"]');
+          if (bgEl2) {
+            const bgMatch2 = (bgEl2.getAttribute('style') || '').match(/url\\(['"]?([^'"\\)]+)/);
+            if (bgMatch2 && bgMatch2[1] && !junkImg2.test(bgMatch2[1])) imageUrl = bgMatch2[1];
+          }
+        }
+
+        lots.push({ lot: lotMatch ? parseInt(lotMatch[1]) : lots.length + 1, address, price, url, imageUrl: imageUrl || undefined, bullets: bullets.slice(0, 8) });
       }
     }
-    
+
     return lots;
   })()
 `;
@@ -6093,6 +6130,9 @@ async function extractWithDOM(page, house) {
     }
     if (lot.detailUrl && !/^https?:\/\//i.test(lot.detailUrl)) {
       try { lot.detailUrl = new URL(lot.detailUrl, baseUrl).href; } catch {}
+    }
+    if (lot.imageUrl && !/^https?:\/\//i.test(lot.imageUrl)) {
+      try { lot.imageUrl = new URL(lot.imageUrl, baseUrl).href; } catch {}
     }
   }
 
