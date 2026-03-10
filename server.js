@@ -1091,7 +1091,7 @@ const FALLBACK_CALENDAR = [
     {
       house: 'Hollis Morgan', houseSlug: 'hollismorgan', logo: '🏘️',
       date: '2026-04-01', title: 'April 2026', lots: null,
-      url: 'https://www.hollismorgan.co.uk/search-auction/?bid=11&orderby=lot_no+asc',
+      url: 'https://www.hollismorgan.co.uk/search-auction/',
       location: 'Online (Live Stream from Clifton, Bristol)', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: false,
     },
@@ -1900,6 +1900,7 @@ app.post('/api/analyse', async (req, res) => {
               console.log(`${house}: detected ${detectedPages.max} pages (pattern: ${detectedPages.pattern}), loading up to ${maxPages}`);
 
               for (let p = 2; p <= maxPages; p++) {
+                if (rawLots.length >= MAX_LOTS_PER_SCRAPE) { console.log(`${house}: lot cap reached at ${rawLots.length}`); break; }
                 let pageUrl;
                 if (detectedPages.pattern === 'path-dash') {
                   pageUrl = scrapeUrl.replace(/\/page-\d+/, '') + `/page-${p}`;
@@ -1931,6 +1932,11 @@ app.post('/api/analyse', async (req, res) => {
                   break;
                 }
               }
+            }
+            // Enforce lot cap to prevent runaway scraping
+            if (rawLots.length > MAX_LOTS_PER_SCRAPE) {
+              console.log(`${house}: capping ${rawLots.length} lots to ${MAX_LOTS_PER_SCRAPE}`);
+              rawLots = rawLots.slice(0, MAX_LOTS_PER_SCRAPE);
             }
             console.log(`${house} total: ${rawLots.length} lots via DOM extraction (no Claude needed)`);
           } else {
@@ -7394,6 +7400,7 @@ async function autoAnalyseOne(url, apiKey) {
             let consecutiveFails = 0;
             const RECYCLE_EVERY = 3; // aggressive — generic pages can be very heavy (150+ lots)
             for (let p = 2; p <= maxPages; p++) {
+              if (rawLots.length >= MAX_LOTS_PER_SCRAPE) { console.log(`AUTO: ${house}: lot cap reached at ${rawLots.length}`); break; }
               let pageUrl;
               if (detectedPages.pattern === 'path-dash') pageUrl = scrapeUrl.replace(/\/page-\d+/, '') + `/page-${p}`;
               else if (detectedPages.pattern === 'path-slash') pageUrl = scrapeUrl.replace(/\/page\/\d+/, '') + `/page/${p}`;
@@ -7438,6 +7445,11 @@ async function autoAnalyseOne(url, apiKey) {
                 if (consecutiveFails >= 3) { console.log(`AUTO: ${house} — stopping after ${consecutiveFails} consecutive failures`); break; }
               }
             }
+          }
+          // Enforce lot cap
+          if (rawLots.length > MAX_LOTS_PER_SCRAPE) {
+            console.log(`AUTO: ${house}: capping ${rawLots.length} lots to ${MAX_LOTS_PER_SCRAPE}`);
+            rawLots = rawLots.slice(0, MAX_LOTS_PER_SCRAPE);
           }
           console.log(`AUTO: ${house} total: ${rawLots.length} lots`);
         } else {
