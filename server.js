@@ -901,7 +901,7 @@ const FALLBACK_CALENDAR = [
     {
       house: 'Savills', houseSlug: 'savills', logo: '🏛️',
       date: '2026-02-24', dateEnd: '2026-02-25',
-      title: '24 & 25 February 2026', lots: 322,
+      title: '24 & 25 February 2026', lots: null,
       url: 'https://auctions.savills.co.uk/auctions/24--25-february-2026-218',
       location: 'Online', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: true,
@@ -1765,14 +1765,19 @@ app.post('/api/analyse', async (req, res) => {
           const maxPages = Math.min(totalPages, 50);
           for (let p = 2; p <= maxPages; p++) {
             const pageUrl = `${scrapeUrl}/page-${p}`;
-            try {
-              await page.goto(pageUrl, { waitUntil: 'networkidle2', timeout: 30000 });
-              await new Promise(r => setTimeout(r, 1500));
-              const pageLots = await extractWithDOM(page, house);
-              if (pageLots && pageLots.length > 0) rawLots.push(...pageLots);
-              console.log(`Page ${p}: ${pageLots ? pageLots.length : 0} lots`);
-            } catch (e) {
-              console.log(`Page ${p} failed: ${e.message}`);
+            let success = false;
+            for (let attempt = 0; attempt < 2 && !success; attempt++) {
+              try {
+                await page.goto(pageUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+                await new Promise(r => setTimeout(r, 1500));
+                const pageLots = await extractWithDOM(page, house);
+                if (pageLots && pageLots.length > 0) rawLots.push(...pageLots);
+                console.log(`Page ${p}: ${pageLots ? pageLots.length : 0} lots`);
+                success = true;
+              } catch (e) {
+                console.log(`Page ${p} attempt ${attempt + 1} failed: ${e.message}`);
+                if (attempt === 0) await new Promise(r => setTimeout(r, 2000));
+              }
             }
           }
           console.log(`Savills total: ${rawLots.length} lots from ${maxPages} pages via DOM extraction`);
@@ -3732,7 +3737,7 @@ const DOM_EXTRACTORS = {
           const lotMatch = text.match(/Lot\\s+(\\d+)/);
           if (lotMatch) lotNum = parseInt(lotMatch[1]);
         }
-        if (lotNum === null || lotNum === 0 || seen.has(lotNum)) continue;
+        if (lotNum === null || seen.has(lotNum)) continue;
         seen.add(lotNum);
         // Address from lot-name link or any link with title containing a postcode
         let address = '';
