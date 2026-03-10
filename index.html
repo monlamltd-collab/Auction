@@ -292,9 +292,19 @@ a{color:var(--green);text-decoration:none}a:hover{text-decoration:underline}
 .modal-note{font-size:.75rem;color:var(--text4);margin-top:12px}
 
 /* ── USER BAR ── */
-.user-bar{display:flex;align-items:center;gap:6px;font-size:.82rem;color:var(--text3);margin-bottom:16px}
-.user-bar .dot{width:6px;height:6px;border-radius:50%;background:var(--green)}
-.user-bar a{cursor:pointer}
+.user-bar{display:none}
+.nav-account{position:relative}
+.account-dropdown{display:none;position:absolute;top:calc(100% + 8px);right:0;background:var(--white);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 8px 24px rgba(0,0,0,.12);min-width:240px;z-index:1000;padding:6px 0;animation:acctFadeIn .15s ease}
+.account-dropdown.show{display:block}
+@keyframes acctFadeIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+.acct-header{padding:12px 16px}
+.acct-email{display:block;font-size:.85rem;font-weight:600;color:var(--navy);word-break:break-all}
+.acct-tier{display:inline-block;margin-top:4px;font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:10px;background:var(--cream);color:var(--text3)}
+.acct-tier.pro{background:var(--green-light);color:var(--green)}
+.acct-divider{height:1px;background:var(--border);margin:4px 0}
+.acct-item{display:block;padding:10px 16px;font-size:.85rem;color:var(--text1);cursor:pointer;transition:background .1s;text-decoration:none}
+.acct-item:hover{background:var(--cream)}
+.acct-signout{color:var(--red)}
 
 /* ── FOOTER ── */
 footer{text-align:center;padding:40px 0 24px;color:var(--text4);font-size:.78rem;border-top:1px solid var(--border);margin-top:44px}
@@ -619,7 +629,20 @@ footer .logo-f span{color:var(--green)}
     <div class="logo" role="img" aria-label="Auction Brain — powered by BridgeMatch">Auction <span>Brain</span><span class="logo-sub">powered by BridgeMatch</span></div>
     <div class="nav-right">
       <a href="/check" class="nav-link-bm" title="Check if you can finance a deal">🧩 Can I fund this?</a>
-      <button class="nav-cta" id="navCta" onclick="requireSignup()" aria-label="Sign in to Auction Brain">Sign in</button>
+      <div class="nav-account" id="navAccount">
+        <button class="nav-cta" id="navCta" onclick="requireSignup()" aria-label="Sign in to Auction Brain">Sign in</button>
+        <div class="account-dropdown" id="accountDropdown">
+          <div class="acct-header">
+            <span class="acct-email" id="acctEmail"></span>
+            <span class="acct-tier" id="acctTier">Free</span>
+          </div>
+          <div class="acct-divider"></div>
+          <a class="acct-item" id="acctManage" onclick="openBillingPortal();closeAccountMenu()">Manage plan</a>
+          <a class="acct-item" onclick="showPaywall();closeAccountMenu()">Upgrade</a>
+          <div class="acct-divider"></div>
+          <a class="acct-item acct-signout" onclick="signOut();closeAccountMenu()">Sign out</a>
+        </div>
+      </div>
     </div>
   </div>
 </nav>
@@ -704,9 +727,11 @@ footer .logo-f span{color:var(--green)}
     </div>
   </div>
 
-  <!-- USER BAR -->
+  <!-- USER BAR (legacy, hidden — replaced by nav dropdown) -->
   <div id="userBar" class="user-bar" style="display:none">
-    <span class="dot"></span> <span id="userEmail"></span> &nbsp;·&nbsp; <a id="manageSubLink" onclick="openBillingPortal()" style="display:none;cursor:pointer">manage plan</a><span id="manageSubDot" style="display:none"> · </span><a onclick="signOut()">sign out</a>
+    <span id="userEmail"></span>
+    <span id="manageSubLink" style="display:none"></span>
+    <span id="manageSubDot" style="display:none"></span>
   </div>
 
   <!-- ═══════ UNIFIED FILTER BAR ═══════ -->
@@ -1480,13 +1505,25 @@ function getAuthHeaders() {
 // Backward compat alias used by existing call sites
 function authHeaders() { return getAuthHeaders(); }
 
+function toggleAccountMenu() {
+  const dd = $('accountDropdown');
+  dd.classList.toggle('show');
+}
+function closeAccountMenu() {
+  $('accountDropdown').classList.remove('show');
+}
+// Close dropdown when clicking outside
+document.addEventListener('click', e => {
+  if (!e.target.closest('.nav-account')) closeAccountMenu();
+});
+
 function onSignIn(session) {
   currentSession = session;
   currentUser = session.user;
-  $('userBar').style.display = 'flex';
-  $('userEmail').textContent = currentUser.email || '';
-  $('navCta').textContent = (currentUser.email || '').split('@')[0];
-  $('navCta').onclick = null;
+  const email = currentUser.email || '';
+  $('acctEmail').textContent = email;
+  $('navCta').textContent = email.split('@')[0];
+  $('navCta').onclick = (e) => { e.stopPropagation(); toggleAccountMenu(); };
   $('signupModal').classList.remove('show');
 
   // Submit pending consent from sessionStorage
@@ -1511,9 +1548,12 @@ function onSignIn(session) {
 function onSignOut() {
   currentSession = null;
   currentUser = null;
-  $('userBar').style.display = 'none';
+  closeAccountMenu();
   $('navCta').textContent = 'Sign in';
   $('navCta').onclick = () => requireSignup();
+  $('acctTier').textContent = 'Free';
+  $('acctTier').classList.remove('pro');
+  if ($('acctManage')) $('acctManage').style.display = 'none';
 }
 
 function requireSignup() {
@@ -1644,8 +1684,13 @@ async function updateProStatus() {
     if (oldBadge) oldBadge.remove();
     if (data.tier === 'premium') {
       emailEl.insertAdjacentHTML('afterend', '<span class="pro-badge">PRO</span>');
-      if ($('manageSubLink')) $('manageSubLink').style.display = '';
-      if ($('manageSubDot')) $('manageSubDot').style.display = '';
+      $('acctTier').textContent = 'Pro';
+      $('acctTier').classList.add('pro');
+      if ($('acctManage')) $('acctManage').style.display = '';
+    } else {
+      $('acctTier').textContent = 'Free';
+      $('acctTier').classList.remove('pro');
+      if ($('acctManage')) $('acctManage').style.display = 'none';
     }
     // Store for scan counter display
     window._userTier = data.tier;
