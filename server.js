@@ -4627,7 +4627,13 @@ const DOM_EXTRACTORS = {
         const bullets = [];
         const _rt = row.textContent || '';
         if (_rt.match(/\\bSOLD\\b|\\bSALE.?AGREED\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) bullets.push('SOLD/STC');
-        lots.push({ lot: lotNum, address, price, url, bullets });
+        let imageUrl = '';
+        const img = row.querySelector('img[src]');
+        if (img) {
+          const s = img.getAttribute('src') || '';
+          if (s && s.length > 10 && !s.startsWith('data:') && !/logo|icon|\\.svg|spacer|pixel/i.test(s)) imageUrl = s;
+        }
+        lots.push({ lot: lotNum, address, price, url, imageUrl: imageUrl || undefined, bullets });
       }
       return lots;
     })()
