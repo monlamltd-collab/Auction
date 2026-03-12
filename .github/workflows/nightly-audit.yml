@@ -1,0 +1,40 @@
+name: Nightly Audit
+
+on:
+  schedule:
+    - cron: '0 5 * * *'    # 5am UTC daily
+  workflow_dispatch:         # manual trigger from Actions tab
+
+jobs:
+  audit-and-fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - run: npm ci
+
+      - run: npx puppeteer browsers install chrome
+
+      - name: Run audit
+        run: node scripts/audit.mjs --json --save > audit-results.json 2>&1
+        continue-on-error: true    # audit exits 1 when houses are BROKEN
+
+      - name: Apply fixes + send report
+        run: node scripts/audit-fix.mjs
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          ADMIN_SECRET: ${{ secrets.ADMIN_SECRET }}
+
+      - name: Commit and push fixes
+        run: |
+          git config user.name "Auction Health Bot"
+          git config user.email "noreply@bridgematch.co.uk"
+          git add server.js scripts/audit/
+          git diff --cached --quiet || (git commit -m "auto-fix: nightly audit $(date +%Y-%m-%d)" && git push)

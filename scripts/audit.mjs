@@ -1,0 +1,922 @@
+#!/usr/bin/env node
+/**
+ * Auction Health Monitor
+ * ======================
+ * Comprehensive diagnostic for all auction house scrapers.
+ * Checks extractors against live sites, compares to production cache,
+ * detects broken selectors, site redesigns, and missing configuration.
+ *
+ * Usage:
+ *   node scripts/audit.mjs                          # Full audit, all houses
+ *   node scripts/audit.mjs --house venmore,kivells   # Specific houses only
+ *   node scripts/audit.mjs --fast                    # HTTP probes only (no Puppeteer)
+ *   node scripts/audit.mjs --discover                # Include new house discovery
+ *   node scripts/audit.mjs --save                    # Save fingerprints + history
+ *   node scripts/audit.mjs --json                    # Output machine-readable JSON
+ *   node scripts/audit.mjs --concurrency 3           # Puppeteer page limit (default 5)
+ */
+
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const PROJECT_ROOT = join(__dirname, '..');
+const AUDIT_DIR = join(__dirname, 'audit');
+const PROD_API = 'https://auctions.bridgematch.co.uk/api/all-lots';
+const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+
+// ── CLI args ──────────────────────────────────────────────────
+const args = process.argv.slice(2);
+const flag = (name) => args.includes(`--${name}`);
+const param = (name) => {
+  const idx = args.indexOf(`--${name}`);
+  return idx !== -1 && args[idx + 1] && !args[idx + 1].startsWith('--') ? args[idx + 1] : null;
+};
+
+const FAST_MODE = flag('fast');
+const DISCOVER_MODE = flag('discover');
+const SAVE_MODE = flag('save');
+const JSON_MODE = flag('json');
+const CONCURRENCY = parseInt(param('concurrency') || '5', 10);
+const HOUSE_FILTER = param('house')?.split(',').map(h => h.trim().toLowerCase()) || null;
+
+// ═══════════════════════════════════════════════════════════════
+// PHASE 1: CONFIG EXTRACTION
+// ═══════════════════════════════════════════════════════════════
+
+function extractBraceBlock(code, startMarker) {
+  const idx = code.indexOf(startMarker);
+  if (idx === -1) return null;
+  let depth = 0, end = -1;
+  for (let i = idx; i < code.length; i++) {
+    if (code[i] === '{') depth++;
+    if (code[i] === '}') {
+      depth--;
+      if (depth === 0) { end = i + 1; break; }
+    }
+  }
+  return end === -1 ? null : code.substring(idx, end);
+}
+
+function extractTemplateLiteral(code, startMarker) {
+  const idx = code.indexOf(startMarker);
+  if (idx === -1) return null;
+  const backtickStart = code.indexOf('`', idx);
+  if (backtickStart === -1) return null;
+  // Find matching closing backtick — skip escaped backticks
+  for (let i = backtickStart + 1; i < code.length; i++) {
+    if (code[i] === '\\') { i++; continue; } // skip escaped chars
+    if (code[i] === '`') {
+      return code.substring(backtickStart + 1, i);
+    }
+  }
+  return null;
+}
+
+function extractConfig() {
+  const serverCode = readFileSync(join(PROJECT_ROOT, 'server.js'), 'utf-8');
+
+  // HOUSE_ROOTS
+  const houseRootsCode = extractBraceBlock(serverCode, 'const HOUSE_ROOTS = {');
+  if (!houseRootsCode) throw new Error('Could not find HOUSE_ROOTS in server.js');
+  const HOUSE_ROOTS = new Function(`${houseRootsCode}; return HOUSE_ROOTS;`)();
+
+  // DOM_EXTRACTORS
+  const extractorCode = extractBraceBlock(serverCode, 'const DOM_EXTRACTORS = {');
+  if (!extractorCode) throw new Error('Could not find DOM_EXTRACTORS in server.js');
+  const DOM_EXTRACTORS = new Function(`${extractorCode}; return DOM_EXTRACTORS;`)();
+
+  // UNIVERSAL_DOM_EXTRACTOR — template literal
+  const UNIVERSAL_DOM_EXTRACTOR = extractTemplateLiteral(serverCode, 'const UNIVERSAL_DOM_EXTRACTOR = `');
+  if (!UNIVERSAL_DOM_EXTRACTOR) throw new Error('Could not find UNIVERSAL_DOM_EXTRACTOR in server.js');
+
+  // rewriteUrl function
+  const rwCode = extractBraceBlock(serverCode, 'function rewriteUrl(url, house) {');
+  if (!rwCode) throw new Error('Could not find rewriteUrl in server.js');
+  const rewriteUrl = new Function('HOUSE_ROOTS', `${rwCode}; return rewriteUrl;`)(HOUSE_ROOTS);
+
+  // SKIP_PUPPETEER — extract the first occurrence
+  const skipMatch = serverCode.match(/const SKIP_PUPPETEER\s*=\s*\[([^\]]+)\]/);
+  const SKIP_PUPPETEER = skipMatch
+    ? (skipMatch[1].match(/'([^']+)'/g) || []).map(s => s.replace(/'/g, ''))
+    : [];
+
+  // CACHE_TIERS
+  const cacheCode = extractBraceBlock(serverCode, 'const CACHE_TIERS = {');
+  const CACHE_TIERS = cacheCode ? new Function(`${cacheCode}; return CACHE_TIERS;`)() : null;
+
+  return { HOUSE_ROOTS, DOM_EXTRACTORS, UNIVERSAL_DOM_EXTRACTOR, rewriteUrl, SKIP_PUPPETEER, CACHE_TIERS };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PHASE 2: HTTP PROBES
+// ═══════════════════════════════════════════════════════════════
+
+async function httpProbe(house, url) {
+  const result = {
+    house, url, status: null, finalUrl: null, redirected: false,
+    responseTime: 0, bodySize: 0, cloudflare: false, botBlock: false, error: null,
+  };
+  const start = Date.now();
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    const res = await fetch(url, {
+      headers: { 'User-Agent': USER_AGENT, 'Accept': 'text/html,application/xhtml+xml' },
+      redirect: 'follow',
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    result.status = res.status;
+    result.responseTime = Date.now() - start;
+    result.finalUrl = res.url;
+    result.cloudflare = !!res.headers.get('cf-ray');
+
+    // Detect cross-domain redirect
+    try {
+      const fromDomain = new URL(url).hostname.replace('www.', '');
+      const toDomain = new URL(res.url).hostname.replace('www.', '');
+      result.redirected = fromDomain !== toDomain;
+    } catch {}
+
+    const body = await res.text();
+    result.bodySize = body.length;
+
+    // Bot detection patterns
+    if (body.includes('cf-browser-verification') || body.includes('challenge-platform') ||
+        body.includes('Just a moment') || body.includes('Checking your browser') ||
+        body.includes('Attention Required') ||
+        (result.status === 403 && result.cloudflare)) {
+      result.botBlock = true;
+    }
+  } catch (err) {
+    result.error = err.name === 'AbortError' ? 'TIMEOUT' : err.message;
+    result.responseTime = Date.now() - start;
+  }
+  return result;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PHASE 3: PUPPETEER PROBES
+// ═══════════════════════════════════════════════════════════════
+
+class Semaphore {
+  constructor(max) { this.max = max; this.count = 0; this.queue = []; }
+  async acquire() {
+    if (this.count < this.max) { this.count++; return; }
+    await new Promise(resolve => this.queue.push(resolve));
+  }
+  release() {
+    this.count--;
+    if (this.queue.length > 0) { this.count++; this.queue.shift()(); }
+  }
+}
+
+async function puppeteerProbe(browser, house, url, extractorCode, universalCode, savedFingerprint, sem) {
+  await sem.acquire();
+  const result = {
+    house,
+    extractorLots: 0, universalLots: 0,
+    extractorImgCount: 0,
+    sampleLots: [], universalSampleLots: [],
+    extractorError: null,
+    reality: {
+      priceCount: 0, postcodeCount: 0, propertyLinks: 0,
+      imageCount: 0, paginationText: null, noResults: false, cookieWall: false,
+    },
+    fingerprint: null, driftScore: 0,
+    imageResults: [],
+  };
+
+  let page;
+  try {
+    page = await browser.newPage();
+    await page.setUserAgent(USER_AGENT);
+    await page.setViewport({ width: 1280, height: 900 });
+
+    // Block images/fonts/media for speed — but keep stylesheets for selector testing
+    await page.setRequestInterception(true);
+    page.on('request', req => {
+      const type = req.resourceType();
+      if (['image', 'font', 'media'].includes(type)) req.abort();
+      else req.continue();
+    });
+
+    try {
+      await page.goto(url, { waitUntil: 'networkidle2', timeout: 45000 });
+    } catch { /* timeout OK — continue with what loaded */ }
+
+    // Scroll for lazy-loaded content
+    await page.evaluate(async () => {
+      for (let i = 0; i < 10; i++) {
+        window.scrollBy(0, window.innerHeight);
+        await new Promise(r => setTimeout(r, 400));
+      }
+      window.scrollTo(0, 0);
+    });
+    await new Promise(r => setTimeout(r, 1000));
+
+    // ── a) DOM Extractor Test ──
+    if (extractorCode) {
+      try {
+        const lotsData = await page.evaluate((code) => {
+          const lots = eval(code);
+          if (!Array.isArray(lots)) return { lots: [], total: 0, imgCount: 0 };
+          const imgCount = lots.filter(l => l.imageUrl).length;
+          const samples = lots.slice(0, 3).map(l => ({
+            lot: l.lot, address: (l.address || '').substring(0, 80),
+            price: l.price, hasImage: !!l.imageUrl, hasUrl: !!l.url,
+          }));
+          return { samples, total: lots.length, imgCount };
+        }, extractorCode);
+        result.extractorLots = lotsData.total;
+        result.extractorImgCount = lotsData.imgCount;
+        result.sampleLots = lotsData.samples;
+      } catch (err) {
+        result.extractorError = err.message?.substring(0, 200);
+      }
+    }
+
+    // Run universal extractor independently
+    try {
+      const uData = await page.evaluate((code) => {
+        const lots = eval(code);
+        if (!Array.isArray(lots)) return { total: 0, samples: [] };
+        const samples = lots.slice(0, 3).map(l => ({
+          lot: l.lot, address: (l.address || '').substring(0, 80),
+          price: l.price, hasImage: !!l.imageUrl, hasUrl: !!l.url,
+        }));
+        return { total: lots.length, samples };
+      }, universalCode);
+      result.universalLots = uData.total;
+      result.universalSampleLots = uData.samples;
+    } catch { /* universal extractor failure is non-critical */ }
+
+    // ── b) Reality Check ──
+    result.reality = await page.evaluate(() => {
+      const text = document.body?.innerText || '';
+
+      // Count £X,XXX price patterns (property-scale prices only)
+      const prices = (text.match(/£[\d,]+/g) || []).filter(p => {
+        const n = parseInt(p.replace(/[£,]/g, ''));
+        return n >= 5000;
+      });
+      const priceCount = prices.length;
+
+      // Count UK postcodes
+      const postcodeCount = (text.match(/[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}/gi) || []).length;
+
+      // Count property-like links
+      const propLinks = document.querySelectorAll(
+        'a[href*="/property/"], a[href*="/lot/"], a[href*="property-details"], ' +
+        'a[href*="/properties/"], a[href*="property_details"], a[href*="/auction/"]'
+      );
+      const propertyLinks = propLinks.length;
+
+      // Count non-junk images
+      const junk = /\.svg|icon|logo|facebook|linkedin|twitter|spacer|pixel|badge|1x1|placeholder|no-image/i;
+      const imgs = [...document.querySelectorAll('img[src], img[data-src], img[data-lazy-src]')].filter(img => {
+        const src = img.getAttribute('src') || img.getAttribute('data-src') || img.getAttribute('data-lazy-src') || '';
+        return src.length > 10 && !src.startsWith('data:') && !junk.test(src);
+      });
+      const imageCount = imgs.length;
+
+      // Detect pagination
+      let paginationText = null;
+      const pagMatch = text.match(/Page\s+\d+\s+of\s+(\d+)/i) ||
+                        text.match(/Showing\s+\d+[\s-]+\d+\s+of\s+(\d+)/i) ||
+                        text.match(/(\d+)\s+results?\s+found/i) ||
+                        text.match(/(\d+)\s+(?:lots?|properties)\s+(?:found|available)/i);
+      if (pagMatch) paginationText = pagMatch[0];
+
+      // Detect "no results" / "coming soon"
+      const noResults = /no\s+(?:lots?|results?|properties)\s+(?:found|available|to display)|coming\s+soon|no\s+current\s+(?:auction|catalogue)|between\s+auctions/i.test(text);
+
+      // Detect cookie/login walls blocking content
+      const cookieWall = !!(
+        document.querySelector('[class*="cookie"], [id*="cookie"], [class*="consent"], [class*="gdpr"]') &&
+        text.length < 2000
+      );
+
+      return { priceCount, postcodeCount, propertyLinks, imageCount, paginationText, noResults, cookieWall };
+    });
+
+    // ── c) Structure Fingerprint ──
+    result.fingerprint = await page.evaluate(() => {
+      const classes = new Set();
+      document.querySelectorAll('[class]').forEach(el => {
+        const cn = (el.className || '').toString();
+        cn.split(/\s+/).forEach(c => {
+          if (/lot|property|card|listing|auction|result|item|catalogue|gallery/i.test(c)) {
+            classes.add(c);
+          }
+        });
+      });
+
+      // Common lot-card selectors — count matches
+      const selectorTests = [
+        '.lot', '.property', '.card', '.listing',
+        '[class*="lot"]', '[class*="property"]', '[class*="card"]',
+        '[class*="listing"]', 'article', '.item',
+        '[class*="auction"]', '[class*="gallery"]',
+      ];
+      const selectors = {};
+      for (const sel of selectorTests) {
+        try { selectors[sel] = document.querySelectorAll(sel).length; } catch { selectors[sel] = 0; }
+      }
+
+      return { classes: [...classes].sort(), selectors };
+    });
+
+    // Compute drift score against saved fingerprint
+    if (savedFingerprint) {
+      const oldClasses = new Set(savedFingerprint.classes || []);
+      const newClasses = new Set(result.fingerprint.classes || []);
+      const removed = [...oldClasses].filter(c => !newClasses.has(c)).length;
+      const added = [...newClasses].filter(c => !oldClasses.has(c)).length;
+      const total = Math.max(oldClasses.size, 1);
+
+      let selectorDrift = 0;
+      if (savedFingerprint.selectors) {
+        for (const [sel, oldCount] of Object.entries(savedFingerprint.selectors)) {
+          const newCount = result.fingerprint.selectors[sel] || 0;
+          if (oldCount > 0 && newCount === 0) selectorDrift += 15;
+          else if (oldCount > 0 && Math.abs(newCount - oldCount) > oldCount * 0.5) selectorDrift += 5;
+        }
+      }
+
+      result.driftScore = Math.min(100, Math.round(
+        (removed / total) * 60 + (added / total) * 20 + selectorDrift
+      ));
+    }
+
+    // ── d) Image Validation ──
+    if (extractorCode && result.extractorLots > 0) {
+      try {
+        const imgUrls = await page.evaluate((code) => {
+          const lots = eval(code);
+          if (!Array.isArray(lots)) return [];
+          return lots.filter(l => l.imageUrl).slice(0, 5).map(l => {
+            try { return new URL(l.imageUrl, location.href).href; } catch { return l.imageUrl; }
+          });
+        }, extractorCode);
+
+        const imgChecks = imgUrls.map(async (imgUrl) => {
+          try {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 5000);
+            const res = await fetch(imgUrl, {
+              method: 'HEAD',
+              signal: controller.signal,
+              headers: { 'User-Agent': USER_AGENT },
+            });
+            clearTimeout(timeout);
+            return { url: imgUrl.substring(0, 100), status: res.status, ok: res.ok };
+          } catch (err) {
+            return { url: imgUrl.substring(0, 100), status: 0, ok: false, error: err.message?.substring(0, 50) };
+          }
+        });
+        result.imageResults = await Promise.all(imgChecks);
+      } catch { /* image validation failure non-critical */ }
+    }
+
+  } catch (err) {
+    result.extractorError = result.extractorError || err.message?.substring(0, 200);
+  } finally {
+    if (page) await page.close().catch(() => {});
+    sem.release();
+  }
+  return result;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PHASE 4: PRODUCTION COMPARISON
+// ═══════════════════════════════════════════════════════════════
+
+async function fetchProductionData() {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    const res = await fetch(PROD_API, {
+      signal: controller.signal,
+      headers: { 'User-Agent': USER_AGENT },
+    });
+    clearTimeout(timeout);
+    if (!res.ok) return null;
+    const data = await res.json();
+
+    const byHouse = {};
+    for (const lot of (data.lots || [])) {
+      const h = lot._house || 'unknown';
+      if (!byHouse[h]) byHouse[h] = { count: 0, withImages: 0 };
+      byHouse[h].count++;
+      if (lot.imageUrl) byHouse[h].withImages++;
+    }
+    return { total: data.lots?.length || 0, byHouse };
+  } catch {
+    return null;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PHASE 5: DISCOVERY (optional, --discover flag)
+// ═══════════════════════════════════════════════════════════════
+
+async function discoverNewHouses(browser, knownDomains) {
+  const discoveries = [];
+  const directories = [
+    { url: 'https://www.eigpropertyauctions.co.uk/', name: 'EIG' },
+    { url: 'https://www.propertyauctionaction.co.uk/auction-rooms/', name: 'PropertyAuctionAction' },
+  ];
+
+  for (const dir of directories) {
+    let page;
+    try {
+      page = await browser.newPage();
+      await page.setUserAgent(USER_AGENT);
+      await page.setRequestInterception(true);
+      page.on('request', req => {
+        if (['image', 'font', 'media'].includes(req.resourceType())) req.abort();
+        else req.continue();
+      });
+
+      try {
+        await page.goto(dir.url, { waitUntil: 'networkidle2', timeout: 30000 });
+      } catch { /* timeout ok */ }
+
+      const links = await page.evaluate((dirHost) => {
+        return [...document.querySelectorAll('a[href]')]
+          .map(a => a.href)
+          .filter(h => h.startsWith('http') && !new URL(h).hostname.includes(dirHost));
+      }, new URL(dir.url).hostname);
+
+      const domains = new Set();
+      for (const link of links) {
+        try {
+          const domain = new URL(link).hostname.replace('www.', '');
+          if (!knownDomains.has(domain) && !domains.has(domain) &&
+              domain.includes('.') && !domain.includes('google') &&
+              !domain.includes('facebook') && !domain.includes('twitter') &&
+              !domain.includes('linkedin') && !domain.includes('youtube')) {
+            domains.add(domain);
+          }
+        } catch {}
+      }
+
+      for (const domain of domains) {
+        discoveries.push({ domain, source: dir.name });
+      }
+    } catch {} finally {
+      if (page) await page.close().catch(() => {});
+    }
+  }
+
+  return discoveries;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PROBLEM DETECTION — Cross-Probe Intelligence
+// ═══════════════════════════════════════════════════════════════
+
+function detectProblems(house, httpResult, puppeteerResult, prodData, config) {
+  const issues = [];
+
+  // Get rewriteUrl config for this house
+  let rw = { preferPuppeteer: false, paginateAs: null, isApi: false };
+  try {
+    rw = config.rewriteUrl(config.HOUSE_ROOTS[house], house);
+  } catch {}
+
+  const hasCustomExtractor = !!config.DOM_EXTRACTORS[house];
+
+  // ── HTTP-level issues ──
+  if (httpResult?.error === 'TIMEOUT') {
+    issues.push({ type: 'TIMEOUT', severity: 'BROKEN', detail: 'HTTP request timed out (10s)' });
+  } else if (httpResult?.error?.includes('ENOTFOUND') || httpResult?.error?.includes('getaddrinfo')) {
+    issues.push({ type: 'URL_DEAD', severity: 'BROKEN', detail: 'DNS resolution failed' });
+  } else if (httpResult?.status === 404) {
+    issues.push({ type: 'URL_DEAD', severity: 'BROKEN', detail: 'HTTP 404 — page not found' });
+  } else if (httpResult?.status >= 500) {
+    issues.push({ type: 'SERVER_ERROR', severity: 'BROKEN', detail: `HTTP ${httpResult.status}` });
+  }
+
+  if (httpResult?.botBlock) {
+    issues.push({ type: 'BLOCKED', severity: 'BROKEN', detail: `Bot detection${httpResult.cloudflare ? ' (Cloudflare)' : ''} — ${httpResult.status || 'challenge page'}` });
+  } else if (httpResult?.status === 403 && httpResult?.cloudflare) {
+    issues.push({ type: 'BLOCKED', severity: 'BROKEN', detail: 'Cloudflare blocking (403)' });
+  }
+
+  if (httpResult?.bodySize > 0 && httpResult?.bodySize < 500 && httpResult?.status === 200 && !httpResult?.botBlock) {
+    issues.push({ type: 'EMPTY_RESPONSE', severity: 'WARNING', detail: `Response only ${httpResult.bodySize} bytes` });
+  }
+
+  // Cross-domain redirect
+  if (httpResult?.redirected) {
+    const toDomain = new URL(httpResult.finalUrl).hostname.replace('www.', '');
+    issues.push({ type: 'DOMAIN_MOVED', severity: 'WARNING', detail: `Redirects to ${toDomain}` });
+  }
+
+  // Skip Puppeteer-level checks if we didn't run Puppeteer
+  if (!puppeteerResult) return issues;
+
+  // ── Extractor issues ──
+  if (puppeteerResult.extractorError) {
+    issues.push({ type: 'EXTRACTOR_ERROR', severity: 'BROKEN', detail: puppeteerResult.extractorError });
+  }
+
+  if (hasCustomExtractor && puppeteerResult.extractorLots === 0 && !puppeteerResult.extractorError &&
+      puppeteerResult.reality.priceCount >= 5) {
+    issues.push({ type: 'EXTRACTOR_BROKEN', severity: 'BROKEN',
+      detail: `DOM extractor returns 0, but ${puppeteerResult.reality.priceCount} prices on page` });
+  }
+
+  if (!hasCustomExtractor && puppeteerResult.universalLots === 0 && puppeteerResult.reality.priceCount >= 5) {
+    issues.push({ type: 'NO_EXTRACTOR', severity: 'WARNING',
+      detail: `No custom extractor — universal finds 0 but ${puppeteerResult.reality.priceCount} prices on page` });
+  }
+
+  if (puppeteerResult.driftScore > 50 && puppeteerResult.extractorLots === 0) {
+    issues.push({ type: 'SITE_REDESIGNED', severity: 'BROKEN',
+      detail: `Structure drift ${puppeteerResult.driftScore}/100 + extractor returns 0` });
+  }
+
+  // ── Universal vs custom comparison ──
+  if (puppeteerResult.universalLots > puppeteerResult.extractorLots * 2 &&
+      puppeteerResult.universalLots > 5 && hasCustomExtractor) {
+    issues.push({ type: 'UNIVERSAL_BETTER', severity: 'WARNING',
+      detail: `Universal finds ${puppeteerResult.universalLots} vs custom ${puppeteerResult.extractorLots}` });
+  }
+
+  // ── Pagination detection ──
+  if (puppeteerResult.reality.paginationText && !rw.paginateAs) {
+    issues.push({ type: 'PAGINATION_MISSED', severity: 'WARNING',
+      detail: `Page says "${puppeteerResult.reality.paginationText}" but no pagination config` });
+  }
+
+  // Pagination gap — estimated total >> extracted
+  if (puppeteerResult.reality.paginationText) {
+    const nums = puppeteerResult.reality.paginationText.match(/(\d+)/g);
+    if (nums) {
+      const estimatedTotal = Math.max(...nums.map(Number));
+      if (estimatedTotal > puppeteerResult.extractorLots * 2 && estimatedTotal > 20) {
+        issues.push({ type: 'PAGINATION_GAP', severity: 'WARNING',
+          detail: `~${estimatedTotal} total lots estimated but only got ${puppeteerResult.extractorLots}` });
+      }
+    }
+  }
+
+  // ── Image coverage ──
+  const imgCoverage = puppeteerResult.extractorLots > 0
+    ? Math.round((puppeteerResult.extractorImgCount / puppeteerResult.extractorLots) * 100) : 0;
+  if (puppeteerResult.extractorLots >= 3 && imgCoverage < 30) {
+    issues.push({ type: 'LOW_IMAGES', severity: 'WARNING',
+      detail: `Image coverage ${imgCoverage}% (${puppeteerResult.extractorImgCount}/${puppeteerResult.extractorLots})` });
+  }
+
+  // Broken images
+  const brokenImages = puppeteerResult.imageResults.filter(r => !r.ok).length;
+  if (brokenImages > 0 && puppeteerResult.imageResults.length > 0) {
+    issues.push({ type: 'BROKEN_IMAGES', severity: 'WARNING',
+      detail: `${brokenImages}/${puppeteerResult.imageResults.length} image URLs return errors` });
+  }
+
+  // ── Config issues ──
+  if (!rw.preferPuppeteer && puppeteerResult.extractorLots > 0 &&
+      httpResult?.bodySize < 2000 && httpResult?.status === 200 && !httpResult?.error) {
+    issues.push({ type: 'NEEDS_PUPPETEER', severity: 'WARNING',
+      detail: 'preferPuppeteer not set — HTTP body too small for static extraction' });
+  }
+
+  // ── No catalogue ──
+  if (puppeteerResult.extractorLots === 0 && puppeteerResult.universalLots === 0 &&
+      puppeteerResult.reality.priceCount === 0 && puppeteerResult.reality.noResults) {
+    issues.push({ type: 'NO_CATALOGUE', severity: 'INFO', detail: 'No current auction catalogue' });
+  }
+
+  // ── Minor drift ──
+  if (puppeteerResult.driftScore >= 20 && puppeteerResult.driftScore <= 50 &&
+      puppeteerResult.extractorLots > 0) {
+    issues.push({ type: 'MINOR_DRIFT', severity: 'INFO',
+      detail: `Structure drift score ${puppeteerResult.driftScore}/100` });
+  }
+
+  // ── Production comparison ──
+  if (prodData?.byHouse) {
+    const cached = prodData.byHouse[house];
+    if ((!cached || cached.count === 0) && puppeteerResult.extractorLots > 0) {
+      issues.push({ type: 'MISSING_FROM_CACHE', severity: 'WARNING',
+        detail: `${puppeteerResult.extractorLots} live lots but missing from production cache` });
+    } else if (cached && puppeteerResult.extractorLots > 0) {
+      const pctDrop = Math.round(((cached.count - puppeteerResult.extractorLots) / cached.count) * 100);
+      if (pctDrop > 30) {
+        issues.push({ type: 'CACHE_STALE', severity: 'WARNING',
+          detail: `Cached ${cached.count} vs live ${puppeteerResult.extractorLots} (${pctDrop}% drift)` });
+      }
+    }
+  }
+
+  return issues;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FINGERPRINT MANAGEMENT
+// ═══════════════════════════════════════════════════════════════
+
+function loadFingerprints() {
+  const fp = join(AUDIT_DIR, 'fingerprints.json');
+  if (existsSync(fp)) {
+    try { return JSON.parse(readFileSync(fp, 'utf-8')); } catch { return {}; }
+  }
+  return {};
+}
+
+function saveFingerprints(fingerprints) {
+  mkdirSync(AUDIT_DIR, { recursive: true });
+  writeFileSync(join(AUDIT_DIR, 'fingerprints.json'), JSON.stringify(fingerprints, null, 2));
+}
+
+function saveAuditResults(data) {
+  mkdirSync(AUDIT_DIR, { recursive: true });
+  writeFileSync(join(AUDIT_DIR, 'last-audit.json'), JSON.stringify(data, null, 2));
+}
+
+// ═══════════════════════════════════════════════════════════════
+// REPORT OUTPUT
+// ═══════════════════════════════════════════════════════════════
+
+function printReport(results, prodData, startTime) {
+  const elapsed = ((Date.now() - startTime) / 1000).toFixed(0);
+  const totalLive = results.reduce((sum, r) => sum + (r.puppeteer?.extractorLots || 0), 0);
+  const houseCount = results.length;
+  const now = new Date();
+  const date = now.toISOString().split('T')[0];
+  const time = now.toTimeString().substring(0, 5);
+
+  console.log('');
+  console.log('\u2550'.repeat(59));
+  console.log(`  AUCTION HEALTH MONITOR  \u2014  ${date}  ${time}`);
+  console.log(`  ${houseCount} houses  |  ${elapsed}s  |  ${totalLive.toLocaleString()} live lots`);
+  console.log('\u2550'.repeat(59));
+
+  // Categorise
+  const broken = results.filter(r => r.issues.some(i => i.severity === 'BROKEN'));
+  const warnings = results.filter(r =>
+    !r.issues.some(i => i.severity === 'BROKEN') && r.issues.some(i => i.severity === 'WARNING'));
+  const healthy = results.filter(r =>
+    !r.issues.some(i => i.severity === 'BROKEN') && !r.issues.some(i => i.severity === 'WARNING'));
+
+  if (broken.length > 0) {
+    console.log(`\n  BROKEN (${broken.length})`);
+    console.log('  ' + '\u2500'.repeat(55));
+    for (const r of broken) {
+      const lots = r.puppeteer?.extractorLots ?? '?';
+      const topIssue = r.issues.find(i => i.severity === 'BROKEN');
+      console.log(`  ${r.house.padEnd(20)} ${String(lots).padStart(4)} lots   ${topIssue.detail}`);
+    }
+  }
+
+  if (warnings.length > 0) {
+    console.log(`\n  WARNING (${warnings.length})`);
+    console.log('  ' + '\u2500'.repeat(55));
+    for (const r of warnings) {
+      const lots = r.puppeteer?.extractorLots ?? '?';
+      const topIssue = r.issues.find(i => i.severity === 'WARNING');
+      console.log(`  ${r.house.padEnd(20)} ${String(lots).padStart(4)} lots   ${topIssue.detail}`);
+    }
+  }
+
+  if (healthy.length > 0) {
+    console.log(`\n  HEALTHY (${healthy.length})`);
+    console.log('  ' + '\u2500'.repeat(55));
+    for (const r of healthy) {
+      const lots = r.puppeteer?.extractorLots ?? '?';
+      let imgPct = '?';
+      if (r.puppeteer && r.puppeteer.extractorLots > 0) {
+        imgPct = Math.round((r.puppeteer.extractorImgCount / r.puppeteer.extractorLots) * 100) + '%';
+      }
+      // Check cache age from prodData
+      let cacheInfo = '';
+      if (prodData?.byHouse?.[r.house]) {
+        cacheInfo = `  cache: ${prodData.byHouse[r.house].count} lots`;
+      }
+      const info = r.issues.find(i => i.severity === 'INFO');
+      const extra = info ? `  ${info.detail}` : '';
+      console.log(`  ${r.house.padEnd(20)} ${String(lots).padStart(4)} lots  | ${imgPct.padStart(4)} img${cacheInfo}${extra}`);
+    }
+  }
+
+  // Production comparison summary
+  if (prodData) {
+    console.log(`\n  PRODUCTION COMPARISON`);
+    console.log('  ' + '\u2500'.repeat(55));
+    const cachedTotal = prodData.total;
+    const delta = totalLive - cachedTotal;
+    console.log(`  Live total: ${totalLive.toLocaleString()}  |  Cached total: ${cachedTotal.toLocaleString()}  |  Delta: ${delta > 0 ? '+' : ''}${delta}`);
+
+    const missingFromCache = results.filter(r => {
+      const cached = prodData.byHouse?.[r.house];
+      return (!cached || cached.count === 0) && (r.puppeteer?.extractorLots > 0);
+    }).map(r => r.house);
+    if (missingFromCache.length > 0) {
+      console.log(`  Missing from cache: ${missingFromCache.join(', ')}`);
+    }
+  }
+
+  // Recommendations
+  const recs = [];
+  for (const r of broken) {
+    const issue = r.issues.find(i => i.severity === 'BROKEN');
+    recs.push({ priority: 'HIGH', text: `Fix ${r.house} \u2014 ${issue.detail}` });
+  }
+  for (const r of warnings) {
+    for (const issue of r.issues.filter(i => i.severity === 'WARNING')) {
+      const pri = ['EXTRACTOR_BROKEN', 'NEEDS_PUPPETEER', 'PAGINATION_MISSED', 'MISSING_FROM_CACHE'].includes(issue.type) ? 'HIGH'
+        : ['BROKEN_IMAGES', 'LOW_IMAGES', 'DOMAIN_MOVED'].includes(issue.type) ? 'MED' : 'LOW';
+      recs.push({ priority: pri, text: `${r.house}: ${issue.detail}` });
+    }
+  }
+
+  if (recs.length > 0) {
+    console.log(`\n  RECOMMENDATIONS`);
+    console.log('  ' + '\u2500'.repeat(55));
+    const sorted = [
+      ...recs.filter(r => r.priority === 'HIGH'),
+      ...recs.filter(r => r.priority === 'MED'),
+      ...recs.filter(r => r.priority === 'LOW'),
+    ];
+    for (let i = 0; i < Math.min(sorted.length, 12); i++) {
+      console.log(`  ${(i + 1).toString().padStart(2)}. [${sorted[i].priority.padEnd(4)}] ${sorted[i].text}`);
+    }
+    if (sorted.length > 12) console.log(`      ... and ${sorted.length - 12} more`);
+  }
+
+  console.log('');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MAIN
+// ═══════════════════════════════════════════════════════════════
+
+async function main() {
+  const startTime = Date.now();
+
+  // ── Phase 1: Config extraction ──
+  if (!JSON_MODE) console.log('\n  Phase 1: Extracting config from server.js...');
+  const config = extractConfig();
+  const allHouses = Object.keys(config.HOUSE_ROOTS);
+  const houses = HOUSE_FILTER
+    ? HOUSE_FILTER.filter(h => { if (!config.HOUSE_ROOTS[h]) { console.log(`  WARN: Unknown house "${h}" — skipping`); return false; } return true; })
+    : allHouses;
+
+  if (!JSON_MODE) {
+    console.log(`  Found ${allHouses.length} houses, ${Object.keys(config.DOM_EXTRACTORS).length} extractors`);
+    if (HOUSE_FILTER) console.log(`  Filtering to: ${houses.join(', ')}`);
+  }
+
+  // Load saved fingerprints
+  const savedFingerprints = loadFingerprints();
+
+  // ── Phase 2: HTTP probes ──
+  if (!JSON_MODE) console.log('\n  Phase 2: HTTP probes...');
+  const httpResults = {};
+  await Promise.all(houses.map(async (house) => {
+    const url = config.HOUSE_ROOTS[house];
+    httpResults[house] = await httpProbe(house, url);
+  }));
+
+  if (!JSON_MODE) {
+    const ok = Object.values(httpResults).filter(r => r.status >= 200 && r.status < 400).length;
+    const blocked = Object.values(httpResults).filter(r => r.botBlock || r.status === 403).length;
+    const errs = Object.values(httpResults).filter(r => r.error).length;
+    console.log(`  ${ok} OK, ${blocked} blocked, ${errs} errors  (${((Date.now() - startTime) / 1000).toFixed(1)}s)`);
+  }
+
+  // ── Phase 3: Puppeteer probes ──
+  let puppeteerResults = {};
+  if (!FAST_MODE) {
+    if (!JSON_MODE) console.log(`\n  Phase 3: Puppeteer probes (concurrency ${CONCURRENCY})...`);
+    const puppeteer = await import('puppeteer');
+    const browser = await puppeteer.default.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+    });
+
+    const sem = new Semaphore(CONCURRENCY);
+    await Promise.all(houses.map(async (house) => {
+      const url = config.HOUSE_ROOTS[house];
+      const extractorCode = config.DOM_EXTRACTORS[house] || null;
+      const savedFp = savedFingerprints[house] || null;
+      puppeteerResults[house] = await puppeteerProbe(
+        browser, house, url, extractorCode, config.UNIVERSAL_DOM_EXTRACTOR, savedFp, sem
+      );
+      if (!JSON_MODE) {
+        const r = puppeteerResults[house];
+        const status = r.extractorError ? 'ERR'
+          : r.extractorLots > 0 ? `${r.extractorLots} lots`
+          : `0 lots (univ: ${r.universalLots})`;
+        process.stdout.write(`    ${house.padEnd(20)} ${status}\n`);
+      }
+    }));
+
+    await browser.close();
+    if (!JSON_MODE) console.log(`  Puppeteer phase complete (${((Date.now() - startTime) / 1000).toFixed(1)}s total)`);
+  }
+
+  // ── Phase 4: Production comparison ──
+  if (!JSON_MODE) console.log('\n  Phase 4: Production comparison...');
+  const prodData = await fetchProductionData();
+  if (!JSON_MODE) {
+    if (prodData) console.log(`  Production cache: ${prodData.total.toLocaleString()} lots across ${Object.keys(prodData.byHouse).length} houses`);
+    else console.log('  Could not reach production API');
+  }
+
+  // ── Phase 5: Discovery (optional) ──
+  let discoveries = [];
+  if (DISCOVER_MODE && !FAST_MODE) {
+    if (!JSON_MODE) console.log('\n  Phase 5: Discovering new auction houses...');
+    const knownDomains = new Set(
+      Object.values(config.HOUSE_ROOTS).map(url => {
+        try { return new URL(url).hostname.replace('www.', ''); } catch { return ''; }
+      })
+    );
+    const puppeteer = await import('puppeteer');
+    const browser = await puppeteer.default.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-dev-shm-usage'],
+    });
+    discoveries = await discoverNewHouses(browser, knownDomains);
+    await browser.close();
+    if (!JSON_MODE) console.log(`  Found ${discoveries.length} potential new auction houses`);
+  }
+
+  // ── Detect problems (cross-probe intelligence) ──
+  const results = houses.map(house => {
+    const httpResult = httpResults[house] || null;
+    const puppeteerResult = puppeteerResults[house] || null;
+    const issues = detectProblems(house, httpResult, puppeteerResult, prodData, config);
+    return { house, http: httpResult, puppeteer: puppeteerResult, issues };
+  });
+
+  // ── Output ──
+  if (JSON_MODE) {
+    console.log(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      elapsed: ((Date.now() - startTime) / 1000).toFixed(1) + 's',
+      results: results.map(r => ({
+        house: r.house,
+        httpStatus: r.http?.status ?? null,
+        httpFinalUrl: r.http?.finalUrl ?? null,
+        extractorLots: r.puppeteer?.extractorLots ?? null,
+        universalLots: r.puppeteer?.universalLots ?? null,
+        imgCoverage: r.puppeteer && r.puppeteer.extractorLots > 0
+          ? Math.round((r.puppeteer.extractorImgCount / r.puppeteer.extractorLots) * 100) : null,
+        issues: r.issues,
+      })),
+      production: prodData ? { total: prodData.total, houses: Object.keys(prodData.byHouse).length } : null,
+      discoveries,
+    }, null, 2));
+  } else {
+    printReport(results, prodData, startTime);
+
+    if (discoveries.length > 0) {
+      console.log('  DISCOVERED AUCTION HOUSES');
+      console.log('  ' + '\u2500'.repeat(55));
+      for (const d of discoveries.slice(0, 15)) {
+        console.log(`  ${d.domain.padEnd(40)} (via ${d.source})`);
+      }
+      if (discoveries.length > 15) console.log(`  ... and ${discoveries.length - 15} more`);
+      console.log('');
+    }
+  }
+
+  // ── Save fingerprints + history ──
+  if (SAVE_MODE) {
+    const newFingerprints = { ...savedFingerprints };
+    for (const r of results) {
+      if (r.puppeteer?.fingerprint) {
+        newFingerprints[r.house] = r.puppeteer.fingerprint;
+      }
+    }
+    saveFingerprints(newFingerprints);
+    saveAuditResults({
+      timestamp: new Date().toISOString(),
+      results: results.map(r => ({
+        house: r.house,
+        extractorLots: r.puppeteer?.extractorLots ?? null,
+        universalLots: r.puppeteer?.universalLots ?? null,
+        httpStatus: r.http?.status ?? null,
+        imgCoverage: r.puppeteer && r.puppeteer.extractorLots > 0
+          ? Math.round((r.puppeteer.extractorImgCount / r.puppeteer.extractorLots) * 100) : null,
+        issues: r.issues,
+      })),
+    });
+    if (!JSON_MODE) console.log('  Fingerprints + results saved to scripts/audit/\n');
+  }
+
+  // Exit with error code if any houses are broken
+  const brokenCount = results.filter(r => r.issues.some(i => i.severity === 'BROKEN')).length;
+  if (brokenCount > 0) process.exit(1);
+}
+
+main().catch(err => { console.error('\n  FATAL:', err.message, err.stack); process.exit(1); });
