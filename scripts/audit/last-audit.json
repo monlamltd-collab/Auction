@@ -1,0 +1,487 @@
+{
+  "timestamp": "2026-03-12T18:45:10.547Z",
+  "results": [
+    {
+      "house": "savills",
+      "extractorLots": 0,
+      "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": null,
+      "issues": []
+    },
+    {
+      "house": "allsop",
+      "extractorLots": 0,
+      "universalLots": 0,
+      "httpStatus": 404,
+      "imgCoverage": null,
+      "issues": [
+        {
+          "type": "URL_DEAD",
+          "severity": "BROKEN",
+          "detail": "HTTP 404 — page not found"
+        }
+      ]
+    },
+    {
+      "house": "sdl",
+      "extractorLots": 9,
+      "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": 100,
+      "issues": [
+        {
+          "type": "CACHE_STALE",
+          "severity": "WARNING",
+          "detail": "Cached 49 vs live 9 (82% drift)"
+        }
+      ]
+    },
+    {
+      "house": "network",
+      "extractorLots": 0,
+      "universalLots": 0,
+      "httpStatus": 403,
+      "imgCoverage": null,
+      "issues": [
+        {
+          "type": "BLOCKED",
+          "severity": "BROKEN",
+          "detail": "Bot detection (Cloudflare) — 403"
+        }
+      ]
+    },
+    {
+      "house": "bondwolfe",
+      "extractorLots": 1,
+      "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": 0,
+      "issues": [
+        {
+          "type": "BLOCKED",
+          "severity": "BROKEN",
+          "detail": "Bot detection (Cloudflare) — 200"
+        },
+        {
+          "type": "CACHE_STALE",
+          "severity": "WARNING",
+          "detail": "Cached 12 vs live 1 (92% drift)"
+        }
+      ]
+    },
+    {
+      "house": "barnardmarcus",
+      "extractorLots": 0,
+      "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": null,
+      "issues": [
+        {
+          "type": "EXTRACTOR_BROKEN",
+          "severity": "BROKEN",
+          "detail": "DOM extractor returns 0, but 20 prices on page"
+        }
+      ]
+    },
+    {
+      "house": "auctionhouselondon",
+      "extractorLots": 0,
+      "universalLots": 0,
+      "httpStatus": 404,
+      "imgCoverage": null,
+      "issues": [
+        {
+          "type": "URL_DEAD",
+          "severity": "BROKEN",
+          "detail": "HTTP 404 — page not found"
+        }
+      ]
+    },
+    {
+      "house": "auctionhouse",
+      "extractorLots": 0,
+      "universalLots": 0,
+      "httpStatus": 404,
+      "imgCoverage": null,
+      "issues": [
+        {
+          "type": "URL_DEAD",
+          "severity": "BROKEN",
+          "detail": "HTTP 404 — page not found"
+        }
+      ]
+    },
+    {
+      "house": "cliveemson",
+      "extractorLots": 191,
+      "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": 100,
+      "issues": []
+    },
+    {
+      "house": "strettons",
+      "extractorLots": 0,
+      "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": null,
+      "issues": [
+        {
+          "type": "EXTRACTOR_BROKEN",
+          "severity": "BROKEN",
+          "detail": "DOM extractor returns 0, but 5 prices on page"
+        }
+      ]
+    },
+    {
+      "house": "acuitus",
+      "extractorLots": 0,
+      "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": null,
+      "issues": [
+        {
+          "type": "EXTRACTOR_BROKEN",
+          "severity": "BROKEN",
+          "detail": "DOM extractor returns 0, but 52 prices on page"
+        }
+      ]
+    },
+    {
+      "house": "hollismorgan",
+      "extractorLots": 94,
+      "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": 0,
+      "issues": [
+        {
+          "type": "LOW_IMAGES",
+          "severity": "WARNING",
+          "detail": "Image coverage 0% (0/94)"
+        },
+        {
+          "type": "CACHE_STALE",
+          "severity": "WARNING",
+          "detail": "Cached 506 vs live 94 (81% drift)"
+        }
+      ]
+    },
+    {
+      "house": "maggsandallen",
+      "extractorLots": 0,
+      "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": null,
+      "issues": [
+        {
+          "type": "EXTRACTOR_BROKEN",
+          "severity": "BROKEN",
+          "detail": "DOM extractor returns 0, but 43 prices on page"
+        }
+      ]
+    },
+    {
+      "house": "mchughandco",
+      "extractorLots": 0,
+      "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": null,
+      "issues": []
+    },
+    {
+      "house": "knightfrank",
+      "extractorLots": 0,
+      "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": null,
+      "issues": []
+    },
+    {
+      "house": "pattinson",
+      "extractorLots": 0,
+      "universalLots": 0,
+      "httpStatus": 403,
+      "imgCoverage": null,
+      "issues": [
+        {
+          "type": "BLOCKED",
+          "severity": "BROKEN",
+          "detail": "Bot detection (Cloudflare) — 403"
+        },
+        {
+          "type": "EXTRACTOR_ERROR",
+          "severity": "BROKEN",
+          "detail": "Protocol error (Runtime.callFunctionOn): Execution context was destroyed."
+        }
+      ]
+    },
+    {
+      "house": "bidx1",
+      "extractorLots": 0,
+      "universalLots": 0,
+      "httpStatus": 404,
+      "imgCoverage": null,
+      "issues": [
+        {
+          "type": "URL_DEAD",
+          "severity": "BROKEN",
+          "detail": "HTTP 404 — page not found"
+        }
+      ]
+    },
+    {
+      "house": "philliparnold",
+      "extractorLots": 0,
+      "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": null,
+      "issues": []
+    },
+    {
+      "house": "edwardmellor",
+      "extractorLots": 0,
+      "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": null,
+      "issues": []
+    },
+    {
+      "house": "paulfosh",
+      "extractorLots": 50,
+      "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": 100,
+      "issues": [
+        {
+          "type": "MISSING_FROM_CACHE",
+          "severity": "WARNING",
+          "detail": "50 live lots but missing from production cache"
+        }
+      ]
+    },
+    {
+      "house": "cottons",
+      "extractorLots": 0,
+      "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": null,
+      "issues": []
+    },
+    {
+      "house": "dedmangray",
+      "extractorLots": 0,
+      "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": null,
+      "issues": []
+    },
+    {
+      "house": "barnettross",
+      "extractorLots": 0,
+      "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": null,
+      "issues": []
+    },
+    {
+      "house": "bradleyhall",
+      "extractorLots": 31,
+      "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": 100,
+      "issues": []
+    },
+    {
+      "house": "connectuk",
+      "extractorLots": 0,
+      "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": null,
+      "issues": [
+        {
+          "type": "DOMAIN_MOVED",
+          "severity": "WARNING",
+          "detail": "Redirects to connectukgroup.co.uk"
+        }
+      ]
+    },
+    {
+      "house": "auctionestates",
+      "extractorLots": 0,
+      "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": null,
+      "issues": []
+    },
+    {
+      "house": "landwood",
+      "extractorLots": 0,
+      "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": null,
+      "issues": []
+    },
+    {
+      "house": "loveitts",
+      "extractorLots": 0,
+      "universalLots": 0,
+      "httpStatus": 301,
+      "imgCoverage": null,
+      "issues": [
+        {
+          "type": "NO_CATALOGUE",
+          "severity": "INFO",
+          "detail": "No current auction catalogue"
+        }
+      ]
+    },
+    {
+      "house": "hunters",
+      "extractorLots": 20,
+      "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": 100,
+      "issues": [
+        {
+          "type": "MISSING_FROM_CACHE",
+          "severity": "WARNING",
+          "detail": "20 live lots but missing from production cache"
+        }
+      ]
+    },
+    {
+      "house": "probateauction",
+      "extractorLots": 0,
+      "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": null,
+      "issues": []
+    },
+    {
+      "house": "countrywide",
+      "extractorLots": 0,
+      "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": null,
+      "issues": []
+    },
+    {
+      "house": "venmore",
+      "extractorLots": 19,
+      "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": 100,
+      "issues": [
+        {
+          "type": "PAGINATION_MISSED",
+          "severity": "WARNING",
+          "detail": "Page says \"19 properties found\" but no pagination config"
+        },
+        {
+          "type": "MISSING_FROM_CACHE",
+          "severity": "WARNING",
+          "detail": "19 live lots but missing from production cache"
+        }
+      ]
+    },
+    {
+      "house": "tcpa",
+      "extractorLots": 51,
+      "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": 100,
+      "issues": [
+        {
+          "type": "MISSING_FROM_CACHE",
+          "severity": "WARNING",
+          "detail": "51 live lots but missing from production cache"
+        }
+      ]
+    },
+    {
+      "house": "futureauctions",
+      "extractorLots": 0,
+      "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": null,
+      "issues": [
+        {
+          "type": "EXTRACTOR_BROKEN",
+          "severity": "BROKEN",
+          "detail": "DOM extractor returns 0, but 17 prices on page"
+        }
+      ]
+    },
+    {
+      "house": "kivells",
+      "extractorLots": 10,
+      "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": 100,
+      "issues": [
+        {
+          "type": "MISSING_FROM_CACHE",
+          "severity": "WARNING",
+          "detail": "10 live lots but missing from production cache"
+        }
+      ]
+    },
+    {
+      "house": "firstforauctions",
+      "extractorLots": 50,
+      "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": 100,
+      "issues": [
+        {
+          "type": "MISSING_FROM_CACHE",
+          "severity": "WARNING",
+          "detail": "50 live lots but missing from production cache"
+        }
+      ]
+    },
+    {
+      "house": "harmanhealy",
+      "extractorLots": 76,
+      "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": 38,
+      "issues": [
+        {
+          "type": "MISSING_FROM_CACHE",
+          "severity": "WARNING",
+          "detail": "76 live lots but missing from production cache"
+        }
+      ]
+    },
+    {
+      "house": "seelauctions",
+      "extractorLots": 0,
+      "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": null,
+      "issues": [
+        {
+          "type": "EXTRACTOR_BROKEN",
+          "severity": "BROKEN",
+          "detail": "DOM extractor returns 0, but 35 prices on page"
+        }
+      ]
+    },
+    {
+      "house": "robinsonhall",
+      "extractorLots": 18,
+      "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": 100,
+      "issues": [
+        {
+          "type": "MISSING_FROM_CACHE",
+          "severity": "WARNING",
+          "detail": "18 live lots but missing from production cache"
+        }
+      ]
+    }
+  ]
+}
