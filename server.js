@@ -3896,63 +3896,72 @@ const DOM_EXTRACTORS = {
   maggsandallen: `
     (() => {
       const lots = [];
-      const detailLinks = document.querySelectorAll('a[href*="property-details"]');
-      let lotIndex = 1;
-      for (const link of detailLinks) {
-        const url = link.getAttribute('href') || '';
-        if (!url || link.textContent.trim() === '') continue;
-        let card = link.parentElement;
-        for (let i = 0; i < 5 && card; i++) {
-          if (card.querySelector('h3') && card.querySelector('h4')) break;
-          card = card.parentElement;
+      const seen = new Set();
+      // Maggs & Allen 2026: Bootstrap .card layout with .auction-property-image, h2 > a for address
+      let cards = document.querySelectorAll('.card');
+      if (cards.length === 0) cards = document.querySelectorAll('[class*="property-card"], article, .lot-card');
+      for (const card of cards) {
+        const text = card.textContent || '';
+        // Skip nav/footer cards that aren't property listings
+        if (text.length < 20 || text.length > 5000) continue;
+        if (!text.match(/£[\\d,]|Lot\\s+\\d|Guide/i)) continue;
+        // Address from h2 > a or h2/h3
+        let address = '', url = '';
+        const h2a = card.querySelector('h2 a, .card-body h2 a, h3 a');
+        if (h2a) {
+          address = h2a.textContent.trim();
+          url = h2a.getAttribute('href') || '';
         }
-        if (!card) continue;
-        const h3 = card.querySelector('h3');
-        const address = h3 ? h3.textContent.trim() : '';
-        if (!address) continue;
+        if (!address) {
+          const h2 = card.querySelector('h2, h3');
+          if (h2) address = h2.textContent.trim();
+        }
+        if (!address || address.length < 5) continue;
+        // URL fallback
+        if (!url) {
+          const link = card.querySelector('a[href*="property"], a[href*="details"], .card-footer a, a[href]');
+          if (link) url = link.getAttribute('href') || '';
+        }
+        // Price from .card-text or text
         let price = null;
-        const h4s = card.querySelectorAll('h4');
-        for (const h4 of h4s) {
-          const t = h4.textContent.trim();
-          const pm = t.match(/£([\\d,]+)/);
-          if (pm) { price = parseInt(pm[1].replace(/,/g, '')); break; }
-        }
-        let lotNum = lotIndex;
-        for (const h4 of h4s) {
-          const t = h4.textContent.trim();
-          const lm = t.match(/Lot\\s+(\\d+)/i);
-          if (lm) { lotNum = parseInt(lm[1]); break; }
-        }
-        const bullets = [];
-        card.querySelectorAll('li').forEach(li => {
-          const t = li.textContent.trim();
-          if (t.length > 3 && t.length < 200) bullets.push(t);
-        });
-        const cardText = card.textContent;
-        if (cardText.match(/\\bSOLD\\b|\\bSALE.?AGREED\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) {
-          if (!bullets.some(b => b.match(/SOLD|STC|WITHDRAWN|SALE AGREED/i))) bullets.push('SOLD/STC');
-        }
-        // Image: look for <img> or background-image on .auction-property-image
+        const priceEl = card.querySelector('.card-text, [class*="price"]');
+        const priceMatch = (priceEl ? priceEl.textContent : text).match(/£([\\d,]+)/);
+        if (priceMatch) price = parseInt(priceMatch[1].replace(/,/g, ''));
+        // Lot number
+        let lotNum = lots.length + 1;
+        const lotMatch = text.match(/LOT\\s+(\\d+)/i);
+        if (lotMatch) lotNum = parseInt(lotMatch[1]);
+        if (seen.has(lotNum)) continue;
+        seen.add(lotNum);
+        // Image from .auction-property-image or img
         let imageUrl = '';
-        const imgDiv = card.querySelector('.auction-property-image');
-        if (imgDiv) {
-          const bg = imgDiv.style.backgroundImage || imgDiv.getAttribute('style') || '';
-          const bgMatch = bg.match(/url\\(['"]?([^'"\\)]+)/);
-          if (bgMatch) imageUrl = bgMatch[1];
-        }
-        if (!imageUrl) {
-          const cardImg = card.querySelector('img.main-image, img.img-responsive, .property-grid-image img');
-          if (cardImg) imageUrl = cardImg.getAttribute('src') || cardImg.dataset.src || '';
+        const imgEl = card.querySelector('.auction-property-image, img.auction-property-image');
+        if (imgEl && imgEl.tagName === 'IMG') {
+          imageUrl = imgEl.getAttribute('src') || '';
+        } else if (imgEl) {
+          const innerImg = imgEl.querySelector('img[src]');
+          if (innerImg) imageUrl = innerImg.getAttribute('src') || '';
+          if (!imageUrl) {
+            const bg = imgEl.getAttribute('style') || '';
+            const bgMatch = bg.match(/url\\(['"]?([^'"\\)]+)/);
+            if (bgMatch) imageUrl = bgMatch[1];
+          }
         }
         if (!imageUrl) {
           const anyImg = card.querySelector('img[src]');
           if (anyImg) {
             const s = anyImg.getAttribute('src') || '';
-            if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) imageUrl = s;
+            if (s && !s.includes('logo') && !s.includes('icon') && s.length > 10) imageUrl = s;
           }
         }
+        // Bullets
+        const bullets = [];
+        card.querySelectorAll('li').forEach(li => {
+          const t = li.textContent.trim();
+          if (t.length > 3 && t.length < 200) bullets.push(t);
+        });
+        if (text.match(/\\bSOLD\\b|\\bSALE.?AGREED\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) bullets.push('SOLD/STC');
         lots.push({ lot: lotNum, address, price, url, bullets, imageUrl: imageUrl || undefined });
-        lotIndex++;
       }
       return lots;
     })()
@@ -4121,44 +4130,46 @@ const DOM_EXTRACTORS = {
     (() => {
       const lots = [];
       const seen = new Set();
-      const headers = document.querySelectorAll('h2, h3, h4, h5');
-      for (const h of headers) {
-        const text = h.textContent.trim();
-        const lotMatch = text.match(/^\\s*(\\d{1,4})\\s*$/) || text.match(/Lot\\s+(\\d+)/i);
+      // Barnard Marcus 2026: .lot-item cards with BEM-style classes
+      let cards = document.querySelectorAll('.lot-item');
+      if (cards.length === 0) cards = document.querySelectorAll('[class*="lot-item"], [class*="lot-card"], article');
+      for (const card of cards) {
+        const text = card.textContent || '';
+        // Lot number from .lot-info__name or text
+        const lotEl = card.querySelector('.lot-info__name, [class*="lot-info"] [class*="name"], [class*="lot-number"]');
+        const lotMatch = (lotEl ? lotEl.textContent : text).match(/(?:Lot\\s+)?(\\d+)/i);
         if (!lotMatch) continue;
         const num = parseInt(lotMatch[1]);
         if (seen.has(num)) continue;
         seen.add(num);
-        const parent = h.closest('.lot, .property, div[class*="lot"], div, li, article') || h.parentElement;
-        if (!parent) continue;
-        let address = '', price = null, url = '';
-        const links = parent.querySelectorAll('a[href]');
-        for (const link of links) {
-          const lt = link.textContent.trim();
-          const href = link.getAttribute('href') || '';
-          if (lt.match(/[A-Z]{1,2}\\d[A-Z\\d]?\\s*\\d[A-Z]{2}/i) && !address) {
-            address = lt;
-            if (href && href !== '#') url = href;
-          }
-        }
-        const priceMatch = parent.textContent.match(/(?:Guide|Price|£)\\s*£?([\\d,]+(?:,\\d{3})*)/i);
+        // Address from .lot-item__address
+        const addrEl = card.querySelector('.lot-item__address, [class*="lot-item__address"], [class*="address"], h3, h4');
+        const address = addrEl ? addrEl.textContent.trim() : '';
+        if (!address) continue;
+        // Price from .lot-item__price
+        let price = null;
+        const priceEl = card.querySelector('.lot-item__price, [class*="price"]');
+        const priceMatch = (priceEl ? priceEl.textContent : text).match(/£([\\d,]+)/);
         if (priceMatch) price = parseInt(priceMatch[1].replace(/,/g, ''));
-        const bullets = [];
-        parent.querySelectorAll('li').forEach(li => {
-          const t = li.textContent.trim();
-          if (t.length > 5 && t.length < 200) bullets.push(t);
-        });
-        if (parent.textContent.match(/\\bSOLD\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) {
-          if (!bullets.some(b => b.match(/SOLD|STC|WITHDRAWN/i))) bullets.push('SOLD/STC');
-        }
-        // Image from parent container
+        // URL
+        const link = card.querySelector('.lot-item__link, a[href*="lot"], a[href*="property"], a[href]');
+        const url = link ? link.getAttribute('href') : '';
+        // Image
         let imageUrl = '';
-        const parentImg = parent.querySelector('img[src]');
-        if (parentImg) {
-          const s = parentImg.getAttribute('src') || parentImg.dataset.src || '';
-          if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) imageUrl = s;
+        const img = card.querySelector('.lot-item__img img, img[src]');
+        if (img) {
+          const s = img.getAttribute('src') || img.dataset.src || '';
+          if (s && !s.includes('logo') && !s.includes('icon') && s.length > 10) imageUrl = s;
         }
-        if (address || price) lots.push({ lot: num, address, price, url, bullets, imageUrl: imageUrl || undefined });
+        // Bullets
+        const bullets = [];
+        const desc = card.querySelector('.lot-item__description, [class*="description"]');
+        if (desc) { const t = desc.textContent.trim(); if (t.length > 5) bullets.push(t.substring(0, 200)); }
+        const loc = card.querySelector('.lot-item__location, [class*="location"]');
+        if (loc && loc.textContent.trim()) bullets.push(loc.textContent.trim());
+        const statusEl = card.querySelector('.lot-info__status, [class*="status"]');
+        if (statusEl && statusEl.textContent.match(/sold|unsold|withdrawn/i)) bullets.push('SOLD/STC');
+        lots.push({ lot: num, address, price, url, bullets, imageUrl: imageUrl || undefined });
       }
       return lots;
     })()
@@ -4336,7 +4347,25 @@ const DOM_EXTRACTORS = {
     (() => {
       const lots = [];
       const seen = new Set();
-      const cards = document.querySelectorAll('[class*="lot"], [class*="property"], .catalogue-item, article');
+      // Strettons 2026: Bootstrap/JS-rendered. Try multiple card strategies.
+      let cards = document.querySelectorAll('.lot-item, .property-card, .catalogue-item');
+      if (cards.length === 0) cards = document.querySelectorAll('[class*="lot-item"], [class*="lot-card"], [class*="property-item"]');
+      if (cards.length === 0) cards = document.querySelectorAll('article, .card');
+      if (cards.length === 0) {
+        // Fallback: find all links to lot/property pages and walk up
+        const links = document.querySelectorAll('a[href*="/lot"], a[href*="/property"], a[href*="/auction"]');
+        const parentSet = new Set();
+        for (const link of links) {
+          let p = link;
+          for (let i = 0; i < 6 && p.parentElement; i++) {
+            p = p.parentElement;
+            const t = p.textContent || '';
+            if (t.match(/Lot\\s+\\d/i) && t.match(/£[\\d,]/)) break;
+          }
+          if (!parentSet.has(p) && p.textContent.length > 20 && p.textContent.length < 3000) parentSet.add(p);
+        }
+        cards = parentSet;
+      }
       for (const card of cards) {
         const text = card.textContent || '';
         const lotMatch = text.match(/Lot\\s+(\\d+)/i);
@@ -4344,29 +4373,36 @@ const DOM_EXTRACTORS = {
         const num = parseInt(lotMatch[1]);
         if (seen.has(num)) continue;
         seen.add(num);
-        const link = card.querySelector('a[href]');
-        const url = link ? link.getAttribute('href') : '';
+        // Address
+        let address = '';
+        const addrEl = card.querySelector('[class*="address"], h2, h3, h4, .title');
+        if (addrEl) address = addrEl.textContent.trim();
+        if (!address) {
+          const lines = text.split('\\n').map(s => s.trim()).filter(s => s.length > 5 && s.length < 200);
+          for (const l of lines) {
+            if (l.match(/[A-Z]{1,2}\\d[A-Z\\d]?\\s*\\d[A-Z]{2}/i)) { address = l; break; }
+          }
+        }
+        if (!address) continue;
+        // Price
         const priceMatch = text.match(/(?:Guide|Price)[^£]*£([\\d,]+)/i) || text.match(/£([\\d,]+)/);
         const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
-        let address = '';
-        const heading = card.querySelector('h2, h3, h4, .address');
-        if (heading) address = heading.textContent.trim();
-        if (!address) continue;
-        const bullets = [];
-        card.querySelectorAll('li').forEach(li => {
-          const t = li.textContent.trim();
-          if (t.length > 5 && t.length < 200) bullets.push(t);
-        });
-        if (text.match(/\\bSOLD\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) {
-          if (!bullets.some(b => b.match(/SOLD|STC|WITHDRAWN/i))) bullets.push('SOLD/STC');
-        }
-        // Image from card
+        // URL
+        const link = card.querySelector('a[href*="/lot"], a[href*="/property"], a[href*="/auction"], a[href]');
+        const url = link ? link.getAttribute('href') : '';
+        // Image
         let imageUrl = '';
-        const cardImg = card.querySelector('img[src]');
-        if (cardImg) {
-          const s = cardImg.getAttribute('src') || cardImg.dataset.src || '';
+        const img = card.querySelector('img[src]');
+        if (img) {
+          const s = img.getAttribute('src') || img.dataset.src || '';
           if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) imageUrl = s;
         }
+        const bullets = [];
+        card.querySelectorAll('li, .description, .feature, [class*="description"]').forEach(el => {
+          const t = el.textContent.trim();
+          if (t.length > 5 && t.length < 200) bullets.push(t);
+        });
+        if (text.match(/\\bSOLD\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) bullets.push('SOLD/STC');
         lots.push({ lot: num, address, price, url, bullets, imageUrl: imageUrl || undefined });
       }
       return lots;
@@ -4378,37 +4414,39 @@ const DOM_EXTRACTORS = {
     (() => {
       const lots = [];
       const seen = new Set();
-      const cards = document.querySelectorAll('[class*="lot"], [class*="property"], article, .search-result');
+      // Acuitus 2026: .property-card containers with .lot-number, .address, .guide-price
+      let cards = document.querySelectorAll('.property-card');
+      if (cards.length === 0) cards = document.querySelectorAll('[class*="property-card"], [class*="property-item"], [class*="lot-card"]');
       for (const card of cards) {
         const text = card.textContent || '';
-        const lotMatch = text.match(/Lot\\s+(\\d+)/i);
+        const lotEl = card.querySelector('.lot-number, [class*="lot-number"]');
+        const lotMatch = (lotEl ? lotEl.textContent : text).match(/Lot\\s+(\\d+)/i);
         if (!lotMatch) continue;
         const num = parseInt(lotMatch[1]);
         if (seen.has(num)) continue;
         seen.add(num);
-        const link = card.querySelector('a[href]');
-        const url = link ? link.getAttribute('href') : '';
-        const priceMatch = text.match(/(?:Guide|Price)[^£]*£([\\d,]+)/i) || text.match(/£([\\d,]+)/);
-        const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
-        let address = '';
-        const heading = card.querySelector('h2, h3, h4, .address, .title');
-        if (heading) address = heading.textContent.trim();
+        const addrEl = card.querySelector('.address, [class*="address"], h2, h3');
+        const address = addrEl ? addrEl.textContent.trim() : '';
         if (!address) continue;
-        const bullets = [];
-        card.querySelectorAll('li, .description, .feature').forEach(el => {
-          const t = el.textContent.trim();
-          if (t.length > 5 && t.length < 200) bullets.push(t);
-        });
-        if (text.match(/\\bSOLD\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) {
-          if (!bullets.some(b => b.match(/SOLD|STC|WITHDRAWN/i))) bullets.push('SOLD/STC');
-        }
-        // Image from card
+        let price = null;
+        const priceEl = card.querySelector('.guide-price, [class*="guide-price"], [class*="price"]');
+        const priceMatch = (priceEl ? priceEl.textContent : text).match(/£([\\d,]+)/);
+        if (priceMatch) price = parseInt(priceMatch[1].replace(/,/g, ''));
+        const link = card.querySelector('a[href*="/property/"], a[href]');
+        const url = link ? link.getAttribute('href') : '';
         let imageUrl = '';
-        const cardImg = card.querySelector('img[src]');
-        if (cardImg) {
-          const s = cardImg.getAttribute('src') || cardImg.dataset.src || '';
-          if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) imageUrl = s;
+        const img = card.querySelector('img[src]');
+        if (img) {
+          const s = img.getAttribute('src') || '';
+          if (s && !s.includes('logo') && !s.includes('icon') && s.length > 10) imageUrl = s;
         }
+        const bullets = [];
+        const yieldEl = card.querySelector('.yield, [class*="yield"]');
+        if (yieldEl && yieldEl.textContent.trim()) bullets.push('Yield: ' + yieldEl.textContent.trim());
+        const typeEl = card.querySelector('.property-type, [class*="property-type"]');
+        if (typeEl && typeEl.textContent.trim()) bullets.push(typeEl.textContent.trim());
+        const statusEl = card.querySelector('.status, [class*="status"]');
+        if (statusEl && statusEl.textContent.match(/sold|withdrawn/i)) bullets.push('SOLD/STC');
         lots.push({ lot: num, address, price, url, bullets, imageUrl: imageUrl || undefined });
       }
       return lots;
@@ -5302,56 +5340,67 @@ const DOM_EXTRACTORS = {
     (() => {
       const lots = [];
       const seen = new Set();
-      // Each lot card wraps in a link to property_details.asp
-      const cards = document.querySelectorAll('a[href*="property_details.asp"]');
-      for (const card of cards) {
-        const href = card.getAttribute('href') || '';
-        if (seen.has(href)) continue;
-        seen.add(href);
+      // Future Property Auctions 2026: ASP pages, property_details.asp links
+      // Try both link-as-card and walking up from links to parent containers
+      let cards = document.querySelectorAll('a[href*="property_details.asp"]');
+      // If links are small (just "View Details"), walk up to parent containers
+      const useParent = cards.length > 0 && cards[0].textContent.trim().length < 50;
+      const processed = new Set();
+      for (const el of cards) {
+        const href = el.getAttribute('href') || '';
+        if (processed.has(href)) continue;
+        processed.add(href);
+        // Walk up to the lot container
+        let card = el;
+        if (useParent) {
+          for (let i = 0; i < 6 && card.parentElement; i++) {
+            card = card.parentElement;
+            const t = card.textContent || '';
+            if (t.match(/£[\\d,]/) && t.match(/Lot\\s+\\d|bedroom|property/i)) break;
+          }
+        }
         const text = card.textContent || '';
-        if (text.length < 20 || text.length > 2000) continue;
+        if (text.length < 20 || text.length > 3000) continue;
         // Lot number
         let lotNum = lots.length + 1;
         const lotMatch = text.match(/Lot\\s+(\\d+)/i);
         if (lotMatch) lotNum = parseInt(lotMatch[1]);
-        // Price — "£60,000 OPENING BID" or "£60,000"
+        if (seen.has(lotNum)) continue;
+        seen.add(lotNum);
+        // Price
         let price = null;
         const priceMatch = text.match(/£([\\d,]+)/);
         if (priceMatch) price = parseInt(priceMatch[1].replace(/,/g, ''));
-        // Address — find a postcode pattern and use nearby text
+        // Address — look for Google Maps link text or postcode-containing line
         let address = '';
-        const lines = text.split('\\n').map(s => s.trim()).filter(s => s.length > 3);
-        for (const line of lines) {
-          if (line.match(/[A-Z]{1,2}\\d[A-Z\\d]?\\s*\\d[A-Z]{2}/i) && line.length < 200) {
-            address = line.replace(/Lot\\s+\\d+/i, '').replace(/£[\\d,]+[^\\n]*/g, '').trim();
-            break;
-          }
-        }
+        const mapsLink = card.querySelector('a[href*="maps.google"], a[href*="google.com/maps"]');
+        if (mapsLink) address = mapsLink.textContent.trim();
         if (!address) {
-          // Use first substantial line that isn't a price or lot number
+          const lines = text.split('\\n').map(s => s.trim()).filter(s => s.length > 3);
           for (const line of lines) {
-            if (line.length > 10 && line.length < 200 && !line.match(/^Lot\\s|^£|OPENING BID|Offer Now|Timed|Online/i)) {
-              address = line;
+            if (line.match(/[A-Z]{1,2}\\d[A-Z\\d]?\\s*\\d[A-Z]{2}/i) && line.length < 200) {
+              address = line.replace(/Lot\\s+\\d+/i, '').replace(/£[\\d,]+[^\\n]*/g, '').trim();
               break;
             }
+          }
+          if (!address) {
+            const h4 = card.querySelector('h4 a, h4, h3');
+            if (h4) address = h4.textContent.trim();
           }
         }
         if (!address || address.length < 5) continue;
         // Image
         let imageUrl = '';
-        const img = card.querySelector('img[src*="/upload/"]');
+        const img = card.querySelector('img[src*="/upload/"], img[src*="futurepropertyauctions"], img[src]');
         if (img) {
           let src = img.getAttribute('src') || '';
           if (src.startsWith('http://')) src = src.replace('http://', 'https://');
-          imageUrl = src;
+          if (src && !src.includes('logo') && !src.includes('icon') && src.length > 10) imageUrl = src;
         }
-        // Bullets — auction type
         const bullets = [];
         const typeMatch = text.match(/(Timed Online Auction|Live Auction)[^\\n]*/i);
         if (typeMatch) bullets.push(typeMatch[0].trim());
-        if (text.match(/\\bSOLD\\b|\\bSALE.?AGREED\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) {
-          if (!bullets.some(b => b.match(/SOLD|STC|WITHDRAWN|SALE AGREED/i))) bullets.push('SOLD/STC');
-        }
+        if (text.match(/\\bSOLD\\b|\\bSALE.?AGREED\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) bullets.push('SOLD/STC');
         lots.push({ lot: lotNum, address, price, url: href, bullets, imageUrl: imageUrl || undefined });
       }
       return lots;
@@ -5612,34 +5661,48 @@ const DOM_EXTRACTORS = {
     (() => {
       const lots = [];
       const seen = new Set();
-      const cards = document.querySelectorAll('a[href*="/lot/details/"]');
+      // Seel Auctions 2026: EIG platform — try multiple card selectors
+      let cards = document.querySelectorAll('.lot-panel');
+      if (cards.length === 0) cards = document.querySelectorAll('[data-lot-item-toggle]');
+      if (cards.length === 0) cards = document.querySelectorAll('a[href*="/lot/details/"]');
+      if (cards.length === 0) cards = document.querySelectorAll('.grid-item, [class*="lot-card"], [class*="property-card"]');
       for (const card of cards) {
-        const href = card.getAttribute('href') || '';
-        if (seen.has(href)) continue;
-        seen.add(href);
         const text = card.textContent || '';
         if (text.length < 10 || text.length > 3000) continue;
-        // Lot number
-        let lotNum = lots.length + 1;
-        const lotMatch = text.match(/Lot\\s+(\\d+)/i);
-        if (lotMatch) lotNum = parseInt(lotMatch[1]);
-        // Address from h4
+        const lotMatch = text.match(/Lot\\s*(\\d+)/i);
+        const num = lotMatch ? parseInt(lotMatch[1]) : lots.length + 1;
+        if (seen.has(num)) continue;
+        seen.add(num);
+        // Address
         let address = '';
-        const addrEl = card.querySelector('h4');
-        if (addrEl) address = addrEl.textContent.trim();
+        const addrEl = card.querySelector('h4.grid-address, .lot-address, [data-address-searchable], h4, h3, .address');
+        if (addrEl) address = addrEl.textContent.trim().replace(/\\u00a0/g, ' ');
+        if (!address) {
+          const lines = text.split('\\n').map(s => s.trim()).filter(s => s.length > 5 && s.length < 200);
+          for (const l of lines) {
+            if (l.match(/[A-Z]{1,2}\\d[A-Z\\d]?\\s*\\d[A-Z]{2}/i)) { address = l; break; }
+          }
+        }
         if (!address || address.length < 5) continue;
-        // Price — "Guide Price £120,000+"
+        // Price
         let price = null;
-        const priceMatch = text.match(/Guide Price[^£]*£([\\d,]+)/i) || text.match(/£([\\d,]+)/);
+        const priceMatch = text.match(/(?:Guide Price|Opening Bid)[^£]*£([\\d,]+)/i) || text.match(/£([\\d,]+)/);
         if (priceMatch) price = parseInt(priceMatch[1].replace(/,/g, ''));
+        // URL
+        let url = '';
+        const link = card.querySelector('a[href*="/lot/details/"]');
+        if (link) url = link.getAttribute('href') || '';
+        else if (card.tagName === 'A') url = card.getAttribute('href') || '';
         // Image
         let imageUrl = '';
-        const img = card.querySelector('img[src*="eigpropertyauctions"]');
-        if (img) imageUrl = img.getAttribute('src') || '';
-        // Bullets
+        const img = card.querySelector('img[src*="eigpropertyauctions"], img.grid-img, img.img-responsive, img[src]');
+        if (img) {
+          const s = img.getAttribute('src') || img.dataset.src || '';
+          if (s && !s.includes('logo') && !s.includes('icon') && s.length > 10) imageUrl = s;
+        }
         const bullets = [];
         if (text.match(/\\bSOLD\\b|\\bSALE.?AGREED\\b|\\bSTC\\b|\\bWithdrawn\\b|\\bPostponed\\b/i)) bullets.push('SOLD/STC');
-        lots.push({ lot: lotNum, address, price, url: href, bullets, imageUrl: imageUrl || undefined });
+        lots.push({ lot: num, address: address.substring(0, 200), price, url, bullets, imageUrl: imageUrl || undefined });
       }
       return lots;
     })()
