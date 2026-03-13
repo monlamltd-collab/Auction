@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-03-12T18:45:10.547Z",
+  "timestamp": "2026-03-13T05:43:24.693Z",
   "results": [
     {
       "house": "savills",
@@ -13,13 +13,13 @@
       "house": "allsop",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": 404,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": [
         {
-          "type": "URL_DEAD",
+          "type": "SITE_REDESIGNED",
           "severity": "BROKEN",
-          "detail": "HTTP 404 — page not found"
+          "detail": "Structure drift 100/100 + extractor returns 0"
         }
       ]
     },
@@ -72,6 +72,33 @@
     },
     {
       "house": "barnardmarcus",
+      "extractorLots": 20,
+      "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": 0,
+      "issues": [
+        {
+          "type": "LOW_IMAGES",
+          "severity": "WARNING",
+          "detail": "Image coverage 0% (0/20)"
+        },
+        {
+          "type": "MISSING_FROM_CACHE",
+          "severity": "WARNING",
+          "detail": "20 live lots but missing from production cache"
+        }
+      ]
+    },
+    {
+      "house": "auctionhouselondon",
+      "extractorLots": 238,
+      "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": 100,
+      "issues": []
+    },
+    {
+      "house": "auctionhouse",
       "extractorLots": 0,
       "universalLots": 0,
       "httpStatus": 200,
@@ -80,35 +107,12 @@
         {
           "type": "EXTRACTOR_BROKEN",
           "severity": "BROKEN",
-          "detail": "DOM extractor returns 0, but 20 prices on page"
-        }
-      ]
-    },
-    {
-      "house": "auctionhouselondon",
-      "extractorLots": 0,
-      "universalLots": 0,
-      "httpStatus": 404,
-      "imgCoverage": null,
-      "issues": [
+          "detail": "DOM extractor returns 0, but 758 prices on page"
+        },
         {
-          "type": "URL_DEAD",
+          "type": "SITE_REDESIGNED",
           "severity": "BROKEN",
-          "detail": "HTTP 404 — page not found"
-        }
-      ]
-    },
-    {
-      "house": "auctionhouse",
-      "extractorLots": 0,
-      "universalLots": 0,
-      "httpStatus": 404,
-      "imgCoverage": null,
-      "issues": [
-        {
-          "type": "URL_DEAD",
-          "severity": "BROKEN",
-          "detail": "HTTP 404 — page not found"
+          "detail": "Structure drift 58/100 + extractor returns 0"
         }
       ]
     },
@@ -122,15 +126,15 @@
     },
     {
       "house": "strettons",
-      "extractorLots": 0,
+      "extractorLots": 4,
       "universalLots": 0,
       "httpStatus": 200,
-      "imgCoverage": null,
+      "imgCoverage": 100,
       "issues": [
         {
-          "type": "EXTRACTOR_BROKEN",
-          "severity": "BROKEN",
-          "detail": "DOM extractor returns 0, but 5 prices on page"
+          "type": "CACHE_STALE",
+          "severity": "WARNING",
+          "detail": "Cached 80 vs live 4 (95% drift)"
         }
       ]
     },
@@ -169,17 +173,11 @@
     },
     {
       "house": "maggsandallen",
-      "extractorLots": 0,
+      "extractorLots": 19,
       "universalLots": 0,
       "httpStatus": 200,
-      "imgCoverage": null,
-      "issues": [
-        {
-          "type": "EXTRACTOR_BROKEN",
-          "severity": "BROKEN",
-          "detail": "DOM extractor returns 0, but 43 prices on page"
-        }
-      ]
+      "imgCoverage": 100,
+      "issues": []
     },
     {
       "house": "mchughandco",
@@ -218,15 +216,15 @@
     },
     {
       "house": "bidx1",
-      "extractorLots": 0,
+      "extractorLots": 259,
       "universalLots": 0,
-      "httpStatus": 404,
-      "imgCoverage": null,
+      "httpStatus": 200,
+      "imgCoverage": 16,
       "issues": [
         {
-          "type": "URL_DEAD",
-          "severity": "BROKEN",
-          "detail": "HTTP 404 — page not found"
+          "type": "LOW_IMAGES",
+          "severity": "WARNING",
+          "detail": "Image coverage 16% (41/259)"
         }
       ]
     },
@@ -298,13 +296,7 @@
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": null,
-      "issues": [
-        {
-          "type": "DOMAIN_MOVED",
-          "severity": "WARNING",
-          "detail": "Redirects to connectukgroup.co.uk"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "auctionestates",
@@ -457,15 +449,15 @@
     },
     {
       "house": "seelauctions",
-      "extractorLots": 0,
+      "extractorLots": 33,
       "universalLots": 0,
       "httpStatus": 200,
-      "imgCoverage": null,
+      "imgCoverage": 100,
       "issues": [
         {
-          "type": "EXTRACTOR_BROKEN",
-          "severity": "BROKEN",
-          "detail": "DOM extractor returns 0, but 35 prices on page"
+          "type": "MISSING_FROM_CACHE",
+          "severity": "WARNING",
+          "detail": "33 live lots but missing from production cache"
         }
       ]
     },
