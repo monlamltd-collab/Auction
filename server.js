@@ -7267,14 +7267,21 @@ async function autoAnalyseOne(url, apiKey) {
       .select('content_hash, expires_at')
       .eq('url', normalisedUrl)
       .single();
-    if (cached && cached.content_hash === contentHash && cached.expires_at && new Date(cached.expires_at) > new Date()) {
-      // Extend cache TTL since content hasn't changed
+    // Check if cache entry is too old (>3 days) — force re-analysis even if hash matches
+    // because fetchPage() does plain HTTP, not Puppeteer, so JS-rendered sites always hash the same
+    const MAX_CACHE_AGE_MS = 3 * 24 * 3600000; // 3 days
+    const cacheAge = cached?.expires_at ? Date.now() - (new Date(cached.expires_at).getTime() - getCacheTTL(house)) : Infinity;
+    const tooOld = cacheAge > MAX_CACHE_AGE_MS;
+
+    if (cached && cached.content_hash === contentHash && cached.expires_at && new Date(cached.expires_at) > new Date() && !tooOld) {
+      // Extend cache TTL since content hasn't changed and data is recent
       const newExpiry = new Date(Date.now() + getCacheTTL(house)).toISOString();
       await supabase.from('cached_analyses').update({ expires_at: newExpiry, last_scraped_at: new Date().toISOString() }).eq('url', normalisedUrl);
       hashHitCount++;
       console.log(`Cache extended — content unchanged for ${house}`);
       return;
     }
+    if (tooOld) console.log(`Cache too old for ${house} (${Math.round(cacheAge / 3600000)}h) — forcing re-analysis`);
     // Store hash for later upsert
     autoAnalyseOne._lastContentHash = contentHash;
   } catch (e) {
