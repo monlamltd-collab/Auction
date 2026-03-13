@@ -186,8 +186,8 @@ const RATE_LIMIT = 5;
 const CACHE_DAYS = 7; // fallback default
 const CACHE_TIERS = {
   high:   { houses: ['allsop','savills','sdl','network','bidx1'], ttlHours: 12 },
-  medium: { houses: ['cliveemson','edwardmellor','bondwolfe','strettons','countrywide','tcpa','futureauctions','firstforauctions','harmanhealy'], ttlHours: 24 },
-  low:    { houses: [], ttlHours: 48 }  // everything else
+  medium: { houses: ['cliveemson','edwardmellor','bondwolfe','strettons','countrywide','tcpa','futureauctions','firstforauctions','harmanhealy'], ttlHours: 18 },
+  low:    { houses: [], ttlHours: 24 }  // everything else
 };
 function getCacheTTL(houseKey) {
   if (CACHE_TIERS.high.houses.includes(houseKey)) return CACHE_TIERS.high.ttlHours * 3600000;
@@ -7269,7 +7269,7 @@ async function autoAnalyseOne(url, apiKey) {
       .single();
     // Check if cache entry is too old (>3 days) — force re-analysis even if hash matches
     // because fetchPage() does plain HTTP, not Puppeteer, so JS-rendered sites always hash the same
-    const MAX_CACHE_AGE_MS = 3 * 24 * 3600000; // 3 days
+    const MAX_CACHE_AGE_MS = 24 * 3600000; // 24 hours
     const cacheAge = cached?.expires_at ? Date.now() - (new Date(cached.expires_at).getTime() - getCacheTTL(house)) : Infinity;
     const tooOld = cacheAge > MAX_CACHE_AGE_MS;
 
