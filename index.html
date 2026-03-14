@@ -2031,7 +2031,7 @@ async function runSmartSearch(query) {
         }
         return;
       }
-      throw new Error(data.error || 'Search failed');
+      throw new Error(data.detail || data.error || 'Search failed');
     }
 
     LOTS = data.results || [];
@@ -2077,7 +2077,7 @@ async function runSmartSearch(query) {
     if(e.name==='AbortError') return; // Silently ignore aborted requests
     console.error('Analysis error:', e);
     $('progressPanel').innerHTML=`<div class="scan-animation" style="background:var(--red)">
-      <div class="scan-title">✗ Analysis failed — please try again</div>
+      <div class="scan-title">✗ ${e.message || 'Analysis failed'}</div>
       <div class="scan-label"><a href="#" onclick="backToAuctions();return false" style="color:white;text-decoration:underline">← Back to auctions</a></div>
     </div>`;
   }
