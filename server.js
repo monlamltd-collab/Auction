@@ -206,10 +206,10 @@ const MAX_AUCTIONS_PER_HOUSE = 2;
 const TIMEOUT = 25000;
 
 // ═══════════════════════════════════════════════════════════════
-// GEMINI MODEL SELECTION — Flash for known houses, Pro for unknown/PDF
+// GEMINI MODEL SELECTION — Flash-Lite for known houses, Pro for unknown/PDF
 // ═══════════════════════════════════════════════════════════════
 const MODEL_PRO   = 'gemini-2.5-pro';
-const MODEL_FLASH = 'gemini-2.0-flash';
+const MODEL_FLASH = 'gemini-2.5-flash-lite';
 
 // ── Gemini client & rate limiter (free tier: 15 RPM) ──
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
