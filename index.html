@@ -81,21 +81,41 @@ a{color:var(--green);text-decoration:none}a:hover{text-decoration:underline}
 @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
 
 /* ── SEARCH PANEL ── */
-.search-panel{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.03);position:sticky;top:56px;z-index:10}
+.search-panel{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:0;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.03);position:sticky;top:56px;z-index:10;overflow:visible}
+/* Row 1: Search bar — most prominent */
+.sp-search-row{display:flex;gap:8px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border)}
+.sp-text-search{flex:1;min-width:120px;max-width:220px}
+.sp-ai-group{display:flex;gap:0;flex:2;min-width:200px;position:relative}
+.sp-ai-group .tb-search{border-radius:var(--radius-sm) 0 0 var(--radius-sm);border-right:none;padding-left:34px}
+.sp-ai-group .btn-main{border-radius:0 var(--radius-sm) var(--radius-sm) 0;padding:8px 20px}
+.sp-ai-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:.82rem;color:var(--text4);pointer-events:none;z-index:1}
+.sp-page-info{font-size:.72rem;color:var(--text3);white-space:nowrap;margin-left:4px}
+.sp-per-page{flex-shrink:0}
+.sp-lots-dd{flex-shrink:0}
+/* Row 2: Filters — secondary, muted background */
+.sp-filter-row{display:flex;flex-wrap:wrap;gap:5px 7px;align-items:center;padding:8px 16px;background:var(--bg-primary, #f5f7fa);border-bottom:1px solid var(--border)}
+.sp-filter-row .tb-select,.sp-filter-row .tb-search{padding:5px 8px;font-size:.76rem;background:var(--white);border-color:var(--border)}
+.sp-filter-row .tb-search{min-width:70px;max-width:90px;flex:0}
+.sp-filter-row label{font-size:.76rem;color:var(--text3);display:flex;align-items:center;gap:4px;white-space:nowrap;cursor:pointer}
+.sp-filter-row label input[type="checkbox"]{width:14px;height:14px;accent-color:var(--green);cursor:pointer}
+.sp-filter-label{font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--text4);margin-right:2px;flex-shrink:0}
+/* Row 3: Quick chips */
+.chip-row{display:flex;flex-wrap:wrap;gap:5px;align-items:center;padding:8px 16px}
+.chip-row .ex-btn{font-size:.7rem;padding:3px 8px}
+.chip-row .adv-toggle{font-size:.75rem}
+.chip-sep{width:1px;height:16px;background:var(--border);margin:0 4px;flex-shrink:0}
+/* Legacy compat */
 .unified-bar{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center}
 .unified-bar .tb-select,.unified-bar .tb-search{padding:7px 10px;font-size:.8rem}
 .unified-bar .tb-search{min-width:140px;flex:1}
 .ub-sep{width:1px;height:24px;background:var(--border);margin:0 2px;flex-shrink:0}
 .price-dd{position:relative;display:inline-block}
-.price-dd-btn{padding:7px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--white);font-size:.8rem;color:var(--text);font-family:inherit;cursor:pointer;white-space:nowrap}
+.price-dd-btn{padding:5px 8px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--white);font-size:.76rem;color:var(--text);font-family:inherit;cursor:pointer;white-space:nowrap}
 .price-dd-btn.active-filter{border-color:var(--green);color:var(--green)}
 .price-pop{display:none;position:absolute;top:100%;left:0;background:var(--white);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.12);padding:12px;z-index:20;min-width:260px}
 .price-pop.open{display:flex;gap:8px}
 .price-pop select{flex:1;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:.82rem;font-family:inherit}
 .price-pop label{display:block;font-size:.7rem;font-weight:600;color:var(--text3);margin-bottom:3px;text-transform:uppercase}
-.chip-row{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:6px}
-.chip-row .ex-btn{font-size:.7rem;padding:3px 8px}
-.chip-row .adv-toggle{font-size:.75rem}
 .search-input{flex:1;padding:13px 18px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:.93rem;font-family:inherit;outline:0;transition:border-color .15s}
 .search-input:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(46,125,50,.08)}
 .search-input::placeholder{color:var(--text4)}
@@ -499,7 +519,7 @@ footer .logo-f span{color:var(--green)}
 
 /* House dropdown popover */
 .house-dropdown{position:relative;display:inline-block}
-.house-dropdown-btn{padding:8px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--white);font-size:.82rem;color:var(--text);font-family:inherit;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:4px}
+.house-dropdown-btn{padding:5px 8px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--white);font-size:.76rem;color:var(--text);font-family:inherit;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:4px}
 .house-dropdown-btn.active-filter{border-color:var(--green);color:var(--green)}
 .house-dropdown-btn::after{content:'▾';font-size:.7rem;color:var(--text3)}
 .house-popover{display:none;position:absolute;top:100%;left:0;margin-top:4px;background:var(--white);border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:0 4px 16px rgba(0,0,0,.1);z-index:100;min-width:240px;max-height:320px;overflow-y:auto}
@@ -519,6 +539,11 @@ footer .logo-f span{color:var(--green)}
   .hero h1{font-size:1.8rem}
   .unified-bar{gap:4px 6px}
   .unified-bar .tb-select,.unified-bar .tb-search{font-size:.76rem;padding:6px 8px;min-height:40px}
+  .sp-search-row{flex-wrap:wrap}
+  .sp-ai-group{min-width:160px}
+  .sp-text-search{max-width:none}
+  .sp-filter-row{gap:4px 5px}
+  .sp-filter-row .tb-select,.sp-filter-row .tb-search{font-size:.73rem;padding:5px 6px;min-height:36px}
   .stats-grid{grid-template-columns:1fr 1fr}
   .budget-row{grid-template-columns:1fr}
   .fp-row{grid-template-columns:1fr}
@@ -539,6 +564,10 @@ footer .logo-f span{color:var(--green)}
   .hero-ctas{flex-direction:column;align-items:center}
   .cta-primary,.cta-secondary{width:100%;justify-content:center}
   .unified-bar{gap:4px}
+  .sp-search-row{flex-direction:column;gap:6px}
+  .sp-text-search{max-width:none;width:100%}
+  .sp-ai-group{width:100%}
+  .sp-page-info{text-align:center;width:100%}
   .steps{grid-template-columns:1fr}
   .steps::before{display:none}
   .step{flex-direction:column;gap:12px;text-align:center;align-items:center}
@@ -552,7 +581,10 @@ footer .logo-f span{color:var(--green)}
   .hero{padding:32px 0 24px}
   .hero h1{font-size:1.5rem}
   .hero-sub{font-size:.88rem;margin-bottom:20px}
-  .search-panel{padding:18px 14px}
+  .search-panel{padding:0}
+  .sp-search-row{padding:10px 12px}
+  .sp-filter-row{padding:6px 12px}
+  .chip-row{padding:6px 12px}
   .search-input{padding:11px 14px;font-size:.88rem}
   .filters{grid-template-columns:1fr 1fr;gap:8px}
   .filter-field select,.filter-field input{padding:9px 10px;font-size:.82rem}
@@ -734,8 +766,20 @@ footer .logo-f span{color:var(--green)}
 
   <!-- ═══════ UNIFIED FILTER BAR ═══════ -->
   <div class="search-panel" id="filterBar">
-    <div class="unified-bar">
-      <input class="tb-search" type="text" id="fSearch" placeholder="Search lots..." oninput="renderLots()">
+    <!-- ROW 1: Search + AI — primary actions -->
+    <div class="sp-search-row">
+      <input class="tb-search sp-text-search" type="text" id="fSearch" placeholder="Search lots..." oninput="renderLots()">
+      <div class="sp-ai-group">
+        <span class="sp-ai-icon">✨</span>
+        <input class="tb-search" id="smartQuery" placeholder="AI search..." aria-label="AI-powered search query">
+        <button class="btn-main" id="mainBtn" onclick="handleSearch()" aria-label="Search auction lots">Search</button>
+      </div>
+      <select class="tb-select sp-per-page" id="fPerPage" onchange="savePerPage();_currentPage=1;renderLots()" aria-label="Lots per page"><option value="20">20 / page</option><option value="30">30 / page</option><option value="50" selected>50 / page</option><option value="100">100 / page</option></select>
+      <span class="sp-page-info" id="filterBarCount"></span>
+      <select class="tb-select sp-lots-dd" id="fAfford" onchange="renderLots()" style="display:none"><option value="all">All lots</option><option value="affordable">Affordable</option><option value="in_budget">In budget only</option><option value="full_finance">Zero deposit only</option></select>
+    </div>
+    <!-- ROW 2: Filters — secondary, muted background -->
+    <div class="sp-filter-row">
       <div class="house-dropdown" id="houseDropdown">
         <button class="house-dropdown-btn" id="houseDropdownBtn" onclick="toggleHousePopover(event)" aria-label="Select auction houses" aria-expanded="false" aria-haspopup="listbox">All houses</button>
         <div class="house-popover" id="housePopover">
@@ -780,18 +824,12 @@ footer .logo-f span{color:var(--green)}
       <select class="tb-select" id="fSoldTop" onchange="renderLots()" aria-label="Lot status">
         <option value="available">Available only</option><option value="all">All lots</option><option value="sold">Sold only</option>
       </select>
-      <input class="tb-search" type="text" id="fPostcode" placeholder="Postcode..." style="min-width:80px;max-width:100px;flex:0" oninput="renderLots()" aria-label="Filter by postcode">
+      <input class="tb-search" type="text" id="fPostcode" placeholder="Postcode..." oninput="renderLots()" aria-label="Filter by postcode">
       <select class="tb-select" id="fExcludePOA" onchange="renderLots()" aria-label="Include or exclude POA lots"><option value="">Inc. POA</option><option value="yes">Excl. POA</option></select>
-      <select class="tb-select" id="fLookahead" onchange="saveLookahead();renderLots()" aria-label="Auction lookahead"><option value="1" selected>Next auction</option><option value="2">Next 2 auctions</option><option value="all">All upcoming (may include duplicates)</option></select>
-      <label style="display:flex;align-items:center;gap:5px;white-space:nowrap;padding:5px 10px;cursor:pointer;font-size:.8rem;font-family:'DM Sans',sans-serif;color:var(--text2)"><input type="checkbox" id="fIncludePrevious" onchange="renderLots()" style="width:15px;height:15px;accent-color:var(--green);cursor:pointer"> Previous auctions</label>
-      <select class="tb-select" id="fPerPage" onchange="savePerPage();_currentPage=1;renderLots()" aria-label="Lots per page"><option value="20">20 / page</option><option value="30">30 / page</option><option value="50" selected>50 / page</option><option value="100">100 / page</option></select>
-      <div class="ub-sep"></div>
-      <input class="tb-search" id="smartQuery" placeholder="AI search..." style="min-width:120px" aria-label="AI-powered search query">
-      <button class="btn-main" id="mainBtn" onclick="handleSearch()" aria-label="Search auction lots">Browse</button>
-      <span class="filter-count" id="filterBarCount" style="font-size:.72rem;color:var(--text3);white-space:nowrap"></span>
-      <select class="tb-select" id="fAfford" onchange="renderLots()" style="display:none"><option value="all">All lots</option><option value="affordable">Affordable</option><option value="in_budget">In budget only</option><option value="full_finance">Zero deposit only</option></select>
-      <!-- fTS removed: title split filtering available via chip button / AI search -->
+      <select class="tb-select" id="fLookahead" onchange="saveLookahead();renderLots()" aria-label="Auction lookahead"><option value="1" selected>Next auction</option><option value="2">Next 2 auctions</option><option value="all">All upcoming</option></select>
+      <label><input type="checkbox" id="fIncludePrevious" onchange="renderLots()"> Previous</label>
     </div>
+    <!-- ROW 3: Quick filter chips + AI shortcuts -->
     <div class="chip-row">
       <button class="ex-btn" onclick="applyPreset('refurb150')">Refurb under £150k</button>
       <button class="ex-btn" onclick="applyPreset('titlesplit')">Title splits</button>
@@ -800,10 +838,10 @@ footer .logo-f span{color:var(--green)}
       <button class="ex-btn" onclick="applyPreset('under100')">Under £100k</button>
       <button class="ex-btn" onclick="applyPreset('vacant')">Vacant</button>
       <button class="ex-btn" onclick="applyPreset('reset')">Reset filters</button>
-      <span class="ub-sep"></span>
-      <button class="ex-btn" onclick="setQ('Properties needing heavy refurbishment')">AI: Heavy refurb</button>
-      <button class="ex-btn" onclick="setQ('Best scoring deals')">AI: Top picks</button>
-      <button class="ex-btn" onclick="setQ('Probate or executor sales')">AI: Probate</button>
+      <span class="chip-sep"></span>
+      <button class="ex-btn" onclick="setQ('Properties needing heavy refurbishment')">✨ Heavy refurb</button>
+      <button class="ex-btn" onclick="setQ('Best scoring deals')">✨ Top picks</button>
+      <button class="ex-btn" onclick="setQ('Probate or executor sales')">✨ Probate</button>
       <button class="ex-btn" onclick="toggleAdvanced()" id="fpToggleBtn">💰 Finance profile</button>
     </div>
     <div class="advanced" id="advancedPanel">
