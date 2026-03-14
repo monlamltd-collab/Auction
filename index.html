@@ -701,32 +701,39 @@ footer .logo-f span{color:var(--green)}
 
   <!-- ═══════ AUTH MODAL (Magic Link) ═══════ -->
   <div class="modal-bg" id="signupModal" role="dialog" aria-modal="true" aria-labelledby="authModalTitle">
-    <div class="modal">
+    <div class="modal" style="max-width:420px">
       <!-- Step 1: Email + consent -->
       <div id="authStep1">
-        <div class="modal-icon">🔓</div>
-        <h2 id="authModalTitle">Sign in to Auction Brain</h2>
-        <p>We'll email you a secure sign-in link. No payment needed.</p>
-        <input id="signupEmail" placeholder="Email address" type="email" aria-label="Email address for sign-in">
-        <div style="text-align:left;margin:10px 0 14px;font-size:.82rem;color:var(--text2)">
-          <label style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;cursor:pointer">
-            <input type="checkbox" id="consentAlerts" checked style="margin-top:3px;accent-color:var(--green)">
+        <h2 id="authModalTitle" style="font-size:1.4rem;margin-bottom:12px">Sign in to Auction Brain</h2>
+        <div style="background:var(--bg-primary, #f5f7fa);border-radius:10px;padding:12px 14px;margin-bottom:18px;text-align:left">
+          <div style="font-size:.8rem;font-weight:600;color:var(--navy);margin-bottom:6px">Your free account includes:</div>
+          <div style="display:flex;flex-direction:column;gap:4px;font-size:.78rem;color:var(--text2)">
+            <span>✓ 14-day Pro trial — unlimited AI searches</span>
+            <span>✓ 10 free AI searches per day after trial</span>
+            <span>✓ Full lot data, scores, and addresses</span>
+            <span>✓ BridgeMatch finance check on every lot</span>
+          </div>
+        </div>
+        <input id="signupEmail" placeholder="Email address" type="email" aria-label="Email address for sign-in" style="margin-bottom:12px">
+        <div id="signupError" style="color:var(--red);font-size:.82rem;margin-bottom:8px;display:none"></div>
+        <button class="btn-main" style="width:100%;padding:14px;font-size:.9rem" id="btnSendMagicLink" onclick="handleSendMagicLink()">Send Magic Link</button>
+        <div style="text-align:left;margin:14px 0 0;font-size:.75rem;color:var(--text4)">
+          <label style="display:flex;align-items:flex-start;gap:6px;margin-bottom:5px;cursor:pointer">
+            <input type="checkbox" id="consentAlerts" checked style="margin-top:2px;accent-color:var(--green);flex-shrink:0">
             <span>Send me auction alerts and feature updates</span>
           </label>
-          <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer">
-            <input type="checkbox" id="consentPartner" style="margin-top:3px;accent-color:var(--green)">
-            <span>I'd also like to hear about BridgeMatch bridging finance tools and partner offers</span>
+          <label style="display:flex;align-items:flex-start;gap:6px;cursor:pointer">
+            <input type="checkbox" id="consentPartner" style="margin-top:2px;accent-color:var(--green);flex-shrink:0">
+            <span>Hear about BridgeMatch finance tools and partner offers</span>
           </label>
         </div>
-        <div id="signupError" style="color:var(--red);font-size:.82rem;margin-bottom:8px;display:none"></div>
-        <button class="btn-main" style="width:100%" id="btnSendMagicLink" onclick="handleSendMagicLink()">Send Magic Link</button>
         <div class="modal-note">No password needed · No spam · Unsubscribe anytime</div>
       </div>
       <!-- Step 2: Check email -->
       <div id="authStep2" style="display:none">
-        <div class="modal-icon">✉️</div>
+        <div style="font-size:2.5rem;margin-bottom:12px">✉️</div>
         <h2>Check your email</h2>
-        <p>We've sent a sign-in link to <strong id="authSentEmail"></strong>. Click the link in your email to sign in.</p>
+        <p>We've sent a magic link to <strong id="authSentEmail"></strong>. Click it to sign in — no password needed.</p>
         <button class="btn-main" style="width:100%;background:var(--cream);color:var(--text2)" onclick="$('signupModal').classList.remove('show');$('authStep1').style.display='';$('authStep2').style.display='none'">Close</button>
       </div>
     </div>

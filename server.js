@@ -2180,18 +2180,17 @@ app.post('/api/smart-search', async (req, res) => {
   // Allow anonymous users (user = null)
   const user = await validateUserFromReq(req);
 
-  // ── Tier-aware AI search rate limiting ──
+  // ── Tier-aware AI search rate limiting (check only — increment on success) ──
   const searchLimit = getAISearchLimit(user);
   const searchToday = new Date().toISOString().slice(0, 10);
   let searchesUsed = 0;
+  const _searchIp = req.ip || 'unknown';
+  const _searchKey = `aisearch:${_searchIp}`;
 
   if (searchLimit !== Infinity) {
     if (user) {
-      // Registered user: track by user row
       const userSearchDate = user.ai_searches_date ? new Date(user.ai_searches_date).toISOString().slice(0, 10) : null;
-      if (userSearchDate === searchToday) {
-        searchesUsed = user.ai_searches_today || 0;
-      }
+      if (userSearchDate === searchToday) searchesUsed = user.ai_searches_today || 0;
       if (searchesUsed >= searchLimit) {
         return res.status(429).json({
           error: 'rate_limited',
@@ -2199,31 +2198,33 @@ app.post('/api/smart-search', async (req, res) => {
           searchesUsed, searchLimit,
         });
       }
-      // Increment
-      await supabase.from('users').update({
-        ai_searches_today: searchesUsed + 1,
-        ai_searches_date: searchToday,
-      }).eq('id', user.id);
-      searchesUsed += 1;
     } else {
-      // Anonymous: track by IP in rate_limits table
-      const searchIp = req.ip || 'unknown';
-      const searchKey = `aisearch:${searchIp}`;
       try {
-        const { data: sr } = await supabase.from('rate_limits').select('requests').eq('ip', searchKey).eq('date', searchToday).single();
+        const { data: sr } = await supabase.from('rate_limits').select('requests').eq('ip', _searchKey).eq('date', searchToday).single();
         searchesUsed = sr?.requests || 0;
-        if (searchesUsed >= searchLimit) {
-          return res.status(429).json({
-            error: 'rate_limited',
-            message: `You've used all ${searchLimit} free AI searches for today. Sign up for 10 per day!`,
-            searchesUsed, searchLimit, signup_prompt: true,
-          });
-        }
-        if (sr) { await supabase.from('rate_limits').update({ requests: searchesUsed + 1 }).eq('ip', searchKey).eq('date', searchToday); }
-        else { await supabase.from('rate_limits').insert({ ip: searchKey, date: searchToday, requests: 1 }); }
-        searchesUsed += 1;
-      } catch { /* rate limit check failed — allow through */ }
+      } catch { /* no row yet */ }
+      if (searchesUsed >= searchLimit) {
+        return res.status(429).json({
+          error: 'rate_limited',
+          message: `You've used all ${searchLimit} free AI searches for today. Sign up for 10 per day!`,
+          searchesUsed, searchLimit, signup_prompt: true,
+        });
+      }
     }
+  }
+
+  // Helper: increment search counter AFTER successful response
+  async function incrementSearchCounter() {
+    try {
+      if (user) {
+        await supabase.from('users').update({ ai_searches_today: searchesUsed + 1, ai_searches_date: searchToday }).eq('id', user.id);
+      } else {
+        const { data: sr } = await supabase.from('rate_limits').select('requests').eq('ip', _searchKey).eq('date', searchToday).single();
+        if (sr) { await supabase.from('rate_limits').update({ requests: (sr.requests || 0) + 1 }).eq('ip', _searchKey).eq('date', searchToday); }
+        else { await supabase.from('rate_limits').insert({ ip: _searchKey, date: searchToday, requests: 1 }); }
+      }
+      searchesUsed += 1;
+    } catch { /* non-critical */ }
   }
 
   const presetSlug = isPresetQuery(query);
@@ -2241,6 +2242,7 @@ app.post('/api/smart-search', async (req, res) => {
 
     if (presetCache && (!presetCache.stale_urls || presetCache.stale_urls.length === 0)) {
       // Fully fresh cache — return instantly
+      await incrementSearchCounter();
       return res.json({
         results: presetCache.results || [],
         report: presetCache.report || '',
@@ -2275,6 +2277,7 @@ app.post('/api/smart-search', async (req, res) => {
             results: cleanResults, sources: cleanSources,
             total_searched: cleanResults.length, stale_urls: [],
           }).eq('query_key', cacheKey);
+          await incrementSearchCounter();
           return res.json({ results: cleanResults, report: presetCache.report || '', sources: cleanSources, totalSearched: cleanResults.length, cached: true, searchesUsed, searchLimit });
         }
 
@@ -2313,6 +2316,7 @@ app.post('/api/smart-search', async (req, res) => {
             total_searched: (presetCache.total_searched || 0) - deltaLots.length + filteredDelta.length,
             stale_urls: [],
           }).eq('query_key', cacheKey);
+          await incrementSearchCounter();
           return res.json({ results: cleanResults, report: presetCache.report || '', sources: cleanSources, totalSearched: cleanResults.length, cached: true, searchesUsed, searchLimit });
         }
 
@@ -2397,6 +2401,7 @@ Only return lots that genuinely match the query.`, { maxTokens: 4000 });
 
         console.log(`Incremental preset refresh: ${presetSlug} — ${newMatches.length} new matches from ${deltaSources.map(s => s.house).join(', ')}`);
 
+        await incrementSearchCounter();
         return res.json({
           results: mergedResults,
           report: mergedReport,
@@ -2422,6 +2427,7 @@ Only return lots that genuinely match the query.`, { maxTokens: 4000 });
       .gt('expires_at', new Date().toISOString());
 
     if (!cached || cached.length === 0) {
+      await incrementSearchCounter();
       return res.json({ results: [], report: 'No cached auction data available. Please analyse some auction catalogues first.', sources: [], searchesUsed, searchLimit });
     }
 
@@ -2438,6 +2444,7 @@ Only return lots that genuinely match the query.`, { maxTokens: 4000 });
     }
 
     if (allLots.length === 0) {
+      await incrementSearchCounter();
       return res.json({ results: [], report: 'No lot data in cache. Please analyse auction catalogues first.', sources: [], searchesUsed, searchLimit });
     }
 
@@ -2545,6 +2552,7 @@ Only return lots that genuinely match the query. If nothing matches well, say so
       }, { onConflict: 'query_key' });
     }
 
+    await incrementSearchCounter();
     return res.json(response);
   } catch (err) {
     log.error('Smart search error', { error: err.message, stack: err.stack?.split('\n').slice(0, 3).join(' | ') });
