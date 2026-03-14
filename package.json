@@ -6,10 +6,11 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test": "node tests/test-extractors.js"
+    "test": "node tests/test-extractors.js",
+    "audit": "node scripts/audit.mjs"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.39.0",
+    "@google/generative-ai": "^0.24.1",
     "@sentry/node": "^8.0.0",
     "@supabase/supabase-js": "^2.45.0",
     "express": "^4.21.0",

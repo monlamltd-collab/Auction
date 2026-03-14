@@ -2,13 +2,13 @@
 
 ## Project Overview
 
-Bridgematch is a UK property auction directory and AI-powered catalogue analyser, live at [bridgematch.co.uk](https://bridgematch.co.uk). It scrapes upcoming auction catalogues from UK auction houses, uses Claude AI to extract structured lot data, scores each lot for investment potential, and presents results in a filterable frontend.
+Bridgematch is a UK property auction directory and AI-powered catalogue analyser, live at [bridgematch.co.uk](https://bridgematch.co.uk). It scrapes upcoming auction catalogues from UK auction houses, uses Google Gemini AI to extract structured lot data, scores each lot for investment potential, and presents results in a filterable frontend.
 
 **Owner:** Simon Deeming
 **Repo:** `monlamltd-collab/Auction`
 **Hosting:** Railway (Express server) — was originally Vercel but migrated
 **Domain:** bridgematch.co.uk
-**Stack:** Node.js (Express), Puppeteer, Anthropic Claude API, vanilla JS frontend
+**Stack:** Node.js (Express), Puppeteer, Google Gemini API (free tier), vanilla JS frontend
 
 ---
 
@@ -17,7 +17,7 @@ Bridgematch is a UK property auction directory and AI-powered catalogue analyser
 ```
 server.js (Express, ~131K)
 ├── GET  /api/auctions        → Returns upcoming auction dates (curated list)
-├── POST /api/analyse          → Scrapes catalogue URL, Claude extracts lots, scores them
+├── POST /api/analyse          → Scrapes catalogue URL, Gemini extracts lots, scores them
 ├── GET  /auctions             → Serves index.html (directory view)
 ├── GET  /analyse              → Serves index.html (analyser view)
 └── GET  /                     → Serves index.html
@@ -30,7 +30,7 @@ index.html (~79K)
 ```
 
 ### Key Dependencies
-- `@anthropic-ai/sdk` — Claude API for lot data extraction
+- `@google/generative-ai` — Gemini API for lot data extraction (free tier: 15 RPM, 1500 RPD)
 - `puppeteer` — Headless Chrome for scraping JS-rendered auction sites
 - `express` — HTTP server
 - `@supabase/supabase-js` — Auth (for future features)
@@ -41,16 +41,17 @@ index.html (~79K)
 
 1. User pastes an auction catalogue URL or selects an auction house
 2. Server fetches catalogue pages (direct HTTP or Puppeteer for JS-rendered sites)
-3. Each page's HTML is stripped and sent to Claude (Sonnet) with extraction instructions
-4. Claude returns structured lot data as JSON
+3. Each page's HTML is stripped and sent to Gemini (Flash for known houses, Pro for unknown/PDF) with extraction instructions
+4. Gemini returns structured lot data as JSON
 5. Server runs the **scoring engine** on each lot
 6. Results cached in memory/database per auction house
 7. Frontend displays lots with filters (price, type, score, opportunities)
 
 ### Extraction Pipeline
 - **Primary:** DOM extractors — custom per-house selectors that parse HTML directly
-- **Fallback:** Claude API extraction — when DOM extractors return 0 lots, the stripped HTML is sent to Claude with structured extraction prompts
-- **Critical gotcha:** The Claude model string must be `claude-sonnet-4-6` (NOT `claude-sonnet-4-6-20250514` with date suffix — this caused 404 errors on every API call)
+- **Fallback:** Gemini API extraction — when DOM extractors return 0 lots, the stripped HTML is sent to Gemini with structured extraction prompts
+- **Models:** `gemini-2.0-flash` for known houses (fast, free), `gemini-2.5-pro` for unknown houses and PDF extraction
+- **Rate limiting:** Built-in 4.1s gap between calls to stay under Gemini free tier 15 RPM limit
 
 ### Puppeteer & Memory
 - Puppeteer instances consume significant RAM on Railway
@@ -135,9 +136,9 @@ These are computed from lot data fields: `price`, `estGrossYield`, `opportunitie
 
 ## Known Issues & Gotchas
 
-1. **Claude API model string** — Must be `claude-sonnet-4-6` without date suffix, or all extraction calls 404
+1. **Gemini rate limits** — Free tier is 15 RPM / 1500 RPD. Built-in rate limiter handles this, but large batch runs may hit daily limits
 2. **Puppeteer memory** — Railway has limited RAM; use skip lists for houses that won't work anyway
-3. **DOM extractor failures** — When a house redesigns their site, the DOM extractor breaks and falls back to Claude API (which costs money per call)
+3. **DOM extractor failures** — When a house redesigns their site, the DOM extractor breaks and falls back to Gemini API (free, but slower due to rate limiting)
 4. **Pagination** — Each auction house has different pagination patterns; these are handled per-house in server.js
 5. **vercel.json still present** — Legacy from when this was on Vercel; now on Railway with Express. The vercel.json is vestigial
 
@@ -147,7 +148,7 @@ These are computed from lot data fields: `price`, `estGrossYield`, `opportunitie
 
 | Variable | Purpose |
 |---|---|
-| `ANTHROPIC_API_KEY` | Claude API key for lot extraction |
+| `GEMINI_API_KEY` | Google Gemini API key for lot extraction (free tier) |
 | `PORT` | Server port (Railway sets this) |
 | `SUPABASE_URL` | Supabase project URL (future auth) |
 | `SUPABASE_ANON_KEY` | Supabase anon key (future auth) |
@@ -244,7 +245,7 @@ Must check before changes:
 - HTML change detection (contentHash comparison)
 - Tiered cache TTLs (CACHE_TIERS)
 - Puppeteer skip list (PUPPETEER_SKIP)
-- Cost per scrape cycle (estimate Claude API calls before running)
+- Rate limit awareness (Gemini free tier: 15 RPM, 1500 RPD)
 
 ### Frontend Agent
 Owns: index.html, welcome.html, all CSS and client-side JS
@@ -266,16 +267,16 @@ Must check before changes:
 - Skip list: if extractor consistently returns 0, add to PUPPETEER_SKIP
 - Image URL extraction: at least one image URL per lot where available
 - Lot deduplication: no duplicate lot numbers in output
-- Fallback awareness: broken DOM extractor = Claude API fallback = costs money
+- Fallback awareness: broken DOM extractor = Gemini API fallback (free but rate-limited)
 
 ### AI Extraction Agent
-Owns: extractWithClaude(), batch logic, prompt templates
+Owns: extractLotsWithAI(), callGemini(), batch logic, prompt templates
 Must check before changes:
 - Batch size: keep batches to ≤ 3 pages or ≤ 21000 chars
-- Model: use claude-haiku-4-5-20251001 for extraction (cheapest capable model)
-- Credit guard: check creditExhausted flag before every batch
+- Model: use gemini-2.0-flash for known houses, gemini-2.5-pro for unknown/PDF
+- Rate limit guard: check creditExhausted flag before every batch (triggers on 429 / quota errors)
 - Structured output: validate response has expected lot fields before caching
-- Cost estimate: log expected token usage before large extraction runs
+- Rate limiting: callGemini() enforces 4.1s gap between calls (15 RPM safe margin)
 
 ### Property Data Manager Agent
 Owns: enrichLots(), Land Registry calls, VOA calls, scoring logic
@@ -289,7 +290,7 @@ Must check before changes:
 ### DI Manager (coordination)
 Reviews output of all other agents. Produces weekly quality report covering:
 - Houses with 0 lots (extractor broken)
-- Houses where Claude API fallback triggered > 3 times consecutively
+- Houses where Gemini API fallback triggered > 3 times consecutively
 - Image coverage rate (target > 70%)
 - Cache hit rate (target > 60%)
-- Estimated weekly API cost vs $5 target
+- Gemini API daily request count vs 1500 RPD free tier limit

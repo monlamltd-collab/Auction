@@ -6,6 +6,9 @@ node_modules/
 # Claude Code / internal
 .claude/
 
+# Audit script persistent state (auto-generated)
+scripts/audit/*.json
+
 # Internal docs (not production)
 AGENT_ORGANISATION_COMPLETE.md
 LAUNCH-BRAINSTORM.md

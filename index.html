@@ -285,6 +285,10 @@ a{color:var(--green);text-decoration:none}a:hover{text-decoration:underline}
 .paywall-features li::before{content:'✓ ';color:var(--accent);font-weight:700}
 .paywall-free-note{font-size:.78rem;color:var(--text3);background:#f5f7fa;border-radius:8px;padding:8px 12px;margin-top:10px}
 .pro-badge{display:inline-block;background:var(--accent);color:white;font-size:.65rem;font-weight:700;padding:2px 7px;border-radius:10px;margin-left:6px;vertical-align:middle;letter-spacing:.5px}
+.pro-badge.trial-badge{background:var(--accent-warn, #e67e22)}
+.trial-banner{position:fixed;top:0;left:0;right:0;z-index:9999;background:linear-gradient(90deg,#e67e22,#f39c12);color:white;text-align:center;padding:8px 16px;font-size:.82rem;font-weight:600;display:flex;align-items:center;justify-content:center;gap:12px}
+.trial-banner button{background:white;color:#e67e22;border:none;border-radius:6px;padding:4px 14px;font-weight:700;font-size:.78rem;cursor:pointer}
+.search-counter{font-size:.78rem;color:var(--text3);margin-top:6px;text-align:center}
 .scan-counter{font-size:.78rem;color:var(--text3);margin-top:8px}
 .modal input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:13px 16px;color:var(--text);font-size:.9rem;outline:0;margin-bottom:10px;font-family:inherit}
 .modal input:focus{border-color:var(--green)}
@@ -700,29 +704,23 @@ footer .logo-f span{color:var(--green)}
   <div class="modal-bg" id="paywallModal">
     <div class="modal" style="max-width:500px">
       <div class="modal-icon">⚡</div>
-      <h2>Unlock AI Analysis</h2>
-      <p id="paywallReason">You've used your 3 free AI scans. Upgrade to keep analysing catalogues.</p>
+      <h2>Upgrade to Pro</h2>
+      <p id="paywallReason">You've used your free AI searches for today. Go Pro for unlimited.</p>
       <div class="paywall-cards">
-        <div class="paywall-card" onclick="startCheckout('day_pass')">
-          <div class="plan-name">Day Pass</div>
-          <div class="price">£1.99</div>
-          <div class="period">one-time · 24hr access</div>
-          <div class="plan-desc">Perfect for auction day</div>
-        </div>
         <div class="paywall-card popular" onclick="startCheckout('monthly')">
-          <div class="plan-name">Monthly Pro</div>
+          <div class="plan-name">Pro</div>
           <div class="price">£9.99</div>
           <div class="period">per month · cancel anytime</div>
-          <div class="plan-desc">Unlimited AI analysis</div>
+          <div class="plan-desc">Unlimited AI searches, every day</div>
         </div>
       </div>
       <ul class="paywall-features">
+        <li>Unlimited AI searches across all catalogues</li>
         <li>AI scores, opportunities & risks for every lot</li>
-        <li>Unlimited catalogue scans</li>
-        <li>Full deal analysis & expanded cards</li>
-        <li>Download CSV/JSON exports</li>
+        <li>CSV/JSON export of results</li>
+        <li>Portfolio tracking (coming soon)</li>
       </ul>
-      <div class="paywall-free-note">BridgeMatch finance matching is always free — it's our gift to fellow investors.</div>
+      <div class="paywall-free-note">Free users get 10 AI searches per day. BridgeMatch finance matching is always free.</div>
       <button onclick="$('paywallModal').classList.remove('show')" style="margin-top:12px;background:none;border:none;color:var(--text3);cursor:pointer;font-size:.85rem;width:100%">Maybe later</button>
     </div>
   </div>
@@ -1025,6 +1023,7 @@ function resetSearchState(){
   const _rp=$('resultsPanel'); if(_rp) _rp.style.display='none';
   const _lb=$('logBox'); if(_lb) _lb.innerHTML='';
   const _mb=$('mainBtn'); if(_mb) _mb.disabled=true;
+  const _sc=document.querySelector('.search-counter'); if(_sc) _sc.remove();
 }
 
 // Price popover toggle
@@ -1682,7 +1681,22 @@ async function updateProStatus() {
     // Remove old badge if present
     const oldBadge = document.querySelector('.pro-badge');
     if (oldBadge) oldBadge.remove();
-    if (data.tier === 'premium') {
+    if (data.trial) {
+      // Trial state — show orange TRIAL badge with days remaining
+      emailEl.insertAdjacentHTML('afterend', '<span class="pro-badge trial-badge">TRIAL · ' + data.trialDaysLeft + 'd</span>');
+      $('acctTier').textContent = 'Pro Trial';
+      $('acctTier').classList.add('pro');
+      if ($('acctManage')) $('acctManage').style.display = 'none';
+      // Show countdown banner when <= 5 days left
+      if (data.trialDaysLeft <= 5) {
+        const existingBanner = document.querySelector('.trial-banner');
+        if (existingBanner) existingBanner.remove();
+        const banner = document.createElement('div');
+        banner.className = 'trial-banner';
+        banner.innerHTML = '<span>Your Pro trial ends in ' + data.trialDaysLeft + ' day' + (data.trialDaysLeft !== 1 ? 's' : '') + '</span> <button onclick="showPaywall(\'Keep unlimited AI searches — upgrade now!\');this.parentElement.remove()">Upgrade to Pro</button>';
+        document.body.prepend(banner);
+      }
+    } else if (data.tier === 'premium') {
       emailEl.insertAdjacentHTML('afterend', '<span class="pro-badge">PRO</span>');
       $('acctTier').textContent = 'Pro';
       $('acctTier').classList.add('pro');
@@ -1692,10 +1706,12 @@ async function updateProStatus() {
       $('acctTier').classList.remove('pro');
       if ($('acctManage')) $('acctManage').style.display = 'none';
     }
-    // Store for scan counter display
+    // Store for search counter display
     window._userTier = data.tier;
     window._scansUsed = data.scansUsed;
     window._scanLimit = data.scanLimit;
+    window._aiSearchesUsed = data.aiSearchesUsed || 0;
+    window._aiSearchLimit = data.aiSearchLimit;
   } catch {}
 }
 
@@ -1899,8 +1915,6 @@ async function runAnalysis(url){
 // SMART SEARCH
 // ═══════════════════════════════
 async function runSmartSearch(query) {
-  if (!requireSignup()) return;
-
   // Clean slate — abort previous, clear all state, reset filters
   resetSearchState();
   _searchAbort=new AbortController();
@@ -1950,11 +1964,26 @@ async function runSmartSearch(query) {
     });
     const data = await resp.json();
     if (!resp.ok) {
-      if (data.error === 'signup_required') { requireSignup(); throw new Error('Please sign up first'); }
-      if (data.error === 'premium_required') {
+      if (data.error === 'rate_limited') {
         const _pp=$('progressPanel'); if(_pp) _pp.style.display='none';
-        showPaywall('Custom AI search requires a Pro subscription.');
         const _sb=$('mainBtn'); if(_sb){_sb.disabled=false;_sb.textContent='Search';}
+        if (data.signup_prompt) {
+          // Anonymous user hit limit — prompt signup
+          $('signupModal').classList.add('show');
+          $('authStep1').style.display = '';
+          $('authStep2').style.display = 'none';
+          $('signupError').style.display = 'none';
+          $('signupError').textContent = '';
+          $('signupEmail').value = '';
+          $('signupEmail').focus();
+          // Show a helpful message above the form
+          const errEl = $('signupError');
+          errEl.textContent = 'Sign up for 10 free AI searches per day + a 14-day Pro trial!';
+          errEl.style.display = '';
+          errEl.style.color = 'var(--accent)';
+        } else {
+          showPaywall(data.message || 'Daily AI search limit reached. Upgrade to Pro for unlimited.');
+        }
         return;
       }
       throw new Error(data.error || 'Search failed');
@@ -1992,6 +2021,13 @@ async function runSmartSearch(query) {
       <div class="stat-card"><div class="v g">${LOTS.filter(l=>(l.score||0)>=3).length}</div><div class="l">Score 3+</div></div>
       <div class="stat-card"><div class="v p">${LOTS.filter(l=>l.vacant).length}</div><div class="l">Vacant</div></div>
       <div class="stat-card"><div class="v y">${data.sources?.length||0}</div><div class="l">Catalogues</div></div>`;
+    // Show AI search counter
+    if (data.searchLimit && data.searchLimit !== 'unlimited') {
+      const remaining = Math.max(0, data.searchLimit - (data.searchesUsed || 0));
+      $('statsRow').insertAdjacentHTML('afterend', '<div class="search-counter">' + remaining + ' AI search' + (remaining !== 1 ? 'es' : '') + ' left today</div>');
+    }
+    // Update stored counters
+    if (data.searchesUsed != null) window._aiSearchesUsed = data.searchesUsed;
   } catch (e) {
     if(e.name==='AbortError') return; // Silently ignore aborted requests
     console.error('Analysis error:', e);
@@ -2326,12 +2362,11 @@ function card(l){
   const catLabel = 'Lot ' + esc(l.lot || '—') + ' · ' + esc(l.dealType || 'Standard');
 
   // Card footer links
-  const viewLink = (l.url && !l.blurred) ? '<a href="' + safeHref(l.url) + '" target="_blank" rel="noopener noreferrer" class="card-view-link" onclick="event.stopPropagation()">View listing ↗</a>' : '<span></span>';
+  const viewLink = l.url ? '<a href="' + safeHref(l.url) + '" target="_blank" rel="noopener noreferrer" class="card-view-link" onclick="event.stopPropagation()">View listing ↗</a>' : '<span></span>';
   const bmBtn = l.price ? '<button class="card-bm-btn" onclick="bridgeMatchLot(' + l._idx + ',event)">🧩 BridgeMatch It</button>' : '';
 
-  const blurClass = l.blurred ? ' blurred' : '';
   const endedClass = (l._auctionDate && l._auctionDate < new Date().toISOString().slice(0,10)) ? ' card-ended' : '';
-  return '<div class="lot-card' + blurClass + endedClass + '" id="lot-' + l._idx + '" tabindex="0" role="article" aria-label="Lot ' + esc(l.lot || '') + ' — ' + esc(l.address || 'Address not available') + '" onclick="' + (l.blurred ? 'showPaywall()' : 'expandCard(LOTS[' + l._idx + '])') + '" onkeydown="if(event.key===\'Enter\'){this.click()}">' +
+  return '<div class="lot-card' + endedClass + '" id="lot-' + l._idx + '" tabindex="0" role="article" aria-label="Lot ' + esc(l.lot || '') + ' — ' + esc(l.address || 'Address not available') + '" onclick="expandCard(LOTS[' + l._idx + '])" onkeydown="if(event.key===\'Enter\'){this.click()}">' +
     getCardImageHtml(l) +
     '<div class="card-body">' +
       '<div class="card-row1"><span class="card-lot-info">' + catLabel + '</span><span class="card-price">' + esc(priceText) + '</span></div>' +
@@ -2480,8 +2515,6 @@ function getSignalChips(lot) {
 }
 
 function expandCard(lot) {
-  if (lot.blurred) { showPaywall(); return; }
-
   // Close any existing expanded panel
   const existing = document.querySelector('.expanded-panel');
   if (existing) existing.remove();
@@ -2594,33 +2627,6 @@ function bridgeMatchLot(idx, event) {
   if (event) { event.preventDefault(); event.stopPropagation(); }
   const lot = LOTS.find(l => l._idx === idx);
   if (!lot) return;
-
-  if (lot.blurred) {
-    // For blurred lots: show finance-only panel (no AI data, no address, no listing link)
-    const existing = document.getElementById('finance-mini-' + idx);
-    if (existing) { existing.remove(); return; }
-    const cardEl = document.getElementById('lot-' + idx);
-    if (!cardEl) return;
-    const panel = document.createElement('div');
-    panel.id = 'finance-mini-' + idx;
-    panel.className = 'expanded-panel';
-    panel.innerHTML =
-      '<div class="finance-widget" id="finance-widget-' + idx + '" style="width:100%">' +
-        '<div class="fw-header"><div class="fw-title">🧩 Finance Check</div><span class="fw-powered">Powered by BridgeMatch</span></div>' +
-        '<div class="fw-prefilled">' +
-          '<div class="fw-field"><div class="fw-field-label">PURCHASE PRICE</div><div class="fw-field-value">' + (lot.price ? '\u00a3' + lot.price.toLocaleString() : 'TBA') + '</div></div>' +
-          '<div class="fw-field"><div class="fw-field-label">PROPERTY TYPE</div><div class="fw-field-value">' + esc(lot.propType || 'Residential') + '</div></div>' +
-        '</div>' +
-        '<div class="fw-slider-row"><span class="fw-slider-label">Loan to Value</span><span class="fw-slider-value" id="ltv-val-' + idx + '">70%</span></div>' +
-        '<input type="range" class="fw-range" id="ltv-slider-' + idx + '" min="50" max="80" step="5" value="70" oninput="updateLTV(' + idx + ',this.value)">' +
-        '<div id="fw-results-' + idx + '" class="fw-empty">Adjust LTV and tap Check</div>' +
-        '<button class="fw-cta" onclick="triggerFinanceCheck(' + idx + ')">Check finance →</button>' +
-        '<div style="text-align:center;margin-top:8px;font-size:.78rem;color:var(--text3)">Upgrade to see full address, AI analysis, and auction house listing</div>' +
-      '</div>';
-    cardEl.after(panel);
-    setTimeout(() => { panel.scrollIntoView({ behavior: 'smooth', block: 'center' }); triggerFinanceCheck(idx); }, 200);
-    return;
-  }
 
   const isExpanded = expandedLotId === idx;
   if (!isExpanded) {

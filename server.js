@@ -13,7 +13,7 @@ import express from 'express';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { randomBytes, timingSafeEqual, createHash } from 'crypto';
-import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createClient } from '@supabase/supabase-js';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { readFileSync } from 'fs';
@@ -206,10 +206,42 @@ const MAX_AUCTIONS_PER_HOUSE = 2;
 const TIMEOUT = 25000;
 
 // ═══════════════════════════════════════════════════════════════
-// CLAUDE MODEL SELECTION — Haiku for known houses, Sonnet for unknown/PDF
+// GEMINI MODEL SELECTION — Flash for known houses, Pro for unknown/PDF
 // ═══════════════════════════════════════════════════════════════
-const MODEL_SONNET = 'claude-sonnet-4-6';
-const MODEL_HAIKU  = 'claude-haiku-4-5-20251001';
+const MODEL_PRO   = 'gemini-2.5-pro';
+const MODEL_FLASH = 'gemini-2.0-flash';
+
+// ── Gemini client & rate limiter (free tier: 15 RPM) ──
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+let geminiLastCall = 0;
+async function geminiRateLimited(fn) {
+  const now = Date.now();
+  const earliest = geminiLastCall + 4100;
+  const wait = Math.max(0, earliest - now);
+  geminiLastCall = now + wait; // claim this slot immediately to prevent concurrent overlap
+  if (wait > 0) await new Promise(r => setTimeout(r, wait));
+  return fn();
+}
+
+async function callGemini(prompt, { model = MODEL_FLASH, maxTokens = 8000, systemPrompt = null, pdfBase64 = null } = {}) {
+  const config = { maxOutputTokens: maxTokens };
+  const modelOpts = { model };
+  if (systemPrompt) modelOpts.systemInstruction = systemPrompt;
+  const m = genAI.getGenerativeModel(modelOpts);
+  const parts = [];
+  if (pdfBase64) {
+    parts.push({ inlineData: { mimeType: 'application/pdf', data: pdfBase64 } });
+  }
+  parts.push({ text: prompt });
+
+  const result = await geminiRateLimited(() =>
+    m.generateContent({
+      contents: [{ role: 'user', parts }],
+      generationConfig: config,
+    })
+  );
+  return result.response.text();
+}
 
 // One-line structural hints for known houses — injected into Haiku prompts
 // to compensate for smaller model capacity. Each describes the HTML/JSON shape.
@@ -258,7 +290,7 @@ const HOUSE_EXTRACTION_HINTS = {
 };
 
 function getExtractionModel(house) {
-  return house === 'unknown' ? MODEL_SONNET : MODEL_HAIKU;
+  return house === 'unknown' ? MODEL_PRO : MODEL_FLASH;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -476,13 +508,11 @@ app.post('/api/stripe/checkout', async (req, res) => {
   if (!user) return res.status(401).json({ error: 'Authentication required' });
 
   const { product } = req.body || {};
-  if (!['day_pass', 'monthly'].includes(product)) {
-    return res.status(400).json({ error: 'Invalid product. Use "day_pass" or "monthly".' });
+  if (product !== 'monthly') {
+    return res.status(400).json({ error: 'Invalid product. Use "monthly".' });
   }
 
-  const priceId = product === 'day_pass'
-    ? process.env.STRIPE_DAY_PASS_PRICE_ID
-    : process.env.STRIPE_MONTHLY_PRICE_ID;
+  const priceId = process.env.STRIPE_MONTHLY_PRICE_ID;
   if (!priceId) return res.status(503).json({ error: 'Price not configured' });
 
   try {
@@ -546,7 +576,7 @@ app.post('/api/stripe/webhook', async (req, res) => {
         });
 
         if (product === 'day_pass') {
-          // Day pass: premium for 24 hours
+          // Legacy day_pass — no longer sold, but handle existing sessions gracefully
           await supabase.from('users').update({
             tier: 'premium',
             tier_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
@@ -635,12 +665,24 @@ app.get('/api/stripe/status', async (req, res) => {
   const user = await validateUserFromReq(req);
   if (!user) return res.status(401).json({ error: 'Authentication required' });
 
+  const isTrial = !!(user.trial_expires_at && new Date(user.trial_expires_at) > new Date() && !user.stripe_subscription_id);
+  const trialDaysLeft = isTrial ? Math.max(0, Math.ceil((new Date(user.trial_expires_at) - new Date()) / (24 * 60 * 60 * 1000))) : 0;
+  const searchDate = user.ai_searches_date ? new Date(user.ai_searches_date).toISOString().slice(0, 10) : null;
+  const today = new Date().toISOString().slice(0, 10);
+  const aiSearchesUsed = searchDate === today ? (user.ai_searches_today || 0) : 0;
+  const aiSearchLimit = getAISearchLimit(user);
+
   res.json({
     tier: user.tier || 'free',
     scansUsed: user.analyses_count || 0,
     scanLimit: FREE_SCAN_LIMIT,
     tierExpiresAt: user.tier_expires_at || null,
     hasSubscription: !!user.stripe_subscription_id,
+    trial: isTrial,
+    trialExpiresAt: isTrial ? user.trial_expires_at : null,
+    trialDaysLeft,
+    aiSearchesUsed,
+    aiSearchLimit: aiSearchLimit === Infinity ? 'unlimited' : aiSearchLimit,
   });
 });
 
@@ -755,13 +797,14 @@ async function sendWelcomeEmail(email, name) {
       </div>
       <div style="background:#ffffff;padding:32px 24px;border:1px solid #e4dfd6;border-top:none;border-radius:0 0 12px 12px">
         <h1 style="font-size:20px;margin:0 0 16px;color:#1a2332">Welcome, ${firstName}!</h1>
-        <p style="line-height:1.7;color:#5c564d;margin:0 0 16px">You're in. Here's what you can do right now:</p>
+        <p style="line-height:1.7;color:#5c564d;margin:0 0 16px">You're in — and you've got <strong>14 days of Pro access</strong> on us. Here's what you can do:</p>
         <ul style="line-height:1.8;color:#5c564d;margin:0 0 20px;padding-left:20px">
+          <li><strong>Unlimited AI searches</strong> — natural language search across every catalogue</li>
           <li><strong>Browse 2,000+ auction lots</strong> — every major UK auction house in one place</li>
+          <li><strong>AI investment scores</strong> — opportunity/risk flags on every lot</li>
           <li><strong>BridgeMatch finance check</strong> — see which of 68 bridging lenders would fund any lot</li>
-          <li><strong>Filter by score, yield, price, type</strong> — find deals that match your criteria</li>
         </ul>
-        <p style="line-height:1.7;color:#5c564d;margin:0 0 20px">Want the full picture? <strong>AI investment scores</strong>, opportunity/risk flags, and full addresses are available with a Day Pass (£1.99 for 24 hours) or Pro (£9.99/month).</p>
+        <p style="line-height:1.7;color:#5c564d;margin:0 0 20px">After your trial, you'll still get 10 free AI searches per day. Upgrade to Pro (£9.99/month) for unlimited.</p>
         <div style="text-align:center;margin:24px 0">
           <a href="https://auctions.bridgematch.co.uk/" style="display:inline-block;background:#2e7d32;color:#fff;font-weight:700;font-size:15px;padding:14px 32px;border-radius:10px;text-decoration:none">Browse Auction Deals →</a>
         </div>
@@ -805,7 +848,7 @@ async function validateUserFromReq(req) {
       // Look up by supabase_auth_id first
       const { data: byAuthId } = await supabase
         .from('users')
-        .select('id, email, name, tier, analyses_count, stripe_customer_id, tier_expires_at, stripe_subscription_id')
+        .select('id, email, name, tier, analyses_count, stripe_customer_id, tier_expires_at, stripe_subscription_id, trial_started_at, trial_expires_at, trial_used, ai_searches_today, ai_searches_date')
         .eq('supabase_auth_id', authId)
         .single();
       if (byAuthId) {
@@ -820,7 +863,7 @@ async function validateUserFromReq(req) {
       if (email) {
         const { data: byEmail } = await supabase
           .from('users')
-          .select('id, email, name, tier, analyses_count, stripe_customer_id, tier_expires_at, stripe_subscription_id')
+          .select('id, email, name, tier, analyses_count, stripe_customer_id, tier_expires_at, stripe_subscription_id, trial_started_at, trial_expires_at, trial_used, ai_searches_today, ai_searches_date')
           .eq('email', email.toLowerCase().trim())
           .single();
         if (byEmail) {
@@ -835,11 +878,21 @@ async function validateUserFromReq(req) {
         }
       }
 
-      // Auto-create new user
+      // Auto-create new user with 14-day Pro trial
+      const trialStart = new Date();
+      const trialEnd = new Date(trialStart.getTime() + 14 * 24 * 60 * 60 * 1000);
       const { data: newUser, error: insertErr } = await supabase
         .from('users')
-        .insert({ email: (email || '').toLowerCase().trim(), supabase_auth_id: authId })
-        .select('id, email, name, tier, analyses_count, stripe_customer_id, tier_expires_at, stripe_subscription_id')
+        .insert({
+          email: (email || '').toLowerCase().trim(),
+          supabase_auth_id: authId,
+          tier: 'premium',
+          tier_expires_at: trialEnd.toISOString(),
+          trial_started_at: trialStart.toISOString(),
+          trial_expires_at: trialEnd.toISOString(),
+          trial_used: true,
+        })
+        .select('id, email, name, tier, analyses_count, stripe_customer_id, tier_expires_at, stripe_subscription_id, trial_started_at, trial_expires_at, trial_used, ai_searches_today, ai_searches_date')
         .single();
       if (!insertErr && newUser) {
         sendWelcomeEmail(newUser.email, newUser.name).catch(() => {});
@@ -852,7 +905,7 @@ async function validateUserFromReq(req) {
     try {
       const { data } = await supabase
         .from('users')
-        .select('id, email, name, tier, analyses_count, stripe_customer_id, tier_expires_at, stripe_subscription_id')
+        .select('id, email, name, tier, analyses_count, stripe_customer_id, tier_expires_at, stripe_subscription_id, trial_started_at, trial_expires_at, trial_used, ai_searches_today, ai_searches_date')
         .eq('session_token', token)
         .single();
       if (data) return data;
@@ -865,6 +918,18 @@ async function validateUserFromReq(req) {
 const FREE_SCAN_LIMIT = 3;
 
 const FREE_PREVIEW_LOTS = 6; // Show full AI data on first N lots even for free users over limit
+
+// ── AI Search tier limits ──
+const ANON_AI_SEARCH_LIMIT = 3;   // Anonymous users: 3 AI searches/day by IP
+const FREE_AI_SEARCH_LIMIT = 10;  // Free registered users: 10 AI searches/day
+
+function getAISearchLimit(user) {
+  if (!user) return ANON_AI_SEARCH_LIMIT;
+  const tier = user.tier || 'free';
+  if (tier === 'premium') return Infinity;
+  if (user.trial_expires_at && new Date(user.trial_expires_at) > new Date()) return Infinity;
+  return FREE_AI_SEARCH_LIMIT;
+}
 
 function truncateAddress(address) {
   if (!address) return 'Address available with upgrade';
@@ -1521,13 +1586,7 @@ app.post('/api/admin/discover-catalogues', async (req, res) => {
       const hrefMatches = [...html.matchAll(/href="([^"]*(?:auction|lot|catalogue|sale|property)[^"]*)"/gi)];
       const hrefs = [...new Set(hrefMatches.map(m => m[1]))].slice(0, 50);
 
-      const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-      const aiResp = await client.messages.create({
-        model: MODEL_HAIKU,
-        max_tokens: 2000,
-        messages: [{
-          role: 'user',
-          content: `You are analysing an auction house's listing page to find links to upcoming/current auction catalogues.
+      const aiText = await callGemini(`You are analysing an auction house's listing page to find links to upcoming/current auction catalogues.
 
 House: ${HOUSE_DISPLAY_NAMES[slug] || slug}
 Root URL: ${rootUrl}
@@ -1545,17 +1604,15 @@ Extract ALL auction catalogue links you can find. For each, provide:
 - catalogueReady: true if the catalogue appears to have lots listed, false if "coming soon"
 
 Return ONLY valid JSON: {"catalogues": [{"url": "...", "title": "...", "date": "...", "catalogueReady": true}]}
-If no catalogues found, return {"catalogues": []}`
-        }]
-      });
+If no catalogues found, return {"catalogues": []}`, { maxTokens: 2000 });
 
       let catalogues = [];
       try {
-        let text = aiResp.content[0].text.trim();
+        let text = aiText.trim();
         if (text.startsWith('```')) text = text.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
         catalogues = JSON.parse(text).catalogues || [];
       } catch (e) {
-        results.push({ house: slug, error: 'AI returned invalid JSON', raw: aiResp.content[0].text.substring(0, 200) });
+        results.push({ house: slug, error: 'AI returned invalid JSON', raw: aiText.substring(0, 200) });
         continue;
       }
 
@@ -1588,10 +1645,9 @@ app.post('/api/analyse', async (req, res) => {
   const user = await validateUserFromReq(req);
   if (!user) return res.status(401).json({ error: 'signup_required', message: 'Please sign up to use the analyser' });
 
-  // ── Free tier scan gating ──
+  // ── Tier info (blurring removed — all data visible) ──
   const userTier = user.tier || 'free';
   const scanCount = user.analyses_count || 0;
-  const isFreeLimited = (userTier === 'free' && scanCount >= FREE_SCAN_LIMIT);
 
   // ── Rate limiting (admin bypass with ADMIN_SECRET header) ──
   const isAdmin = process.env.ADMIN_SECRET && safeCompare(req.headers['x-admin-secret'], process.env.ADMIN_SECRET);
@@ -1648,9 +1704,9 @@ app.post('/api/analyse', async (req, res) => {
       avgYield: cached.avg_yield || null,
       devPotential: cached.dev_potential || 0,
       vacantCount: cached.vacant_count || 0,
-      lots: isFreeLimited ? stripAIFields(cached.lots) : cached.lots,
+      lots: cached.lots,
       cached: true,
-      blurred: isFreeLimited,
+      blurred: false,
       scansUsed: scanCount,
       scanLimit: FREE_SCAN_LIMIT,
     });
@@ -1660,8 +1716,7 @@ app.post('/api/analyse', async (req, res) => {
   // For cached responses, the count was bumped but that's acceptable (prevents cache-probe abuse)
 
   // ── Fresh analysis — stream progress via SSE ──
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: 'API key not configured' });
+  if (!process.env.GEMINI_API_KEY) return res.status(500).json({ error: 'API key not configured' });
 
   // Set up SSE stream
   res.writeHead(200, {
@@ -1698,7 +1753,6 @@ app.post('/api/analyse', async (req, res) => {
     }
 
     let pages;
-    const client = new Anthropic({ apiKey });
     let rawLots = [];
 
     sseWrite(res, 'phase', { step: 'scraping' });
@@ -1707,17 +1761,17 @@ app.post('/api/analyse', async (req, res) => {
       sseWrite(res, 'extract', { batch, totalBatches, lotsFound });
     };
 
-    // ── PDF catalogues — send directly to Claude ──
+    // ── PDF catalogues — send directly to Gemini ──
     if (isPdfUrl(url)) {
       log.info('pdf_detected', { url, house });
-      rawLots = await extractLotsFromPdf(client, url);
+      rawLots = await extractLotsFromPdf(url);
     } else if (rewritten.paginateAs === 'allsop_api') {
       // Allsop API: paginate through JSON endpoint
       pages = await scrapeAllsopApi(rewritten.baseUrl);
       sseWrite(res, 'scrape', { pages: pages.length });
       if (pages.length > 0) {
         sseWrite(res, 'phase', { step: 'extracting' });
-        rawLots = await extractLotsWithClaude(client, pages, house, onExtract, scrapeUrl);
+        rawLots = await extractLotsWithAI(pages, house, onExtract, scrapeUrl);
         enrichAllsopLots(rawLots, pages);
       }
     } else if (rewritten.preferPuppeteer) {
@@ -1953,7 +2007,7 @@ app.post('/api/analyse', async (req, res) => {
             console.log(`Puppeteer: got ${html.length} chars, sending to Claude...`);
             const puppeteerPages = [{ page: 1, html }];
             sseWrite(res, 'phase', { step: 'extracting' });
-            rawLots = await extractLotsWithClaude(client, puppeteerPages, house, onExtract, scrapeUrl);
+            rawLots = await extractLotsWithAI(puppeteerPages, house, onExtract, scrapeUrl);
             console.log(`Claude extracted ${rawLots.length} lots from Puppeteer content`);
           }
         }
@@ -1966,7 +2020,7 @@ app.post('/api/analyse', async (req, res) => {
       sseWrite(res, 'scrape', { pages: pages ? pages.length : 0 });
       if (pages && pages.length > 0) {
         sseWrite(res, 'phase', { step: 'extracting' });
-        rawLots = await extractLotsWithClaude(client, pages, house, onExtract, scrapeUrl);
+        rawLots = await extractLotsWithAI(pages, house, onExtract, scrapeUrl);
       }
       // Puppeteer fallback if static scraping found nothing
       // Skip for houses where Puppeteer wastes memory (blocked, empty, or JS-only)
@@ -1977,7 +2031,7 @@ app.post('/api/analyse', async (req, res) => {
         if (puppeteerPages.length > 0) {
           console.log(`Puppeteer got ${puppeteerPages.length} page(s), sending to Claude...`);
           sseWrite(res, 'phase', { step: 'extracting' });
-          rawLots = await extractLotsWithClaude(client, puppeteerPages, house, onExtract, scrapeUrl);
+          rawLots = await extractLotsWithAI(puppeteerPages, house, onExtract, scrapeUrl);
           console.log(`Claude extracted ${rawLots.length} lots from Puppeteer content`);
         }
       }
@@ -2069,7 +2123,6 @@ app.post('/api/analyse', async (req, res) => {
     logActivityEvent('analysis', { house: displayName, url: normalisedUrl, lots_found: analysed.length }, user?.email, getClientIP(req));
 
     const updatedScanCount = (user.analyses_count || 0) + 1;
-    const nowFreeLimited = (userTier === 'free' && updatedScanCount >= FREE_SCAN_LIMIT);
 
     sseWrite(res, 'done', {
       house: displayName,
@@ -2082,9 +2135,9 @@ app.post('/api/analyse', async (req, res) => {
       avgYield: yieldsArr.length ? +(yieldsArr.reduce((a, b) => a + b, 0) / yieldsArr.length).toFixed(1) : null,
       devPotential: analysed.filter(l => (l.opps || []).some(o => /development|planning|conversion/i.test(o))).length,
       vacantCount: analysed.filter(l => l.vacant === true).length,
-      lots: isFreeLimited ? stripAIFields(analysed) : analysed,
+      lots: analysed,
       cached: false,
-      blurred: isFreeLimited,
+      blurred: false,
       scansUsed: updatedScanCount,
       scanLimit: FREE_SCAN_LIMIT,
     });
@@ -2124,43 +2177,57 @@ app.post('/api/smart-search', async (req, res) => {
   const { query, soldFilter } = req.body || {};
   if (!query) return res.status(400).json({ error: 'Missing search query' });
 
+  // Allow anonymous users (user = null)
   const user = await validateUserFromReq(req);
-  if (!user) return res.status(401).json({ error: 'signup_required' });
 
-  // Rate limit: 30 smart searches per IP per day
-  const SEARCH_RATE_LIMIT = 30;
-  const searchIp = req.ip || 'unknown';
+  // ── Tier-aware AI search rate limiting ──
+  const searchLimit = getAISearchLimit(user);
   const searchToday = new Date().toISOString().slice(0, 10);
-  const searchKey = `search:${searchIp}`;
-  try {
-    const { data: sr } = await supabase.from('rate_limits').select('requests').eq('ip', searchKey).eq('date', searchToday).single();
-    if (sr && sr.requests >= SEARCH_RATE_LIMIT) {
-      return res.status(429).json({ error: 'rate_limited', message: `Daily search limit reached (${SEARCH_RATE_LIMIT}). Try again tomorrow.` });
+  let searchesUsed = 0;
+
+  if (searchLimit !== Infinity) {
+    if (user) {
+      // Registered user: track by user row
+      const userSearchDate = user.ai_searches_date ? new Date(user.ai_searches_date).toISOString().slice(0, 10) : null;
+      if (userSearchDate === searchToday) {
+        searchesUsed = user.ai_searches_today || 0;
+      }
+      if (searchesUsed >= searchLimit) {
+        return res.status(429).json({
+          error: 'rate_limited',
+          message: `You've used all ${searchLimit} AI searches for today. Upgrade to Pro for unlimited.`,
+          searchesUsed, searchLimit,
+        });
+      }
+      // Increment
+      await supabase.from('users').update({
+        ai_searches_today: searchesUsed + 1,
+        ai_searches_date: searchToday,
+      }).eq('id', user.id);
+      searchesUsed += 1;
+    } else {
+      // Anonymous: track by IP in rate_limits table
+      const searchIp = req.ip || 'unknown';
+      const searchKey = `aisearch:${searchIp}`;
+      try {
+        const { data: sr } = await supabase.from('rate_limits').select('requests').eq('ip', searchKey).eq('date', searchToday).single();
+        searchesUsed = sr?.requests || 0;
+        if (searchesUsed >= searchLimit) {
+          return res.status(429).json({
+            error: 'rate_limited',
+            message: `You've used all ${searchLimit} free AI searches for today. Sign up for 10 per day!`,
+            searchesUsed, searchLimit, signup_prompt: true,
+          });
+        }
+        if (sr) { await supabase.from('rate_limits').update({ requests: searchesUsed + 1 }).eq('ip', searchKey).eq('date', searchToday); }
+        else { await supabase.from('rate_limits').insert({ ip: searchKey, date: searchToday, requests: 1 }); }
+        searchesUsed += 1;
+      } catch { /* rate limit check failed — allow through */ }
     }
-    if (sr) { await supabase.from('rate_limits').update({ requests: sr.requests + 1 }).eq('ip', searchKey).eq('date', searchToday); }
-    else { await supabase.from('rate_limits').insert({ ip: searchKey, date: searchToday, requests: 1 }); }
-  } catch { /* rate limit check failed — allow through */ }
+  }
 
   const presetSlug = isPresetQuery(query);
   const sf = soldFilter || 'all';
-
-  // Gate custom (non-preset) queries behind premium tier
-  if (!presetSlug && (user.tier || 'free') === 'free') {
-    return res.status(403).json({
-      error: 'premium_required',
-      message: 'Custom AI search is a premium feature',
-      features: [
-        'Natural language AI search across all catalogues',
-        'Email alerts for new lots matching saved criteria',
-        'Unlimited daily catalogue analyses',
-        'CSV/JSON export of results',
-        'Portfolio tracking (watching / bid / won)',
-        'BridgeMatch finance integration per lot',
-        'Historical auction data & price trends',
-        'Custom scoring weights',
-      ],
-    });
-  }
 
   // Check smart search cache for preset queries
   if (presetSlug) {
@@ -2180,13 +2247,13 @@ app.post('/api/smart-search', async (req, res) => {
         sources: presetCache.sources || [],
         totalSearched: presetCache.total_searched || 0,
         cached: true,
+        searchesUsed, searchLimit,
       });
     }
 
     if (presetCache && presetCache.stale_urls && presetCache.stale_urls.length > 0) {
       // Partially stale — only re-search the changed catalogues and merge
-      const apiKey = process.env.ANTHROPIC_API_KEY;
-      if (!apiKey) return res.status(500).json({ error: 'API key not configured' });
+      if (!process.env.GEMINI_API_KEY) return res.status(500).json({ error: 'API key not configured' });
 
       try {
         // Fetch only the changed catalogues
@@ -2208,7 +2275,7 @@ app.post('/api/smart-search', async (req, res) => {
             results: cleanResults, sources: cleanSources,
             total_searched: cleanResults.length, stale_urls: [],
           }).eq('query_key', cacheKey);
-          return res.json({ results: cleanResults, report: presetCache.report || '', sources: cleanSources, totalSearched: cleanResults.length, cached: true });
+          return res.json({ results: cleanResults, report: presetCache.report || '', sources: cleanSources, totalSearched: cleanResults.length, cached: true, searchesUsed, searchLimit });
         }
 
         // Gather lots from only the changed catalogues
@@ -2246,7 +2313,7 @@ app.post('/api/smart-search', async (req, res) => {
             total_searched: (presetCache.total_searched || 0) - deltaLots.length + filteredDelta.length,
             stale_urls: [],
           }).eq('query_key', cacheKey);
-          return res.json({ results: cleanResults, report: presetCache.report || '', sources: cleanSources, totalSearched: cleanResults.length, cached: true });
+          return res.json({ results: cleanResults, report: presetCache.report || '', sources: cleanSources, totalSearched: cleanResults.length, cached: true, searchesUsed, searchLimit });
         }
 
         // Run Claude only on the delta lots
@@ -2268,11 +2335,7 @@ app.post('/api/smart-search', async (req, res) => {
           included++;
         }
 
-        const client = new Anthropic({ apiKey });
-        const msg = await client.messages.create({
-          model: MODEL_HAIKU,
-          max_tokens: 4000,
-          messages: [{ role: 'user', content: `You are a UK property investment analyst. A user has searched across ${filteredDelta.length} NEW auction lots from ${deltaSources.length} recently updated catalogues.
+        const responseText = await callGemini(`You are a UK property investment analyst. A user has searched across ${filteredDelta.length} NEW auction lots from ${deltaSources.length} recently updated catalogues.
 
 Their search query: "${query}"
 
@@ -2287,12 +2350,8 @@ TASK:
 Respond in this exact JSON format:
 {"indices":[0,5,12],"summary":"Brief change summary"}
 
-Only return lots that genuinely match the query.` }]
-        });
-        const ssUsage = msg.usage || {};
-        log.info('smart_search_incremental', { model: MODEL_HAIKU, input_tokens: ssUsage.input_tokens, output_tokens: ssUsage.output_tokens });
-
-        const responseText = msg.content[0]?.text || '';
+Only return lots that genuinely match the query.`, { maxTokens: 4000 });
+        log.info('smart_search_incremental', { model: MODEL_FLASH });
         let parsed;
         try {
           let cleaned = responseText.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
@@ -2344,6 +2403,7 @@ Only return lots that genuinely match the query.` }]
           sources: mergedSources,
           totalSearched: (presetCache.total_searched || 0) + filteredDelta.length,
           cached: true,
+          searchesUsed, searchLimit,
         });
       } catch (err) {
         log.warn('Incremental preset refresh failed, falling through to full search', { error: err.message });
@@ -2352,8 +2412,7 @@ Only return lots that genuinely match the query.` }]
     }
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: 'API key not configured' });
+  if (!process.env.GEMINI_API_KEY) return res.status(500).json({ error: 'API key not configured' });
 
   try {
     // Get all cached analyses
@@ -2363,7 +2422,7 @@ Only return lots that genuinely match the query.` }]
       .gt('expires_at', new Date().toISOString());
 
     if (!cached || cached.length === 0) {
-      return res.json({ results: [], report: 'No cached auction data available. Please analyse some auction catalogues first.', sources: [] });
+      return res.json({ results: [], report: 'No cached auction data available. Please analyse some auction catalogues first.', sources: [], searchesUsed, searchLimit });
     }
 
     // Gather all lots from all cached analyses
@@ -2379,10 +2438,10 @@ Only return lots that genuinely match the query.` }]
     }
 
     if (allLots.length === 0) {
-      return res.json({ results: [], report: 'No lot data in cache. Please analyse auction catalogues first.', sources: [] });
+      return res.json({ results: [], report: 'No lot data in cache. Please analyse auction catalogues first.', sources: [], searchesUsed, searchLimit });
     }
 
-    // Apply sold filter before sending to Claude
+    // Apply sold filter before sending to Gemini
     const soldRe = /\bSOLD\b|\bSTC\b|\bSALE.?AGREED\b|\bWITHDRAWN\b/i;
     const filteredLots = soldFilter === 'available'
       ? allLots.filter(l => !(l.bullets || []).some(b => soldRe.test(b)))
@@ -2390,7 +2449,7 @@ Only return lots that genuinely match the query.` }]
       ? allLots.filter(l => (l.bullets || []).some(b => soldRe.test(b)))
       : allLots;
 
-    // Build a compact lot summary for Claude, prioritising query-relevant lots
+    // Build a compact lot summary for Gemini, prioritising query-relevant lots
     const queryTerms = query.toLowerCase().split(/\s+/).filter(t => t.length > 2);
     const lotEntries = filteredLots.map((l, i) => {
       const summary = `[${i}] ${l._house} L${l.lot}: ${l.address} | £${l.price || '?'} | Score:${l.score || 0} | ${l.titleSplit ? 'TITLE_SPLIT' : ''} | ${(l.bullets || []).join('; ').substring(0, 150)}`;
@@ -2402,7 +2461,7 @@ Only return lots that genuinely match the query.` }]
     // Sort: query-relevant lots first, then by original order
     lotEntries.sort((a, b) => b.relevance - a.relevance);
 
-    // Build context string with 120K char budget (fits within Claude's context)
+    // Build context string with 120K char budget (fits within Gemini's context)
     const CONTEXT_LIMIT = 120000;
     let lotSummaries = '';
     let included = 0;
@@ -2416,11 +2475,7 @@ Only return lots that genuinely match the query.` }]
     const soldInstruction = soldFilter === 'available' ? '\nIMPORTANT: The user has filtered to show only available (unsold) lots. All sold/STC/withdrawn lots have already been excluded.' :
       soldFilter === 'sold' ? '\nIMPORTANT: The user is specifically looking at sold/STC/withdrawn lots only.' : '';
 
-    const client = new Anthropic({ apiKey });
-    const msg = await client.messages.create({
-      model: MODEL_HAIKU,
-      max_tokens: 4000,
-      messages: [{ role: 'user', content: `You are a UK property investment analyst. A user has searched across ${filteredLots.length} auction lots from ${sources.length} auction house catalogues.${soldInstruction}
+    const responseText = await callGemini(`You are a UK property investment analyst. A user has searched across ${filteredLots.length} auction lots from ${sources.length} auction house catalogues.${soldInstruction}
 
 Their search query: "${query}"
 
@@ -2435,12 +2490,8 @@ TASK:
 Respond in this exact JSON format:
 {"indices":[0,5,12],"report":"Your report here..."}
 
-Only return lots that genuinely match the query. If nothing matches well, say so in the report and return an empty indices array.` }]
-    });
-    const ssFullUsage = msg.usage || {};
-    log.info('smart_search_full', { model: MODEL_HAIKU, input_tokens: ssFullUsage.input_tokens, output_tokens: ssFullUsage.output_tokens });
-
-    const responseText = msg.content[0]?.text || '';
+Only return lots that genuinely match the query. If nothing matches well, say so in the report and return an empty indices array.`, { maxTokens: 4000 });
+    log.info('smart_search_full', { model: MODEL_FLASH });
     let parsed;
     try {
       // Strip markdown code fences if present
@@ -2472,6 +2523,7 @@ Only return lots that genuinely match the query. If nothing matches well, say so
       report: parsed.report || '',
       sources,
       totalSearched: filteredLots.length,
+      searchesUsed, searchLimit,
     };
 
     // Log smart search activity
@@ -2510,9 +2562,8 @@ app.get('/api/all-lots', async (req, res) => {
   try {
     if (!supabase) return res.json({ lots: [], sources: [] });
 
-    // Optional auth — anonymous users see full data (entice signup)
+    // Optional auth — all users see full data (no blurring)
     const user = await validateUserFromReq(req);
-    const shouldBlur = user && (user.tier || 'free') === 'free' && (user.analyses_count || 0) >= FREE_SCAN_LIMIT;
 
     const { data: cached } = await supabase
       .from('cached_analyses')
@@ -2633,7 +2684,7 @@ app.get('/api/all-lots', async (req, res) => {
     }
     if (imgStripped > 0) console.log(`Image sanitiser: stripped ${imgStripped} junk images`);
 
-    res.json({ lots: shouldBlur ? stripAIFields(cleanLots) : cleanLots, sources, blurred: !!shouldBlur });
+    res.json({ lots: cleanLots, sources, blurred: false });
   } catch (e) {
     log.error('All lots error', { error: e.message });
     res.status(500).json({ error: 'Internal server error' });
@@ -2816,8 +2867,8 @@ app.get('/api/cost-monitor', async (req, res) => {
     const SKIP_PUPPETEER_LIST = ['philliparnold','knightfrank'];
     res.json({
       weeklyEstimate: {
-        claudeApiCalls: apiCallCount,
-        estimatedCost: +(apiCallCount * 0.00025).toFixed(4),
+        geminiApiCalls: apiCallCount,
+        estimatedCost: 0,
         creditExhausted,
         lastResetAt: serverStartTime
       },
@@ -3480,14 +3531,14 @@ async function scrapeWithPuppeteer(url, house) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// CLAUDE EXTRACTION
+// AI EXTRACTION (Gemini)
 // ═══════════════════════════════════════════════════════════════
-async function extractLotsWithClaude(client, pages, house, onProgress, catalogueUrl) {
+async function extractLotsWithAI(pages, house, onProgress, catalogueUrl) {
   const allLots = [];
   const seenLots = new Set();
   const batchSize = 3;
   for (let i = 0; i < pages.length; i += batchSize) {
-    if (creditExhausted) { console.log('Skipping remaining batches — API credits exhausted'); break; }
+    if (creditExhausted) { console.log('Skipping remaining batches — API rate limited'); break; }
     if (allLots.length >= MAX_LOTS_PER_SCRAPE) { console.log(`${house} lots cap reached at ${MAX_LOTS_PER_SCRAPE}`); break; }
     const batch = pages.slice(i, i + batchSize);
     const strippedBatch = batch.map(p => ({ page: p.page, content: stripHtml(p.html) }));
@@ -3519,14 +3570,8 @@ ${strippedBatch.map(p => `=== PAGE ${p.page} ===\n${p.content}`).join('\n\n')}
 Return ONLY the JSON array:`;
     try {
       apiCallCount++;
-      const response = await client.messages.create({
-        model,
-        max_tokens: 16000,
-        messages: [{ role: 'user', content: prompt }],
-      });
-      const usage = response.usage || {};
-      log.info('claude_extraction', { house, model, batch: Math.floor(i/batchSize)+1, input_tokens: usage.input_tokens, output_tokens: usage.output_tokens });
-      const text = response.content.map(c => c.text || '').join('');
+      const text = await callGemini(prompt, { model, maxTokens: 16000 });
+      log.info('gemini_extraction', { house, model, batch: Math.floor(i/batchSize)+1 });
       const jsonMatch = text.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
         const lots = JSON.parse(jsonMatch[0]);
@@ -3547,10 +3592,10 @@ Return ONLY the JSON array:`;
       }
       if (onProgress) onProgress(Math.floor(i/batchSize)+1, Math.ceil(pages.length/batchSize), allLots.length);
     } catch (err) {
-      console.error(`Claude extraction failed for batch starting at page ${batch[0].page}:`, err.message);
-      if (err.status === 400 && /credit.*(balance|low)|insufficient.*credit/i.test(err.message)) {
+      console.error(`Gemini extraction failed for batch starting at page ${batch[0].page}:`, err.message);
+      if (err.status === 429 || /quota|rate.limit|resource.exhausted/i.test(err.message)) {
         creditExhausted = true;
-        console.error('API credits exhausted — stopping all extraction');
+        console.error('Gemini API rate limited — stopping all extraction');
         break;
       }
     }
@@ -3573,7 +3618,7 @@ function isPdfUrl(url) {
   return /\.pdf(\?|$|#)/i.test(url) || /content-type=application\/pdf/i.test(url);
 }
 
-async function extractLotsFromPdf(client, url) {
+async function extractLotsFromPdf(url) {
   log.info('pdf_download', { url });
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 60000);
@@ -3592,15 +3637,14 @@ async function extractLotsFromPdf(client, url) {
   const sizeMB = (pdfBuffer.length / 1024 / 1024).toFixed(1);
   log.info('pdf_loaded', { sizeMB, bytes: pdfBuffer.length });
 
-  // Claude supports PDFs up to 32MB
-  if (pdfBuffer.length > 32 * 1024 * 1024) {
-    throw new Error('PDF is too large (over 32MB). Try a smaller catalogue.');
+  // Gemini supports PDFs up to 20MB inline
+  if (pdfBuffer.length > 20 * 1024 * 1024) {
+    throw new Error('PDF is too large (over 20MB). Try a smaller catalogue.');
   }
 
   const allLots = [];
   const seenLots = new Set();
 
-  // Send full PDF to Claude — it can read the document natively
   const prompt = `You are extracting property auction lot data from a UK auction house catalogue PDF.
 
 Extract EVERY auction lot you find in this PDF document.
@@ -3624,29 +3668,9 @@ Important:
 Return ONLY the JSON array:`;
 
   try {
-    // Use streaming to avoid SDK timeout on large PDF uploads
-    // PDFs stay on Sonnet — complex layout extraction needs the stronger model
-    const stream = client.messages.stream({
-      model: MODEL_SONNET,
-      max_tokens: 32000,
-      messages: [{
-        role: 'user',
-        content: [
-          {
-            type: 'document',
-            source: { type: 'base64', media_type: 'application/pdf', data: pdfBase64 },
-          },
-          { type: 'text', text: prompt },
-        ],
-      }],
-    });
-    const response = await stream.finalMessage();
-    const pdfUsage = response.usage || {};
-    log.info('claude_pdf_extraction', { model: MODEL_SONNET, input_tokens: pdfUsage.input_tokens, output_tokens: pdfUsage.output_tokens });
-    const text = response.content.map(c => c.text || '').join('');
-    if (response.stop_reason === 'max_tokens') {
-      log.warn('pdf_truncated', { url, textLength: text.length });
-    }
+    // PDFs use Pro model — complex layout extraction needs the stronger model
+    const text = await callGemini(prompt, { model: MODEL_PRO, maxTokens: 32000, pdfBase64 });
+    log.info('gemini_pdf_extraction', { model: MODEL_PRO });
     const jsonMatch = text.match(/\[[\s\S]*\]/);
     if (jsonMatch) {
       const lots = JSON.parse(jsonMatch[0]);
@@ -3662,7 +3686,7 @@ Return ONLY the JSON array:`;
         }
       }
     }
-    log.info('pdf_extracted', { lots: allLots.length, inputTokens: response.usage?.input_tokens, outputTokens: response.usage?.output_tokens });
+    log.info('pdf_extracted', { lots: allLots.length });
   } catch (err) {
     log.error('pdf_extraction_failed', { error: err.message });
     throw new Error(`PDF extraction failed: ${err.message}`);
@@ -6962,7 +6986,7 @@ app.listen(PORT, () => {
   log.info('server_start', { port: PORT });
   if (!process.env.SUPABASE_URL) log.warn('missing_env', { var: 'SUPABASE_URL' });
   if (!process.env.SUPABASE_SERVICE_KEY) log.warn('missing_env', { var: 'SUPABASE_SERVICE_KEY' });
-  if (!process.env.ANTHROPIC_API_KEY) log.warn('missing_env', { var: 'ANTHROPIC_API_KEY' });
+  if (!process.env.GEMINI_API_KEY) log.warn('missing_env', { var: 'GEMINI_API_KEY' });
 
   // ── Sync calendar + fix stale house names on startup ──
   setTimeout(() => syncCalendarAndHouseNames(), 5000);
@@ -6984,7 +7008,7 @@ const serverStartTime = new Date().toISOString();
 
 async function autoAnalyseAll() {
   if (creditExhausted) {
-    console.log('AUTO: Skipping — API credits exhausted');
+    console.log('AUTO: Skipping — Gemini API rate limited');
     return { skipped: true, reason: 'credits_exhausted' };
   }
   if (_autoAnalysisRunning) {
@@ -7001,12 +7025,11 @@ async function autoAnalyseAll() {
 
 async function _doAutoAnalyseAll() {
   console.log('\n═══ AUTO-ANALYSIS: checking all catalogue-ready auctions ═══');
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) { console.log('AUTO: No API key, skipping'); return; }
+  if (!process.env.GEMINI_API_KEY) { console.log('AUTO: No Gemini API key, skipping'); return; }
 
   // ── Step 1: Discover new catalogues from house root pages ──
   // Runs once per cycle to find new auction URLs that aren't in the calendar yet.
-  await discoverAndUpdateCalendar(apiKey).catch(e =>
+  await discoverAndUpdateCalendar().catch(e =>
     console.error('AUTO-DISCOVER: failed —', e.message)
   );
 
@@ -7105,7 +7128,7 @@ async function _doAutoAnalyseAll() {
       }
 
       console.log(`AUTO: Analysing ${auction.house} — ${auction.url}`);
-      await autoAnalyseOne(auction.url, apiKey);
+      await autoAnalyseOne(auction.url);
       analysed++;
 
       // Pause between analyses to be kind to servers and our resources
@@ -7127,8 +7150,8 @@ async function _doAutoAnalyseAll() {
 // Runs as part of the 6-hour auto-analysis cycle. For each house with a
 // HOUSE_ROOTS entry, fetches the root page, extracts auction links with
 // Claude Haiku, and upserts any new ones into the Supabase calendar.
-async function discoverAndUpdateCalendar(apiKey) {
-  if (!supabase || !apiKey) return;
+async function discoverAndUpdateCalendar() {
+  if (!supabase || !process.env.GEMINI_API_KEY) return;
 
   // Only discover for houses that have root URLs configured
   const slugs = Object.keys(HOUSE_ROOTS);
@@ -7160,13 +7183,7 @@ async function discoverAndUpdateCalendar(apiKey) {
 
       if (hrefs.length === 0 && stripped.length < 200) continue;
 
-      const client = new Anthropic({ apiKey });
-      const aiResp = await client.messages.create({
-        model: MODEL_HAIKU,
-        max_tokens: 1500,
-        messages: [{
-          role: 'user',
-          content: `Extract auction catalogue links from this auction house page.
+      const aiText = await callGemini(`Extract auction catalogue links from this auction house page.
 
 House: ${HOUSE_DISPLAY_NAMES[slug] || slug}
 Root URL: ${rootUrl}
@@ -7184,13 +7201,11 @@ For each UPCOMING or CURRENT auction with lots to view, provide:
 - catalogueReady: true if lots appear listed
 
 Return ONLY: {"catalogues": [{"url":"...","title":"...","date":"...","catalogueReady":true}]}
-No catalogues? Return {"catalogues": []}`
-        }]
-      });
+No catalogues? Return {"catalogues": []}`, { maxTokens: 1500 });
 
       let catalogues = [];
       try {
-        let text = aiResp.content[0].text.trim();
+        let text = aiText.trim();
         if (text.startsWith('```')) text = text.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
         catalogues = JSON.parse(text).catalogues || [];
       } catch { continue; }
@@ -7242,7 +7257,7 @@ No catalogues? Return {"catalogues": []}`
   console.log(`AUTO-DISCOVER: Complete — ${discovered} new catalogues found, ${errors} errors`);
 }
 
-async function autoAnalyseOne(url, apiKey) {
+async function autoAnalyseOne(url) {
   const urlCheck = await validateUrl(url);
   if (!urlCheck.ok) { log.warn('autoAnalyseOne skipped — invalid URL', { url, reason: urlCheck.error }); return []; }
   const house = detectAuctionHouse(url);
@@ -7288,13 +7303,12 @@ async function autoAnalyseOne(url, apiKey) {
     autoAnalyseOne._lastContentHash = null;
   }
 
-  const client = new Anthropic({ apiKey });
   let rawLots = [];
 
   if (rewritten.paginateAs === 'allsop_api') {
     const pages = await scrapeAllsopApi(rewritten.baseUrl);
     if (pages.length > 0) {
-      rawLots = await extractLotsWithClaude(client, pages, house, null, scrapeUrl);
+      rawLots = await extractLotsWithAI(pages, house, null, scrapeUrl);
       enrichAllsopLots(rawLots, pages);
     }
 
@@ -7530,7 +7544,7 @@ async function autoAnalyseOne(url, apiKey) {
         } else {
           const html = await page.content();
           const puppeteerPages = [{ page: 1, html }];
-          rawLots = await extractLotsWithClaude(client, puppeteerPages, house, null, scrapeUrl);
+          rawLots = await extractLotsWithAI(puppeteerPages, house, null, scrapeUrl);
           console.log(`AUTO: ${house}: ${rawLots.length} lots via Claude fallback`);
         }
       }
@@ -7540,12 +7554,12 @@ async function autoAnalyseOne(url, apiKey) {
 
   } else {
     const pages = await scrapeAllPages(scrapeUrl, house);
-    if (pages && pages.length > 0) rawLots = await extractLotsWithClaude(client, pages, house, null, scrapeUrl);
+    if (pages && pages.length > 0) rawLots = await extractLotsWithAI(pages, house, null, scrapeUrl);
     // Skip Puppeteer fallback for houses where it wastes memory (blocked, empty, or JS-only)
     const SKIP_PUPPETEER = ['philliparnold','knightfrank'];
     if (rawLots.length === 0 && !SKIP_PUPPETEER.includes(house)) {
       const puppeteerPages = await scrapeWithPuppeteer(url, house);
-      if (puppeteerPages.length > 0) rawLots = await extractLotsWithClaude(client, puppeteerPages, house, null, scrapeUrl);
+      if (puppeteerPages.length > 0) rawLots = await extractLotsWithAI(puppeteerPages, house, null, scrapeUrl);
     }
   }
 
