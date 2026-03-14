@@ -492,38 +492,57 @@ function extractWithJSDOM(html, house, baseUrl, firecrawlImages) {
       const skipFc = /logo|icon|arrow|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|1x1|favicon|banner|advert/i;
       const propertyImages = firecrawlImages.filter(img => img && img.length > 20 && /^https?:\/\//i.test(img) && !skipFc.test(img));
       if (propertyImages.length > 0) {
-        // Try matching by proximity: if lot has a URL, look for an image URL that shares the same domain/path segment
         let fcMatched = 0;
+        const usedImages = new Set();
         for (const lot of lots) {
           if (lot.imageUrl) continue;
-          // Strategy 1: match by lot number in image URL
-          if (lot.lotNumber) {
-            const lotNum = String(lot.lotNumber).replace(/\D/g, '');
-            if (lotNum) {
-              const match = propertyImages.find(img => img.includes(lotNum) || img.includes(`lot-${lotNum}`) || img.includes(`lot${lotNum}`));
-              if (match) { lot.imageUrl = match; fcMatched++; continue; }
-            }
+
+          // Strategy 1: match by lot number anywhere in image URL (lot field or lotNumber)
+          const lotNum = String(lot.lot || lot.lotNumber || '').replace(/\D/g, '');
+          if (lotNum && lotNum.length >= 1) {
+            const match = propertyImages.find(img => !usedImages.has(img) && (
+              img.includes(`/${lotNum}/`) || img.includes(`/${lotNum}.`) || img.includes(`-${lotNum}.`)
+              || img.includes(`lot-${lotNum}`) || img.includes(`lot${lotNum}`)
+              || img.includes(`_${lotNum}.`) || img.includes(`_${lotNum}_`)
+            ));
+            if (match) { lot.imageUrl = match; usedImages.add(match); fcMatched++; continue; }
           }
+
           // Strategy 2: match by lot URL path overlap
           if (lot.url) {
             try {
               const lotPath = new URL(lot.url).pathname.replace(/\/$/, '').split('/').pop();
               if (lotPath && lotPath.length > 3) {
-                const match = propertyImages.find(img => img.toLowerCase().includes(lotPath.toLowerCase()));
-                if (match) { lot.imageUrl = match; fcMatched++; continue; }
+                const match = propertyImages.find(img => !usedImages.has(img) && img.toLowerCase().includes(lotPath.toLowerCase()));
+                if (match) { lot.imageUrl = match; usedImages.add(match); fcMatched++; continue; }
               }
             } catch {}
           }
+
+          // Strategy 3: match by address keyword (first meaningful word of street name)
+          if (lot.address) {
+            const words = lot.address.replace(/^(lot\s*\d+[,:]?\s*)/i, '').split(/[\s,]+/).filter(w => w.length > 3 && !/^\d+$/.test(w));
+            const keyword = words[0];
+            if (keyword && keyword.length > 3) {
+              const kw = keyword.toLowerCase();
+              const match = propertyImages.find(img => !usedImages.has(img) && img.toLowerCase().includes(kw));
+              if (match) { lot.imageUrl = match; usedImages.add(match); fcMatched++; continue; }
+            }
+          }
         }
-        // Strategy 3: round-robin assign remaining property images to imageless lots
-        if (fcMatched === 0 && propertyImages.length >= lots.filter(l => !l.imageUrl).length * 0.5) {
+
+        // Strategy 4: position-based — nth property image = nth imageless lot (last resort)
+        const stillMissing = lots.filter(l => !l.imageUrl);
+        const unusedImages = propertyImages.filter(img => !usedImages.has(img));
+        if (fcMatched < stillMissing.length && unusedImages.length >= stillMissing.length * 0.3) {
           let imgIdx = 0;
-          for (const lot of lots) {
-            if (lot.imageUrl || imgIdx >= propertyImages.length) continue;
-            lot.imageUrl = propertyImages[imgIdx++];
+          for (const lot of stillMissing) {
+            if (imgIdx >= unusedImages.length) break;
+            lot.imageUrl = unusedImages[imgIdx++];
             fcMatched++;
           }
         }
+
         if (fcMatched > 0) console.log(`JSDOM Firecrawl images fallback for ${house}: matched ${fcMatched} lots`);
       }
     }
@@ -718,8 +737,6 @@ async function backfillImagesWithFirecrawl(catalogueUrl, lots, house) {
       hrefImageMap[absHref] = imgSrc;
     }
 
-    dom.window.close();
-
     // Match images to lots via href→image map
     let updated = 0;
     for (const lot of lots) {
@@ -735,22 +752,55 @@ async function backfillImagesWithFirecrawl(catalogueUrl, lots, house) {
       }
     }
 
-    // Fallback: use Firecrawl's images array for remaining imageless lots
+    // Fallback: use Firecrawl's images array + JSDOM-extracted images for remaining imageless lots
+    const allPageImages = [];
+    // Collect images from JSDOM parsing
+    const allImgs = document.querySelectorAll('img[src], img[data-src]');
+    const skipFc = /logo|icon|arrow|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|1x1|favicon|banner|advert/i;
+    for (const img of allImgs) {
+      const src = img.getAttribute('src') || img.getAttribute('data-src') || '';
+      if (src && src.length > 20 && !src.startsWith('data:') && !skipFc.test(src)) {
+        let abs = src;
+        if (!/^https?:\/\//i.test(abs)) { try { abs = new URL(abs, catalogueUrl).href; } catch { continue; } }
+        allPageImages.push(abs);
+      }
+    }
+    // Also add Firecrawl's images array
     if (result.images && result.images.length > 0) {
-      const skipFc = /logo|icon|arrow|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|1x1|favicon|banner|advert/i;
-      const propertyImages = result.images.filter(img => img && img.length > 20 && /^https?:\/\//i.test(img) && !skipFc.test(img));
+      for (const img of result.images) {
+        if (img && img.length > 20 && /^https?:\/\//i.test(img) && !skipFc.test(img)) allPageImages.push(img);
+      }
+    }
+    // Deduplicate
+    const uniquePageImages = [...new Set(allPageImages)];
+    if (uniquePageImages.length > 0) {
+      const usedImgs = new Set(lots.filter(l => l.imageUrl).map(l => l.imageUrl));
+      const available = uniquePageImages.filter(i => !usedImgs.has(i));
+      // Try lot number matching first
       for (const lot of lots) {
         if (lot.imageUrl) continue;
-        // Try matching by lot number
-        if (lot.lotNumber) {
-          const lotNum = String(lot.lotNumber).replace(/\D/g, '');
-          if (lotNum) {
-            const match = propertyImages.find(img => img.includes(lotNum));
-            if (match) { lot.imageUrl = match; updated++; }
-          }
+        const lotNum = String(lot.lot || lot.lotNumber || '').replace(/\D/g, '');
+        if (lotNum) {
+          const match = available.find(img => !usedImgs.has(img) && (
+            img.includes(`/${lotNum}/`) || img.includes(`/${lotNum}.`) || img.includes(`-${lotNum}.`)
+            || img.includes(`_${lotNum}.`) || img.includes(`lot${lotNum}`)
+          ));
+          if (match) { lot.imageUrl = match; usedImgs.add(match); updated++; }
+        }
+      }
+      // Position-based matching for remaining
+      const stillMissing = lots.filter(l => !l.imageUrl);
+      const unusedImgs = available.filter(i => !usedImgs.has(i));
+      if (stillMissing.length > 0 && unusedImgs.length >= stillMissing.length * 0.3) {
+        let idx = 0;
+        for (const lot of stillMissing) {
+          if (idx >= unusedImgs.length) break;
+          lot.imageUrl = unusedImgs[idx++];
+          updated++;
         }
       }
     }
+    dom.window.close();
     console.log(`Firecrawl image backfill for ${house}: ${updated}/${lots.length} lots got images`);
     return updated;
   } catch (err) {
@@ -2511,6 +2561,31 @@ app.post('/api/analyse', async (req, res) => {
             sseWrite(res, 'phase', { step: 'extracting' });
             rawLots = await extractLotsWithAI(renderedPages, house, onExtract, scrapeUrl);
             console.log(`Claude extracted ${rawLots.length} lots from rendered content`);
+
+            // ── DOM→Gemini merge: harvest URLs + images from DOM, merge into Gemini lots ──
+            if (rawLots.length > 0 && firstResult.html) {
+              const domHarvest = extractWithJSDOM(firstResult.html, house, scrapeUrl, firstResult.images);
+              if (domHarvest && domHarvest.length > 0) {
+                const domByLot = {};
+                for (const d of domHarvest) { if (d.lot) domByLot[d.lot] = d; }
+                let urlsMerged = 0, imgsMerged = 0;
+                for (const lot of rawLots) {
+                  const dom = domByLot[lot.lot];
+                  if (!dom) continue;
+                  if (!lot.url && dom.url) { lot.url = dom.url; urlsMerged++; }
+                  if (!lot.imageUrl && dom.imageUrl) { lot.imageUrl = dom.imageUrl; imgsMerged++; }
+                }
+                if (urlsMerged === 0 && imgsMerged === 0 && domHarvest.length >= rawLots.length * 0.5) {
+                  for (let i = 0; i < rawLots.length && i < domHarvest.length; i++) {
+                    if (!rawLots[i].url && domHarvest[i].url) { rawLots[i].url = domHarvest[i].url; urlsMerged++; }
+                    if (!rawLots[i].imageUrl && domHarvest[i].imageUrl) { rawLots[i].imageUrl = domHarvest[i].imageUrl; imgsMerged++; }
+                  }
+                }
+                if (urlsMerged > 0 || imgsMerged > 0) {
+                  console.log(`DOM→Gemini merge for ${house}: ${urlsMerged} URLs, ${imgsMerged} images`);
+                }
+              }
+            }
           }
         }
       } catch (err) {
@@ -2542,6 +2617,26 @@ app.post('/api/analyse', async (req, res) => {
               sseWrite(res, 'phase', { step: 'extracting' });
               rawLots = await extractLotsWithAI(renderedPages, house, onExtract, scrapeUrl);
               console.log(`Claude extracted ${rawLots.length} lots from rendered content`);
+              // DOM→Gemini merge
+              if (rawLots.length > 0) {
+                const domH = extractWithJSDOM(rendered.html, house, url, rendered.images);
+                if (domH && domH.length > 0) {
+                  const byLot = {}; for (const d of domH) { if (d.lot) byLot[d.lot] = d; }
+                  let um = 0, im = 0;
+                  for (const lot of rawLots) {
+                    const d = byLot[lot.lot]; if (!d) continue;
+                    if (!lot.url && d.url) { lot.url = d.url; um++; }
+                    if (!lot.imageUrl && d.imageUrl) { lot.imageUrl = d.imageUrl; im++; }
+                  }
+                  if (um === 0 && im === 0 && domH.length >= rawLots.length * 0.5) {
+                    for (let i = 0; i < rawLots.length && i < domH.length; i++) {
+                      if (!rawLots[i].url && domH[i].url) { rawLots[i].url = domH[i].url; um++; }
+                      if (!rawLots[i].imageUrl && domH[i].imageUrl) { rawLots[i].imageUrl = domH[i].imageUrl; im++; }
+                    }
+                  }
+                  if (um > 0 || im > 0) console.log(`DOM→Gemini merge (fallback): ${um} URLs, ${im} images`);
+                }
+              }
             }
           }
         } catch (err) {
@@ -5543,8 +5638,8 @@ const DOM_EXTRACTORS = {
           imageUrl = swiperImg.getAttribute('src') || swiperImg.dataset.src || '';
         }
         if (!imageUrl) {
-          // Check for background-image on swiper slide divs
-          const slideDiv = card.querySelector('.swiper-slide [style*="background"]');
+          // Check for background-image on slide/swiper divs (probateauction uses <a class="slide" style="background-image:url(...)">)
+          const slideDiv = card.querySelector('.slide[style*="background"], .swiper-slide [style*="background"], [style*="background-image"]');
           if (slideDiv) {
             const bg = slideDiv.getAttribute('style') || '';
             const bgMatch = bg.match(/background(?:-image)?:\\s*url\\(['"]?([^'"\\)]+)/i);
@@ -6789,7 +6884,8 @@ async function backfillImages(catalogueUrl, lots) {
 
     let updated = 0;
     for (const lot of lots) {
-      if (lot.imageUrl || !lot.url) continue;
+      if (lot.imageUrl) continue;
+      if (!lot.url) continue; // URL-less lots handled by position matching below
       let imgSrc = null;
 
       // Strategy 1: direct href match (try multiple URL variants)
@@ -6834,6 +6930,25 @@ async function backfillImages(catalogueUrl, lots) {
         updated++;
       }
     }
+    // Strategy 4: Position-based matching for URL-less lots (Gemini extraction loses URLs)
+    // Use allImages ordered by appearance — nth unique property image = nth lot
+    const urlLessLots = lots.filter(l => !l.imageUrl && !l.url);
+    if (urlLessLots.length > 0 && allImages.length > 0) {
+      // Deduplicate images while preserving order
+      const seen = new Set();
+      const uniqueImages = allImages.filter(img => { if (seen.has(img)) return false; seen.add(img); return true; });
+      // If image count is roughly similar to lot count, do positional matching
+      if (uniqueImages.length >= urlLessLots.length * 0.3) {
+        let posMatched = 0;
+        for (let i = 0; i < urlLessLots.length && i < uniqueImages.length; i++) {
+          urlLessLots[i].imageUrl = uniqueImages[i];
+          posMatched++;
+        }
+        updated += posMatched;
+        if (posMatched > 0) console.log(`Image backfill position-match for URL-less lots: ${posMatched}/${urlLessLots.length}`);
+      }
+    }
+
     console.log(`Image backfill for ${catalogueUrl.substring(0, 60)}: ${updated}/${lots.filter(l => !l.imageUrl).length + updated} matched`);
     return updated > 0 ? lots : null;
   } catch (err) {
@@ -8210,6 +8325,37 @@ async function autoAnalyseOne(url) {
         const renderedPages = [{ page: 1, html: firstResult.html }];
         rawLots = await extractLotsWithAI(renderedPages, house, null, scrapeUrl);
         console.log(`AUTO: ${house}: ${rawLots.length} lots via Claude fallback`);
+
+        // ── DOM→Gemini merge: re-run DOM extractor to harvest URLs + images ──
+        // Gemini loses URLs/images because it works on stripped text.
+        // DOM extractors capture URLs and images from the HTML structure.
+        // Merge by lot number to get best of both worlds.
+        if (rawLots.length > 0 && firstResult.html) {
+          const domHarvest = extractWithJSDOM(firstResult.html, house, scrapeUrl, firstResult.images);
+          if (domHarvest && domHarvest.length > 0) {
+            const domByLot = {};
+            for (const d of domHarvest) {
+              if (d.lot) domByLot[d.lot] = d;
+            }
+            let urlsMerged = 0, imgsMerged = 0;
+            for (const lot of rawLots) {
+              const dom = domByLot[lot.lot];
+              if (!dom) continue;
+              if (!lot.url && dom.url) { lot.url = dom.url; urlsMerged++; }
+              if (!lot.imageUrl && dom.imageUrl) { lot.imageUrl = dom.imageUrl; imgsMerged++; }
+            }
+            // Also try position-based merge if lot numbers didn't match
+            if (urlsMerged === 0 && imgsMerged === 0 && domHarvest.length >= rawLots.length * 0.5) {
+              for (let i = 0; i < rawLots.length && i < domHarvest.length; i++) {
+                if (!rawLots[i].url && domHarvest[i].url) { rawLots[i].url = domHarvest[i].url; urlsMerged++; }
+                if (!rawLots[i].imageUrl && domHarvest[i].imageUrl) { rawLots[i].imageUrl = domHarvest[i].imageUrl; imgsMerged++; }
+              }
+            }
+            if (urlsMerged > 0 || imgsMerged > 0) {
+              console.log(`AUTO: ${house}: DOM→Gemini merge: ${urlsMerged} URLs, ${imgsMerged} images merged`);
+            }
+          }
+        }
       }
     }
 
@@ -8228,6 +8374,26 @@ async function autoAnalyseOne(url) {
           } else {
             const renderedPages = [{ page: 1, html: rendered.html }];
             rawLots = await extractLotsWithAI(renderedPages, house, null, scrapeUrl);
+            // DOM→Gemini merge for this fallback path too
+            if (rawLots.length > 0) {
+              const domH = extractWithJSDOM(rendered.html, house, url, rendered.images);
+              if (domH && domH.length > 0) {
+                const byLot = {}; for (const d of domH) { if (d.lot) byLot[d.lot] = d; }
+                let um = 0, im = 0;
+                for (const lot of rawLots) {
+                  const d = byLot[lot.lot]; if (!d) continue;
+                  if (!lot.url && d.url) { lot.url = d.url; um++; }
+                  if (!lot.imageUrl && d.imageUrl) { lot.imageUrl = d.imageUrl; im++; }
+                }
+                if (um === 0 && im === 0 && domH.length >= rawLots.length * 0.5) {
+                  for (let i = 0; i < rawLots.length && i < domH.length; i++) {
+                    if (!rawLots[i].url && domH[i].url) { rawLots[i].url = domH[i].url; um++; }
+                    if (!rawLots[i].imageUrl && domH[i].imageUrl) { rawLots[i].imageUrl = domH[i].imageUrl; im++; }
+                  }
+                }
+                if (um > 0 || im > 0) console.log(`AUTO: ${house}: DOM→Gemini merge (fallback): ${um} URLs, ${im} images`);
+              }
+            }
           }
         }
       } catch (err) {
