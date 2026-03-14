@@ -112,6 +112,19 @@ tr:hover td { background: rgba(255,255,255,.02); }
 .action-btn.danger:hover { border-color: var(--red); background: var(--red-bg); }
 .action-btn:disabled { opacity: .4; cursor: not-allowed; }
 
+/* Add auction form */
+.add-auction-form { padding: 14px 18px; display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+.add-auction-form .field { display: flex; flex-direction: column; gap: 3px; }
+.add-auction-form .field label { font-size: .65rem; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: .04em; }
+.add-auction-form .field input, .add-auction-form .field select { padding: 7px 10px; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-family: inherit; font-size: .8rem; }
+.add-auction-form .field input:focus, .add-auction-form .field select:focus { outline: none; border-color: var(--green); }
+.add-auction-form .field input[type="url"] { min-width: 280px; }
+.add-auction-form .field input[type="date"] { min-width: 130px; }
+.add-auction-form .field select { min-width: 160px; }
+.add-auction-form .field-check { display: flex; align-items: center; gap: 6px; padding-bottom: 2px; }
+.add-auction-form .field-check input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--green); }
+.add-auction-form .field-check label { font-size: .78rem; color: var(--text2); }
+
 /* Loading */
 .loading { padding: 40px; text-align: center; color: var(--text3); }
 .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--green); border-radius: 50%; animation: spin .6s linear infinite; margin-right: 8px; vertical-align: middle; }
@@ -245,6 +258,34 @@ tr:hover td { background: rgba(255,255,255,.02); }
         <div class="engine-item"><div><div class="label">Leads</div><div class="val" id="a-leads">-</div></div></div>
         <div class="engine-item"><div><div class="label">Total Events</div><div class="val" id="a-events">-</div></div></div>
       </div>
+    </div>
+
+    <!-- Add Auction -->
+    <div class="section">
+      <div class="section-header"><h2>Add Auction URL</h2></div>
+      <form class="add-auction-form" onsubmit="addAuction(event)">
+        <div class="field">
+          <label>Catalogue URL</label>
+          <input type="url" id="aa-url" placeholder="https://..." required oninput="autoDetectHouse()">
+        </div>
+        <div class="field">
+          <label>House</label>
+          <select id="aa-house"></select>
+        </div>
+        <div class="field">
+          <label>Auction Date</label>
+          <input type="date" id="aa-date" required>
+        </div>
+        <div class="field">
+          <label>Title (optional)</label>
+          <input type="text" id="aa-title" placeholder="e.g. March 2026 Online">
+        </div>
+        <div class="field-check">
+          <input type="checkbox" id="aa-ready" checked>
+          <label for="aa-ready">Catalogue ready</label>
+        </div>
+        <button type="submit" class="action-btn" id="aa-submit" style="align-self:flex-end;">Add to Calendar</button>
+      </form>
     </div>
 
     <!-- Quick Actions -->
@@ -585,6 +626,112 @@ async function triggerAction(action) {
 }
 
 function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+// ── Add Auction ──
+const KNOWN_HOUSES = {
+  savills:'Savills', allsop:'Allsop', sdl:'BTG Eddisons', network:'Network Auctions',
+  bondwolfe:'Bond Wolfe', barnardmarcus:'Barnard Marcus', auctionhouselondon:'Auction House London',
+  auctionhouse:'Auction House UK', cliveemson:'Clive Emson', strettons:'Strettons', acuitus:'Acuitus',
+  hollismorgan:'Hollis Morgan', maggsandallen:'Maggs & Allen', mchughandco:'McHugh & Co',
+  knightfrank:'Knight Frank', pattinson:'Pattinson', bidx1:'BidX1', philliparnold:'Phillip Arnold',
+  edwardmellor:'Edward Mellor', paulfosh:'Paul Fosh', cottons:'Cottons', dedmangray:'Dedman Gray',
+  barnettross:'Barnett Ross', bradleyhall:'Bradley Hall', connectuk:'Connect UK',
+  auctionestates:'Auction Estates', landwood:'Landwood', loveitts:'Loveitts', hunters:'Hunters',
+  probateauction:'Probate Auction', countrywide:'Countrywide / Sutton Kersh',
+  venmore:'Venmore Auctions', tcpa:'Town & Country', futureauctions:'Future Property Auctions',
+  kivells:'Kivells', firstforauctions:'First For Auctions', harmanhealy:'Harman Healy',
+  seelauctions:'Seel & Co', robinsonhall:'Robinson & Hall',
+};
+// Auto-detect rules: URL substring → slug
+const HOUSE_DETECT = [
+  ['savills.co.uk','savills'],['allsop.co.uk','allsop'],['btgeddisons','sdl'],
+  ['networkauctions','network'],['bondwolfe','bondwolfe'],['barnardmarcus','barnardmarcus'],
+  ['auctionhouselondon','auctionhouselondon'],['auctionhouse.co.uk','auctionhouse'],
+  ['cliveemson','cliveemson'],['strettons','strettons'],['acuitus','acuitus'],
+  ['hollismorgan','hollismorgan'],['maggsandallen','maggsandallen'],['mchughandco','mchughandco'],
+  ['knightfrankauctions','knightfrank'],['pattinson','pattinson'],['bidx1','bidx1'],
+  ['philliparnold','philliparnold'],['edwardmellor','edwardmellor'],['paulfosh','paulfosh'],
+  ['cottons.co.uk','cottons'],['dedmangray','dedmangray'],['barnettross','barnettross'],
+  ['bradleyhall','bradleyhall'],['connectukgroup','connectuk'],['auctionestates','auctionestates'],
+  ['landwoodproperty','landwood'],['loveitts','loveitts'],['hunters','hunters'],
+  ['probate.auction','probateauction'],['countrywideproperty','countrywide'],
+  ['venmore','venmore'],['townandcountryproperty','tcpa'],['futurepropertyauctions','futureauctions'],
+  ['kivells','kivells'],['firstforauctions','firstforauctions'],['harman-healy','harmanhealy'],
+  ['seelauctions','seelauctions'],['robinsonandhall','robinsonhall'],
+];
+
+// Populate house dropdown
+(function populateHouseSelect() {
+  const sel = document.getElementById('aa-house');
+  sel.innerHTML = '<option value="">-- Auto-detect --</option>';
+  const sorted = Object.entries(KNOWN_HOUSES).sort((a,b) => a[1].localeCompare(b[1]));
+  for (const [slug, name] of sorted) {
+    sel.innerHTML += `<option value="${slug}">${esc(name)}</option>`;
+  }
+  sel.innerHTML += '<option value="_custom">Other (type name)</option>';
+})();
+
+function autoDetectHouse() {
+  const url = document.getElementById('aa-url').value.toLowerCase();
+  const sel = document.getElementById('aa-house');
+  if (!url) { sel.value = ''; return; }
+  for (const [pattern, slug] of HOUSE_DETECT) {
+    if (url.includes(pattern)) { sel.value = slug; return; }
+  }
+  sel.value = '';
+}
+
+async function addAuction(e) {
+  e.preventDefault();
+  const btn = document.getElementById('aa-submit');
+  btn.disabled = true; btn.textContent = 'Adding...';
+
+  const url = document.getElementById('aa-url').value.trim();
+  const houseSlug = document.getElementById('aa-house').value;
+  const date = document.getElementById('aa-date').value;
+  const title = document.getElementById('aa-title').value.trim();
+  const ready = document.getElementById('aa-ready').checked;
+
+  if (!url || !date) { toast('URL and date are required', 'error'); btn.disabled = false; btn.textContent = 'Add to Calendar'; return; }
+
+  let house, slug;
+  if (houseSlug === '_custom') {
+    house = prompt('Enter the auction house name:');
+    if (!house) { btn.disabled = false; btn.textContent = 'Add to Calendar'; return; }
+    slug = house.toLowerCase().replace(/[^a-z0-9]/g, '');
+  } else if (houseSlug && KNOWN_HOUSES[houseSlug]) {
+    house = KNOWN_HOUSES[houseSlug];
+    slug = houseSlug;
+  } else {
+    // Try auto-detect from URL
+    for (const [pattern, s] of HOUSE_DETECT) {
+      if (url.toLowerCase().includes(pattern)) { slug = s; house = KNOWN_HOUSES[s]; break; }
+    }
+    if (!house) {
+      try { house = new URL(url).hostname.replace('www.','').split('.')[0].replace(/-/g,' ').replace(/\b\w/g,c=>c.toUpperCase()); slug = house.toLowerCase().replace(/[^a-z0-9]/g,''); } catch { house = 'Unknown'; slug = 'unknown'; }
+    }
+  }
+
+  try {
+    const result = await apiFetch('/api/admin/calendar', {
+      method: 'POST',
+      body: JSON.stringify({
+        secret: SECRET,
+        auction: { house, houseSlug: slug, date, title: title || date, url, catalogueReady: ready }
+      })
+    });
+    if (result.error) { toast('Failed: ' + result.error, 'error'); }
+    else {
+      toast(`Added: ${house} — ${date}`, 'success');
+      document.getElementById('aa-url').value = '';
+      document.getElementById('aa-title').value = '';
+      document.getElementById('aa-house').value = '';
+      refreshAll();
+    }
+  } catch (err) { toast('Error: ' + err.message, 'error'); }
+
+  btn.disabled = false; btn.textContent = 'Add to Calendar';
+}
 
 // Auto-refresh every 5 minutes
 setInterval(refreshAll, 300000);

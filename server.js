@@ -2113,7 +2113,8 @@ app.post('/api/admin/seed-calendar', async (req, res) => {
 // Admin: add/update a single auction
 app.post('/api/admin/calendar', async (req, res) => {
   const { secret, auction } = req.body || {};
-  if (!process.env.ADMIN_SECRET || !safeCompare(secret, process.env.ADMIN_SECRET)) {
+  const token = req.headers['x-admin-secret'] || secret || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
     return res.status(403).json({ error: 'Invalid admin secret' });
   }
   if (!auction || !auction.house || !auction.date || !auction.url) {
