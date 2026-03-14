@@ -495,6 +495,9 @@ function extractWithJSDOM(html, house, baseUrl) {
   return lots;
 }
 
+// Track which scraping engine was last used (for cache metadata)
+let _lastScrapeEngine = 'http';
+
 async function scrapeRenderedPage(url, house, options = {}) {
   // Tier 1: Firecrawl (if available and not skipped/exhausted)
   if (FIRECRAWL_API_KEY && !fcCreditExhausted && !FIRECRAWL_SKIP.has(house)) {
@@ -513,6 +516,7 @@ async function scrapeRenderedPage(url, house, options = {}) {
         });
         if (result.html && result.html.length > 500) {
           console.log(`Firecrawl: got ${result.html.length} chars for ${house}`);
+          _lastScrapeEngine = 'firecrawl';
           return result;
         }
         console.log(`Firecrawl: empty/short response for ${house}, falling back`);
@@ -545,6 +549,7 @@ async function scrapeRenderedPage(url, house, options = {}) {
         await new Promise(r => setTimeout(r, 2000));
         const html = await page.content();
         const sourceURL = page.url();
+        _lastScrapeEngine = 'puppeteer';
         return { html, sourceURL };
       } finally {
         await page.close();
@@ -557,6 +562,7 @@ async function scrapeRenderedPage(url, house, options = {}) {
   // Tier 3: Plain HTTP (last resort)
   try {
     const html = await fetchPage(url);
+    _lastScrapeEngine = 'http';
     return { html, sourceURL: url };
   } catch (err) {
     throw new Error(`All scraping methods failed for ${url}: ${err.message}`);
@@ -2511,6 +2517,7 @@ app.post('/api/analyse', async (req, res) => {
       created_at: new Date().toISOString(),
       expires_at: expiresAt,
       last_scraped_at: new Date().toISOString(),
+      scraped_with: _lastScrapeEngine,
     }, { onConflict: 'url' });
 
     // Mark preset cache entries as partially stale (only the changed catalogue needs re-searching)
@@ -8126,7 +8133,7 @@ async function autoAnalyseOne(url) {
   const lotsWithPrice = lots.filter(l => l.price && l.price > 0);
   const yieldsArr = lots.map(l => l.estGrossYield).filter(y => y && y > 0);
 
-  // Check if catalogue data actually changed
+  // Check if catalogue data actually changed + lot count regression guard
   const { data: prevCached } = await supabase
     .from('cached_analyses')
     .select('total_lots, top_picks, title_splits')
@@ -8136,6 +8143,13 @@ async function autoAnalyseOne(url) {
   const newTotalLots = lots.length;
   const newTopPicks = lots.filter(l => l.score >= 3).length;
   const newTitleSplits = lots.filter(l => l.titleSplit).length;
+
+  // Lot count regression guard — if new scrape finds <50% of previous lots, warn and keep old data
+  if (prevCached && prevCached.total_lots > 5 && newTotalLots < prevCached.total_lots * 0.5) {
+    console.log(`AUTO: ⚠ ${house} lot count regression: ${prevCached.total_lots} → ${newTotalLots} (${Math.round(newTotalLots / prevCached.total_lots * 100)}%). Keeping old data.`);
+    return;
+  }
+
   const catalogueChanged = !prevCached
     || prevCached.total_lots !== newTotalLots
     || prevCached.top_picks !== newTopPicks
@@ -8156,6 +8170,7 @@ async function autoAnalyseOne(url) {
     expires_at: expiresAt,
     content_hash: autoAnalyseOne._lastContentHash || null,
     last_scraped_at: new Date().toISOString(),
+    scraped_with: _lastScrapeEngine,
   }, { onConflict: 'url' });
 
   // Mark preset cache entries as partially stale (only the changed catalogue needs re-searching)
