@@ -2031,6 +2031,9 @@ async function runSmartSearch(query) {
         }
         return;
       }
+      if (data.error === 'ai_quota_exhausted') {
+        throw new Error(data.message || 'AI search temporarily unavailable — daily quota reached. Please try again later.');
+      }
       throw new Error(data.detail || data.error || 'Search failed');
     }
 

@@ -2418,6 +2418,7 @@ Only return lots that genuinely match the query.`, { maxTokens: 4000 });
   }
 
   if (!process.env.GEMINI_API_KEY) return res.status(500).json({ error: 'API key not configured' });
+  if (creditExhausted) return res.status(503).json({ error: 'ai_quota_exhausted', message: 'AI search is temporarily unavailable — daily API quota reached. It resets automatically, please try again later.' });
 
   try {
     // Get all cached analyses
@@ -2556,6 +2557,10 @@ Only return lots that genuinely match the query. If nothing matches well, say so
     return res.json(response);
   } catch (err) {
     log.error('Smart search error', { error: err.message, stack: err.stack?.split('\n').slice(0, 3).join(' | ') });
+    if (err.status === 429 || /quota|rate.limit|resource.exhausted/i.test(err.message)) {
+      creditExhausted = true;
+      return res.status(503).json({ error: 'ai_quota_exhausted', message: 'AI search is temporarily unavailable — daily API quota reached. It resets automatically, please try again later.' });
+    }
     return res.status(500).json({ error: 'Smart search failed', detail: err.message });
   }
 });
