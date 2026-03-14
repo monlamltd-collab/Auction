@@ -3387,6 +3387,27 @@ app.get('/terms', (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
+// DIAGNOSTIC ENDPOINT (temporary — remove after debugging)
+// ═══════════════════════════════════════════════════════════════
+app.get('/api/diag', (req, res) => {
+  res.json({
+    uptime: Math.round(process.uptime()),
+    autoRunning: _autoAnalysisRunning,
+    creditExhausted,
+    fcKey: FIRECRAWL_API_KEY ? `set (${FIRECRAWL_API_KEY.length} chars)` : 'NOT SET',
+    fcCreditsUsed,
+    fcCreditExhausted,
+    fcTemporarilyDown,
+    fcFallbackCount,
+    fcErrorCount,
+    fcRequestCount,
+    puppeteerAvailable: !!puppeteer,
+    geminiKey: process.env.GEMINI_API_KEY ? 'set' : 'NOT SET',
+    apiCallCount,
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
 // BRIDGEMATCH LITE
 // ═══════════════════════════════════════════════════════════════
 app.get('/check', (req, res) => {
