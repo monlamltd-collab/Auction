@@ -822,12 +822,12 @@ footer .logo-f span{color:var(--green)}
         <option value="">Any tenure</option><option value="Freehold">Freehold</option><option value="Leasehold">Leasehold</option><option value="Share of Freehold">Share of FH</option>
       </select>
       <select class="tb-select" id="fSoldTop" onchange="renderLots()" aria-label="Lot status">
-        <option value="available">Available only</option><option value="all">All lots</option><option value="sold">Sold only</option>
+        <option value="all">All lots</option><option value="available">Available only</option><option value="sold">Sold only</option>
       </select>
       <input class="tb-search" type="text" id="fPostcode" placeholder="Postcode..." oninput="renderLots()" aria-label="Filter by postcode">
       <select class="tb-select" id="fExcludePOA" onchange="renderLots()" aria-label="Include or exclude POA lots"><option value="">Inc. POA</option><option value="yes">Excl. POA</option></select>
       <select class="tb-select" id="fLookahead" onchange="saveLookahead();renderLots()" aria-label="Auction lookahead"><option value="1">Next auction</option><option value="2">Next 2 auctions</option><option value="all" selected>All upcoming</option></select>
-      <label><input type="checkbox" id="fIncludePrevious" onchange="renderLots()"> Previous</label>
+      <label><input type="checkbox" id="fIncludePrevious" onchange="renderLots()" checked> Previous</label>
     </div>
     <!-- ROW 3: Quick filter chips + AI shortcuts -->
     <div class="chip-row">
@@ -1054,7 +1054,7 @@ function resetSearchState(){
   SMART_RESULTS=null;
   const filterResets={fDeal:'',fType:'',fCondition:'',fTenure:'',fLocation:'',fAfford:'all',fSoldTop:'all',fSearch:'',fSort:'score',fBeds:'',fPostcode:'',fMinPrice:'',fMaxPrice:''};
   if($('fExcludePOA')) $('fExcludePOA').value='';
-  if($('fIncludePrevious')) $('fIncludePrevious').checked=false;
+  if($('fIncludePrevious')) $('fIncludePrevious').checked=true;
   _selectedHouses.clear();
   for(const[id,val] of Object.entries(filterResets)){const el=$(id);if(el)el.value=val}
   updatePriceBtn();
@@ -1249,7 +1249,7 @@ function handleSearch(){
 function setQ(q){ $('smartQuery').value = q; }
 function applyPreset(name){
   // Reset all filters first
-  const resets={fDeal:'',fType:'',fCondition:'',fTenure:'',fLocation:'',fSoldTop:'available',fSearch:'',fSort:'score',fBeds:'',fPostcode:'',fMinPrice:'',fMaxPrice:'',fExcludePOA:''};
+  const resets={fDeal:'',fType:'',fCondition:'',fTenure:'',fLocation:'',fSoldTop:'all',fSearch:'',fSort:'score',fBeds:'',fPostcode:'',fMinPrice:'',fMaxPrice:'',fExcludePOA:''};
   for(const[id,val] of Object.entries(resets)){const el=$(id);if(el)el.value=val}
   $('smartQuery').value='';
   if(name==='refurb150'){$('fCondition').value='needs work';$('fMaxPrice').value='150000'}
