@@ -3155,8 +3155,7 @@ app.get('/api/cache-status', async (req, res) => {
   try {
     const { data: cached } = await supabase
       .from('cached_analyses')
-      .select('house, url, total_lots, title_splits, top_picks, under_100k, avg_yield, dev_potential, vacant_count, created_at, expires_at')
-      .gt('expires_at', new Date().toISOString())
+      .select('house, url, total_lots, title_splits, top_picks, under_100k, avg_yield, dev_potential, vacant_count, created_at, expires_at, scraped_with, last_scraped_at')
       .order('house');
 
     const allAuctions = await getCalendarAuctions();
@@ -3361,6 +3360,13 @@ app.post('/api/analyse-all', async (req, res) => {
     log.error('Refresh cache error', { error: e.message });
     res.status(500).json({ error: 'Internal server error' });
   }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// ADMIN DASHBOARD
+// ═══════════════════════════════════════════════════════════════
+app.get('/admin', (req, res) => {
+  res.sendFile(join(__dirname, 'admin.html'));
 });
 
 // ═══════════════════════════════════════════════════════════════
