@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-03-13T05:43:24.693Z",
+  "timestamp": "2026-03-14T05:40:47.540Z",
   "results": [
     {
       "house": "savills",
@@ -15,13 +15,7 @@
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": null,
-      "issues": [
-        {
-          "type": "SITE_REDESIGNED",
-          "severity": "BROKEN",
-          "detail": "Structure drift 100/100 + extractor returns 0"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "sdl",
@@ -74,9 +68,14 @@
       "house": "barnardmarcus",
       "extractorLots": 20,
       "universalLots": 0,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": 0,
       "issues": [
+        {
+          "type": "TIMEOUT",
+          "severity": "BROKEN",
+          "detail": "HTTP request timed out (10s)"
+        },
         {
           "type": "LOW_IMAGES",
           "severity": "WARNING",
@@ -107,12 +106,7 @@
         {
           "type": "EXTRACTOR_BROKEN",
           "severity": "BROKEN",
-          "detail": "DOM extractor returns 0, but 758 prices on page"
-        },
-        {
-          "type": "SITE_REDESIGNED",
-          "severity": "BROKEN",
-          "detail": "Structure drift 58/100 + extractor returns 0"
+          "detail": "DOM extractor returns 0, but 779 prices on page"
         }
       ]
     },
@@ -154,7 +148,7 @@
     },
     {
       "house": "hollismorgan",
-      "extractorLots": 94,
+      "extractorLots": 93,
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": 0,
@@ -162,18 +156,18 @@
         {
           "type": "LOW_IMAGES",
           "severity": "WARNING",
-          "detail": "Image coverage 0% (0/94)"
+          "detail": "Image coverage 0% (0/93)"
         },
         {
           "type": "CACHE_STALE",
           "severity": "WARNING",
-          "detail": "Cached 506 vs live 94 (81% drift)"
+          "detail": "Cached 506 vs live 93 (82% drift)"
         }
       ]
     },
     {
       "house": "maggsandallen",
-      "extractorLots": 19,
+      "extractorLots": 18,
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": 100,
@@ -216,7 +210,7 @@
     },
     {
       "house": "bidx1",
-      "extractorLots": 259,
+      "extractorLots": 261,
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": 16,
@@ -224,7 +218,7 @@
         {
           "type": "LOW_IMAGES",
           "severity": "WARNING",
-          "detail": "Image coverage 16% (41/259)"
+          "detail": "Image coverage 16% (42/261)"
         }
       ]
     },
@@ -284,7 +278,7 @@
     },
     {
       "house": "bradleyhall",
-      "extractorLots": 31,
+      "extractorLots": 30,
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": 100,
@@ -401,7 +395,7 @@
         {
           "type": "EXTRACTOR_BROKEN",
           "severity": "BROKEN",
-          "detail": "DOM extractor returns 0, but 17 prices on page"
+          "detail": "DOM extractor returns 0, but 21 prices on page"
         }
       ]
     },
@@ -449,7 +443,7 @@
     },
     {
       "house": "seelauctions",
-      "extractorLots": 33,
+      "extractorLots": 31,
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": 100,
@@ -457,13 +451,13 @@
         {
           "type": "MISSING_FROM_CACHE",
           "severity": "WARNING",
-          "detail": "33 live lots but missing from production cache"
+          "detail": "31 live lots but missing from production cache"
         }
       ]
     },
     {
       "house": "robinsonhall",
-      "extractorLots": 18,
+      "extractorLots": 21,
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": 100,
@@ -471,7 +465,7 @@
         {
           "type": "MISSING_FROM_CACHE",
           "severity": "WARNING",
-          "detail": "18 live lots but missing from production cache"
+          "detail": "21 live lots but missing from production cache"
         }
       ]
     }
