@@ -8,7 +8,7 @@ Bridgematch is a UK property auction directory and AI-powered catalogue analyser
 **Repo:** `monlamltd-collab/Auction`
 **Hosting:** Railway (Express server) — was originally Vercel but migrated
 **Domain:** bridgematch.co.uk
-**Stack:** Node.js (Express), Puppeteer, Google Gemini API (free tier), vanilla JS frontend
+**Stack:** Node.js (Express), Firecrawl (primary scraper) + Puppeteer (fallback), Google Gemini API (free tier), vanilla JS frontend
 
 ---
 
@@ -31,7 +31,8 @@ index.html (~79K)
 
 ### Key Dependencies
 - `@google/generative-ai` — Gemini API for lot data extraction (free tier: 15 RPM, 1500 RPD)
-- `puppeteer` — Headless Chrome for scraping JS-rendered auction sites
+- `jsdom` — DOM parsing for Firecrawl HTML (runs DOM extractors locally via `new Function('document', ...)`)
+- `puppeteer` — Headless Chrome fallback for JS-rendered sites (conditional — Firecrawl is primary)
 - `express` — HTTP server
 - `@supabase/supabase-js` — Auth (for future features)
 
@@ -53,10 +54,30 @@ index.html (~79K)
 - **Models:** `gemini-2.0-flash` for known houses (fast, free), `gemini-2.5-pro` for unknown houses and PDF extraction
 - **Rate limiting:** Built-in 4.1s gap between calls to stay under Gemini free tier 15 RPM limit
 
-### Puppeteer & Memory
-- Puppeteer instances consume significant RAM on Railway
-- A **skip list** exists for houses where Puppeteer is futile (blocked requests, empty pages, JS-only rendering that still fails)
-- Memory optimisation: skip list prevents wasting resources on houses that will never return data via Puppeteer
+### Scraping Architecture (Three-Tier Fallback)
+1. **Firecrawl** (primary) — Managed scraping API (`scrapeWithFirecrawl()`). Handles JS rendering, anti-bot, proxy rotation. Returns raw HTML which is parsed locally with JSDOM (`extractWithJSDOM()`). Controlled by `FIRECRAWL_API_KEY` env var.
+2. **Puppeteer** (fallback) — Headless Chrome via `acquirePage()`. Used when Firecrawl is unavailable, credits exhausted, or house is in `FIRECRAWL_SKIP`. Puppeteer import is conditional — server works without it.
+3. **Plain HTTP** (last resort) — `fetchPage()` for static HTML pages.
+
+Key functions:
+- `scrapeRenderedPage(url, house)` — Orchestrates the three-tier fallback
+- `extractWithJSDOM(html, house, baseUrl)` — Runs DOM extractors in JSDOM (same pattern as test suite)
+- `scrapePageWithFirecrawl(url, house)` — Multi-page wrapper with pagination
+- `backfillImagesWithFirecrawl(url, lots, house)` — Image backfill via rendered page
+
+### Firecrawl Credit Management
+- Monthly budget cap via `FIRECRAWL_MONTHLY_BUDGET` env var (default 15000)
+- Auto-exhaustion detection on 402/429 responses → falls back to Puppeteer
+- 3 consecutive 5xx → marks temporarily down for 10min
+- Credit exhaustion auto-clears after 1 hour
+- Hash-based skip in `autoAnalyseOne()` saves ~50-70% of credits
+- Per-house skip via `FIRECRAWL_SKIP_HOUSES` env var
+- Stats visible at `/api/cost-monitor`
+
+### Rollback
+- **Instant**: Remove `FIRECRAWL_API_KEY` from env → all paths use Puppeteer
+- **Per-house**: Add slug to `FIRECRAWL_SKIP_HOUSES` env var
+- Puppeteer remains in `package.json` and Dockerfile throughout
 
 ---
 
@@ -149,6 +170,10 @@ These are computed from lot data fields: `price`, `estGrossYield`, `opportunitie
 | Variable | Purpose |
 |---|---|
 | `GEMINI_API_KEY` | Google Gemini API key for lot extraction (free tier) |
+| `FIRECRAWL_API_KEY` | Firecrawl API key for managed scraping (primary scraper) |
+| `FIRECRAWL_MONTHLY_BUDGET` | Credit cap per month (default 15000) |
+| `FIRECRAWL_SKIP_HOUSES` | Comma-separated house slugs to skip Firecrawl for |
+| `FIRECRAWL_MIN_GAP_MS` | Min gap between Firecrawl calls in ms (default 300) |
 | `PORT` | Server port (Railway sets this) |
 | `SUPABASE_URL` | Supabase project URL (future auth) |
 | `SUPABASE_ANON_KEY` | Supabase anon key (future auth) |

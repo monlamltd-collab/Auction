@@ -1,7 +1,9 @@
 FROM node:20-slim
 
-# Install Chromium dependencies
-RUN apt-get update && apt-get install -y \
+# Conditionally install Chromium (set INSTALL_CHROMIUM=false to skip for Firecrawl-only deployments)
+ARG INSTALL_CHROMIUM=true
+RUN if [ "$INSTALL_CHROMIUM" = "true" ]; then \
+    apt-get update && apt-get install -y \
     chromium \
     fonts-liberation \
     libnss3 \
@@ -25,9 +27,10 @@ RUN apt-get update && apt-get install -y \
     libxss1 \
     libxtst6 \
     --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/*; \
+  fi
 
-# Tell Puppeteer to use installed Chromium
+# Tell Puppeteer to use installed Chromium (no-op if Chromium not installed)
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 

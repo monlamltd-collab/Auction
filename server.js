@@ -18,10 +18,29 @@ import { createClient } from '@supabase/supabase-js';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { readFileSync } from 'fs';
 import { lookup } from 'dns/promises';
-import puppeteer from 'puppeteer';
+import { JSDOM } from 'jsdom';
+let puppeteer = null;
+try { puppeteer = (await import('puppeteer')).default; } catch {}
 import Stripe from 'stripe';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// ═══════════════════════════════════════════════════════════════
+// ENV VAR VALIDATION
+// ═══════════════════════════════════════════════════════════════
+const REQUIRED_ENV = ['GEMINI_API_KEY', 'SUPABASE_URL', 'SUPABASE_SERVICE_KEY'];
+const RECOMMENDED_ENV = ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'SUPABASE_ANON_KEY', 'SUPABASE_JWT_SECRET', 'ADMIN_SECRET', 'RESEND_API_KEY', 'FIRECRAWL_API_KEY'];
+for (const key of REQUIRED_ENV) {
+  if (!process.env[key]) {
+    console.error(`FATAL: Required environment variable ${key} is not set. Server cannot start.`);
+    process.exit(1);
+  }
+}
+for (const key of RECOMMENDED_ENV) {
+  if (!process.env[key]) console.warn(`WARNING: Recommended env var ${key} is not set — some features will be disabled.`);
+}
+
+function escHtml(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -90,9 +109,8 @@ app.use((req, res, next) => {
 function csrfCheck(req, res, next) {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
   if (req.path === '/api/stripe/webhook') return next(); // Stripe uses its own signature verification
-  const origin = req.headers.origin || req.headers.referer || '';
-  const allowed = ['https://auctions.bridgematch.co.uk', 'https://www.bridgematch.co.uk', 'https://bridgematch.co.uk'];
-  if (origin && allowed.some(a => origin.startsWith(a))) {
+  const origin = (req.headers.origin || req.headers.referer || '').replace(/\/+$/, '');
+  if (origin && ALLOWED_ORIGINS.some(a => origin === a || origin === a + '/')) {
     return next();
   }
   return res.status(403).json({ error: 'Forbidden — missing or invalid Origin header' });
@@ -204,6 +222,12 @@ const MAX_PUPPETEER_PAGES = 15;
 const MAX_LOTS_PER_SCRAPE = 100;
 const MAX_AUCTIONS_PER_HOUSE = 2;
 const TIMEOUT = 25000;
+// Houses where catalogue pages are JS-rendered — need Puppeteer for image backfill
+const PUPPETEER_IMAGE_HOUSES = new Set([
+  'bondwolfe', 'probateauction', 'cliveemson', 'savills', 'sdl',
+  'network', 'pattinson', 'barnardmarcus', 'auctionhouselondon',
+  'strettons', 'acuitus', 'hollismorgan', 'knightfrank', 'auctionhouse',
+]);
 
 // ═══════════════════════════════════════════════════════════════
 // GEMINI MODEL SELECTION — Flash-Lite for known houses, Pro for unknown/PDF
@@ -223,6 +247,422 @@ async function geminiRateLimited(fn) {
   return fn();
 }
 
+// ── Firecrawl rate limiter & credit tracking ──
+const FIRECRAWL_API_KEY = process.env.FIRECRAWL_API_KEY || '';
+const FIRECRAWL_MONTHLY_BUDGET = parseInt(process.env.FIRECRAWL_MONTHLY_BUDGET || '15000');
+const FIRECRAWL_SKIP = new Set((process.env.FIRECRAWL_SKIP_HOUSES || '').split(',').filter(Boolean));
+let _fcLastCall = 0;
+const FC_MIN_GAP = parseInt(process.env.FIRECRAWL_MIN_GAP_MS || '300');
+async function firecrawlRateLimited(fn) {
+  const now = Date.now();
+  const earliest = _fcLastCall + FC_MIN_GAP;
+  const wait = Math.max(0, earliest - now);
+  _fcLastCall = now + wait;
+  if (wait > 0) await new Promise(r => setTimeout(r, wait));
+  return fn();
+}
+
+let fcCreditsUsed = 0;
+let fcCreditExhausted = false;
+let fcExhaustedAt = 0;
+let fcFallbackCount = 0;
+let fcErrorCount = 0;
+let fcRequestCount = 0;
+let fcTemporarilyDown = false;
+let fcDownAt = 0;
+let fcConsecutive5xx = 0;
+
+async function scrapeWithFirecrawl(url, options = {}) {
+  if (!FIRECRAWL_API_KEY) throw new Error('FIRECRAWL_API_KEY not set');
+  if (fcCreditExhausted) throw new Error('Firecrawl credits exhausted');
+  if (fcTemporarilyDown && Date.now() - fcDownAt < 600000) throw new Error('Firecrawl temporarily down');
+
+  const body = {
+    url,
+    formats: ['rawHtml'],
+  };
+  if (options.waitFor) body.waitFor = options.waitFor;
+  if (options.actions) body.actions = options.actions;
+
+  const doFetch = async () => {
+    const resp = await fetch('https://api.firecrawl.dev/v1/scrape', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${FIRECRAWL_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(60000),
+    });
+
+    if (resp.status === 402 || resp.status === 429) {
+      fcCreditExhausted = true;
+      fcExhaustedAt = Date.now();
+      console.log('Firecrawl: credit/rate limit hit — switching to fallback');
+      throw new Error(`Firecrawl ${resp.status}: credits/rate exhausted`);
+    }
+
+    if (resp.status >= 500) {
+      fcConsecutive5xx++;
+      if (fcConsecutive5xx >= 3) {
+        fcTemporarilyDown = true;
+        fcDownAt = Date.now();
+        console.log('Firecrawl: 3 consecutive 5xx — marking temporarily down for 10min');
+      }
+      throw new Error(`Firecrawl ${resp.status}: server error`);
+    }
+
+    if (!resp.ok) throw new Error(`Firecrawl ${resp.status}: ${await resp.text().catch(() => 'unknown')}`);
+
+    fcConsecutive5xx = 0;
+    const data = await resp.json();
+    if (!data.success) throw new Error(`Firecrawl returned success=false: ${data.error || 'unknown'}`);
+
+    fcCreditsUsed++;
+    fcRequestCount++;
+    return {
+      html: data.data?.rawHtml || data.data?.html || '',
+      sourceURL: data.data?.metadata?.sourceURL || url,
+    };
+  };
+
+  // 1 retry on 5xx/timeout with 2s backoff
+  try {
+    return await firecrawlRateLimited(doFetch);
+  } catch (err) {
+    if (/5\d\d|timeout|abort/i.test(err.message)) {
+      console.log(`Firecrawl: retrying after error: ${err.message}`);
+      await new Promise(r => setTimeout(r, 2000));
+      try {
+        return await firecrawlRateLimited(doFetch);
+      } catch (retryErr) {
+        fcErrorCount++;
+        throw retryErr;
+      }
+    }
+    fcErrorCount++;
+    throw err;
+  }
+}
+
+function extractWithJSDOM(html, house, baseUrl) {
+  const dom = new JSDOM(html, { url: baseUrl });
+  const { document } = dom.window;
+
+  let lots = null;
+
+  // Try house-specific extractor first
+  const extractor = DOM_EXTRACTORS[house];
+  if (extractor) {
+    try {
+      const fn = new Function('document', `return ${extractor}`);
+      const result = fn(document);
+      if (Array.isArray(result) && result.length > 0) {
+        console.log(`JSDOM extractor for ${house}: found ${result.length} lots`);
+        lots = result;
+      }
+    } catch (err) {
+      log.warn('JSDOM extractor error', { house, error: err.message });
+    }
+  }
+
+  // Fall back to universal extractor
+  if (!lots) {
+    try {
+      const fn = new Function('document', `return ${UNIVERSAL_DOM_EXTRACTOR}`);
+      const result = fn(document);
+      if (Array.isArray(result) && result.length > 0) {
+        console.log(`JSDOM universal extractor for ${house}: found ${result.length} lots`);
+        lots = result;
+      }
+    } catch (err) {
+      log.warn('JSDOM universal extractor error', { house, error: err.message });
+    }
+  }
+
+  if (!lots) {
+    console.log(`All JSDOM extractors for ${house}: found 0 lots`);
+    dom.window.close();
+    return null;
+  }
+
+  // Save raw URLs for image matching
+  const rawUrls = lots.map(l => l.url || '');
+
+  // Resolve relative URLs to absolute
+  for (const lot of lots) {
+    if (lot.url && !/^https?:\/\//i.test(lot.url)) {
+      try { lot.url = new URL(lot.url, baseUrl).href; } catch {}
+    }
+    if (lot.detailUrl && !/^https?:\/\//i.test(lot.detailUrl)) {
+      try { lot.detailUrl = new URL(lot.detailUrl, baseUrl).href; } catch {}
+    }
+    if (lot.imageUrl && !/^https?:\/\//i.test(lot.imageUrl)) {
+      try { lot.imageUrl = new URL(lot.imageUrl, baseUrl).href; } catch {}
+    }
+  }
+
+  // Image extraction pass — match by lot URL href→image mapping
+  try {
+    const skip = /logo|icon|arrow|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|loading|cookie|emoji/i;
+    const hrefImageMap = {};
+    const links = document.querySelectorAll('a[href]');
+    for (const link of links) {
+      const rawHref = link.getAttribute('href') || '';
+      let absHref;
+      try { absHref = new URL(rawHref, baseUrl).href; } catch { absHref = rawHref; }
+      if (!rawHref || rawHref === '#') continue;
+      if (hrefImageMap[rawHref] || hrefImageMap[absHref]) continue;
+
+      // Strategy 1: <img> inside the link
+      let imgSrc = '';
+      let img = link.querySelector('img');
+      // Strategy 2: Walk up parent (up to 5 levels)
+      if (!img) {
+        let el = link;
+        for (let depth = 0; depth < 5; depth++) {
+          el = el.parentElement;
+          if (!el) break;
+          img = el.querySelector('img');
+          if (img) break;
+        }
+      }
+      if (img) {
+        imgSrc = img.getAttribute('src') || img.getAttribute('data-src')
+          || img.getAttribute('data-lazy-src') || img.getAttribute('data-original')
+          || (img.getAttribute('srcset') ? img.getAttribute('srcset').split(',')[0].trim().split(/\s+/)[0] : '');
+      }
+
+      // Strategy 3: background-image
+      if (!imgSrc || imgSrc.startsWith('data:')) {
+        let el = link;
+        for (let depth = 0; depth < 5; depth++) {
+          el = el.parentElement;
+          if (!el) break;
+          const bgEls = el.querySelectorAll('[style*="background"]');
+          for (const bgEl of bgEls) {
+            const style = bgEl.getAttribute('style') || '';
+            const bgMatch = style.match(/background(?:-image)?:\s*url\(['"]?([^'")\s]+)/i);
+            if (bgMatch && bgMatch[1] && !bgMatch[1].startsWith('data:')) {
+              imgSrc = bgMatch[1];
+              break;
+            }
+          }
+          if (imgSrc && !imgSrc.startsWith('data:')) break;
+        }
+      }
+
+      if (!imgSrc || imgSrc.startsWith('data:') || imgSrc.length < 10 || skip.test(imgSrc)) continue;
+      hrefImageMap[rawHref] = imgSrc;
+      hrefImageMap[absHref] = imgSrc;
+    }
+
+    if (Object.keys(hrefImageMap).length > 0) {
+      for (let i = 0; i < lots.length; i++) {
+        if (lots[i].imageUrl) continue;
+        const imgSrc = hrefImageMap[rawUrls[i]] || hrefImageMap[lots[i].url];
+        if (imgSrc) {
+          let imgUrl = imgSrc;
+          if (!/^https?:\/\//i.test(imgUrl)) {
+            try { imgUrl = new URL(imgUrl, baseUrl).href; } catch {}
+          }
+          lots[i].imageUrl = imgUrl;
+        }
+      }
+      console.log(`JSDOM image extraction for ${house}: ${lots.filter(l => l.imageUrl).length}/${lots.length} lots got images`);
+    }
+  } catch (err) {
+    log.warn('JSDOM image extraction error', { house, error: err.message });
+  }
+
+  // Resolve any remaining relative imageUrls
+  for (const lot of lots) {
+    if (lot.imageUrl && !/^https?:\/\//i.test(lot.imageUrl)) {
+      try { lot.imageUrl = new URL(lot.imageUrl, baseUrl).href; } catch {}
+    }
+  }
+
+  // Post-processing: filter junk images (same blocklist as extractWithDOM)
+  const imgBlocklist = /logo|icon|placeholder|no-image|default|blank|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|1x1|noimage|favicon|banner|advert|sponsor|newsletter|widget|thumb_generic|modal\.png|_NYC\.|_LCC\.|_BMDC\.|Unit[ie]*d?_?Utilit|Cardwells|themes\/.*assets\/images\/|download_\(\d+\)\./i;
+  const imgDomainBlock = /flannels|kirklees|rdw\b|council\.gov|\.gov\.uk\/|googleads|doubleclick|analytics|hotjar|intercom|crisp\.chat|tawk\.to|zendesk|hubspot|mailchimp|sendgrid/i;
+  for (const lot of lots) {
+    if (lot.imageUrl && (imgBlocklist.test(lot.imageUrl) || imgDomainBlock.test(lot.imageUrl))) {
+      lot.imageUrl = '';
+    }
+  }
+
+  dom.window.close();
+  return lots;
+}
+
+async function scrapeRenderedPage(url, house, options = {}) {
+  // Tier 1: Firecrawl (if available and not skipped/exhausted)
+  if (FIRECRAWL_API_KEY && !fcCreditExhausted && !FIRECRAWL_SKIP.has(house)) {
+    if (!(fcTemporarilyDown && Date.now() - fcDownAt < 600000)) {
+      try {
+        const fcActions = [
+          { type: 'scroll', direction: 'down', amount: 5 },
+          { type: 'wait', milliseconds: 2000 },
+          { type: 'scroll', direction: 'down', amount: 5 },
+          { type: 'wait', milliseconds: 1000 },
+          { type: 'scroll', direction: 'up', amount: 10 },
+        ];
+        const result = await scrapeWithFirecrawl(url, {
+          waitFor: options.waitFor || 3000,
+          actions: options.actions || fcActions,
+        });
+        if (result.html && result.html.length > 500) {
+          console.log(`Firecrawl: got ${result.html.length} chars for ${house}`);
+          return result;
+        }
+        console.log(`Firecrawl: empty/short response for ${house}, falling back`);
+      } catch (err) {
+        console.log(`Firecrawl failed for ${house}: ${err.message}, falling back`);
+        fcFallbackCount++;
+      }
+    }
+  }
+
+  // Tier 2: Puppeteer (if available)
+  if (puppeteer) {
+    try {
+      const page = await acquirePage();
+      try {
+        await page.setUserAgent(HEADERS['User-Agent']);
+        await page.setViewport({ width: 1280, height: 900 });
+        await page.setRequestInterception(true);
+        page.on('request', req => {
+          const type = req.resourceType();
+          if (['image', 'font', 'media'].includes(type)) req.abort();
+          else req.continue();
+        });
+        await page.goto(url, { waitUntil: 'networkidle2', timeout: 45000 });
+        await new Promise(r => setTimeout(r, 3000));
+        await page.evaluate(async () => {
+          for (let i = 0; i < 15; i++) { window.scrollBy(0, window.innerHeight); await new Promise(r => setTimeout(r, 500)); }
+          window.scrollTo(0, 0);
+        });
+        await new Promise(r => setTimeout(r, 2000));
+        const html = await page.content();
+        const sourceURL = page.url();
+        return { html, sourceURL };
+      } finally {
+        await page.close();
+      }
+    } catch (err) {
+      console.log(`Puppeteer fallback failed for ${house}: ${err.message}`);
+    }
+  }
+
+  // Tier 3: Plain HTTP (last resort)
+  try {
+    const html = await fetchPage(url);
+    return { html, sourceURL: url };
+  } catch (err) {
+    throw new Error(`All scraping methods failed for ${url}: ${err.message}`);
+  }
+}
+
+async function scrapePageWithFirecrawl(url, house) {
+  const result = await scrapeRenderedPage(url, house);
+  if (!result.html) return [];
+  const pages = [{ page: 1, html: result.html }];
+
+  // Detect total pages from first page HTML
+  const totalPages = detectTotalPages(result.html, url, house);
+  if (totalPages > 1) {
+    const pageCap = Math.min(totalPages, MAX_PUPPETEER_PAGES);
+    console.log(`Firecrawl multi-page: ${house} has ${totalPages} pages, loading up to ${pageCap}`);
+    for (let p = 2; p <= pageCap; p++) {
+      if (fcCreditExhausted) { console.log(`Firecrawl: credits exhausted at page ${p}, stopping`); break; }
+      const pageUrl = buildPageUrl(url, p, house);
+      try {
+        const pageResult = await scrapeRenderedPage(pageUrl, house);
+        if (pageResult.html && pageResult.html.length > 500) {
+          pages.push({ page: p, html: pageResult.html });
+        } else {
+          console.log(`Firecrawl: page ${p} empty for ${house}, stopping`);
+          break;
+        }
+      } catch (err) {
+        console.log(`Firecrawl: page ${p} failed for ${house}: ${err.message}`);
+        break;
+      }
+    }
+  }
+  return pages;
+}
+
+async function backfillImagesWithFirecrawl(catalogueUrl, lots, house) {
+  try {
+    const result = await scrapeRenderedPage(catalogueUrl, house, {
+      actions: [
+        { type: 'scroll', direction: 'down', amount: 10 },
+        { type: 'wait', milliseconds: 3000 },
+        { type: 'scroll', direction: 'up', amount: 10 },
+      ],
+    });
+    if (!result.html) return 0;
+
+    const dom = new JSDOM(result.html, { url: catalogueUrl });
+    const { document } = dom.window;
+
+    // Build href→image map from the rendered page
+    const skip = /logo|icon|arrow|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|loading|cookie|emoji/i;
+    const hrefImageMap = {};
+    const links = document.querySelectorAll('a[href]');
+    for (const link of links) {
+      const rawHref = link.getAttribute('href') || '';
+      let absHref;
+      try { absHref = new URL(rawHref, catalogueUrl).href; } catch { absHref = rawHref; }
+      if (!rawHref || rawHref === '#') continue;
+      if (hrefImageMap[rawHref] || hrefImageMap[absHref]) continue;
+
+      let imgSrc = '';
+      let img = link.querySelector('img');
+      if (!img) {
+        let el = link;
+        for (let depth = 0; depth < 5; depth++) {
+          el = el.parentElement;
+          if (!el) break;
+          img = el.querySelector('img');
+          if (img) break;
+        }
+      }
+      if (img) {
+        imgSrc = img.getAttribute('src') || img.getAttribute('data-src')
+          || img.getAttribute('data-lazy-src') || img.getAttribute('data-original')
+          || (img.getAttribute('srcset') ? img.getAttribute('srcset').split(',')[0].trim().split(/\s+/)[0] : '');
+      }
+      if (!imgSrc || imgSrc.startsWith('data:') || imgSrc.length < 10 || skip.test(imgSrc)) continue;
+      hrefImageMap[rawHref] = imgSrc;
+      hrefImageMap[absHref] = imgSrc;
+    }
+
+    dom.window.close();
+
+    // Match images to lots
+    let updated = 0;
+    for (const lot of lots) {
+      if (lot.imageUrl) continue;
+      const imgSrc = hrefImageMap[lot.url];
+      if (imgSrc) {
+        let imgUrl = imgSrc;
+        if (!/^https?:\/\//i.test(imgUrl)) {
+          try { imgUrl = new URL(imgUrl, catalogueUrl).href; } catch {}
+        }
+        lot.imageUrl = imgUrl;
+        updated++;
+      }
+    }
+    console.log(`Firecrawl image backfill for ${house}: ${updated}/${lots.length} lots got images`);
+    return updated;
+  } catch (err) {
+    log.warn('Firecrawl image backfill error', { house, catalogueUrl, error: err.message });
+    return 0;
+  }
+}
+
 async function callGemini(prompt, { model = MODEL_FLASH, maxTokens = 8000, systemPrompt = null, pdfBase64 = null } = {}) {
   const config = { maxOutputTokens: maxTokens };
   const modelOpts = { model };
@@ -234,12 +674,25 @@ async function callGemini(prompt, { model = MODEL_FLASH, maxTokens = 8000, syste
   }
   parts.push({ text: prompt });
 
-  const result = await geminiRateLimited(() =>
-    m.generateContent({
-      contents: [{ role: 'user', parts }],
-      generationConfig: config,
-    })
-  );
+  let result;
+  try {
+    result = await geminiRateLimited(() =>
+      m.generateContent({
+        contents: [{ role: 'user', parts }],
+        generationConfig: config,
+      })
+    );
+  } catch (err) {
+    const msg = err?.message || String(err);
+    if (/429|quota|rate/i.test(msg)) {
+      creditExhausted = true; creditExhaustedAt = Date.now();
+      log.warn('Gemini quota exhausted', { model, error: msg });
+    }
+    throw new Error(`Gemini API error (${model}): ${msg}`);
+  }
+  if (!result || !result.response) {
+    throw new Error(`Gemini returned empty response (${model})`);
+  }
   return result.response.text();
 }
 
@@ -346,6 +799,33 @@ function getClientIP(req) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// SIMPLE IN-MEMORY RATE LIMITER
+// ═══════════════════════════════════════════════════════════════
+const _rlBuckets = new Map();
+function rateLimit(windowMs, maxHits) {
+  return (req, res, next) => {
+    const ip = getClientIP(req);
+    const key = `${req.route?.path || req.path}:${ip}`;
+    const now = Date.now();
+    let bucket = _rlBuckets.get(key);
+    if (!bucket || now - bucket.start > windowMs) {
+      bucket = { start: now, count: 0 };
+      _rlBuckets.set(key, bucket);
+    }
+    bucket.count++;
+    if (bucket.count > maxHits) {
+      return res.status(429).json({ error: 'Too many requests. Please try again later.' });
+    }
+    next();
+  };
+}
+// Clean up stale buckets every 5 minutes
+setInterval(() => {
+  const cutoff = Date.now() - 600000;
+  for (const [k, v] of _rlBuckets) { if (v.start < cutoff) _rlBuckets.delete(k); }
+}, 300000);
+
+// ═══════════════════════════════════════════════════════════════
 // URL VALIDATION — prevent SSRF via user-supplied URLs
 // ═══════════════════════════════════════════════════════════════
 const BLOCKED_HOST_PATTERNS = [
@@ -400,32 +880,35 @@ app.use('/public', express.static(join(__dirname, 'public')));
 // ═══════════════════════════════════════════════════════════════
 // API: USER SIGNUP
 // ═══════════════════════════════════════════════════════════════
-app.post('/api/signup', async (req, res) => {
+// Legacy signup endpoint — kept for backwards compatibility but no longer issues session tokens
+// All auth now goes through Supabase magic links
+app.post('/api/signup', rateLimit(60000, 5), async (req, res) => {
   const { email, name } = req.body || {};
-  if (!email || !email.includes('@')) return res.status(400).json({ error: 'Valid email required' });
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return res.status(400).json({ error: 'Valid email required' });
 
   try {
-    const token = randomBytes(32).toString('hex');
+    const normEmail = email.toLowerCase().trim();
     const { data: existing } = await supabase
       .from('users')
       .select('id, email, name, tier')
-      .eq('email', email.toLowerCase().trim())
+      .eq('email', normEmail)
       .single();
 
     if (existing) {
-      await supabase.from('users').update({ last_login: new Date().toISOString(), session_token: token }).eq('id', existing.id);
-      return res.json({ user: existing, token, returning: true });
+      await supabase.from('users').update({ last_login: new Date().toISOString() }).eq('id', existing.id);
+      // Don't reveal whether user exists — same response shape
+      return res.json({ message: 'Check your email for a login link' });
     }
 
     const { data: newUser, error } = await supabase
       .from('users')
-      .insert({ email: email.toLowerCase().trim(), name: name || null, session_token: token })
+      .insert({ email: normEmail, name: name || null })
       .select('id, email, name, tier')
       .single();
 
     if (error) throw error;
     sendWelcomeEmail(newUser.email, newUser.name).catch(() => {});
-    return res.json({ user: newUser, token, returning: false });
+    return res.json({ message: 'Check your email for a login link' });
   } catch (err) {
     log.error('Signup error', { error: err.message });
     return res.status(500).json({ error: 'Signup failed' });
@@ -491,9 +974,13 @@ app.get('/api/auth/me', async (req, res) => {
       .select('id, email, name, tier, analyses_count, tier_expires_at, stripe_subscription_id, consent_auction_alerts, consent_partner_marketing')
       .eq('id', user.id)
       .single();
-    res.json(data || user);
+    const safe = data || user;
+    // Don't expose internal Stripe IDs to the client
+    const { stripe_subscription_id, stripe_customer_id, ...publicFields } = safe;
+    res.json({ ...publicFields, hasSubscription: !!stripe_subscription_id });
   } catch (err) {
-    res.json(user);
+    const { stripe_subscription_id, stripe_customer_id, ...publicFields } = user;
+    res.json({ ...publicFields, hasSubscription: !!stripe_subscription_id });
   }
 });
 
@@ -502,7 +989,7 @@ app.get('/api/auth/me', async (req, res) => {
 // ═══════════════════════════════════════════════════════════════
 
 // POST /api/stripe/checkout — create Stripe Checkout session
-app.post('/api/stripe/checkout', async (req, res) => {
+app.post('/api/stripe/checkout', rateLimit(60000, 5), async (req, res) => {
   if (!stripe) return res.status(503).json({ error: 'Payments not configured' });
   const user = await validateUserFromReq(req);
   if (!user) return res.status(401).json({ error: 'Authentication required' });
@@ -510,6 +997,9 @@ app.post('/api/stripe/checkout', async (req, res) => {
   const { product } = req.body || {};
   if (product !== 'monthly') {
     return res.status(400).json({ error: 'Invalid product. Use "monthly".' });
+  }
+  if (user.stripe_subscription_id) {
+    return res.status(400).json({ error: 'You already have an active subscription. Use the billing portal to manage it.' });
   }
 
   const priceId = process.env.STRIPE_MONTHLY_PRICE_ID;
@@ -528,9 +1018,10 @@ app.post('/api/stripe/checkout', async (req, res) => {
       customer: customerId,
       line_items: [{ price: priceId, quantity: 1 }],
       mode: product === 'monthly' ? 'subscription' : 'payment',
-      success_url: `${req.headers.origin || 'https://auctions.bridgematch.co.uk'}/?payment=success`,
-      cancel_url: `${req.headers.origin || 'https://auctions.bridgematch.co.uk'}/?payment=cancelled`,
+      success_url: `${ALLOWED_ORIGINS.includes(req.headers.origin) ? req.headers.origin : 'https://auctions.bridgematch.co.uk'}/?payment=success`,
+      cancel_url: `${ALLOWED_ORIGINS.includes(req.headers.origin) ? req.headers.origin : 'https://auctions.bridgematch.co.uk'}/?payment=cancelled`,
       metadata: { user_id: user.id, product },
+      ...(product === 'monthly' && { subscription_data: { metadata: { user_id: user.id, product } } }),
     };
 
     const session = await stripe.checkout.sessions.create(sessionParams);
@@ -562,7 +1053,10 @@ app.post('/api/stripe/webhook', async (req, res) => {
         const session = event.data.object;
         const userId = session.metadata?.user_id;
         const product = session.metadata?.product;
-        if (!userId) break;
+        if (!userId) {
+          log.warn('checkout.session.completed missing user_id in metadata', { sessionId: session.id, email: session.customer_email });
+          break;
+        }
 
         // Record payment
         await supabase.from('payments').insert({
@@ -623,7 +1117,8 @@ app.post('/api/stripe/webhook', async (req, res) => {
         if (subUser && sub.status === 'active') {
           await supabase.from('users').update({ tier: 'premium' }).eq('id', subUser.id);
         } else if (subUser && ['past_due', 'canceled', 'unpaid'].includes(sub.status)) {
-          await supabase.from('users').update({ tier: 'free', stripe_subscription_id: null, tier_expires_at: null }).eq('id', subUser.id);
+          // Keep stripe_subscription_id so recovery events can find the user
+          await supabase.from('users').update({ tier: 'free', tier_expires_at: null }).eq('id', subUser.id);
         }
         break;
       }
@@ -631,11 +1126,28 @@ app.post('/api/stripe/webhook', async (req, res) => {
       case 'invoice.payment_failed': {
         const invoice = event.data.object;
         log.warn('Invoice payment failed', { customer: invoice.customer, subscription: invoice.subscription });
+        // Notify user via email if possible
+        if (invoice.customer) {
+          const { data: failedUser } = await supabase.from('users').select('email, name').eq('stripe_customer_id', invoice.customer).single();
+          if (failedUser?.email && process.env.RESEND_API_KEY) {
+            fetch('https://api.resend.com/emails', {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                from: 'BridgeMatch <hello@bridgematch.co.uk>',
+                to: [failedUser.email],
+                subject: 'Payment failed — your BridgeMatch Pro subscription',
+                html: `<p>Hi ${escHtml((failedUser.name || '').split(' ')[0] || 'there')},</p><p>We couldn't process your latest payment for BridgeMatch Pro. Please update your payment method to keep your subscription active.</p><p><a href="https://auctions.bridgematch.co.uk/?manage=billing">Update payment method</a></p><p>— The BridgeMatch team</p>`,
+              }),
+            }).catch(e => log.warn('Payment failed email send error', { error: e.message }));
+          }
+        }
         break;
       }
     }
   } catch (err) {
     log.error('Stripe webhook handler error', { error: err.message, eventType: event.type });
+    return res.status(500).json({ error: 'Webhook handler failed' });
   }
 
   res.json({ received: true });
@@ -651,7 +1163,7 @@ app.post('/api/stripe/portal', async (req, res) => {
   try {
     const session = await stripe.billingPortal.sessions.create({
       customer: user.stripe_customer_id,
-      return_url: `${req.headers.origin || 'https://auctions.bridgematch.co.uk'}/`,
+      return_url: `${ALLOWED_ORIGINS.includes(req.headers.origin) ? req.headers.origin : 'https://auctions.bridgematch.co.uk'}/`,
     });
     res.json({ url: session.url });
   } catch (err) {
@@ -689,23 +1201,23 @@ app.get('/api/stripe/status', async (req, res) => {
 // ═══════════════════════════════════════════════════════════════
 // API: LEAD SUBMISSION (BridgeMatch Lite)
 // ═══════════════════════════════════════════════════════════════
-app.post('/api/leads', async (req, res) => {
+app.post('/api/leads', rateLimit(60000, 10), async (req, res) => {
   const {
     name, email, phone, contactPref, isRegulated, occupancy,
     propertyPrice, loanAmount, ltvPercent, worksBudget,
     matchingLenders, propertyType, propertyAddress,
     depositRange, experienceLevel, auctionUrl, dealData,
-    source
+    source, consent
   } = req.body || {};
 
   if (!name || !email) {
     return res.status(400).json({ error: 'Name and email are required' });
   }
   // Phone required unless it's a simple email capture (e.g. landing-page newsletter)
-  if (!phone && !source) {
+  if (!phone && source !== 'landing-page') {
     return res.status(400).json({ error: 'Name, email, and phone are required' });
   }
-  if (!email.includes('@')) {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
     return res.status(400).json({ error: 'Valid email required' });
   }
 
@@ -713,9 +1225,10 @@ app.post('/api/leads', async (req, res) => {
     const { data, error } = await supabase
       .from('leads')
       .insert({
-        name,
+        name: (name || '').trim(),
         email: email.toLowerCase().trim(),
-        phone: phone || null,
+        phone: phone ? phone.trim() : null,
+        source: source || 'bridgematch_lite',
         contact_pref: contactPref || 'email',
         is_regulated: !!isRegulated,
         occupancy: occupancy || null,
@@ -729,7 +1242,8 @@ app.post('/api/leads', async (req, res) => {
         deposit_range: depositRange || null,
         experience_level: experienceLevel || null,
         auction_url: auctionUrl || null,
-        deal_data: source ? { source, ...(dealData || {}) } : (dealData || null),
+        deal_data: dealData || null,
+        consent_given: !!consent,
         ip_address: req.ip || null,
         created_at: new Date().toISOString(),
       })
@@ -744,33 +1258,35 @@ app.post('/api/leads', async (req, res) => {
     const resendKey = process.env.RESEND_API_KEY;
     if (resendKey) {
       const regulated = isRegulated ? '⚠️ REGULATED (owner-occupier)' : 'Investment (bridging)';
+      const safeUrl = auctionUrl && /^https?:\/\//.test(auctionUrl) ? auctionUrl : null;
       const html = `
         <h2>New Lead from Auction Tool</h2>
         <table style="border-collapse:collapse;font-family:sans-serif;font-size:14px">
-          <tr><td style="padding:4px 12px 4px 0;font-weight:bold">Name</td><td>${name}</td></tr>
-          <tr><td style="padding:4px 12px 4px 0;font-weight:bold">Email</td><td><a href="mailto:${email}">${email}</a></td></tr>
-          <tr><td style="padding:4px 12px 4px 0;font-weight:bold">Phone</td><td><a href="tel:${phone}">${phone}</a></td></tr>
-          <tr><td style="padding:4px 12px 4px 0;font-weight:bold">Preferred contact</td><td>${contactPref || 'email'}</td></tr>
+          <tr><td style="padding:4px 12px 4px 0;font-weight:bold">Name</td><td>${escHtml(name)}</td></tr>
+          <tr><td style="padding:4px 12px 4px 0;font-weight:bold">Email</td><td><a href="mailto:${escHtml(email)}">${escHtml(email)}</a></td></tr>
+          <tr><td style="padding:4px 12px 4px 0;font-weight:bold">Phone</td><td><a href="tel:${escHtml(phone)}">${escHtml(phone)}</a></td></tr>
+          <tr><td style="padding:4px 12px 4px 0;font-weight:bold">Preferred contact</td><td>${escHtml(contactPref || 'email')}</td></tr>
           <tr><td style="padding:4px 12px 4px 0;font-weight:bold">Type</td><td>${regulated}</td></tr>
-          ${propertyAddress ? `<tr><td style="padding:4px 12px 4px 0;font-weight:bold">Property</td><td>${propertyAddress}</td></tr>` : ''}
-          ${propertyPrice ? `<tr><td style="padding:4px 12px 4px 0;font-weight:bold">Price</td><td>${propertyPrice}</td></tr>` : ''}
-          ${loanAmount ? `<tr><td style="padding:4px 12px 4px 0;font-weight:bold">Loan needed</td><td>${loanAmount}</td></tr>` : ''}
-          ${ltvPercent ? `<tr><td style="padding:4px 12px 4px 0;font-weight:bold">LTV</td><td>${ltvPercent}%</td></tr>` : ''}
-          ${worksBudget ? `<tr><td style="padding:4px 12px 4px 0;font-weight:bold">Works budget</td><td>${worksBudget}</td></tr>` : ''}
-          ${matchingLenders ? `<tr><td style="padding:4px 12px 4px 0;font-weight:bold">Matching lenders</td><td>${matchingLenders}</td></tr>` : ''}
-          ${propertyType ? `<tr><td style="padding:4px 12px 4px 0;font-weight:bold">Property type</td><td>${propertyType}</td></tr>` : ''}
-          ${depositRange ? `<tr><td style="padding:4px 12px 4px 0;font-weight:bold">Deposit range</td><td>${depositRange}</td></tr>` : ''}
-          ${experienceLevel ? `<tr><td style="padding:4px 12px 4px 0;font-weight:bold">Experience</td><td>${experienceLevel}</td></tr>` : ''}
-          ${auctionUrl ? `<tr><td style="padding:4px 12px 4px 0;font-weight:bold">Source</td><td><a href="${auctionUrl}">View deal</a></td></tr>` : ''}
+          ${propertyAddress ? `<tr><td style="padding:4px 12px 4px 0;font-weight:bold">Property</td><td>${escHtml(propertyAddress)}</td></tr>` : ''}
+          ${propertyPrice ? `<tr><td style="padding:4px 12px 4px 0;font-weight:bold">Price</td><td>${escHtml(propertyPrice)}</td></tr>` : ''}
+          ${loanAmount ? `<tr><td style="padding:4px 12px 4px 0;font-weight:bold">Loan needed</td><td>${escHtml(loanAmount)}</td></tr>` : ''}
+          ${ltvPercent ? `<tr><td style="padding:4px 12px 4px 0;font-weight:bold">LTV</td><td>${escHtml(ltvPercent)}%</td></tr>` : ''}
+          ${worksBudget ? `<tr><td style="padding:4px 12px 4px 0;font-weight:bold">Works budget</td><td>${escHtml(worksBudget)}</td></tr>` : ''}
+          ${matchingLenders ? `<tr><td style="padding:4px 12px 4px 0;font-weight:bold">Matching lenders</td><td>${escHtml(matchingLenders)}</td></tr>` : ''}
+          ${propertyType ? `<tr><td style="padding:4px 12px 4px 0;font-weight:bold">Property type</td><td>${escHtml(propertyType)}</td></tr>` : ''}
+          ${depositRange ? `<tr><td style="padding:4px 12px 4px 0;font-weight:bold">Deposit range</td><td>${escHtml(depositRange)}</td></tr>` : ''}
+          ${experienceLevel ? `<tr><td style="padding:4px 12px 4px 0;font-weight:bold">Experience</td><td>${escHtml(experienceLevel)}</td></tr>` : ''}
+          ${safeUrl ? `<tr><td style="padding:4px 12px 4px 0;font-weight:bold">Source</td><td><a href="${escHtml(safeUrl)}">View deal</a></td></tr>` : ''}
         </table>
       `;
+      const safeName = (name || '').replace(/[\r\n\t]/g, ' ').slice(0, 100);
       fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           from: 'BridgeMatch <hello@bridgematch.co.uk>',
           to: ['hello@bridgematch.co.uk'],
-          subject: `🏠 New lead: ${name} — ${propertyPrice || 'price TBC'}`,
+          subject: `🏠 New lead: ${safeName} — ${escHtml(propertyPrice || 'price TBC')}`,
           html,
         }),
       }).catch(e => log.warn('Lead email failed', { error: e.message }));
@@ -789,7 +1305,7 @@ app.post('/api/leads', async (req, res) => {
 async function sendWelcomeEmail(email, name) {
   const resendKey = process.env.RESEND_API_KEY;
   if (!resendKey) return;
-  const firstName = (name || '').split(' ')[0] || 'there';
+  const firstName = escHtml((name || '').split(' ')[0] || 'there');
   const html = `
     <div style="font-family:'DM Sans',Helvetica,Arial,sans-serif;max-width:560px;margin:0 auto;color:#1a1714">
       <div style="background:linear-gradient(135deg,#1a3a5c,#2a5a8c);padding:32px 24px;border-radius:12px 12px 0 0;text-align:center">
@@ -1693,6 +2209,7 @@ app.post('/api/analyse', async (req, res) => {
       ? cached.house  // cached.house is already a slug
       : Object.entries(HOUSE_DISPLAY_NAMES).find(([k, v]) => v === cached.house)?.[0] || 'unknown';
     const cachedDisplayName = HOUSE_DISPLAY_NAMES[cachedSlug] || cached.house;
+    const gatedLots = userTier === 'premium' ? cached.lots : stripAIFields(cached.lots || []);
     return res.json({
       house: cachedDisplayName,
       houseSlug: cachedSlug,
@@ -1704,9 +2221,9 @@ app.post('/api/analyse', async (req, res) => {
       avgYield: cached.avg_yield || null,
       devPotential: cached.dev_potential || 0,
       vacantCount: cached.vacant_count || 0,
-      lots: cached.lots,
+      lots: gatedLots,
       cached: true,
-      blurred: false,
+      blurred: userTier !== 'premium',
       scansUsed: scanCount,
       scanLimit: FREE_SCAN_LIMIT,
     });
@@ -1775,116 +2292,64 @@ app.post('/api/analyse', async (req, res) => {
         enrichAllsopLots(rawLots, pages);
       }
     } else if (rewritten.preferPuppeteer) {
-      // JS-rendered sites: go straight to Puppeteer
-      console.log(`Using Puppeteer directly for ${house} (JS-rendered site)...`);
-      const browser = await getBrowser();
-      const page = await browser.newPage();
-      await page.setUserAgent(HEADERS['User-Agent']);
-      await page.setViewport({ width: 1280, height: 900 });
-      await page.setRequestInterception(true);
-      page.on('request', req => {
-        const type = req.resourceType();
-        if (['image', 'font', 'media'].includes(type)) req.abort();
-        else req.continue();
-      });
+      // JS-rendered sites: use Firecrawl+JSDOM (primary) or Puppeteer (fallback)
+      console.log(`Scraping JS-rendered site for ${house} (Firecrawl primary, Puppeteer fallback)...`);
 
       try {
-        // Handle paginated sites (Savills has 28+ pages)
+        // Paginated sites: build page URLs, scrape each with scrapeRenderedPage + extractWithJSDOM
         if (rewritten.paginateAs === 'savills_pages') {
-          console.log(`Puppeteer: loading paginated Savills catalogue...`);
-          // Load first page to detect total pages
-          await page.goto(scrapeUrl, { waitUntil: 'networkidle2', timeout: 45000 });
-          await new Promise(r => setTimeout(r, 2000));
-          
-          // Detect total pages from pagination links
-          const totalPages = await page.evaluate(() => {
-            const pageLinks = document.querySelectorAll('a[href*="/page-"]');
+          console.log(`Loading paginated Savills catalogue...`);
+          const firstResult = await scrapeRenderedPage(scrapeUrl, house);
+          // Detect total pages from first page HTML
+          const dom = new JSDOM(firstResult.html, { url: scrapeUrl });
+          const totalPages = (() => {
+            const pageLinks = dom.window.document.querySelectorAll('a[href*="/page-"]');
             let max = 1;
             for (const a of pageLinks) {
               const m = a.textContent.trim().match(/^(\d+)$/);
               if (m) max = Math.max(max, parseInt(m[1]));
             }
             return max;
-          });
+          })();
+          dom.window.close();
           console.log(`Savills: detected ${totalPages} pages`);
           sseWrite(res, 'scrape', { pages: totalPages, lots: 0 });
 
-          // Extract from first page
-          const firstPageLots = await extractWithDOM(page, house);
+          const firstPageLots = extractWithJSDOM(firstResult.html, house, scrapeUrl);
           if (firstPageLots && firstPageLots.length > 0) rawLots.push(...firstPageLots);
           sseWrite(res, 'scrape', { pages: totalPages, lots: rawLots.length });
           console.log(`Page 1: ${firstPageLots ? firstPageLots.length : 0} lots`);
 
-          // Load remaining pages
           const maxPages = Math.min(totalPages, 50);
           for (let p = 2; p <= maxPages; p++) {
-            const pageUrl = `${scrapeUrl}/page-${p}`;
-            let success = false;
-            for (let attempt = 0; attempt < 2 && !success; attempt++) {
-              try {
-                await page.goto(pageUrl, { waitUntil: 'networkidle2', timeout: 30000 });
-                await new Promise(r => setTimeout(r, 1500));
-                const pageLots = await extractWithDOM(page, house);
-                if (pageLots && pageLots.length > 0) rawLots.push(...pageLots);
-                console.log(`Page ${p}: ${pageLots ? pageLots.length : 0} lots`);
-                success = true;
-              } catch (e) {
-                console.log(`Page ${p} attempt ${attempt + 1} failed: ${e.message}`);
-                if (attempt === 0) await new Promise(r => setTimeout(r, 2000));
-              }
+            try {
+              const pageResult = await scrapeRenderedPage(`${scrapeUrl}/page-${p}`, house);
+              const pageLots = extractWithJSDOM(pageResult.html, house, `${scrapeUrl}/page-${p}`);
+              if (pageLots && pageLots.length > 0) rawLots.push(...pageLots);
+              console.log(`Page ${p}: ${pageLots ? pageLots.length : 0} lots`);
+            } catch (e) {
+              console.log(`Page ${p} failed: ${e.message}`);
             }
           }
           console.log(`Savills total: ${rawLots.length} lots from ${maxPages} pages via DOM extraction`);
 
         } else if (rewritten.paginateAs === 'sdl_pages') {
-          // ── SDL / BTG Eddisons: paginated with ?page=N ──
-          console.log(`Puppeteer: loading paginated SDL catalogue...`);
-          await page.goto(scrapeUrl, { waitUntil: 'networkidle2', timeout: 45000 });
-          await new Promise(r => setTimeout(r, 3000));
-          // Scroll to load lazy content on first page
-          await page.evaluate(async () => {
-            for (let i = 0; i < 15; i++) { window.scrollBy(0, window.innerHeight); await new Promise(r => setTimeout(r, 500)); }
-            window.scrollTo(0, 0);
-          });
-          await new Promise(r => setTimeout(r, 2000));
-
-          // Detect total pages from pagination
-          const sdlTotalPages = await page.evaluate(() => {
-            const pageLinks = document.querySelectorAll('a[href*="page="], .pagination a, nav a');
-            let max = 1;
-            for (const a of pageLinks) {
-              const href = a.getAttribute('href') || '';
-              const pm = href.match(/page=(\d+)/);
-              if (pm) max = Math.max(max, parseInt(pm[1]));
-              const tm = a.textContent.trim().match(/^(\d+)$/);
-              if (tm) max = Math.max(max, parseInt(tm[1]));
-            }
-            const bodyText = document.body.innerText;
-            const ofMatch = bodyText.match(/page\s+\d+\s+of\s+(\d+)/i) || bodyText.match(/(\d+)\s+pages/i);
-            if (ofMatch) max = Math.max(max, parseInt(ofMatch[1]));
-            return max;
-          });
+          console.log(`Loading paginated SDL catalogue...`);
+          const firstResult = await scrapeRenderedPage(scrapeUrl, house);
+          const sdlTotalPages = detectTotalPages(firstResult.html, scrapeUrl, house);
           console.log(`SDL: detected ${sdlTotalPages} pages`);
 
-          // Extract from first page
-          const sdlFirstLots = await extractWithDOM(page, house);
+          const sdlFirstLots = extractWithJSDOM(firstResult.html, house, scrapeUrl);
           if (sdlFirstLots && sdlFirstLots.length > 0) rawLots.push(...sdlFirstLots);
           console.log(`SDL Page 1: ${sdlFirstLots ? sdlFirstLots.length : 0} lots`);
 
-          // Load remaining pages
           const sdlMaxPages = Math.min(sdlTotalPages, 40);
           for (let p = 2; p <= sdlMaxPages; p++) {
             const sep = scrapeUrl.includes('?') ? '&' : '?';
             const pageUrl = `${scrapeUrl}${sep}page=${p}`;
             try {
-              await page.goto(pageUrl, { waitUntil: 'networkidle2', timeout: 30000 });
-              await new Promise(r => setTimeout(r, 2000));
-              await page.evaluate(async () => {
-                for (let i = 0; i < 10; i++) { window.scrollBy(0, window.innerHeight); await new Promise(r => setTimeout(r, 400)); }
-                window.scrollTo(0, 0);
-              });
-              await new Promise(r => setTimeout(r, 1500));
-              const pageLots = await extractWithDOM(page, house);
+              const pageResult = await scrapeRenderedPage(pageUrl, house);
+              const pageLots = extractWithJSDOM(pageResult.html, house, pageUrl);
               if (pageLots && pageLots.length > 0) {
                 rawLots.push(...pageLots);
                 console.log(`SDL Page ${p}: ${pageLots.length} lots`);
@@ -1900,85 +2365,27 @@ app.post('/api/analyse', async (req, res) => {
           console.log(`SDL total: ${rawLots.length} lots via DOM extraction`);
 
         } else {
-          // ── Generic Puppeteer extraction with auto-pagination ──
-          console.log(`Puppeteer: loading ${scrapeUrl} for ${house}`);
-          await page.goto(scrapeUrl, { waitUntil: 'networkidle2', timeout: 45000 });
-          await new Promise(r => setTimeout(r, 3000));
+          // ── Generic extraction with auto-pagination ──
+          console.log(`Loading ${scrapeUrl} for ${house}`);
+          const firstResult = await scrapeRenderedPage(scrapeUrl, house);
 
-          // Scroll to trigger lazy loading
-          await page.evaluate(async () => {
-            for (let i = 0; i < 15; i++) {
-              window.scrollBy(0, window.innerHeight);
-              await new Promise(r => setTimeout(r, 500));
-            }
-            window.scrollTo(0, 0);
-          });
-          await new Promise(r => setTimeout(r, 2000));
-
-          // Extract page 1
-          const domLots = await extractWithDOM(page, house);
+          const domLots = extractWithJSDOM(firstResult.html, house, scrapeUrl);
           if (domLots && domLots.length >= 3) {
             rawLots.push(...domLots);
             console.log(`${house} Page 1: ${domLots.length} lots via DOM extraction`);
 
-            // ── Auto-detect pagination and follow it ──
-            const detectedPages = await page.evaluate(() => {
-              let max = 1;
-              // Strategy 1: ?page=N or &page=N links
-              document.querySelectorAll('a[href*="page="], a[href*="page-"], a[href*="/page/"]').forEach(a => {
-                const href = a.getAttribute('href') || '';
-                const m = href.match(/page[=/](\d+)/) || href.match(/page-(\d+)/);
-                if (m) max = Math.max(max, parseInt(m[1]));
-              });
-              // Strategy 2: pagination nav with numbered links
-              document.querySelectorAll('.pagination a, nav.pagination a, .paging a, .page-numbers a, [class*="pagination"] a, [class*="pager"] a').forEach(a => {
-                const t = a.textContent.trim();
-                if (t.match(/^\d+$/)) max = Math.max(max, parseInt(t));
-              });
-              // Strategy 3: "Page X of Y" text
-              const bodyText = document.body.innerText;
-              const ofMatch = bodyText.match(/page\s+\d+\s+of\s+(\d+)/i) || bodyText.match(/(\d+)\s+pages/i);
-              if (ofMatch) max = Math.max(max, parseInt(ofMatch[1]));
-              // Strategy 4: "Showing 1-20 of 345" — calculate pages
-              const showMatch = bodyText.match(/showing\s+\d+[\s-]+\d+\s+of\s+(\d+)/i) || bodyText.match(/(\d+)\s+results?\s+found/i) || bodyText.match(/(\d+)\s+(?:lots?|properties)/i);
-              if (showMatch) {
-                const total = parseInt(showMatch[1]);
-                if (total > 50) max = Math.max(max, Math.ceil(total / 20)); // assume ~20 per page
-              }
-              // Detect the pagination URL pattern
-              let pattern = 'query'; // default: ?page=N
-              const pageLink = document.querySelector('a[href*="page-"]');
-              if (pageLink) pattern = 'path-dash'; // /page-2
-              const pageSlash = document.querySelector('a[href*="/page/"]');
-              if (pageSlash) pattern = 'path-slash'; // /page/2
-              return { max, pattern };
-            });
-
-            if (detectedPages.max > 1) {
-              const maxPages = Math.min(detectedPages.max, 25);
-              console.log(`${house}: detected ${detectedPages.max} pages (pattern: ${detectedPages.pattern}), loading up to ${maxPages}`);
+            // Auto-detect pagination from HTML
+            const detectedPages = detectTotalPages(firstResult.html, scrapeUrl, house);
+            if (detectedPages > 1) {
+              const maxPages = Math.min(detectedPages, 25);
+              console.log(`${house}: detected ${detectedPages} pages, loading up to ${maxPages}`);
 
               for (let p = 2; p <= maxPages; p++) {
                 if (rawLots.length >= MAX_LOTS_PER_SCRAPE) { console.log(`${house}: lot cap reached at ${rawLots.length}`); break; }
-                let pageUrl;
-                if (detectedPages.pattern === 'path-dash') {
-                  pageUrl = scrapeUrl.replace(/\/page-\d+/, '') + `/page-${p}`;
-                } else if (detectedPages.pattern === 'path-slash') {
-                  pageUrl = scrapeUrl.replace(/\/page\/\d+/, '') + `/page/${p}`;
-                } else {
-                  const sep = scrapeUrl.includes('?') ? '&' : '?';
-                  pageUrl = `${scrapeUrl}${sep}page=${p}`;
-                }
-
+                const pageUrl = buildPageUrl(scrapeUrl, p, house);
                 try {
-                  await page.goto(pageUrl, { waitUntil: 'networkidle2', timeout: 30000 });
-                  await new Promise(r => setTimeout(r, 2000));
-                  await page.evaluate(async () => {
-                    for (let i = 0; i < 10; i++) { window.scrollBy(0, window.innerHeight); await new Promise(r => setTimeout(r, 400)); }
-                    window.scrollTo(0, 0);
-                  });
-                  await new Promise(r => setTimeout(r, 1500));
-                  const pageLots = await extractWithDOM(page, house);
+                  const pageResult = await scrapeRenderedPage(pageUrl, house);
+                  const pageLots = extractWithJSDOM(pageResult.html, house, pageUrl);
                   if (pageLots && pageLots.length > 0) {
                     rawLots.push(...pageLots);
                     console.log(`${house} Page ${p}: ${pageLots.length} lots`);
@@ -1992,27 +2399,27 @@ app.post('/api/analyse', async (req, res) => {
                 }
               }
             }
-            // Enforce lot cap to prevent runaway scraping
             if (rawLots.length > MAX_LOTS_PER_SCRAPE) {
               console.log(`${house}: capping ${rawLots.length} lots to ${MAX_LOTS_PER_SCRAPE}`);
               rawLots = rawLots.slice(0, MAX_LOTS_PER_SCRAPE);
             }
             console.log(`${house} total: ${rawLots.length} lots via DOM extraction (no Claude needed)`);
           } else {
-            // Fall back to Claude extraction from page HTML
+            // Fall back to Claude extraction
             if (domLots && domLots.length > 0) {
               console.log(`DOM extractor found only ${domLots.length} lots for ${house} (below threshold of 3), falling back to Claude`);
             }
-            const html = await page.content();
-            console.log(`Puppeteer: got ${html.length} chars, sending to Claude...`);
-            const puppeteerPages = [{ page: 1, html }];
+            console.log(`Got ${firstResult.html.length} chars, sending to Claude...`);
+            const renderedPages = [{ page: 1, html: firstResult.html }];
             sseWrite(res, 'phase', { step: 'extracting' });
-            rawLots = await extractLotsWithAI(puppeteerPages, house, onExtract, scrapeUrl);
-            console.log(`Claude extracted ${rawLots.length} lots from Puppeteer content`);
+            rawLots = await extractLotsWithAI(renderedPages, house, onExtract, scrapeUrl);
+            console.log(`Claude extracted ${rawLots.length} lots from rendered content`);
           }
         }
-      } finally {
-        await page.close();
+      } catch (err) {
+        log.error('JS-rendered scraping failed', { house, error: err.message });
+        sseWrite(res, 'error', { message: 'Scraping engine unavailable — please try again in a moment.' });
+        return res.end();
       }
     } else {
       // Standard static HTML scraping
@@ -2022,17 +2429,26 @@ app.post('/api/analyse', async (req, res) => {
         sseWrite(res, 'phase', { step: 'extracting' });
         rawLots = await extractLotsWithAI(pages, house, onExtract, scrapeUrl);
       }
-      // Puppeteer fallback if static scraping found nothing
-      // Skip for houses where Puppeteer wastes memory (blocked, empty, or JS-only)
+      // Rendered page fallback if static scraping found nothing
       const SKIP_PUPPETEER = ['philliparnold','knightfrank'];
       if (rawLots.length === 0 && !SKIP_PUPPETEER.includes(house)) {
-        console.log(`No lots from static HTML, trying Puppeteer for ${house}...`);
-        const puppeteerPages = await scrapeWithPuppeteer(url, house);
-        if (puppeteerPages.length > 0) {
-          console.log(`Puppeteer got ${puppeteerPages.length} page(s), sending to Claude...`);
-          sseWrite(res, 'phase', { step: 'extracting' });
-          rawLots = await extractLotsWithAI(puppeteerPages, house, onExtract, scrapeUrl);
-          console.log(`Claude extracted ${rawLots.length} lots from Puppeteer content`);
+        console.log(`No lots from static HTML, trying rendered scraping for ${house}...`);
+        try {
+          const rendered = await scrapeRenderedPage(url, house);
+          if (rendered.html) {
+            const renderedLots = extractWithJSDOM(rendered.html, house, url);
+            if (renderedLots && renderedLots.length > 0) {
+              rawLots = renderedLots;
+              console.log(`Rendered scraping got ${rawLots.length} lots via DOM extraction`);
+            } else {
+              const renderedPages = [{ page: 1, html: rendered.html }];
+              sseWrite(res, 'phase', { step: 'extracting' });
+              rawLots = await extractLotsWithAI(renderedPages, house, onExtract, scrapeUrl);
+              console.log(`Claude extracted ${rawLots.length} lots from rendered content`);
+            }
+          }
+        } catch (err) {
+          console.log(`Rendered scraping fallback failed for ${house}: ${err.message}`);
         }
       }
     }
@@ -2124,6 +2540,7 @@ app.post('/api/analyse', async (req, res) => {
 
     const updatedScanCount = (user.analyses_count || 0) + 1;
 
+    const gatedAnalysed = userTier === 'premium' ? analysed : stripAIFields(analysed);
     sseWrite(res, 'done', {
       house: displayName,
       houseSlug: house,
@@ -2135,9 +2552,9 @@ app.post('/api/analyse', async (req, res) => {
       avgYield: yieldsArr.length ? +(yieldsArr.reduce((a, b) => a + b, 0) / yieldsArr.length).toFixed(1) : null,
       devPotential: analysed.filter(l => (l.opps || []).some(o => /development|planning|conversion/i.test(o))).length,
       vacantCount: analysed.filter(l => l.vacant === true).length,
-      lots: analysed,
+      lots: gatedAnalysed,
       cached: false,
-      blurred: false,
+      blurred: userTier !== 'premium',
       scansUsed: updatedScanCount,
       scanLimit: FREE_SCAN_LIMIT,
     });
@@ -2242,9 +2659,11 @@ app.post('/api/smart-search', async (req, res) => {
 
     if (presetCache && (!presetCache.stale_urls || presetCache.stale_urls.length === 0)) {
       // Fully fresh cache — return instantly
+      const isPremiumCached = user && (user.tier === 'premium' || user.tier === 'trial');
+      const cachedResults = isPremiumCached ? (presetCache.results || []) : stripAIFields(presetCache.results || []);
       await incrementSearchCounter();
       return res.json({
-        results: presetCache.results || [],
+        results: cachedResults,
         report: presetCache.report || '',
         sources: presetCache.sources || [],
         totalSearched: presetCache.total_searched || 0,
@@ -2277,8 +2696,10 @@ app.post('/api/smart-search', async (req, res) => {
             results: cleanResults, sources: cleanSources,
             total_searched: cleanResults.length, stale_urls: [],
           }).eq('query_key', cacheKey);
+          const isPremiumClean1 = user && (user.tier === 'premium' || user.tier === 'trial');
+          const gatedClean1 = isPremiumClean1 ? cleanResults : stripAIFields(cleanResults);
           await incrementSearchCounter();
-          return res.json({ results: cleanResults, report: presetCache.report || '', sources: cleanSources, totalSearched: cleanResults.length, cached: true, searchesUsed, searchLimit });
+          return res.json({ results: gatedClean1, report: presetCache.report || '', sources: cleanSources, totalSearched: cleanResults.length, cached: true, searchesUsed, searchLimit });
         }
 
         // Gather lots from only the changed catalogues
@@ -2316,11 +2737,17 @@ app.post('/api/smart-search', async (req, res) => {
             total_searched: (presetCache.total_searched || 0) - deltaLots.length + filteredDelta.length,
             stale_urls: [],
           }).eq('query_key', cacheKey);
+          const isPremiumClean2 = user && (user.tier === 'premium' || user.tier === 'trial');
+          const gatedClean2 = isPremiumClean2 ? cleanResults : stripAIFields(cleanResults);
           await incrementSearchCounter();
-          return res.json({ results: cleanResults, report: presetCache.report || '', sources: cleanSources, totalSearched: cleanResults.length, cached: true, searchesUsed, searchLimit });
+          return res.json({ results: gatedClean2, report: presetCache.report || '', sources: cleanSources, totalSearched: cleanResults.length, cached: true, searchesUsed, searchLimit });
         }
 
         // Run Claude only on the delta lots
+        if (creditExhausted) {
+          log.warn('Incremental smart search skipped — Gemini quota exhausted');
+          throw new Error('quota_exhausted'); // fall through to return stale cache
+        }
         const queryTerms = query.toLowerCase().split(/\s+/).filter(t => t.length > 2);
         const lotEntries = filteredDelta.map((l, i) => {
           const summary = `[${i}] ${l._house} L${l.lot}: ${l.address} | £${l.price || '?'} | Score:${l.score || 0} | ${l.titleSplit ? 'TITLE_SPLIT' : ''} | ${(l.bullets || []).join('; ').substring(0, 150)}`;
@@ -2401,9 +2828,11 @@ Only return lots that genuinely match the query.`, { maxTokens: 4000 });
 
         console.log(`Incremental preset refresh: ${presetSlug} — ${newMatches.length} new matches from ${deltaSources.map(s => s.house).join(', ')}`);
 
+        const isPremiumMerged = user && (user.tier === 'premium' || user.tier === 'trial');
+        const gatedMerged = isPremiumMerged ? mergedResults : stripAIFields(mergedResults);
         await incrementSearchCounter();
         return res.json({
-          results: mergedResults,
+          results: gatedMerged,
           report: mergedReport,
           sources: mergedSources,
           totalSearched: (presetCache.total_searched || 0) + filteredDelta.length,
@@ -2526,8 +2955,12 @@ Only return lots that genuinely match the query. If nothing matches well, say so
       .filter(i => i >= 0 && i < filteredLots.length)
       .map(i => filteredLots[i]);
 
+    // Gate data for free/anon users
+    const isPremium = user && (user.tier === 'premium' || user.tier === 'trial');
+    const gatedResults = isPremium ? matchingLots : stripAIFields(matchingLots);
+
     const response = {
-      results: matchingLots,
+      results: gatedResults,
       report: parsed.report || '',
       sources,
       totalSearched: filteredLots.length,
@@ -2558,7 +2991,7 @@ Only return lots that genuinely match the query. If nothing matches well, say so
   } catch (err) {
     log.error('Smart search error', { error: err.message, stack: err.stack?.split('\n').slice(0, 3).join(' | ') });
     if (err.status === 429 || /quota|rate.limit|resource.exhausted/i.test(err.message)) {
-      creditExhausted = true;
+      creditExhausted = true; creditExhaustedAt = Date.now();
       return res.status(503).json({ error: 'ai_quota_exhausted', message: 'AI search is temporarily unavailable — daily API quota reached. It resets automatically, please try again later.' });
     }
     return res.status(500).json({ error: 'Smart search failed', detail: err.message });
@@ -2571,11 +3004,10 @@ Only return lots that genuinely match the query. If nothing matches well, say so
 // ═══════════════════════════════════════════════════════════════
 // API: ALL LOTS — pre-load every cached lot for frontend filtering
 // ═══════════════════════════════════════════════════════════════
-app.get('/api/all-lots', async (req, res) => {
+app.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
   try {
     if (!supabase) return res.json({ lots: [], sources: [] });
 
-    // Optional auth — all users see full data (no blurring)
     const user = await validateUserFromReq(req);
 
     const { data: cached } = await supabase
@@ -2697,7 +3129,10 @@ app.get('/api/all-lots', async (req, res) => {
     }
     if (imgStripped > 0) console.log(`Image sanitiser: stripped ${imgStripped} junk images`);
 
-    res.json({ lots: cleanLots, sources, blurred: false });
+    // Gate data for free/anon users
+    const isPremium = user && (user.tier === 'premium' || user.tier === 'trial');
+    const outputLots = isPremium ? cleanLots : stripAIFields(cleanLots);
+    res.json({ lots: outputLots, sources, blurred: !isPremium });
   } catch (e) {
     log.error('All lots error', { error: e.message });
     res.status(500).json({ error: 'Internal server error' });
@@ -2768,28 +3203,43 @@ app.post('/api/admin/backfill-images', async (req, res) => {
     const results = [];
     for (const entry of cached) {
       const lots = entry.lots || [];
-      const missing = lots.filter(l => l.url && !l.imageUrl).length;
-      if (missing === 0) {
+      const missingImages = lots.filter(l => !l.imageUrl).length;
+      if (missingImages === 0) {
         results.push({ house: entry.house, url: entry.url, total: lots.length, missing: 0, gained: 0, status: 'skipped — all have images' });
         continue;
       }
 
-      const updated = await backfillImages(entry.url, lots);
       let gained = 0;
-      if (updated) {
-        gained = updated.filter(l => l.imageUrl).length - (lots.length - missing);
+
+      // Step 1: Plain HTTP backfill from catalogue page (works for server-rendered sites)
+      const lotsWithUrl = lots.filter(l => l.url && !l.imageUrl).length;
+      if (lotsWithUrl > 0) {
+        const updated = await backfillImages(entry.url, lots);
+        if (updated) {
+          gained += updated.filter(l => l.imageUrl).length - (lots.length - missingImages);
+        }
+        // Step 2: Deep backfill from individual lot pages
+        const stillMissing = lots.filter(l => l.url && !l.imageUrl).length;
+        if (stillMissing > 0) {
+          const deepGained = await backfillImagesFromLotPages(lots);
+          gained += deepGained;
+        }
       }
-      // Deep backfill: fetch individual lot pages for lots still missing images
-      const stillMissing = lots.filter(l => l.url && !l.imageUrl).length;
-      if (stillMissing > 0) {
-        const deepGained = await backfillImagesFromLotPages(lots);
-        gained += deepGained;
+
+      // Step 3: Rendered page backfill for JS-rendered sites (Firecrawl primary, Puppeteer fallback)
+      const stillNoImages = lots.filter(l => !l.imageUrl).length;
+      if (stillNoImages > 0 && PUPPETEER_IMAGE_HOUSES.has(entry.house)) {
+        const renderedGained = FIRECRAWL_API_KEY && !fcCreditExhausted
+          ? await backfillImagesWithFirecrawl(entry.url, lots, entry.house)
+          : await backfillImagesWithPuppeteer(entry.url, lots, entry.house);
+        gained += renderedGained;
       }
+
       if (gained > 0) {
         await supabase.from('cached_analyses').update({ lots }).eq('url', entry.url);
-        results.push({ house: entry.house, url: entry.url, total: lots.length, missing, gained, status: 'updated' });
+        results.push({ house: entry.house, url: entry.url, total: lots.length, missing: missingImages, gained, status: 'updated' });
       } else {
-        results.push({ house: entry.house, url: entry.url, total: lots.length, missing, gained: 0, status: 'no matches found' });
+        results.push({ house: entry.house, url: entry.url, total: lots.length, missing: missingImages, gained: 0, status: 'no matches found' });
       }
     }
 
@@ -2801,10 +3251,100 @@ app.post('/api/admin/backfill-images', async (req, res) => {
   }
 });
 
-// User-facing: analyse all catalogue-ready auctions
+// Admin-only: clear cached analyses to force re-scrape
+app.post('/api/admin/clear-cache', async (req, res) => {
+  const adminToken = req.headers['x-admin-secret'] || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(adminToken, process.env.ADMIN_SECRET)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  try {
+    const house = req.body?.house;
+    let query;
+    if (house) {
+      query = supabase.from('cached_analyses').delete().eq('house', house);
+    } else {
+      query = supabase.from('cached_analyses').delete().neq('url', '');
+    }
+    const { data, error } = await query.select();
+    if (error) throw error;
+
+    const cleared = data ? data.length : 0;
+    const houses = data ? [...new Set(data.map(r => r.house))].filter(Boolean) : [];
+    log.info('Cache cleared', { house: house || 'ALL', cleared });
+    res.json({
+      message: house
+        ? `Cache cleared for ${house}. ${cleared} entries deleted. Next autoAnalyseAll will re-scrape.`
+        : `All cache cleared. ${cleared} entries deleted. Next autoAnalyseAll will re-scrape.`,
+      cleared, houses,
+    });
+  } catch (err) {
+    log.error('Cache clear error', { error: err.message });
+    res.status(500).json({ error: 'Cache clear failed' });
+  }
+});
+
+// Admin-only: test DOM extractor on a URL (diagnostics)
+app.post('/api/admin/test-extractor', rateLimit(60000, 5), async (req, res) => {
+  const adminToken = req.headers['x-admin-secret'] || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(adminToken, process.env.ADMIN_SECRET)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const { url } = req.body || {};
+  if (!url) return res.status(400).json({ error: 'url is required' });
+
+  const house = req.body.house || detectAuctionHouse(url);
+
+  try {
+    // Use Firecrawl+JSDOM (primary) or Puppeteer (fallback) to render the page
+    const result = await scrapeRenderedPage(url, house);
+    const html = result.html;
+    const dom = new JSDOM(html, { url });
+    const { document } = dom.window;
+
+    // Check which CSS selectors match on the rendered page
+    const test = sel => document.querySelectorAll(sel).length;
+    const selectorMatches = {
+      '.property-card': test('.property-card'), '.lot-card': test('.lot-card'),
+      '.lot': test('.lot'), '.lot-panel': test('.lot-panel'),
+      '.property-list-card': test('.property-list-card'), '.search-result': test('.search-result'),
+      'article': test('article'), '.current-lots-single': test('.current-lots-single'),
+      '.lot-item': test('.lot-item'), '[class*="property"]': test('[class*="property"]'),
+      '[class*="lot"]': test('[class*="lot"]'), 'img[src]': test('img[src]'),
+      'img[data-src]': test('img[data-src]'), '.swiper-slide img': test('.swiper-slide img'),
+      '[data-mainpic]': test('[data-mainpic]'),
+    };
+
+    const pageTitle = document.title || '';
+    dom.window.close();
+
+    // Run the actual DOM extractor via JSDOM
+    const lots = extractWithJSDOM(html, house, url);
+    const hasImages = lots ? lots.filter(l => l.imageUrl).length : 0;
+    const hasUrls = lots ? lots.filter(l => l.url && l.url !== '').length : 0;
+
+    res.json({
+      house, url, pageTitle,
+      hasExtractor: !!DOM_EXTRACTORS[house],
+      lotCount: lots ? lots.length : 0,
+      lotsWithImages: hasImages,
+      lotsWithUrls: hasUrls,
+      sampleLots: lots ? lots.slice(0, 3) : [],
+      selectorMatches,
+      scrapedWith: FIRECRAWL_API_KEY && !fcCreditExhausted && !FIRECRAWL_SKIP.has(house) ? 'firecrawl' : (puppeteer ? 'puppeteer' : 'http'),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message, house });
+  }
+});
+
+// Admin-only: analyse all catalogue-ready auctions
 app.post('/api/analyse-all', async (req, res) => {
-  const user = await validateUserFromReq(req);
-  if (!user) return res.status(401).json({ error: 'signup_required' });
+  const adminToken = req.headers['x-admin-secret'] || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(adminToken, process.env.ADMIN_SECRET)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
 
   // Trigger auto-analysis and wait for it to complete
   try {
@@ -2841,7 +3381,7 @@ app.get('/check', (req, res) => {
 });
 
 app.get('/api/admin/daily-stats', async (req, res) => {
-  const token = req.headers['x-admin-secret'] || req.query.token || '';
+  const token = req.headers['x-admin-secret'] || '';
   if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
     return res.status(403).json({ error: 'Invalid admin token' });
   }
@@ -2868,7 +3408,7 @@ app.get('/api/admin/daily-stats', async (req, res) => {
 });
 
 app.get('/api/cost-monitor', async (req, res) => {
-  const token = req.headers['x-admin-secret'] || req.query.token || '';
+  const token = req.headers['x-admin-secret'] || '';
   if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
     return res.status(403).json({ error: 'Invalid admin token' });
   }
@@ -2891,7 +3431,19 @@ app.get('/api/cost-monitor', async (req, res) => {
         housesWithStaleCache: houses.length - freshCount,
         contentHashHits: hashHitCount
       },
+      firecrawl: {
+        enabled: !!FIRECRAWL_API_KEY,
+        creditsUsed: fcCreditsUsed,
+        creditExhausted: fcCreditExhausted,
+        temporarilyDown: fcTemporarilyDown,
+        fallbackCount: fcFallbackCount,
+        errorCount: fcErrorCount,
+        requestCount: fcRequestCount,
+        monthlyBudget: FIRECRAWL_MONTHLY_BUDGET,
+        skipHouses: [...FIRECRAWL_SKIP],
+      },
       puppeteerSkipList: SKIP_PUPPETEER_LIST,
+      puppeteerAvailable: !!puppeteer,
       lookaheadLimit: MAX_AUCTIONS_PER_HOUSE,
       pageCapLimit: MAX_PUPPETEER_PAGES,
       lotsCapLimit: MAX_LOTS_PER_SCRAPE
@@ -2903,7 +3455,7 @@ app.get('/api/cost-monitor', async (req, res) => {
 });
 
 app.get('/api/quality-report', async (req, res) => {
-  const token = req.headers['x-admin-secret'] || req.query.token || '';
+  const token = req.headers['x-admin-secret'] || '';
   if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
     return res.status(403).json({ error: 'Invalid admin token' });
   }
@@ -2960,6 +3512,7 @@ app.get('*', (req, res) => {
     html = html.replace("window.__AUTH_ENABLED__ || false", AUTH_ENABLED ? 'true' : 'false');
     res.type('html').send(html);
   } catch (e) {
+    log.error('Failed to inject config into index.html', { error: e.message });
     res.sendFile(join(__dirname, 'index.html'));
   }
 });
@@ -3430,6 +3983,7 @@ const MAX_CONCURRENT_PAGES = 3;
 let activePagesCount = 0;
 
 async function acquirePage() {
+  if (!puppeteer) throw new Error('Puppeteer not available');
   // Wait for a slot if at max concurrency
   while (activePagesCount >= MAX_CONCURRENT_PAGES) {
     await new Promise(r => setTimeout(r, 500));
@@ -3443,6 +3997,7 @@ async function acquirePage() {
 }
 
 async function getBrowser() {
+  if (!puppeteer) throw new Error('Puppeteer not available');
   // Restart browser after N uses to prevent memory bloat
   if (browserInstance && browserUseCount >= BROWSER_MAX_USES) {
     console.log(`Puppeteer: recycling browser after ${browserUseCount} uses`);
@@ -3607,7 +4162,7 @@ Return ONLY the JSON array:`;
     } catch (err) {
       console.error(`Gemini extraction failed for batch starting at page ${batch[0].page}:`, err.message);
       if (err.status === 429 || /quota|rate.limit|resource.exhausted/i.test(err.message)) {
-        creditExhausted = true;
+        creditExhausted = true; creditExhaustedAt = Date.now();
         console.error('Gemini API rate limited — stopping all extraction');
         break;
       }
@@ -6201,6 +6756,66 @@ async function backfillImagesFromLotPages(lots, concurrency = 5) {
   return filled;
 }
 
+// ═══════════════════════════════════════════════════════════════
+// PUPPETEER IMAGE BACKFILL — for JS-rendered sites where plain HTTP fails
+// ═══════════════════════════════════════════════════════════════
+async function backfillImagesWithPuppeteer(catalogueUrl, lots, house) {
+  let page;
+  try {
+    page = await acquirePage();
+    await page.setUserAgent(HEADERS['User-Agent']);
+    await page.setViewport({ width: 1280, height: 900 });
+    // Allow images through (unlike normal scraper) so img src attributes populate
+    await page.setRequestInterception(true);
+    page.on('request', req => {
+      const type = req.resourceType();
+      if (['font', 'media'].includes(type)) req.abort();
+      else req.continue();
+    });
+
+    await page.goto(catalogueUrl, { waitUntil: 'networkidle2', timeout: 45000 });
+    await new Promise(r => setTimeout(r, 3000));
+    // Scroll to trigger lazy-loaded images
+    await page.evaluate(async () => {
+      for (let i = 0; i < 15; i++) {
+        window.scrollBy(0, window.innerHeight);
+        await new Promise(r => setTimeout(r, 500));
+      }
+      window.scrollTo(0, 0);
+    });
+    await new Promise(r => setTimeout(r, 2000));
+
+    // Use existing DOM extractor to get lots with images from rendered page
+    const domLots = await extractWithDOM(page, house);
+    if (!domLots || domLots.length === 0) {
+      console.log(`Puppeteer image backfill: DOM extractor returned 0 lots for ${house}`);
+      return 0;
+    }
+
+    // Build lot number → {imageUrl, url} map
+    const lotMap = {};
+    for (const dl of domLots) {
+      if (dl.lot) lotMap[dl.lot] = { imageUrl: dl.imageUrl, url: dl.url };
+    }
+
+    let updated = 0;
+    for (const lot of lots) {
+      const match = lotMap[lot.lot];
+      if (!match) continue;
+      if (!lot.imageUrl && match.imageUrl) { lot.imageUrl = match.imageUrl; updated++; }
+      if ((!lot.url || lot.url === '') && match.url) lot.url = match.url;
+    }
+
+    console.log(`Puppeteer image backfill for ${house}: ${updated}/${lots.length} lots got images (DOM found ${domLots.length} lots)`);
+    return updated;
+  } catch (err) {
+    log.warn('Puppeteer image backfill error', { house, catalogueUrl, error: err.message });
+    return 0;
+  } finally {
+    if (page) await page.close().catch(() => {});
+  }
+}
+
 async function extractWithDOM(page, house) {
   let lots = null;
 
@@ -6457,7 +7072,7 @@ function analyseLot(raw) {
   else if (executor || receivership) L.dealType = 'Motivated';
   else L.dealType = 'Standard';
 
-  L.score = Math.round(s * 10) / 10;
+  L.score = Math.max(0, Math.min(10, Math.round(s * 10) / 10));
   return L;
 }
 
@@ -6508,7 +7123,7 @@ LIMIT 30`;
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
-    const resp = await fetch('http://landregistry.data.gov.uk/landregistry/query', {
+    const resp = await fetch('https://landregistry.data.gov.uk/landregistry/query', {
       method: 'POST',
       headers: { 'Accept': 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
       body: `query=${encodeURIComponent(sparql)}`,
@@ -6632,12 +7247,12 @@ function estimateMonthlyRent(address, beds) {
   for (const [key, rents] of Object.entries(VOA_RENTS)) {
     if (key === '_default') continue;
     if (a.includes(key)) {
-      const base = rents[Math.min(beds ?? 2, 4)];
+      const base = rents[Math.min(Math.max(beds ?? 2, 0), 4)];
       const uplift = RENT_UPLIFT[key] || RENT_UPLIFT._default;
       return Math.round(base * uplift);
     }
   }
-  const base = VOA_RENTS._default[Math.min(beds ?? 2, 4)];
+  const base = VOA_RENTS._default[Math.min(Math.max(beds ?? 2, 0), 4)];
   return Math.round(base * RENT_UPLIFT._default);
 }
 
@@ -6920,7 +7535,7 @@ async function enrichLots(lots, house, sourceUrl, onProgress) {
         } else if (discount < -10) {
           lot.risks.push(`${Math.abs(lot.belowMarket)}% above market avg`);
         }
-        lot.score = Math.round(lot.score * 10) / 10;
+        lot.score = Math.max(0, Math.min(10, Math.round(lot.score * 10) / 10));
       }
     } else {
       lot.streetAvg = null;
@@ -6934,13 +7549,13 @@ async function enrichLots(lots, house, sourceUrl, onProgress) {
     if (lot.price && lot.price > 0) {
       lot.estGrossYield = Math.round((lot.estAnnualRent / lot.price) * 1000) / 10;
       if (lot.estGrossYield > 8 && !lot.opps.some(o => o.includes('GIY'))) {
-        lot.score += 1.5;
+        lot.score += 2.5;
         lot.opps.push(`Est. ${lot.estGrossYield}% yield`);
       } else if (lot.estGrossYield > 6 && !lot.opps.some(o => o.includes('GIY'))) {
-        lot.score += 0.5;
+        lot.score += 1.5;
         lot.opps.push(`Est. ${lot.estGrossYield}% yield`);
       }
-      lot.score = Math.round(lot.score * 10) / 10;
+      lot.score = Math.max(0, Math.min(10, Math.round(lot.score * 10) / 10));
     }
   }
 
@@ -7015,6 +7630,26 @@ app.listen(PORT, () => {
 // ═══════════════════════════════════════════════════════════════
 let _autoAnalysisRunning = false;
 let creditExhausted = false;
+let creditExhaustedAt = 0;
+// Auto-reset creditExhausted after 1 hour (Gemini quotas reset at different intervals)
+setInterval(() => {
+  if (creditExhausted && Date.now() - creditExhaustedAt > 3600000) {
+    creditExhausted = false;
+    creditExhaustedAt = 0;
+    console.log('Gemini credit exhaustion flag auto-cleared (1h TTL)');
+  }
+  if (fcCreditExhausted && Date.now() - fcExhaustedAt > 3600000) {
+    fcCreditExhausted = false;
+    fcExhaustedAt = 0;
+    console.log('Firecrawl credit exhaustion flag auto-cleared (1h TTL)');
+  }
+  if (fcTemporarilyDown && Date.now() - fcDownAt > 600000) {
+    fcTemporarilyDown = false;
+    fcDownAt = 0;
+    fcConsecutive5xx = 0;
+    console.log('Firecrawl temporarily-down flag auto-cleared (10min TTL)');
+  }
+}, 300000);
 let apiCallCount = 0;
 let hashHitCount = 0;
 const serverStartTime = new Date().toISOString();
@@ -7112,19 +7747,33 @@ async function _doAutoAnalyseAll() {
         }
 
         // Backfill images for cached lots that are missing them
-        const missingImages = cachedLots.filter(l => l.url && !l.imageUrl).length;
-        if (missingImages > 0) {
-          const updated = await backfillImages(auction.url, cachedLots);
-          if (updated) {
-            needsUpdate = true;
-            const gained = updated.filter(l => l.imageUrl).length;
-            console.log(`AUTO: ✓ ${auction.house} already cached (${cached.total_lots} lots) — backfilled ${gained} images`);
+        const totalMissingImages = cachedLots.filter(l => !l.imageUrl).length;
+        if (totalMissingImages > 0) {
+          // Step 1: Plain HTTP backfill from catalogue page
+          const lotsWithUrl = cachedLots.filter(l => l.url && !l.imageUrl).length;
+          if (lotsWithUrl > 0) {
+            const updated = await backfillImages(auction.url, cachedLots);
+            if (updated) {
+              needsUpdate = true;
+              const gained = updated.filter(l => l.imageUrl).length;
+              console.log(`AUTO: ✓ ${auction.house} — HTTP backfill got ${gained} images`);
+            }
+            // Step 2: Deep backfill from individual lot pages
+            const stillMissing = cachedLots.filter(l => l.url && !l.imageUrl).length;
+            if (stillMissing > 0) {
+              const deepFilled = await backfillImagesFromLotPages(cachedLots);
+              if (deepFilled > 0) needsUpdate = true;
+            }
           }
-          // Deep backfill: fetch individual lot pages for lots still missing images
-          const stillMissing = cachedLots.filter(l => l.url && !l.imageUrl).length;
-          if (stillMissing > 0) {
-            const deepFilled = await backfillImagesFromLotPages(cachedLots);
-            if (deepFilled > 0) needsUpdate = true;
+          // Step 3: Firecrawl/Puppeteer backfill for JS-rendered sites
+          const stillNoImages = cachedLots.filter(l => !l.imageUrl).length;
+          const houseSlug = Object.entries(HOUSE_DISPLAY_NAMES).find(([k, v]) => v === auction.house)?.[0] || auction.house;
+          if (stillNoImages > 0 && PUPPETEER_IMAGE_HOUSES.has(houseSlug)) {
+            console.log(`AUTO: ${auction.house} — ${stillNoImages} lots still missing images, trying rendered backfill...`);
+            const gained = FIRECRAWL_API_KEY && !fcCreditExhausted
+              ? await backfillImagesWithFirecrawl(auction.url, cachedLots, houseSlug)
+              : await backfillImagesWithPuppeteer(auction.url, cachedLots, houseSlug);
+            if (gained > 0) needsUpdate = true;
           }
           if (!needsUpdate) {
             console.log(`AUTO: ✓ ${auction.house} already cached (${cached.total_lots} lots)`);
@@ -7326,253 +7975,127 @@ async function autoAnalyseOne(url) {
     }
 
   } else if (rewritten.preferPuppeteer) {
-    const browser = await getBrowser();
-    let page = await browser.newPage();
-    await page.setUserAgent(HEADERS['User-Agent']);
-    await page.setViewport({ width: 1280, height: 900 });
-    await page.setRequestInterception(true);
-    page.on('request', req => {
-      const type = req.resourceType();
-      if (['image', 'font', 'media'].includes(type)) req.abort();
-      else req.continue();
-    });
+    // JS-rendered sites: Firecrawl+JSDOM (primary), Puppeteer (fallback)
+    if (fcCreditExhausted) console.log(`AUTO: Firecrawl credits exhausted, will use Puppeteer fallback for ${house}`);
 
-    try {
-      if (rewritten.paginateAs === 'savills_pages') {
-        await page.goto(scrapeUrl, { waitUntil: 'networkidle2', timeout: 45000 });
-        await new Promise(r => setTimeout(r, 2000));
-        const totalPages = await page.evaluate(() => {
-          const pageLinks = document.querySelectorAll('a[href*="/page-"]');
-          let max = 1;
-          for (const a of pageLinks) {
-            const m = a.textContent.trim().match(/^(\d+)$/);
-            if (m) max = Math.max(max, parseInt(m[1]));
-          }
-          return max;
-        });
-        const firstPageLots = await extractWithDOM(page, house);
-        if (firstPageLots && firstPageLots.length > 0) rawLots.push(...firstPageLots);
-        const maxPages = Math.min(totalPages, 50);
-        const PAGE_RECYCLE_INTERVAL = 10; // recycle page every N pages to prevent OOM
-        let consecutiveFails = 0;
-        for (let p = 2; p <= maxPages; p++) {
-          try {
-            // Recycle the page periodically to free accumulated DOM/JS heap
-            if ((p - 1) % PAGE_RECYCLE_INTERVAL === 0) {
-              try { await page.close(); } catch {}
-              const browser = await getBrowser();
-              page = await browser.newPage();
-              await page.setUserAgent(HEADERS['User-Agent']);
-              await page.setViewport({ width: 1280, height: 900 });
-              await page.setRequestInterception(true);
-              page.on('request', req => {
-                const type = req.resourceType();
-                if (['image', 'font', 'media'].includes(type)) req.abort();
-                else req.continue();
-              });
-              console.log(`AUTO: Savills — recycled page at page ${p}`);
-            }
-            await page.goto(`${scrapeUrl}/page-${p}`, { waitUntil: 'networkidle2', timeout: 30000 });
-            await new Promise(r => setTimeout(r, 1500));
-            const pageLots = await extractWithDOM(page, house);
-            if (pageLots && pageLots.length > 0) {
-              rawLots.push(...pageLots);
-              consecutiveFails = 0;
-            }
-            // Clear DOM after extraction to free memory before next navigation
-            try { await page.evaluate(() => { document.body.innerHTML = ''; }); } catch {}
-          } catch (e) {
-            console.log(`AUTO: Page ${p} failed: ${e.message}`);
-            consecutiveFails++;
-            // If page/browser died, get a fresh one before retrying
-            if (/closed|detached|disposed|crashed|protocol/i.test(e.message)) {
-              try { await page.close(); } catch {}
-              const browser = await getBrowser();
-              page = await browser.newPage();
-              await page.setUserAgent(HEADERS['User-Agent']);
-              await page.setViewport({ width: 1280, height: 900 });
-              await page.setRequestInterception(true);
-              page.on('request', req => {
-                const type = req.resourceType();
-                if (['image', 'font', 'media'].includes(type)) req.abort();
-                else req.continue();
-              });
-              console.log(`AUTO: Savills — recovered page after crash at page ${p}`);
-            }
-            if (consecutiveFails >= 3) { console.log(`AUTO: Savills — stopping after ${consecutiveFails} consecutive failures`); break; }
-          }
+    if (rewritten.paginateAs === 'savills_pages') {
+      const firstResult = await scrapeRenderedPage(scrapeUrl, house);
+      const dom = new JSDOM(firstResult.html, { url: scrapeUrl });
+      const totalPages = (() => {
+        const pageLinks = dom.window.document.querySelectorAll('a[href*="/page-"]');
+        let max = 1;
+        for (const a of pageLinks) {
+          const m = a.textContent.trim().match(/^(\d+)$/);
+          if (m) max = Math.max(max, parseInt(m[1]));
         }
-        console.log(`AUTO: Savills total: ${rawLots.length} lots from ${maxPages} pages`);
+        return max;
+      })();
+      dom.window.close();
 
-      } else if (rewritten.paginateAs === 'sdl_pages') {
-        await page.goto(scrapeUrl, { waitUntil: 'networkidle2', timeout: 45000 });
-        await new Promise(r => setTimeout(r, 3000));
-        await page.evaluate(async () => {
-          for (let i = 0; i < 15; i++) { window.scrollBy(0, window.innerHeight); await new Promise(r => setTimeout(r, 500)); }
-          window.scrollTo(0, 0);
-        });
-        await new Promise(r => setTimeout(r, 2000));
-        const sdlTotalPages = await page.evaluate(() => {
-          const pageLinks = document.querySelectorAll('a[href*="page="], .pagination a, nav a');
-          let max = 1;
-          for (const a of pageLinks) {
-            const href = a.getAttribute('href') || '';
-            const pm = href.match(/page=(\d+)/);
-            if (pm) max = Math.max(max, parseInt(pm[1]));
-            const tm = a.textContent.trim().match(/^(\d+)$/);
-            if (tm) max = Math.max(max, parseInt(tm[1]));
-          }
-          const bodyText = document.body.innerText;
-          const ofMatch = bodyText.match(/page\s+\d+\s+of\s+(\d+)/i) || bodyText.match(/(\d+)\s+pages/i);
-          if (ofMatch) max = Math.max(max, parseInt(ofMatch[1]));
-          return max;
-        });
-        console.log(`AUTO: SDL detected ${sdlTotalPages} pages`);
-        const firstLots = await extractWithDOM(page, house);
-        if (firstLots && firstLots.length > 0) rawLots.push(...firstLots);
-        console.log(`AUTO: SDL Page 1: ${firstLots ? firstLots.length : 0} lots`);
-        const sdlMaxPages = Math.min(sdlTotalPages, 20);
-        for (let p = 2; p <= sdlMaxPages; p++) {
-          const sep = scrapeUrl.includes('?') ? '&' : '?';
-          const pageUrl = `${scrapeUrl}${sep}page=${p}`;
-          try {
-            await page.goto(pageUrl, { waitUntil: 'networkidle2', timeout: 30000 });
-            await new Promise(r => setTimeout(r, 2000));
-            await page.evaluate(async () => {
-              for (let i = 0; i < 10; i++) { window.scrollBy(0, window.innerHeight); await new Promise(r => setTimeout(r, 400)); }
-              window.scrollTo(0, 0);
-            });
-            await new Promise(r => setTimeout(r, 1500));
-            const pageLots = await extractWithDOM(page, house);
-            if (pageLots && pageLots.length > 0) {
-              rawLots.push(...pageLots);
-              console.log(`AUTO: SDL Page ${p}: ${pageLots.length} lots`);
-            } else {
-              console.log(`AUTO: SDL Page ${p}: 0 lots — stopping`);
-              break;
-            }
-          } catch (e) { console.log(`AUTO: SDL Page ${p} failed: ${e.message}`); break; }
-        }
-        console.log(`AUTO: SDL total: ${rawLots.length} lots`);
-
-      } else {
-        // ── Generic auto-paginating Puppeteer extraction ──
-        await page.goto(scrapeUrl, { waitUntil: 'networkidle2', timeout: 45000 });
-        await new Promise(r => setTimeout(r, 3000));
-        await page.evaluate(async () => {
-          for (let i = 0; i < 15; i++) { window.scrollBy(0, window.innerHeight); await new Promise(r => setTimeout(r, 500)); }
-          window.scrollTo(0, 0);
-        });
-        await new Promise(r => setTimeout(r, 2000));
-
-        const domLots = await extractWithDOM(page, house);
-        if (domLots && domLots.length >= 3) {
-          rawLots.push(...domLots);
-          console.log(`AUTO: ${house} Page 1: ${domLots.length} lots`);
-
-          // Auto-detect pagination
-          const detectedPages = await page.evaluate(() => {
-            let max = 1;
-            document.querySelectorAll('a[href*="page="], a[href*="page-"], a[href*="/page/"]').forEach(a => {
-              const href = a.getAttribute('href') || '';
-              const m = href.match(/page[=/](\d+)/) || href.match(/page-(\d+)/);
-              if (m) max = Math.max(max, parseInt(m[1]));
-            });
-            document.querySelectorAll('.pagination a, nav.pagination a, .paging a, .page-numbers a, [class*="pagination"] a, [class*="pager"] a').forEach(a => {
-              const t = a.textContent.trim();
-              if (t.match(/^\d+$/)) max = Math.max(max, parseInt(t));
-            });
-            const bodyText = document.body.innerText;
-            const ofMatch = bodyText.match(/page\s+\d+\s+of\s+(\d+)/i) || bodyText.match(/(\d+)\s+pages/i);
-            if (ofMatch) max = Math.max(max, parseInt(ofMatch[1]));
-            const showMatch = bodyText.match(/showing\s+\d+[\s-]+\d+\s+of\s+(\d+)/i) || bodyText.match(/(\d+)\s+results?\s+found/i) || bodyText.match(/(\d+)\s+(?:lots?|properties)/i);
-            if (showMatch) { const total = parseInt(showMatch[1]); if (total > 50) max = Math.max(max, Math.ceil(total / 20)); }
-            let pattern = 'query';
-            if (document.querySelector('a[href*="page-"]')) pattern = 'path-dash';
-            if (document.querySelector('a[href*="/page/"]')) pattern = 'path-slash';
-            return { max, pattern };
-          });
-
-          if (detectedPages.max > 1) {
-            // Per-house page caps — some houses have massive duplication across dates
-            const PAGE_CAPS = { probateauction: 12, auctionhouselondon: 10 };
-            const pageCap = PAGE_CAPS[house] || 25;
-            const maxPages = Math.min(detectedPages.max, pageCap);
-            console.log(`AUTO: ${house}: detected ${detectedPages.max} pages (${detectedPages.pattern}), loading up to ${maxPages}`);
-            let consecutiveFails = 0;
-            const RECYCLE_EVERY = 3; // aggressive — generic pages can be very heavy (150+ lots)
-            for (let p = 2; p <= maxPages; p++) {
-              if (rawLots.length >= MAX_LOTS_PER_SCRAPE) { console.log(`AUTO: ${house}: lot cap reached at ${rawLots.length}`); break; }
-              let pageUrl;
-              if (detectedPages.pattern === 'path-dash') pageUrl = scrapeUrl.replace(/\/page-\d+/, '') + `/page-${p}`;
-              else if (detectedPages.pattern === 'path-slash') pageUrl = scrapeUrl.replace(/\/page\/\d+/, '') + `/page/${p}`;
-              else { const sep = scrapeUrl.includes('?') ? '&' : '?'; pageUrl = `${scrapeUrl}${sep}page=${p}`; }
-              try {
-                // Recycle page aggressively to prevent OOM on heavy pages
-                if ((p - 1) % RECYCLE_EVERY === 0) {
-                  try { await page.close(); } catch {}
-                  const freshBrowser = await getBrowser();
-                  page = await freshBrowser.newPage();
-                  await page.setUserAgent(HEADERS['User-Agent']);
-                  await page.setViewport({ width: 1280, height: 900 });
-                  await page.setRequestInterception(true);
-                  page.on('request', req => { const t = req.resourceType(); if (['image','font','media'].includes(t)) req.abort(); else req.continue(); });
-                  console.log(`AUTO: ${house} — recycled page at page ${p}`);
-                }
-                await page.goto(pageUrl, { waitUntil: 'networkidle2', timeout: 30000 });
-                await new Promise(r => setTimeout(r, 2000));
-                await page.evaluate(async () => { for (let i = 0; i < 10; i++) { window.scrollBy(0, window.innerHeight); await new Promise(r => setTimeout(r, 400)); } window.scrollTo(0, 0); });
-                await new Promise(r => setTimeout(r, 1500));
-                const pageLots = await extractWithDOM(page, house);
-                if (pageLots && pageLots.length > 0) {
-                  rawLots.push(...pageLots);
-                  console.log(`AUTO: ${house} Page ${p}: ${pageLots.length} lots`);
-                  consecutiveFails = 0;
-                } else { console.log(`AUTO: ${house} Page ${p}: 0 lots — stopping`); break; }
-                // Clear DOM after extraction to free memory before next navigation
-                try { await page.evaluate(() => { document.body.innerHTML = ''; }); } catch {}
-              } catch (e) {
-                console.log(`AUTO: ${house} Page ${p} failed: ${e.message}`);
-                consecutiveFails++;
-                if (/closed|detached|disposed|crashed|protocol/i.test(e.message)) {
-                  try { await page.close(); } catch {}
-                  const freshBrowser = await getBrowser();
-                  page = await freshBrowser.newPage();
-                  await page.setUserAgent(HEADERS['User-Agent']);
-                  await page.setViewport({ width: 1280, height: 900 });
-                  await page.setRequestInterception(true);
-                  page.on('request', req => { const t = req.resourceType(); if (['image','font','media'].includes(t)) req.abort(); else req.continue(); });
-                  console.log(`AUTO: ${house} — recovered page after crash at page ${p}`);
-                }
-                if (consecutiveFails >= 3) { console.log(`AUTO: ${house} — stopping after ${consecutiveFails} consecutive failures`); break; }
-              }
-            }
-          }
-          // Enforce lot cap
-          if (rawLots.length > MAX_LOTS_PER_SCRAPE) {
-            console.log(`AUTO: ${house}: capping ${rawLots.length} lots to ${MAX_LOTS_PER_SCRAPE}`);
-            rawLots = rawLots.slice(0, MAX_LOTS_PER_SCRAPE);
-          }
-          console.log(`AUTO: ${house} total: ${rawLots.length} lots`);
-        } else {
-          const html = await page.content();
-          const puppeteerPages = [{ page: 1, html }];
-          rawLots = await extractLotsWithAI(puppeteerPages, house, null, scrapeUrl);
-          console.log(`AUTO: ${house}: ${rawLots.length} lots via Claude fallback`);
+      const firstPageLots = extractWithJSDOM(firstResult.html, house, scrapeUrl);
+      if (firstPageLots && firstPageLots.length > 0) rawLots.push(...firstPageLots);
+      const maxPages = Math.min(totalPages, 50);
+      for (let p = 2; p <= maxPages; p++) {
+        if (fcCreditExhausted && !puppeteer) { console.log(`AUTO: No scraping engine available at page ${p}`); break; }
+        try {
+          const pageResult = await scrapeRenderedPage(`${scrapeUrl}/page-${p}`, house);
+          const pageLots = extractWithJSDOM(pageResult.html, house, `${scrapeUrl}/page-${p}`);
+          if (pageLots && pageLots.length > 0) rawLots.push(...pageLots);
+        } catch (e) {
+          console.log(`AUTO: Page ${p} failed: ${e.message}`);
         }
       }
-    } finally {
-      await page.close();
+      console.log(`AUTO: Savills total: ${rawLots.length} lots from ${maxPages} pages`);
+
+    } else if (rewritten.paginateAs === 'sdl_pages') {
+      const firstResult = await scrapeRenderedPage(scrapeUrl, house);
+      const sdlTotalPages = detectTotalPages(firstResult.html, scrapeUrl, house);
+      console.log(`AUTO: SDL detected ${sdlTotalPages} pages`);
+
+      const firstLots = extractWithJSDOM(firstResult.html, house, scrapeUrl);
+      if (firstLots && firstLots.length > 0) rawLots.push(...firstLots);
+      console.log(`AUTO: SDL Page 1: ${firstLots ? firstLots.length : 0} lots`);
+      const sdlMaxPages = Math.min(sdlTotalPages, 20);
+      for (let p = 2; p <= sdlMaxPages; p++) {
+        const sep = scrapeUrl.includes('?') ? '&' : '?';
+        const pageUrl = `${scrapeUrl}${sep}page=${p}`;
+        try {
+          const pageResult = await scrapeRenderedPage(pageUrl, house);
+          const pageLots = extractWithJSDOM(pageResult.html, house, pageUrl);
+          if (pageLots && pageLots.length > 0) {
+            rawLots.push(...pageLots);
+            console.log(`AUTO: SDL Page ${p}: ${pageLots.length} lots`);
+          } else {
+            console.log(`AUTO: SDL Page ${p}: 0 lots — stopping`);
+            break;
+          }
+        } catch (e) { console.log(`AUTO: SDL Page ${p} failed: ${e.message}`); break; }
+      }
+      console.log(`AUTO: SDL total: ${rawLots.length} lots`);
+
+    } else {
+      // ── Generic auto-paginating extraction ──
+      const firstResult = await scrapeRenderedPage(scrapeUrl, house);
+      const domLots = extractWithJSDOM(firstResult.html, house, scrapeUrl);
+      if (domLots && domLots.length >= 3) {
+        rawLots.push(...domLots);
+        console.log(`AUTO: ${house} Page 1: ${domLots.length} lots`);
+
+        const detectedPages = detectTotalPages(firstResult.html, scrapeUrl, house);
+        if (detectedPages > 1) {
+          const PAGE_CAPS = { probateauction: 12, auctionhouselondon: 10 };
+          const pageCap = PAGE_CAPS[house] || 25;
+          const maxPages = Math.min(detectedPages, pageCap);
+          console.log(`AUTO: ${house}: detected ${detectedPages} pages, loading up to ${maxPages}`);
+          for (let p = 2; p <= maxPages; p++) {
+            if (rawLots.length >= MAX_LOTS_PER_SCRAPE) { console.log(`AUTO: ${house}: lot cap reached at ${rawLots.length}`); break; }
+            const pageUrl = buildPageUrl(scrapeUrl, p, house);
+            try {
+              const pageResult = await scrapeRenderedPage(pageUrl, house);
+              const pageLots = extractWithJSDOM(pageResult.html, house, pageUrl);
+              if (pageLots && pageLots.length > 0) {
+                rawLots.push(...pageLots);
+                console.log(`AUTO: ${house} Page ${p}: ${pageLots.length} lots`);
+              } else { console.log(`AUTO: ${house} Page ${p}: 0 lots — stopping`); break; }
+            } catch (e) {
+              console.log(`AUTO: ${house} Page ${p} failed: ${e.message}`);
+              break;
+            }
+          }
+        }
+        if (rawLots.length > MAX_LOTS_PER_SCRAPE) {
+          console.log(`AUTO: ${house}: capping ${rawLots.length} lots to ${MAX_LOTS_PER_SCRAPE}`);
+          rawLots = rawLots.slice(0, MAX_LOTS_PER_SCRAPE);
+        }
+        console.log(`AUTO: ${house} total: ${rawLots.length} lots`);
+      } else {
+        // Fall back to Claude extraction
+        const renderedPages = [{ page: 1, html: firstResult.html }];
+        rawLots = await extractLotsWithAI(renderedPages, house, null, scrapeUrl);
+        console.log(`AUTO: ${house}: ${rawLots.length} lots via Claude fallback`);
+      }
     }
 
   } else {
     const pages = await scrapeAllPages(scrapeUrl, house);
     if (pages && pages.length > 0) rawLots = await extractLotsWithAI(pages, house, null, scrapeUrl);
-    // Skip Puppeteer fallback for houses where it wastes memory (blocked, empty, or JS-only)
+    // Rendered page fallback if static scraping found nothing
     const SKIP_PUPPETEER = ['philliparnold','knightfrank'];
     if (rawLots.length === 0 && !SKIP_PUPPETEER.includes(house)) {
-      const puppeteerPages = await scrapeWithPuppeteer(url, house);
-      if (puppeteerPages.length > 0) rawLots = await extractLotsWithAI(puppeteerPages, house, null, scrapeUrl);
+      try {
+        const rendered = await scrapeRenderedPage(url, house);
+        if (rendered.html) {
+          const renderedLots = extractWithJSDOM(rendered.html, house, url);
+          if (renderedLots && renderedLots.length > 0) {
+            rawLots = renderedLots;
+          } else {
+            const renderedPages = [{ page: 1, html: rendered.html }];
+            rawLots = await extractLotsWithAI(renderedPages, house, null, scrapeUrl);
+          }
+        }
+      } catch (err) {
+        console.log(`AUTO: Rendered scraping fallback failed for ${house}: ${err.message}`);
+      }
     }
   }
 
@@ -7588,6 +8111,15 @@ async function autoAnalyseOne(url) {
   const lotsMissingImg = lots.filter(l => l.url && !l.imageUrl).length;
   if (lotsMissingImg > 0) {
     await backfillImagesFromLotPages(lots);
+  }
+  // Rendered page backfill for JS-rendered sites (Firecrawl primary, Puppeteer fallback)
+  const stillNoImg = lots.filter(l => !l.imageUrl).length;
+  if (stillNoImg > 0 && PUPPETEER_IMAGE_HOUSES.has(house)) {
+    if (FIRECRAWL_API_KEY && !fcCreditExhausted) {
+      await backfillImagesWithFirecrawl(url, lots, house);
+    } else {
+      await backfillImagesWithPuppeteer(url, lots, house);
+    }
   }
 
   const expiresAt = new Date(Date.now() + getCacheTTL(house)).toISOString();
