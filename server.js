@@ -277,9 +277,10 @@ async function scrapeWithFirecrawl(url, options = {}) {
   if (fcCreditExhausted) throw new Error('Firecrawl credits exhausted');
   if (fcTemporarilyDown && Date.now() - fcDownAt < 600000) throw new Error('Firecrawl temporarily down');
 
+  const formats = options.formats || ['rawHtml'];
   const body = {
     url,
-    formats: ['rawHtml'],
+    formats,
   };
   if (options.waitFor) body.waitFor = options.waitFor;
   if (options.actions) body.actions = options.actions;
@@ -323,6 +324,7 @@ async function scrapeWithFirecrawl(url, options = {}) {
     return {
       html: data.data?.rawHtml || data.data?.html || '',
       sourceURL: data.data?.metadata?.sourceURL || url,
+      images: data.data?.images || [],
     };
   };
 
@@ -345,7 +347,7 @@ async function scrapeWithFirecrawl(url, options = {}) {
   }
 }
 
-function extractWithJSDOM(html, house, baseUrl) {
+function extractWithJSDOM(html, house, baseUrl, firecrawlImages) {
   const dom = new JSDOM(html, { url: baseUrl });
   const { document } = dom.window;
 
@@ -482,6 +484,51 @@ function extractWithJSDOM(html, house, baseUrl) {
     }
   }
 
+  // Firecrawl images format fallback — match remaining imageless lots using Firecrawl's extracted image URLs
+  if (firecrawlImages && firecrawlImages.length > 0) {
+    const lotsMissingImg = lots.filter(l => !l.imageUrl).length;
+    if (lotsMissingImg > 0) {
+      // Filter to likely property images (not icons, logos, etc)
+      const skipFc = /logo|icon|arrow|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|1x1|favicon|banner|advert/i;
+      const propertyImages = firecrawlImages.filter(img => img && img.length > 20 && /^https?:\/\//i.test(img) && !skipFc.test(img));
+      if (propertyImages.length > 0) {
+        // Try matching by proximity: if lot has a URL, look for an image URL that shares the same domain/path segment
+        let fcMatched = 0;
+        for (const lot of lots) {
+          if (lot.imageUrl) continue;
+          // Strategy 1: match by lot number in image URL
+          if (lot.lotNumber) {
+            const lotNum = String(lot.lotNumber).replace(/\D/g, '');
+            if (lotNum) {
+              const match = propertyImages.find(img => img.includes(lotNum) || img.includes(`lot-${lotNum}`) || img.includes(`lot${lotNum}`));
+              if (match) { lot.imageUrl = match; fcMatched++; continue; }
+            }
+          }
+          // Strategy 2: match by lot URL path overlap
+          if (lot.url) {
+            try {
+              const lotPath = new URL(lot.url).pathname.replace(/\/$/, '').split('/').pop();
+              if (lotPath && lotPath.length > 3) {
+                const match = propertyImages.find(img => img.toLowerCase().includes(lotPath.toLowerCase()));
+                if (match) { lot.imageUrl = match; fcMatched++; continue; }
+              }
+            } catch {}
+          }
+        }
+        // Strategy 3: round-robin assign remaining property images to imageless lots
+        if (fcMatched === 0 && propertyImages.length >= lots.filter(l => !l.imageUrl).length * 0.5) {
+          let imgIdx = 0;
+          for (const lot of lots) {
+            if (lot.imageUrl || imgIdx >= propertyImages.length) continue;
+            lot.imageUrl = propertyImages[imgIdx++];
+            fcMatched++;
+          }
+        }
+        if (fcMatched > 0) console.log(`JSDOM Firecrawl images fallback for ${house}: matched ${fcMatched} lots`);
+      }
+    }
+  }
+
   // Post-processing: filter junk images (same blocklist as extractWithDOM)
   const imgBlocklist = /logo|icon|placeholder|no-image|default|blank|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|1x1|noimage|favicon|banner|advert|sponsor|newsletter|widget|thumb_generic|modal\.png|_NYC\.|_LCC\.|_BMDC\.|Unit[ie]*d?_?Utilit|Cardwells|themes\/.*assets\/images\/|download_\(\d+\)\./i;
   const imgDomainBlock = /flannels|kirklees|rdw\b|council\.gov|\.gov\.uk\/|googleads|doubleclick|analytics|hotjar|intercom|crisp\.chat|tawk\.to|zendesk|hubspot|mailchimp|sendgrid/i;
@@ -504,15 +551,28 @@ async function scrapeRenderedPage(url, house, options = {}) {
     if (!(fcTemporarilyDown && Date.now() - fcDownAt < 600000)) {
       try {
         const fcActions = [
-          { type: 'scroll', direction: 'down', amount: 5 },
-          { type: 'wait', milliseconds: 2000 },
-          { type: 'scroll', direction: 'down', amount: 5 },
+          // Scroll down in stages to trigger intersection observers for lazy-loaded content
+          { type: 'scroll', direction: 'down' },
+          { type: 'wait', milliseconds: 1500 },
+          { type: 'scroll', direction: 'down' },
+          { type: 'wait', milliseconds: 1500 },
+          { type: 'scroll', direction: 'down' },
+          { type: 'wait', milliseconds: 1500 },
+          { type: 'scroll', direction: 'down' },
           { type: 'wait', milliseconds: 1000 },
-          { type: 'scroll', direction: 'up', amount: 10 },
+          // Force lazy-loaded images: swap data-src/data-lazy-src → src
+          { type: 'executeJavascript', script: `document.querySelectorAll('img[data-src], img[data-lazy-src], img[data-original]').forEach(img => { const src = img.getAttribute('data-src') || img.getAttribute('data-lazy-src') || img.getAttribute('data-original'); if (src && !img.getAttribute('src')?.startsWith('http')) img.setAttribute('src', src); });` },
+          { type: 'wait', milliseconds: 500 },
+          // Scroll back to top to capture any fixed-position images
+          { type: 'scroll', direction: 'up' },
+          { type: 'scroll', direction: 'up' },
+          { type: 'scroll', direction: 'up' },
+          { type: 'scroll', direction: 'up' },
         ];
         const result = await scrapeWithFirecrawl(url, {
           waitFor: options.waitFor || 3000,
           actions: options.actions || fcActions,
+          formats: ['rawHtml', 'images'],
         });
         if (result.html && result.html.length > 500) {
           console.log(`Firecrawl: got ${result.html.length} chars for ${house}`);
@@ -603,9 +663,22 @@ async function backfillImagesWithFirecrawl(catalogueUrl, lots, house) {
   try {
     const result = await scrapeRenderedPage(catalogueUrl, house, {
       actions: [
-        { type: 'scroll', direction: 'down', amount: 10 },
-        { type: 'wait', milliseconds: 3000 },
-        { type: 'scroll', direction: 'up', amount: 10 },
+        // Aggressive scrolling to trigger all lazy-load observers
+        { type: 'scroll', direction: 'down' },
+        { type: 'wait', milliseconds: 1500 },
+        { type: 'scroll', direction: 'down' },
+        { type: 'wait', milliseconds: 1500 },
+        { type: 'scroll', direction: 'down' },
+        { type: 'wait', milliseconds: 1500 },
+        { type: 'scroll', direction: 'down' },
+        { type: 'wait', milliseconds: 1000 },
+        // Force lazy-loaded images: swap data-src → src
+        { type: 'executeJavascript', script: `document.querySelectorAll('img[data-src], img[data-lazy-src], img[data-original]').forEach(img => { const src = img.getAttribute('data-src') || img.getAttribute('data-lazy-src') || img.getAttribute('data-original'); if (src && !img.getAttribute('src')?.startsWith('http')) img.setAttribute('src', src); });` },
+        { type: 'wait', milliseconds: 1000 },
+        { type: 'scroll', direction: 'up' },
+        { type: 'scroll', direction: 'up' },
+        { type: 'scroll', direction: 'up' },
+        { type: 'scroll', direction: 'up' },
       ],
     });
     if (!result.html) return 0;
@@ -647,7 +720,7 @@ async function backfillImagesWithFirecrawl(catalogueUrl, lots, house) {
 
     dom.window.close();
 
-    // Match images to lots
+    // Match images to lots via href→image map
     let updated = 0;
     for (const lot of lots) {
       if (lot.imageUrl) continue;
@@ -659,6 +732,23 @@ async function backfillImagesWithFirecrawl(catalogueUrl, lots, house) {
         }
         lot.imageUrl = imgUrl;
         updated++;
+      }
+    }
+
+    // Fallback: use Firecrawl's images array for remaining imageless lots
+    if (result.images && result.images.length > 0) {
+      const skipFc = /logo|icon|arrow|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|1x1|favicon|banner|advert/i;
+      const propertyImages = result.images.filter(img => img && img.length > 20 && /^https?:\/\//i.test(img) && !skipFc.test(img));
+      for (const lot of lots) {
+        if (lot.imageUrl) continue;
+        // Try matching by lot number
+        if (lot.lotNumber) {
+          const lotNum = String(lot.lotNumber).replace(/\D/g, '');
+          if (lotNum) {
+            const match = propertyImages.find(img => img.includes(lotNum));
+            if (match) { lot.imageUrl = match; updated++; }
+          }
+        }
       }
     }
     console.log(`Firecrawl image backfill for ${house}: ${updated}/${lots.length} lots got images`);
@@ -2321,7 +2411,7 @@ app.post('/api/analyse', async (req, res) => {
           console.log(`Savills: detected ${totalPages} pages`);
           sseWrite(res, 'scrape', { pages: totalPages, lots: 0 });
 
-          const firstPageLots = extractWithJSDOM(firstResult.html, house, scrapeUrl);
+          const firstPageLots = extractWithJSDOM(firstResult.html, house, scrapeUrl, firstResult.images);
           if (firstPageLots && firstPageLots.length > 0) rawLots.push(...firstPageLots);
           sseWrite(res, 'scrape', { pages: totalPages, lots: rawLots.length });
           console.log(`Page 1: ${firstPageLots ? firstPageLots.length : 0} lots`);
@@ -2330,7 +2420,7 @@ app.post('/api/analyse', async (req, res) => {
           for (let p = 2; p <= maxPages; p++) {
             try {
               const pageResult = await scrapeRenderedPage(`${scrapeUrl}/page-${p}`, house);
-              const pageLots = extractWithJSDOM(pageResult.html, house, `${scrapeUrl}/page-${p}`);
+              const pageLots = extractWithJSDOM(pageResult.html, house, `${scrapeUrl}/page-${p}`, pageResult.images);
               if (pageLots && pageLots.length > 0) rawLots.push(...pageLots);
               console.log(`Page ${p}: ${pageLots ? pageLots.length : 0} lots`);
             } catch (e) {
@@ -2345,7 +2435,7 @@ app.post('/api/analyse', async (req, res) => {
           const sdlTotalPages = detectTotalPages(firstResult.html, scrapeUrl, house);
           console.log(`SDL: detected ${sdlTotalPages} pages`);
 
-          const sdlFirstLots = extractWithJSDOM(firstResult.html, house, scrapeUrl);
+          const sdlFirstLots = extractWithJSDOM(firstResult.html, house, scrapeUrl, firstResult.images);
           if (sdlFirstLots && sdlFirstLots.length > 0) rawLots.push(...sdlFirstLots);
           console.log(`SDL Page 1: ${sdlFirstLots ? sdlFirstLots.length : 0} lots`);
 
@@ -2355,7 +2445,7 @@ app.post('/api/analyse', async (req, res) => {
             const pageUrl = `${scrapeUrl}${sep}page=${p}`;
             try {
               const pageResult = await scrapeRenderedPage(pageUrl, house);
-              const pageLots = extractWithJSDOM(pageResult.html, house, pageUrl);
+              const pageLots = extractWithJSDOM(pageResult.html, house, pageUrl, pageResult.images);
               if (pageLots && pageLots.length > 0) {
                 rawLots.push(...pageLots);
                 console.log(`SDL Page ${p}: ${pageLots.length} lots`);
@@ -2375,7 +2465,7 @@ app.post('/api/analyse', async (req, res) => {
           console.log(`Loading ${scrapeUrl} for ${house}`);
           const firstResult = await scrapeRenderedPage(scrapeUrl, house);
 
-          const domLots = extractWithJSDOM(firstResult.html, house, scrapeUrl);
+          const domLots = extractWithJSDOM(firstResult.html, house, scrapeUrl, firstResult.images);
           if (domLots && domLots.length >= 3) {
             rawLots.push(...domLots);
             console.log(`${house} Page 1: ${domLots.length} lots via DOM extraction`);
@@ -2391,7 +2481,7 @@ app.post('/api/analyse', async (req, res) => {
                 const pageUrl = buildPageUrl(scrapeUrl, p, house);
                 try {
                   const pageResult = await scrapeRenderedPage(pageUrl, house);
-                  const pageLots = extractWithJSDOM(pageResult.html, house, pageUrl);
+                  const pageLots = extractWithJSDOM(pageResult.html, house, pageUrl, pageResult.images);
                   if (pageLots && pageLots.length > 0) {
                     rawLots.push(...pageLots);
                     console.log(`${house} Page ${p}: ${pageLots.length} lots`);
@@ -2442,7 +2532,7 @@ app.post('/api/analyse', async (req, res) => {
         try {
           const rendered = await scrapeRenderedPage(url, house);
           if (rendered.html) {
-            const renderedLots = extractWithJSDOM(rendered.html, house, url);
+            const renderedLots = extractWithJSDOM(rendered.html, house, url, rendered.images);
             if (renderedLots && renderedLots.length > 0) {
               rawLots = renderedLots;
               console.log(`Rendered scraping got ${rawLots.length} lots via DOM extraction`);
@@ -3232,13 +3322,18 @@ app.post('/api/admin/backfill-images', async (req, res) => {
         }
       }
 
-      // Step 3: Rendered page backfill for JS-rendered sites (Firecrawl primary, Puppeteer fallback)
+      // Step 3: Rendered backfill — try both engines for best coverage
       const stillNoImages = lots.filter(l => !l.imageUrl).length;
       if (stillNoImages > 0 && PUPPETEER_IMAGE_HOUSES.has(entry.house)) {
-        const renderedGained = FIRECRAWL_API_KEY && !fcCreditExhausted
-          ? await backfillImagesWithFirecrawl(entry.url, lots, entry.house)
-          : await backfillImagesWithPuppeteer(entry.url, lots, entry.house);
-        gained += renderedGained;
+        // Pass 1: Firecrawl
+        if (FIRECRAWL_API_KEY && !fcCreditExhausted) {
+          gained += await backfillImagesWithFirecrawl(entry.url, lots, entry.house);
+        }
+        // Pass 2: Puppeteer for remaining
+        const afterFc = lots.filter(l => !l.imageUrl).length;
+        if (afterFc > 0 && puppeteer) {
+          gained += await backfillImagesWithPuppeteer(entry.url, lots, entry.house);
+        }
       }
 
       if (gained > 0) {
@@ -3325,8 +3420,8 @@ app.post('/api/admin/test-extractor', rateLimit(60000, 5), async (req, res) => {
     const pageTitle = document.title || '';
     dom.window.close();
 
-    // Run the actual DOM extractor via JSDOM
-    const lots = extractWithJSDOM(html, house, url);
+    // Run the actual DOM extractor via JSDOM (pass Firecrawl images if available)
+    const lots = extractWithJSDOM(html, house, url, result?.images);
     const hasImages = lots ? lots.filter(l => l.imageUrl).length : 0;
     const hasUrls = lots ? lots.filter(l => l.url && l.url !== '').length : 0;
 
@@ -7799,14 +7894,21 @@ async function _doAutoAnalyseAll() {
               if (deepFilled > 0) needsUpdate = true;
             }
           }
-          // Step 3: Firecrawl/Puppeteer backfill for JS-rendered sites
+          // Step 3: Rendered backfill — try both engines for best image coverage
           const stillNoImages = cachedLots.filter(l => !l.imageUrl).length;
           const houseSlug = Object.entries(HOUSE_DISPLAY_NAMES).find(([k, v]) => v === auction.house)?.[0] || auction.house;
           if (stillNoImages > 0 && PUPPETEER_IMAGE_HOUSES.has(houseSlug)) {
             console.log(`AUTO: ${auction.house} — ${stillNoImages} lots still missing images, trying rendered backfill...`);
-            const gained = FIRECRAWL_API_KEY && !fcCreditExhausted
-              ? await backfillImagesWithFirecrawl(auction.url, cachedLots, houseSlug)
-              : await backfillImagesWithPuppeteer(auction.url, cachedLots, houseSlug);
+            let gained = 0;
+            // Pass 1: Firecrawl with executeJavascript + images format
+            if (FIRECRAWL_API_KEY && !fcCreditExhausted) {
+              gained += await backfillImagesWithFirecrawl(auction.url, cachedLots, houseSlug);
+            }
+            // Pass 2: Puppeteer for remaining misses
+            const afterFc = cachedLots.filter(l => !l.imageUrl).length;
+            if (afterFc > 0 && puppeteer) {
+              gained += await backfillImagesWithPuppeteer(auction.url, cachedLots, houseSlug);
+            }
             if (gained > 0) needsUpdate = true;
           }
           if (!needsUpdate) {
@@ -8026,14 +8128,14 @@ async function autoAnalyseOne(url) {
       })();
       dom.window.close();
 
-      const firstPageLots = extractWithJSDOM(firstResult.html, house, scrapeUrl);
+      const firstPageLots = extractWithJSDOM(firstResult.html, house, scrapeUrl, firstResult.images);
       if (firstPageLots && firstPageLots.length > 0) rawLots.push(...firstPageLots);
       const maxPages = Math.min(totalPages, 50);
       for (let p = 2; p <= maxPages; p++) {
         if (fcCreditExhausted && !puppeteer) { console.log(`AUTO: No scraping engine available at page ${p}`); break; }
         try {
           const pageResult = await scrapeRenderedPage(`${scrapeUrl}/page-${p}`, house);
-          const pageLots = extractWithJSDOM(pageResult.html, house, `${scrapeUrl}/page-${p}`);
+          const pageLots = extractWithJSDOM(pageResult.html, house, `${scrapeUrl}/page-${p}`, pageResult.images);
           if (pageLots && pageLots.length > 0) rawLots.push(...pageLots);
         } catch (e) {
           console.log(`AUTO: Page ${p} failed: ${e.message}`);
@@ -8046,7 +8148,7 @@ async function autoAnalyseOne(url) {
       const sdlTotalPages = detectTotalPages(firstResult.html, scrapeUrl, house);
       console.log(`AUTO: SDL detected ${sdlTotalPages} pages`);
 
-      const firstLots = extractWithJSDOM(firstResult.html, house, scrapeUrl);
+      const firstLots = extractWithJSDOM(firstResult.html, house, scrapeUrl, firstResult.images);
       if (firstLots && firstLots.length > 0) rawLots.push(...firstLots);
       console.log(`AUTO: SDL Page 1: ${firstLots ? firstLots.length : 0} lots`);
       const sdlMaxPages = Math.min(sdlTotalPages, 20);
@@ -8055,7 +8157,7 @@ async function autoAnalyseOne(url) {
         const pageUrl = `${scrapeUrl}${sep}page=${p}`;
         try {
           const pageResult = await scrapeRenderedPage(pageUrl, house);
-          const pageLots = extractWithJSDOM(pageResult.html, house, pageUrl);
+          const pageLots = extractWithJSDOM(pageResult.html, house, pageUrl, pageResult.images);
           if (pageLots && pageLots.length > 0) {
             rawLots.push(...pageLots);
             console.log(`AUTO: SDL Page ${p}: ${pageLots.length} lots`);
@@ -8070,7 +8172,7 @@ async function autoAnalyseOne(url) {
     } else {
       // ── Generic auto-paginating extraction ──
       const firstResult = await scrapeRenderedPage(scrapeUrl, house);
-      const domLots = extractWithJSDOM(firstResult.html, house, scrapeUrl);
+      const domLots = extractWithJSDOM(firstResult.html, house, scrapeUrl, firstResult.images);
       if (domLots && domLots.length >= 3) {
         rawLots.push(...domLots);
         console.log(`AUTO: ${house} Page 1: ${domLots.length} lots`);
@@ -8086,7 +8188,7 @@ async function autoAnalyseOne(url) {
             const pageUrl = buildPageUrl(scrapeUrl, p, house);
             try {
               const pageResult = await scrapeRenderedPage(pageUrl, house);
-              const pageLots = extractWithJSDOM(pageResult.html, house, pageUrl);
+              const pageLots = extractWithJSDOM(pageResult.html, house, pageUrl, pageResult.images);
               if (pageLots && pageLots.length > 0) {
                 rawLots.push(...pageLots);
                 console.log(`AUTO: ${house} Page ${p}: ${pageLots.length} lots`);
@@ -8119,7 +8221,7 @@ async function autoAnalyseOne(url) {
       try {
         const rendered = await scrapeRenderedPage(url, house);
         if (rendered.html) {
-          const renderedLots = extractWithJSDOM(rendered.html, house, url);
+          const renderedLots = extractWithJSDOM(rendered.html, house, url, rendered.images);
           if (renderedLots && renderedLots.length > 0) {
             rawLots = renderedLots;
           } else {
@@ -8146,12 +8248,16 @@ async function autoAnalyseOne(url) {
   if (lotsMissingImg > 0) {
     await backfillImagesFromLotPages(lots);
   }
-  // Rendered page backfill for JS-rendered sites (Firecrawl primary, Puppeteer fallback)
+  // Rendered page backfill for JS-rendered sites — try both engines for best coverage
   const stillNoImg = lots.filter(l => !l.imageUrl).length;
   if (stillNoImg > 0 && PUPPETEER_IMAGE_HOUSES.has(house)) {
+    // Pass 1: Firecrawl (with executeJavascript to force lazy-load + images format)
     if (FIRECRAWL_API_KEY && !fcCreditExhausted) {
       await backfillImagesWithFirecrawl(url, lots, house);
-    } else {
+    }
+    // Pass 2: Puppeteer for any remaining misses (renders JS natively, better at intersection observers)
+    const stillMissing = lots.filter(l => !l.imageUrl).length;
+    if (stillMissing > 0 && puppeteer) {
       await backfillImagesWithPuppeteer(url, lots, house);
     }
   }
