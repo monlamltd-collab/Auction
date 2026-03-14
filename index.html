@@ -1087,7 +1087,7 @@ function updatePriceBtn(){
 // LOOKAHEAD FILTER PERSISTENCE
 // ═══════════════════════════════
 function saveLookahead(){try{localStorage.setItem('bm_lookahead',$('fLookahead').value)}catch(e){}}
-function restoreLookahead(){try{const v=localStorage.getItem('bm_lookahead');if(v&&$('fLookahead'))$('fLookahead').value=v}catch(e){}}
+function restoreLookahead(){try{const v=localStorage.getItem('bm_lookahead');if(v==='1'){localStorage.removeItem('bm_lookahead');return}if(v&&$('fLookahead'))$('fLookahead').value=v}catch(e){}}
 restoreLookahead();
 
 let _currentPage=1;
