@@ -2547,8 +2547,8 @@ Only return lots that genuinely match the query. If nothing matches well, say so
 
     return res.json(response);
   } catch (err) {
-    log.error('Smart search error', { error: err.message });
-    return res.status(500).json({ error: 'Internal server error' });
+    log.error('Smart search error', { error: err.message, stack: err.stack?.split('\n').slice(0, 3).join(' | ') });
+    return res.status(500).json({ error: 'Smart search failed', detail: err.message });
   }
 });
 
