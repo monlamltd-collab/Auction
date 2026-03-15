@@ -143,6 +143,10 @@ tr:hover td { background: rgba(255,255,255,.02); }
 .pipe-eig { background: rgba(139,92,246,.12); color: var(--violet); }
 .pipe-gemini { background: var(--red-bg); color: var(--red); }
 .pipe-arrow { color: var(--text3); font-size: .6rem; }
+.btn-rescrape { padding: 3px 8px; font-size: .7rem; font-weight: 600; border: 1px solid var(--amber); color: var(--amber); background: var(--amber-bg); border-radius: 4px; cursor: pointer; font-family: inherit; white-space: nowrap; transition: all .15s; }
+.btn-rescrape:hover { background: var(--amber); color: #fff; }
+.btn-rescrape:disabled { opacity: .5; cursor: not-allowed; }
+.btn-rescrape.rescraping { border-color: var(--green); color: var(--green); background: var(--green-bg); }
 
 /* Tabs */
 .tab-nav { display: flex; gap: 0; padding: 0 24px; background: var(--surface); border-bottom: 1px solid var(--border); }
@@ -254,10 +258,11 @@ tr:hover td { background: rgba(255,255,255,.02); }
                 <th title="Full extraction pipeline: Fetch (how HTML was obtained) → Extract (how lots were parsed from HTML) → Images (how lot images were obtained)">Pipeline</th>
                 <th title="How long ago this house's data was last scraped and cached">Age</th>
                 <th title="Time until the cached data expires. Once expired, the house will be re-scraped on the next auto-analysis cycle">Expires</th>
+                <th title="Manually trigger a rescrape for this house">Actions</th>
               </tr>
             </thead>
             <tbody id="houses-tbody">
-              <tr><td colspan="10" class="loading"><span class="spinner"></span> Loading...</td></tr>
+              <tr><td colspan="11" class="loading"><span class="spinner"></span> Loading...</td></tr>
             </tbody>
           </table>
         </div>
@@ -553,7 +558,7 @@ async function loadCacheStatus() {
   // Build house table
   const tbody = document.getElementById('houses-tbody');
   if (!cached || cached.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="10" class="text-muted" style="text-align:center;padding:24px;">No cached data — waiting for next auto-analysis cycle</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11" class="text-muted" style="text-align:center;padding:24px;">No cached data — waiting for next auto-analysis cycle</td></tr>';
   } else {
     // Sort by lots descending
     cached.sort((a, b) => (b.total_lots || 0) - (a.total_lots || 0));
@@ -570,6 +575,7 @@ async function loadCacheStatus() {
         totalUnder100k += h.under_100k || 0;
         if (h.avg_yield) { yieldSum += h.avg_yield; yieldCount++; }
       }
+      const slug = Object.entries(KNOWN_HOUSES).find(([k, v]) => v === h.house)?.[0] || h.house.toLowerCase().replace(/[^a-z]/g, '');
       return `<tr style="${isExpired ? 'opacity:.5;' : ''}">
         <td><span class="status-dot ${dotClass}"></span>${statusText}</td>
         <td><strong>${esc(h.house)}</strong></td>
@@ -581,6 +587,7 @@ async function loadCacheStatus() {
         <td>${getPipelineHtml(h.house, h.scraped_with, h.extracted_with)}</td>
         <td class="mono">${timeAgo(h.last_scraped_at || h.created_at)}</td>
         <td class="mono ${isExpired ? 'text-amber' : ''}">${isExpired ? 'expired' : timeUntil(h.expires_at)}</td>
+        <td><button class="btn-rescrape" onclick="rescrapeHouse('${slug}','${esc(h.house)}')" title="Clear cache and rescrape this house now">Re-scrape</button></td>
       </tr>`;
     }).join('');
     document.getElementById('s-under100k').textContent = totalUnder100k.toLocaleString();
@@ -724,6 +731,30 @@ async function deleteCalendarEntry(id) {
   const result = await apiFetch(`/api/admin/calendar/${id}`, { method: 'DELETE', body: JSON.stringify({ secret: SECRET }) });
   if (result.error) toast('Failed: ' + result.error, 'error');
   else { toast('Entry removed', 'success'); loadCalendar(); }
+}
+
+async function rescrapeHouse(slug, displayName) {
+  if (!confirm(`Re-scrape ${displayName}? This will clear cached data and trigger an immediate re-analysis.`)) return;
+  const btn = event.target;
+  btn.disabled = true;
+  btn.textContent = 'Scraping…';
+  btn.classList.add('rescraping');
+  try {
+    const result = await apiFetch('/api/admin/rescrape', { method: 'POST', body: JSON.stringify({ house: slug }) });
+    if (result.error) {
+      toast('Rescrape failed: ' + result.error, 'error');
+    } else {
+      toast(`${displayName}: ${result.message}`, 'success');
+      // Refresh table after a short delay to allow background scrape to complete
+      setTimeout(() => { loadCacheStatus(); loadQualityReport(); }, 15000);
+    }
+  } catch (e) {
+    toast('Rescrape error: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Re-scrape';
+    btn.classList.remove('rescraping');
+  }
 }
 
 async function loadUsers() {

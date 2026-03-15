@@ -3620,6 +3620,57 @@ app.post('/api/admin/clear-cache', async (req, res) => {
   }
 });
 
+// Admin-only: rescrape a specific house (clear cache + trigger immediate re-analysis)
+app.post('/api/admin/rescrape', async (req, res) => {
+  const adminToken = req.headers['x-admin-secret'] || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(adminToken, process.env.ADMIN_SECRET)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  const { house } = req.body || {};
+  if (!house) return res.status(400).json({ error: 'house slug is required' });
+
+  try {
+    // 1. Delete cached data for this house
+    const { data: deleted } = await supabase
+      .from('cached_analyses')
+      .delete()
+      .eq('house', HOUSE_DISPLAY_NAMES[house] || house)
+      .select('url');
+    const cleared = deleted ? deleted.length : 0;
+
+    // 2. Find calendar URLs for this house to re-scrape
+    const calendar = getAuctionCalendar();
+    const urls = calendar
+      .filter(a => a.houseSlug === house || (a.house || '').toLowerCase().replace(/[^a-z]/g, '') === house)
+      .map(a => a.url)
+      .filter(Boolean);
+
+    // Fallback to HOUSE_ROOTS if no calendar entries
+    if (urls.length === 0 && HOUSE_ROOTS[house]) {
+      urls.push(HOUSE_ROOTS[house]);
+    }
+
+    if (urls.length === 0) {
+      return res.json({ message: `Cache cleared (${cleared} entries) but no URLs found to rescrape for ${house}`, cleared, urls: [] });
+    }
+
+    // 3. Trigger re-analysis in background (don't block response)
+    res.json({ message: `Rescraping ${house}: cleared ${cleared} cached entries, now analysing ${urls.length} URL(s)`, cleared, urls });
+
+    for (const url of urls) {
+      try {
+        await autoAnalyseOne(url);
+      } catch (err) {
+        log.error('Rescrape autoAnalyseOne error', { house, url, error: err.message });
+      }
+    }
+    log.info('Rescrape complete', { house, urls: urls.length });
+  } catch (err) {
+    log.error('Rescrape error', { house, error: err.message });
+    if (!res.headersSent) res.status(500).json({ error: 'Rescrape failed: ' + err.message });
+  }
+});
+
 // Admin-only: test DOM extractor on a URL (diagnostics)
 app.post('/api/admin/test-extractor', rateLimit(60000, 5), async (req, res) => {
   const adminToken = req.headers['x-admin-secret'] || '';
