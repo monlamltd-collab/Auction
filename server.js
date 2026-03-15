@@ -575,6 +575,60 @@ function extractWithJSDOM(html, house, baseUrl, firecrawlImages) {
     }
   }
 
+  // Second-chance image recovery — for lots still missing images after junk stripping,
+  // walk the DOM to find their card container and extract background-image or <img>.
+  // This catches sites that use CSS background-image slideshows (Cycle2, Flickity, etc.)
+  // regardless of whether the per-house extractor handled them.
+  const imgRecoverSkip = /logo|icon|arrow|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|favicon|banner|btn|gallery-left|gallery-right/i;
+  const lotsMissingImgCount = lots.filter(l => !l.imageUrl).length;
+  if (lotsMissingImgCount > 0) {
+    let recovered = 0;
+    for (const lot of lots) {
+      if (lot.imageUrl) continue;
+      // Find the lot's anchor in the DOM by href
+      const href = lot.url || '';
+      if (!href) continue;
+      const anchor = document.querySelector(`a[href="${href}"], a[href="${href.replace(baseUrl, '')}"]`);
+      if (!anchor) continue;
+      // Walk up to find the card container (up to 6 levels)
+      let card = anchor;
+      for (let d = 0; d < 6; d++) {
+        card = card.parentElement;
+        if (!card) break;
+        // Stop at likely card boundaries
+        const cls = card.className || '';
+        if (/card|lot|listing|property|item/i.test(cls)) break;
+      }
+      if (!card) continue;
+      // Strategy 1: background-image on any descendant (slideshow slides, cover images)
+      const bgEl = card.querySelector('[style*="background-image"], .slide[style*="background"], [style*="background"][class*="slide"], [style*="background"][class*="cover"]');
+      if (bgEl) {
+        const style = bgEl.getAttribute('style') || '';
+        const bgMatch = style.match(/background(?:-image)?:\s*url\(['"]?([^'")\s]+)/i);
+        if (bgMatch && bgMatch[1] && !imgRecoverSkip.test(bgMatch[1]) && bgMatch[1].length > 10) {
+          let imgUrl = bgMatch[1];
+          if (!/^https?:\/\//i.test(imgUrl)) { try { imgUrl = new URL(imgUrl, baseUrl).href; } catch {} }
+          lot.imageUrl = imgUrl;
+          recovered++;
+          continue;
+        }
+      }
+      // Strategy 2: <img> tag (excluding SVG nav, icons, logos)
+      const imgs = card.querySelectorAll('img[src]');
+      for (const img of imgs) {
+        const s = img.getAttribute('src') || img.getAttribute('data-src') || '';
+        if (s && s.length > 10 && !imgRecoverSkip.test(s)) {
+          let imgUrl = s;
+          if (!/^https?:\/\//i.test(imgUrl)) { try { imgUrl = new URL(imgUrl, baseUrl).href; } catch {} }
+          lot.imageUrl = imgUrl;
+          recovered++;
+          break;
+        }
+      }
+    }
+    if (recovered > 0) console.log(`JSDOM image recovery for ${house}: rescued ${recovered}/${lotsMissingImgCount} imageless lots`);
+  }
+
   // Validate image URLs — must be https and look like an actual image
   for (const lot of lots) {
     if (lot.imageUrl && !isValidImageUrl(lot.imageUrl)) {
