@@ -3461,6 +3461,11 @@ app.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
     }
     if (imgStripped > 0) console.log(`Image sanitiser: stripped ${imgStripped} junk images`);
 
+    // Ensure every lot has a URL — fallback to catalogue page if no lot-specific link
+    for (const lot of cleanLots) {
+      if (!lot.url && lot._sourceUrl) lot.url = lot._sourceUrl;
+    }
+
     // Directory data is free to serve — no gating, no blurring
     res.json({ lots: cleanLots, sources, blurred: false });
   } catch (e) {
@@ -8103,6 +8108,11 @@ function buildLotUrl(lot, house, sourceUrl) {
       }
       break;
     // ── New houses ──
+    case 'probateauction':
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://probate.auction${lot.url}`;
+      }
+      break;
     case 'countrywide':
       if (lot.url && lot.url.startsWith('/')) {
         return `https://www.countrywidepropertyauctions.co.uk${lot.url}`;
@@ -8188,7 +8198,8 @@ function buildLotUrl(lot, house, sourceUrl) {
       }
       break;
   }
-  return lot.url || '';
+  // Fallback: if no lot-specific URL, link to the source catalogue page
+  return lot.url || sourceUrl || '';
 }
 
 // ═══════════════════════════════════════════════════════════════
