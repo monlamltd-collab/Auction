@@ -27,13 +27,13 @@
 | 6 | Howkins & Harrison | https://howkinsandharrison.co.uk/auctions/ | Small | LOW | Primarily farm/machinery dispersals. Property auctions via EIG. Very low property volume. |
 | 7 | Feather Smailes & Scales | https://www.fssproperty.co.uk/auction/online-auctions.html | Small | HIGH | Note: domain is fssproperty.co.uk (not feathersmailes.co.uk). ~28 lots/year. Harrogate, North Yorkshire. |
 | 8 | Arnolds Keys | https://www.arnoldskeys.com/auctions-2/ | Small | LOW | Currently inactive — "no date for next auction". Norfolk-based. |
-| 9 | Brown & Co | https://www.brown-co.com/auctions/property-land/online-auctions | Small-Medium | HIGH | Timed auctions with rolling catalogue. ~16 lots. Norfolk/Suffolk/East Anglia. |
+| 9 | Brown & Co | https://www.brown-co.com/auctions/property-land/online-auctions | Small-Medium | HIGH | EIG platform (lots at brownandco.eigonlineauctions.com). Timed auctions with rolling catalogue. ~16 lots. Norfolk/Suffolk/East Anglia. |
 | 10 | Hobbs Parker | https://www.hobbsparker.co.uk/estate-agents/property-for-sale/?statusDescGroup=Auction | Small | MEDIUM | Kent/Sussex. 0 lots at time of check — may be between auctions. Historical PDF catalogues. |
-| 11 | Clarke & Simpson | https://clarke-simpson.eigonlineauctions.com/search | Small | HIGH | EIG platform. ~3 active lots. Suffolk-based. |
+| 11 | Clarke & Simpson | https://clarke-simpson.eigonlineauctions.com/search | Medium | HIGH | EIG platform. Up to ~140 lots. Suffolk-based. |
 | 12 | Austin Gray | https://www.auctionhouse.co.uk/sussexandhampshire | Medium | HIGH | Operates as Auction House Sussex & Hampshire (part of Auction House UK network). Lots on auctionhouse.co.uk, not austingray.co.uk. |
 | 13 | Durrants | https://durrants.com/property-auctions/ | Small | HIGH | EIG platform. Norfolk/Suffolk. ~9 lots/year. Monthly online sales. |
-| 14 | Goldings | https://www.goldingsauctions.co.uk/auctions/ | Small-Medium | HIGH | Note: domain is goldingsauctions.co.uk (not goldings.co.uk). Ipswich-based. ~15 lots per auction. |
-| 15 | Clarke Gammon | https://www.clarkegammon.co.uk/property-auctions/ | Small | LOW | No online catalogue visible. Lots may require contacting office. |
+| 14 | Goldings | https://www.goldingsauctions.co.uk/auctions/next-auction/ | Small-Medium | HIGH | EIG platform. Note: domain is goldingsauctions.co.uk (not goldings.co.uk). Ipswich-based. ~15 lots per auction. |
+| 15 | Clarke Gammon | https://www.iamsold.co.uk/estate-agent/clarkegammon/properties | Small | MEDIUM | iamsold platform. Note: domain is clarkegammon.co.uk (not clarkeandgammon.co.uk). 0 lots at check — may be between auctions. |
 | 16 | All Wales Auction | https://www.tppuk.com/live-auction | MEDIUM | Medium | Lots hosted on TPPUK (The Property Portal UK) platform. Own site at allwalesauction.com has /catalogue.php but redirects to TPPUK. |
 | 17 | Dawsons | https://www.dawsonsproperty.co.uk/auctions-grid.php | Small | HIGH | EIG platform. ~8 lots. South Wales. |
 | 18 | Agents Property Auction | https://www.agentspropertyauction.com/property-search/ | Large | HIGH | Note: .co.uk domain is dead, actual site is .com. ~146 lots. North East & Cumbria. Partner agent network. |
@@ -79,8 +79,8 @@
 
 | Platform | Houses Using It |
 |----------|----------------|
-| **EIG** | Butters John Bee, Clarke & Simpson, Durrants, Dawsons, Henry Sykes, Astleys, Howkins & Harrison, Town & Country, Auction House Scotland, Greenslade Taylor Hunt, Symonds & Sampson, Harman Healy, Knight Frank |
-| **iamsold** | Drivers & Norris, Andrew Grant, Bond Oxborough Phillips, iamsold (aggregator at iamsold.co.uk/available-properties/) |
+| **EIG** | Brown & Co, Butters John Bee, Clarke & Simpson, Durrants, Dawsons, Feather Smailes & Scales, Goldings, Henry Sykes, Astleys, Howkins & Harrison, Town & Country, Auction House Scotland, Greenslade Taylor Hunt, Symonds & Sampson, Harman Healy, Knight Frank |
+| **iamsold** | Clarke Gammon, Drivers & Norris, Andrew Grant, Bond Oxborough Phillips, iamsold (aggregator at iamsold.co.uk/available-properties/) |
 | **Auction House UK** | Austin Gray (Sussex & Hampshire), Auction House Scotland |
 | **TPPUK** | All Wales Auction |
 
@@ -102,3 +102,4 @@ Several provided domains were wrong or inactive:
 | andrewgrant.co.uk | andrewgrant.com |
 | bopauctions.co.uk | bopproperty.com / bopproperty.iamsold.co.uk |
 | agentspropertyauction.co.uk | agentspropertyauction.com |
+| clarkeandgammon.co.uk | clarkegammon.co.uk (iamsold) |
