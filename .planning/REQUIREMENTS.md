@@ -20,8 +20,8 @@
 - [ ] **FRSH-01**: Frontend defaults to future-only auctions (past catalogues hidden unless user opts in)
 - [ ] **FRSH-02**: Lot-level sold/unsold status reliably detected and displayed across all auction houses
 - [ ] **FRSH-03**: Standardised `lot.status` field in extraction pipeline (available/sold/STC/withdrawn)
-- [ ] **FRSH-04**: Alerting fires when auto-analyse fails or discovery misses catalogues (email + webhook)
-- [ ] **FRSH-05**: Admin dashboard shows data freshness metrics (last scrape time, image coverage %, lot count trends)
+- [x] **FRSH-04**: Alerting fires when auto-analyse fails or discovery misses catalogues (email + webhook)
+- [x] **FRSH-05**: Admin dashboard shows data freshness metrics (last scrape time, image coverage %, lot count trends)
 
 ### Image Quality
 
@@ -106,8 +106,8 @@
 | FRSH-01 | Phase 1 | Pending |
 | FRSH-02 | Phase 1 | Pending |
 | FRSH-03 | Phase 1 | Pending |
-| FRSH-04 | Phase 1 | Pending |
-| FRSH-05 | Phase 1 | Pending |
+| FRSH-04 | Phase 1 | Complete |
+| FRSH-05 | Phase 1 | Complete |
 | IMG-01 | Phase 2 | Pending |
 | IMG-02 | Phase 2 | Pending |
 | IMG-03 | Phase 2 | Pending |

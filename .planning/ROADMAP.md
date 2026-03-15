@@ -5,7 +5,7 @@
 **Phases:** 3
 **Requirements:** 35
 
-## Phase 1: Hardening & Data Freshness
+## Phase 1: Hardening & Data Freshness [4/4 Plans Complete - 2026-03-15]
 
 **Goal:** Fix broken code (SDLT rates using pre-Oct 2024 3% surcharge instead of 5%, Stripe trial abuse via unchecked `trial_used` flag, webhook idempotency, immediate downgrade instead of honouring `current_period_end`), improve data freshness (future-only defaults, sold/unsold tracking, alerting on pipeline failures), and switch Firecrawl to `['markdown', 'rawHtml']` format for better Gemini extraction at zero additional credit cost.
 **Requirements:** HARD-01, HARD-02, HARD-03, HARD-04, HARD-05, HARD-07, FRSH-01, FRSH-02, FRSH-03, FRSH-04, FRSH-05
