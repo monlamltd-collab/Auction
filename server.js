@@ -1049,6 +1049,13 @@ const HOUSE_ROOTS = {
   cheffinstimed:      'https://timedpropertyauctions.cheffins.co.uk/search',
   fssproperty:        'https://www.fssproperty.co.uk/search-auction/',
   iamsold:            'https://www.iamsold.co.uk/available-properties/',
+  // ── Auction House UK regional branches (March 2026 batch 3) ──
+  auctionhouseeastanglia: 'https://www.auctionhouse.co.uk/eastanglia/auction/search-results',
+  auctionhousenorthwest:  'https://www.auctionhouse.co.uk/northwest/auction/search-results',
+  auctionhousenortheast:  'https://www.auctionhouse.co.uk/northeast/auction/search-results',
+  auctionhousewales:      'https://www.auctionhouse.co.uk/southwales/auction/search-results',
+  auctionhousebirmingham: 'https://www.auctionhouse.co.uk/birmingham/auction/search-results',
+  auctionhousekent:       'https://www.auctionhouse.co.uk/kent/auction/search-results',
 };
 
 // Now that HOUSE_ROOTS is defined, populate the image backfill set
@@ -4355,6 +4362,12 @@ function detectAuctionHouse(url) {
   if (u.includes('auctionhouselondon')) return 'auctionhouselondon';
   if (u.includes('auctionhouse.co.uk/scotland')) return 'auctionhousescotland';
   if (u.includes('auctionhouse.co.uk/sussexandhampshire')) return 'austingray';
+  if (u.includes('auctionhouse.co.uk/eastanglia')) return 'auctionhouseeastanglia';
+  if (u.includes('auctionhouse.co.uk/northwest')) return 'auctionhousenorthwest';
+  if (u.includes('auctionhouse.co.uk/northeast')) return 'auctionhousenortheast';
+  if (u.includes('auctionhouse.co.uk/southwales')) return 'auctionhousewales';
+  if (u.includes('auctionhouse.co.uk/birmingham')) return 'auctionhousebirmingham';
+  if (u.includes('auctionhouse.co.uk/kent')) return 'auctionhousekent';
   if (u.includes('auctionhouse.co.uk')) return 'auctionhouse';
   if (u.includes('cliveemson')) return 'cliveemson';
   if (u.includes('strettons')) return 'strettons';
@@ -4430,6 +4443,9 @@ const HOUSE_DISPLAY_NAMES = {
   astleys: 'Astleys', henrysykes: 'Henry Sykes Auctions', clarkesimpson: 'Clarke & Simpson',
   durrants: 'Durrants', dawsons: 'Dawsons', goldings: 'Goldings',
   auctionhousescotland: 'Auction House Scotland', austingray: 'Auction House Sussex & Hampshire',
+  auctionhouseeastanglia: 'Auction House East Anglia', auctionhousenorthwest: 'Auction House North West',
+  auctionhousenortheast: 'Auction House North East', auctionhousewales: 'Auction House Wales',
+  auctionhousebirmingham: 'Auction House Birmingham', auctionhousekent: 'Auction House Kent',
   agentsproperty: 'Agents Property Auction', andrewcraig: 'Andrew Craig',
   buttersjohnbee: 'Butters John Bee', brownco: 'Brown & Co',
   cheffins: 'Cheffins', cheffinstimed: 'Cheffins Timed', fssproperty: 'Feather Smailes & Scales',
@@ -7861,7 +7877,7 @@ for (const slug of ['astleys', 'henrysykes', 'clarkesimpson', 'brownco', 'cheffi
   DOM_EXTRACTORS[slug] = DOM_EXTRACTORS.eigplatform;
 }
 // Wire up Auction House UK branches to the shared auctionhouseuk extractor
-for (const slug of ['auctionhousescotland', 'austingray']) {
+for (const slug of ['auctionhousescotland', 'austingray', 'auctionhouseeastanglia', 'auctionhousenorthwest', 'auctionhousenortheast', 'auctionhousewales', 'auctionhousebirmingham', 'auctionhousekent']) {
   DOM_EXTRACTORS[slug] = DOM_EXTRACTORS.auctionhouseuk;
 }
 
