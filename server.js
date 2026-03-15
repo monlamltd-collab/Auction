@@ -3791,10 +3791,24 @@ app.get('/api/quality-report', async (req, res) => {
     const report = { houses: [], issues: [], summary: {} };
     let totalLots = 0, housesWithZero = 0, staleHouses = 0, totalDupes = 0;
 
+    // Deduplicate by house — merge all cached URLs per house into one report entry
+    const byHouse = {};
     for (const row of (cached || [])) {
+      const h = row.house || 'unknown';
+      if (!byHouse[h]) byHouse[h] = { lots: [], isStale: true, created_at: null };
       const lots = row.lots || [];
+      byHouse[h].lots.push(...lots);
       const isStale = row.expires_at && new Date(row.expires_at) < now;
-      const ageHours = row.created_at ? Math.round((now - new Date(row.created_at)) / 3600000) : null;
+      if (!isStale) byHouse[h].isStale = false; // fresh if ANY URL is fresh
+      if (!byHouse[h].created_at || (row.created_at && new Date(row.created_at) > new Date(byHouse[h].created_at))) {
+        byHouse[h].created_at = row.created_at;
+      }
+    }
+
+    for (const [house, data] of Object.entries(byHouse)) {
+      const lots = data.lots;
+      const isStale = data.isStale;
+      const ageHours = data.created_at ? Math.round((now - new Date(data.created_at)) / 3600000) : null;
       const withImage = lots.filter(l => l.imageUrl).length;
       const imgCoverage = lots.length ? Math.round((withImage / lots.length) * 100) : 0;
 
@@ -3803,8 +3817,8 @@ app.get('/api/quality-report', async (req, res) => {
       let dupes = 0;
       for (const l of lots) {
         const key = l.url || l.address;
-        if (urls.has(key)) dupes++;
-        else urls.add(key);
+        if (key && urls.has(key)) dupes++;
+        else if (key) urls.add(key);
       }
 
       totalLots += lots.length;
@@ -3812,16 +3826,16 @@ app.get('/api/quality-report', async (req, res) => {
       if (lots.length === 0) housesWithZero++;
       if (isStale) staleHouses++;
 
-      const entry = { house: row.house, lots: lots.length, images: withImage, imgCoverage, dupes, ageHours, stale: !!isStale };
+      const entry = { house, lots: lots.length, images: withImage, imgCoverage, dupes, ageHours, stale: !!isStale };
       report.houses.push(entry);
 
-      if (lots.length === 0) report.issues.push({ severity: 'critical', house: row.house, msg: 'Zero lots — extractor may be broken' });
-      if (dupes > 0) report.issues.push({ severity: 'warn', house: row.house, msg: `${dupes} duplicate lots` });
-      if (imgCoverage < 30 && lots.length > 0) report.issues.push({ severity: 'warn', house: row.house, msg: `Low image coverage: ${imgCoverage}%` });
-      if (isStale) report.issues.push({ severity: 'info', house: row.house, msg: `Cache stale (${ageHours}h old)` });
+      if (lots.length === 0) report.issues.push({ severity: 'critical', house, msg: 'Zero lots — extractor may be broken' });
+      if (dupes > 0) report.issues.push({ severity: 'warn', house, msg: `${dupes} duplicate lots` });
+      if (imgCoverage < 30 && lots.length > 0) report.issues.push({ severity: 'warn', house, msg: `Low image coverage: ${imgCoverage}%` });
+      if (isStale) report.issues.push({ severity: 'info', house, msg: `Cache stale (${ageHours}h old)` });
     }
 
-    report.summary = { totalHouses: (cached || []).length, totalLots, housesWithZero, staleHouses, totalDupes };
+    report.summary = { totalHouses: Object.keys(byHouse).length, totalLots, housesWithZero, staleHouses, totalDupes };
     res.json(report);
   } catch (e) {
     log.error('Quality report error', { error: e.message });
@@ -8211,6 +8225,21 @@ app.listen(PORT, () => {
   // Run 30s after startup (let everything initialise), then every 6 hours
   setTimeout(() => autoAnalyseAll(), 30000);
   setInterval(() => autoAnalyseAll(), 6 * 60 * 60 * 1000);
+
+  // ── Daily analytics snapshot at midnight ──
+  function scheduleNextMidnight() {
+    const now = new Date();
+    const midnight = new Date(now);
+    midnight.setHours(24, 0, 5, 0); // 00:00:05 tomorrow
+    const ms = midnight.getTime() - now.getTime();
+    setTimeout(async () => {
+      try { await saveDailySnapshot(); console.log('ANALYTICS: Midnight snapshot saved'); }
+      catch (e) { console.warn('ANALYTICS: Midnight snapshot failed:', e.message); }
+      scheduleNextMidnight(); // schedule the next one
+    }, ms);
+    console.log(`ANALYTICS: Next midnight snapshot in ${Math.round(ms / 60000)} minutes`);
+  }
+  scheduleNextMidnight();
 });
 
 // ═══════════════════════════════════════════════════════════════
