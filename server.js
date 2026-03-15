@@ -3538,6 +3538,7 @@ app.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
   try {
     if (!supabase) return res.json({ lots: [], sources: [] });
 
+    const includePast = req.query.includePast === 'true';
     const user = await validateUserFromReq(req);
 
     const { data: cached } = await supabase
@@ -3610,6 +3611,22 @@ app.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
     for (const lot of lots) {
       const su = (lot._sourceUrl || '').trim().replace(/\/+$/, '').toLowerCase();
       lot._auctionDate = urlDateMap[su] || null;
+    }
+
+    // ── Server-side future-only filtering (7-day grace period) ──
+    if (!includePast) {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - 7);
+      const cutoffStr = cutoff.toISOString().slice(0, 10);
+      const beforeFilter = lots.length;
+      const filtered = lots.filter(lot => {
+        if (!lot._auctionDate) return true; // Include lots with no date
+        return lot._auctionDate >= cutoffStr;
+      });
+      const pastRemoved = beforeFilter - filtered.length;
+      if (pastRemoved > 0) console.log(`Future-only filter: removed ${pastRemoved} past lots (cutoff: ${cutoffStr})`);
+      lots.length = 0;
+      lots.push(...filtered);
     }
 
     // ── Phase 3: Cross-auction dedup by normalised address ──
