@@ -4919,6 +4919,7 @@ For each lot, return a JSON object with these fields:
 - price: number or null (guide price in pounds, null if TBA/not stated)
 - url: string (detail page URL if found, empty string if not)
 - tenure: string or null — one of "Freehold", "Leasehold", "Share of Freehold", or null. Look for: freehold, leasehold, share of freehold, flying freehold, long leasehold, years remaining/unexpired. If not explicitly stated, infer from context (e.g. "125 year lease" = Leasehold, ground rent mentioned = Leasehold). Only return null if there is genuinely no indication.
+- status: string — one of "available", "sold", "stc", "withdrawn". Default "available" if not stated. Look for: SOLD, STC, Sale Agreed, Withdrawn, Under Offer, Prior to Auction.
 - bullets: array of strings (key features/description points - bedrooms, condition, sq ft, special circumstances etc)
 
 Return ONLY a JSON array of lot objects, no other text. If a page has no lots, return an empty array.
@@ -4927,6 +4928,7 @@ Important:
 - Extract the COMPLETE address including postcode
 - Guide prices may be shown as "Guide Price £X" or "Guide £X" or just "£X"
 - Tenure is a PRIORITY field — always look for it in the description, legal pack summary, and property details
+- Status field: check for sold/STC/withdrawn markers, badges, labels, or overlays on the lot listing
 - Bullet points include things like: property type, bedrooms, condition, sq ft, vacant/tenanted, executor sale, development potential, completion terms
 - Include ALL lots, even commercial ones or land
 
@@ -4952,6 +4954,7 @@ Return ONLY the JSON array:`;
             price: lot.price || null,
             priceText: lot.price ? `£${lot.price.toLocaleString()}` : 'TBA',
             url: lot.url || '', bullets: lot.bullets || [],
+            status: lot.status || 'available',
           });
         }
       }
@@ -5020,6 +5023,7 @@ For each lot, return a JSON object with these fields:
 - price: number or null (guide price in pounds, null if TBA/not stated)
 - url: string (empty string — PDFs don't have lot URLs)
 - tenure: string or null — one of "Freehold", "Leasehold", "Share of Freehold", or null. Look for: freehold, leasehold, share of freehold, flying freehold, long leasehold, years remaining/unexpired. If not explicitly stated, infer from context (e.g. "125 year lease" = Leasehold, ground rent mentioned = Leasehold). Only return null if there is genuinely no indication.
+- status: string — one of "available", "sold", "stc", "withdrawn". Default "available" if not stated.
 - bullets: array of strings (key features/description points - bedrooms, condition, sq ft, special circumstances etc)
 
 Return ONLY a JSON array of lot objects, no other text.
@@ -5049,6 +5053,7 @@ Return ONLY the JSON array:`;
             price: lot.price || null,
             priceText: lot.price ? `£${lot.price.toLocaleString()}` : 'TBA',
             url: '', bullets: lot.bullets || [],
+            status: lot.status || 'available',
           });
         }
       }
@@ -9920,6 +9925,20 @@ async function updateHouseSkill(slug, { catalogueUrl, lotCount, imageCoverage, s
     status = 'broken';
   } else if (existing?.average_lot_count && lotCount < existing.average_lot_count * 0.7) {
     status = 'degraded';
+  }
+
+  // ── Image coverage drop alert: warn when coverage drops below 50% from above 50% ──
+  const prevCoverage = existing?.image_coverage || 0;
+  if (prevCoverage > 50 && imageCoverage < 50 && lotCount > 5) {
+    try {
+      await supabase.from('pipeline_alerts').insert({
+        event_type: 'image_coverage_drop',
+        severity: 'warning',
+        house: slug,
+        message: `${displayName} image coverage dropped from ${prevCoverage}% to ${imageCoverage}%`
+      });
+      console.log(`ALERT: Image coverage drop for ${displayName}: ${prevCoverage}% → ${imageCoverage}%`);
+    } catch (alertErr) { console.warn('ALERT: Failed to record image coverage drop:', alertErr.message); }
   }
 
   const skill = {
