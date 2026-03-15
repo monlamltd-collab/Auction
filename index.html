@@ -2563,8 +2563,16 @@ function getCardImageBadges(lot) {
   return html;
 }
 
+function isValidImageUrl(url) {
+  if (!url || typeof url !== 'string') return false;
+  if (!/^https:\/\//i.test(url)) return false;
+  if (/\.(jpe?g|png|webp)(\?.*)?$/i.test(url)) return true;
+  if (/cloudinary\.com|imgix\.net|cdn\.sanity\.io|amazonaws\.com|cloudfront\.net|googleusercontent\.com|wp-content\/uploads|supabase\.co\/storage|i\.imgur\.com|eigpropertyauctions\.co\.uk|auction|property|lot|catalogue|catalog/i.test(url)) return true;
+  return false;
+}
+
 function getCardImageHtml(lot) {
-  if (!lot.imageUrl) {
+  if (!lot.imageUrl || !isValidImageUrl(lot.imageUrl)) {
     return '<div class="card-image-wrapper">' +
       getPlaceholderHtml(lot.propType) +
       getCardImageBadges(lot) +
@@ -2614,7 +2622,8 @@ function expandCard(lot) {
   cardEl.classList.add('expanded');
 
   // Build expanded panel
-  const imgHtml = lot.imageUrl
+  const validImg = lot.imageUrl && isValidImageUrl(lot.imageUrl);
+  const imgHtml = validImg
     ? '<img class="exp-large-img" src="' + esc(lot.imageUrl) + '" alt="' + esc(lot.address || 'Auction property') + '" onerror="this.outerHTML=\'<div class=exp-large-img-placeholder>' + getPropertyTypeIcon(lot.propType) + '</div>\'">'
     : '<div class="exp-large-img-placeholder">' + getPropertyTypeIcon(lot.propType) + '</div>';
 

@@ -346,6 +346,18 @@ async function scrapeWithFirecrawl(url, options = {}) {
   }
 }
 
+// Validate image URLs — must be https and either have a known image extension or come from a known CDN
+const IMG_EXTENSIONS = /\.(jpe?g|png|webp)(\?.*)?$/i;
+const IMG_CDN_DOMAINS = /cloudinary\.com|imgix\.net|cdn\.sanity\.io|images\.unsplash\.com|ik\.imagekit\.io|res\.cloudinary\.com|s3\.amazonaws\.com|amazonaws\.com\/.*\.(jpe?g|png|webp)|cdn\.shopify\.com|akamaized\.net|cloudfront\.net|twimg\.com|fbcdn\.net|googleusercontent\.com|wp-content\/uploads|supabase\.co\/storage|i\.imgur\.com|eigpropertyauctions\.co\.uk|auction|property|lot|catalogue|catalog/i;
+
+function isValidImageUrl(url) {
+  if (!url || typeof url !== 'string') return false;
+  if (!/^https:\/\//i.test(url)) return false;
+  if (IMG_EXTENSIONS.test(url)) return true;
+  if (IMG_CDN_DOMAINS.test(url)) return true;
+  return false;
+}
+
 function extractWithJSDOM(html, house, baseUrl, firecrawlImages) {
   const dom = new JSDOM(html, { url: baseUrl });
   const { document } = dom.window;
@@ -560,6 +572,13 @@ function extractWithJSDOM(html, house, baseUrl, firecrawlImages) {
       lot.imageUrl = '';
     } else if (hollisJunk && lot.imageUrl.includes('maggsandallen.co.uk') && !lot.imageUrl.includes('/resize/')) {
       lot.imageUrl = '';
+    }
+  }
+
+  // Validate image URLs — must be https and look like an actual image
+  for (const lot of lots) {
+    if (lot.imageUrl && !isValidImageUrl(lot.imageUrl)) {
+      lot.imageUrl = null;
     }
   }
 
@@ -3486,6 +3505,13 @@ app.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
     }
     if (imgStripped > 0) console.log(`Image sanitiser: stripped ${imgStripped} junk images`);
 
+    // Validate image URLs — must be https + known extension or CDN domain
+    let imgInvalid = 0;
+    for (const lot of cleanLots) {
+      if (lot.imageUrl && !isValidImageUrl(lot.imageUrl)) { lot.imageUrl = undefined; imgInvalid++; }
+    }
+    if (imgInvalid > 0) console.log(`Image validator: rejected ${imgInvalid} invalid image URLs`);
+
     // Ensure every lot has a URL — fallback to catalogue page if no lot-specific link
     for (const lot of cleanLots) {
       if (!lot.url && lot._sourceUrl) lot.url = lot._sourceUrl;
@@ -5976,19 +6002,20 @@ const DOM_EXTRACTORS = {
         const address = lines.find(l => l.length > 10 && !l.match(/^(?:lot|guide|£|sold|property details|view|swipe)/i));
         // Description is the longest paragraph-like text
         const desc = lines.filter(l => l.length > 30 && !l.match(/^(?:lot|£)/i)).join(' ').substring(0, 300);
-        // Image from Swiper gallery
+        // Image — check background-image slides first (Cycle2 gallery uses <a class="slide" style="background-image:url(...)">)
         let imageUrl = '';
-        const swiperImg = card.querySelector('.swiper-slide img, .property-gallery img, img[src*="uploads"]');
-        if (swiperImg) {
-          imageUrl = swiperImg.getAttribute('src') || swiperImg.dataset.src || '';
+        const slideDiv = card.querySelector('.slide[style*="background"], .swiper-slide [style*="background"], [style*="background-image"]');
+        if (slideDiv) {
+          const bg = slideDiv.getAttribute('style') || '';
+          const bgMatch = bg.match(/background(?:-image)?:\\s*url\\(['"]?([^'"\\)]+)/i);
+          if (bgMatch) imageUrl = bgMatch[1];
         }
         if (!imageUrl) {
-          // Check for background-image on slide/swiper divs (probateauction uses <a class="slide" style="background-image:url(...)">)
-          const slideDiv = card.querySelector('.slide[style*="background"], .swiper-slide [style*="background"], [style*="background-image"]');
-          if (slideDiv) {
-            const bg = slideDiv.getAttribute('style') || '';
-            const bgMatch = bg.match(/background(?:-image)?:\\s*url\\(['"]?([^'"\\)]+)/i);
-            if (bgMatch) imageUrl = bgMatch[1];
+          // Fallback to img tags — exclude SVG nav arrows and icons
+          const swiperImg = card.querySelector('.swiper-slide img, img[src*="uploads"]');
+          if (swiperImg) {
+            const s = swiperImg.getAttribute('src') || swiperImg.dataset.src || '';
+            if (s && !s.includes('.svg') && !s.includes('arrow') && !s.includes('logo') && !s.includes('icon')) imageUrl = s;
           }
         }
         if (!imageUrl) {
