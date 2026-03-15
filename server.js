@@ -1572,7 +1572,7 @@ async function sendWelcomeEmail(email, name) {
           <li><strong>Unlimited AI searches</strong> — natural language search across every catalogue</li>
           <li><strong>Browse 2,000+ auction lots</strong> — every major UK auction house in one place</li>
           <li><strong>AI investment scores</strong> — opportunity/risk flags on every lot</li>
-          <li><strong>BridgeMatch finance check</strong> — see which of 68 bridging lenders would fund any lot</li>
+          <li><strong>BridgeMatch finance check</strong> — see which of 60+ bridging lenders would fund any lot</li>
         </ul>
         <p style="line-height:1.7;color:#5c564d;margin:0 0 20px">After your trial, you'll still get 10 free AI searches per day. Upgrade to Pro (£9.99/month) for unlimited.</p>
         <div style="text-align:center;margin:24px 0">
@@ -3624,7 +3624,14 @@ app.get('/api/cache-status', async (req, res) => {
     const totalLots = (cached || []).reduce((s, c) => s + (c.total_lots || 0), 0);
     const activeLots = activeCached.reduce((s, c) => s + (c.total_lots || 0), 0);
     const expiredLots = expiredCached.reduce((s, c) => s + (c.total_lots || 0), 0);
-    const missing = ready.filter(a => !cachedUrls.has(normaliseUrl(a.url)));
+    const missingRaw = ready.filter(a => !cachedUrls.has(normaliseUrl(a.url)));
+    // Dedup missing entries by house+date so each auction appears once, not once per lot URL
+    const missingMap = new Map();
+    for (const a of missingRaw) {
+      const key = `${a.house}::${a.date}`;
+      if (!missingMap.has(key)) missingMap.set(key, a);
+    }
+    const missing = [...missingMap.values()];
 
     res.json({
       summary: {

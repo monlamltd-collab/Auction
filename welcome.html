@@ -4,9 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Auction Brain — Your Unfair Advantage at Auction</title>
-<meta name="description" content="Auction Brain scores every UK auction lot for investment potential and checks 68 bridging lenders in one click. Browse free.">
+<meta name="description" content="Auction Brain scores every UK auction lot for investment potential and checks 60+ bridging lenders in one click. Browse free.">
 <meta property="og:title" content="Auction Brain — Your Unfair Advantage at Auction">
-<meta property="og:description" content="AI scores every lot. 68 lenders checked instantly. Browse free.">
+<meta property="og:description" content="AI scores every lot. 60+ lenders checked instantly. Browse free.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://auctions.bridgematch.co.uk/welcome">
 <link rel="canonical" href="https://auctions.bridgematch.co.uk/welcome">
@@ -342,7 +342,7 @@ footer a:hover{color:var(--green)}
 
   <p class="hero-sub">
     AI scores every lot across 30+ UK auction houses.
-    Check bridging finance from 68 lenders in one click.
+    Check bridging finance from <span class="lender-count-dynamic">68</span> lenders in one click.
     Free to browse — Pro unlocks full AI analysis.
   </p>
 
@@ -414,7 +414,7 @@ footer a:hover{color:var(--green)}
       <div class="stat-label">Auction houses</div>
     </div>
     <div class="stat">
-      <div class="stat-val" data-target="68">0</div>
+      <div class="stat-val" data-target="68" id="lenderCountStat">0</div>
       <div class="stat-label">Bridging lenders</div>
     </div>
     <div class="stat">
@@ -482,6 +482,7 @@ const revealObserver = new IntersectionObserver((entries) => {
 reveals.forEach(el => revealObserver.observe(el));
 
 // Stats count-up
+(async()=>{try{const r=await fetch('https://www.bridgematch.co.uk/api/lenders-lite');if(r.ok){const d=await r.json();if(Array.isArray(d)&&d.length>0){document.querySelectorAll('.lender-count-dynamic').forEach(el=>el.textContent=d.length);const st=document.getElementById('lenderCountStat');if(st)st.dataset.target=d.length}}}catch(e){}})();
 const statsObserver = new IntersectionObserver((entries) => {
   entries.forEach(entry => {
     if (!entry.isIntersecting) return;

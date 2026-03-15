@@ -4,20 +4,20 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Auction Brain — Find & Finance UK Auction Deals</title>
-<meta name="description" content="Auction Brain scores every UK auction lot for investment potential and checks 68 bridging lenders in one click. Browse free.">
+<meta name="description" content="Auction Brain scores every UK auction lot for investment potential and checks 60+ bridging lenders in one click. Browse free.">
 <link rel="canonical" href="https://auctions.bridgematch.co.uk">
 <link rel="icon" href="/public/favicon.svg" type="image/svg+xml">
 <meta property="og:title" content="Auction Brain — Find & Finance UK Auction Deals">
-<meta property="og:description" content="Auction Brain scores every UK auction lot for investment potential and checks 68 bridging lenders in one click. Browse free.">
+<meta property="og:description" content="Auction Brain scores every UK auction lot for investment potential and checks 60+ bridging lenders in one click. Browse free.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://auctions.bridgematch.co.uk">
 <meta property="og:image" content="https://auctions.bridgematch.co.uk/public/og-image.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Auction Brain — Find & Finance UK Auction Deals">
-<meta name="twitter:description" content="Auction Brain scores every UK auction lot for investment potential and checks 68 bridging lenders in one click. Browse free.">
+<meta name="twitter:description" content="Auction Brain scores every UK auction lot for investment potential and checks 60+ bridging lenders in one click. Browse free.">
 <meta name="twitter:image" content="https://auctions.bridgematch.co.uk/public/og-image.png">
 <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"WebApplication","name":"Auction Brain","description":"Auction Brain scores every UK auction lot for investment potential and checks 68 bridging lenders in one click. Browse free.","url":"https://auctions.bridgematch.co.uk","applicationCategory":"FinanceApplication","offers":{"@type":"AggregateOffer","lowPrice":"0","highPrice":"9.99","priceCurrency":"GBP","offerCount":"3","offers":[{"@type":"Offer","name":"Free","price":"0","priceCurrency":"GBP","description":"Browse 2000+ auction lots and BridgeMatch finance matching"},{"@type":"Offer","name":"Day Pass","price":"1.99","priceCurrency":"GBP","description":"24-hour unlimited AI analysis"},{"@type":"Offer","name":"Pro","price":"9.99","priceCurrency":"GBP","description":"Unlimited AI analysis, custom search, CSV exports"}]}}
+{"@context":"https://schema.org","@type":"WebApplication","name":"Auction Brain","description":"Auction Brain scores every UK auction lot for investment potential and checks 60+ bridging lenders in one click. Browse free.","url":"https://auctions.bridgematch.co.uk","applicationCategory":"FinanceApplication","offers":{"@type":"AggregateOffer","lowPrice":"0","highPrice":"9.99","priceCurrency":"GBP","offerCount":"3","offers":[{"@type":"Offer","name":"Free","price":"0","priceCurrency":"GBP","description":"Browse 2000+ auction lots and BridgeMatch finance matching"},{"@type":"Offer","name":"Day Pass","price":"1.99","priceCurrency":"GBP","description":"24-hour unlimited AI analysis"},{"@type":"Offer","name":"Pro","price":"9.99","priceCurrency":"GBP","description":"Unlimited AI analysis, custom search, CSV exports"}]}}
 </script>
 <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"Organization","name":"BridgeMatch","url":"https://www.bridgematch.co.uk","logo":"https://auctions.bridgematch.co.uk/public/favicon.svg","contactPoint":{"@type":"ContactPoint","email":"hello@bridgematch.co.uk","contactType":"customer service"},"sameAs":[]}
@@ -691,9 +691,9 @@ footer .logo-f span{color:var(--green)}
   <header class="hero">
     <div class="hero-badge"><span class="badge-dot"></span> Live auction data updated daily</div>
     <h1>Your unfair advantage<br>at <em>auction</em></h1>
-    <p class="hero-sub">AI scores every lot across 30+ UK auction houses. Check bridging finance from 68 lenders in one click. Free to browse — Pro unlocks full AI analysis.</p>
+    <p class="hero-sub">AI scores every lot across 30+ UK auction houses. Check bridging finance from <span class="lender-count-dynamic">68</span> lenders in one click. Free to browse — Pro unlocks full AI analysis.</p>
     <div class="hero-ctas">
-      <a href="#calendarSection" class="cta-primary" onclick="event.preventDefault();document.getElementById('calendarSection').scrollIntoView({behavior:'smooth'})">Browse Auction Deals →</a>
+      <a href="#filterBar" class="cta-primary" onclick="event.preventDefault();document.getElementById('filterBar').scrollIntoView({behavior:'smooth'})">Browse Auction Deals →</a>
     </div>
     <div class="trust-line">
       <span><span class="t-icon">✓</span> Free to browse</span>
@@ -995,9 +995,9 @@ footer .logo-f span{color:var(--green)}
       <div class="tool-card tool-bm">
         <div class="tool-emoji-wrap">🧩</div>
         <h3>BridgeMatch</h3>
-        <p>Instantly check finance from 68 bridging lenders. See who will fund your deal and on what terms.</p>
+        <p>Instantly check finance from <span class="lender-count-dynamic">68</span> bridging lenders. See who will fund your deal and on what terms.</p>
         <ul class="tool-features">
-          <li>68 UK bridging lenders</li>
+          <li><span class="lender-count-dynamic">68</span> UK bridging lenders</li>
           <li>Instant LTV matching</li>
           <li>Integrated with every lot</li>
           <li>Always free</li>
@@ -1010,7 +1010,7 @@ footer .logo-f span{color:var(--green)}
   <section class="bottom-cta" id="bottomCta">
     <h2>Ready to find your next deal?</h2>
     <p>Auction catalogues are live now. Start browsing — no account needed, results in seconds.</p>
-    <a href="#" class="cta-primary" onclick="event.preventDefault();window.scrollTo({top:0,behavior:'smooth'})">Browse Auction Deals →</a>
+    <a href="#filterBar" class="cta-primary" onclick="event.preventDefault();document.getElementById('filterBar').scrollIntoView({behavior:'smooth'})">Browse Auction Deals →</a>
   </section>
 
   <!-- ═══════ EMAIL CAPTURE ═══════ -->
@@ -1325,7 +1325,7 @@ function backToAuctions(){
 // ═══════════════════════════════
 (async()=>{try{
   const r=await fetch('https://www.bridgematch.co.uk/api/lenders-lite');
-  if(r.ok){LENDER_DATA=await r.json();console.log('[Finance] Lender data loaded:',LENDER_DATA.length,'lenders');updateFinanceProfile()}
+  if(r.ok){LENDER_DATA=await r.json();console.log('[Finance] Lender data loaded:',LENDER_DATA.length,'lenders');updateFinanceProfile();document.querySelectorAll('.lender-count-dynamic').forEach(el=>el.textContent=LENDER_DATA.length)}
 }catch(e){console.warn('[Finance] Lender data unavailable, using basic budget mode')}})();
 
 // Parsing utilities (same as BridgeMatch Lite)
