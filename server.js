@@ -3081,9 +3081,10 @@ app.post('/api/smart-search', async (req, res) => {
           return res.json({ results: gatedClean2, report: presetCache.report || '', sources: cleanSources, totalSearched: cleanResults.length, cached: true, searchesUsed, searchLimit });
         }
 
-        // Run Claude only on the delta lots
+        // Run Gemini on the delta lots
         if (creditExhausted) {
-          log.warn('Incremental smart search skipped — Gemini quota exhausted');
+          const exhaustedAgo = creditExhaustedAt ? Math.round((Date.now() - creditExhaustedAt) / 60000) : '?';
+          log.warn('Incremental smart search skipped — Gemini quota exhausted', { exhaustedMinutesAgo: exhaustedAgo });
           throw new Error('quota_exhausted'); // fall through to return stale cache
         }
         const queryTerms = query.toLowerCase().split(/\s+/).filter(t => t.length > 2);
@@ -3184,8 +3185,18 @@ Only return lots that genuinely match the query.`, { maxTokens: 4000 });
     }
   }
 
-  if (!process.env.GEMINI_API_KEY) return res.status(500).json({ error: 'API key not configured' });
-  if (creditExhausted) return res.status(503).json({ error: 'ai_quota_exhausted', message: 'AI search is temporarily unavailable — daily API quota reached. It resets automatically, please try again later.' });
+  if (!process.env.GEMINI_API_KEY) {
+    log.warn('smart-search: GEMINI_API_KEY not set');
+    return res.status(500).json({ error: 'key_missing', message: 'AI search is not configured — GEMINI_API_KEY is missing.' });
+  }
+  if (creditExhausted) {
+    const exhaustedAgo = creditExhaustedAt ? Math.round((Date.now() - creditExhaustedAt) / 60000) : '?';
+    log.warn('smart-search: blocked by creditExhausted flag', { exhaustedMinutesAgo: exhaustedAgo });
+    return res.status(503).json({ error: 'ai_quota_exhausted', message: `Gemini API daily quota hit ${exhaustedAgo}min ago. Auto-resets after 1 hour. Try again soon.`, exhaustedMinutesAgo: exhaustedAgo });
+  }
+  // Pre-flight: log which key/model will be used
+  const keyPrefix = (process.env.GEMINI_API_KEY || '').substring(0, 10);
+  log.info('smart-search pre-flight', { model: MODEL_FLASH, keyPrefix: keyPrefix + '...', query: query.substring(0, 60) });
 
   try {
     // Get all cached analyses
@@ -3327,12 +3338,16 @@ Only return lots that genuinely match the query. If nothing matches well, say so
     await incrementSearchCounter();
     return res.json(response);
   } catch (err) {
-    log.error('Smart search error', { error: err.message, stack: err.stack?.split('\n').slice(0, 3).join(' | ') });
-    if (err.status === 429 || /quota|rate.limit|resource.exhausted/i.test(err.message)) {
+    const msg = err.message || String(err);
+    log.error('Smart search error', { error: msg, status: err.status, stack: err.stack?.split('\n').slice(0, 3).join(' | ') });
+    if (err.status === 429 || /quota|rate.limit|resource.exhausted/i.test(msg)) {
       creditExhausted = true; creditExhaustedAt = Date.now();
-      return res.status(503).json({ error: 'ai_quota_exhausted', message: 'AI search is temporarily unavailable — daily API quota reached. It resets automatically, please try again later.' });
+      return res.status(503).json({ error: 'ai_quota_exhausted', message: 'Gemini API daily quota hit. Auto-resets after 1 hour.', provider: 'gemini', model: MODEL_FLASH });
     }
-    return res.status(500).json({ error: 'Smart search failed', detail: err.message });
+    if (err.status === 401 || err.status === 403 || /invalid.api.key|unauthorized|forbidden/i.test(msg)) {
+      return res.status(500).json({ error: 'key_invalid', message: 'Gemini API key is invalid or expired. Check GEMINI_API_KEY in Railway.', provider: 'gemini' });
+    }
+    return res.status(500).json({ error: 'api_error', message: 'Smart search failed — Gemini API error.', detail: msg, provider: 'gemini', model: MODEL_FLASH });
   }
 });
 
