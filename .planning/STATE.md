@@ -7,7 +7,7 @@ See: .planning/PROJECT.md (updated 2026-03-15)
 
 ## Current Phase
 Phase: 1
-Plan: 2 of 4 complete
+Plan: 3 of 4 complete
 Status: In progress
 
 ## Decisions
@@ -26,6 +26,7 @@ Status: In progress
 - 2026-03-15: Project initialized, research complete, roadmap created
 - 2026-03-15: Phase 1 context gathered — resume at .planning/phases/01-hardening-data-freshness/01-CONTEXT.md
 - 2026-03-15: Plan 01-02 executed — Stripe hardening (trial abuse, webhook idempotency, downgrade logic)
+- 2026-03-15: Plan 01-01 executed — SDLT calculator fix for England, Scotland & Wales
 
 ---
-*Last updated: 2026-03-15 after plan 01-02 execution*
+*Last updated: 2026-03-15 after plan 01-01 execution*

@@ -7,8 +7,8 @@
 
 ### Hardening
 
-- [ ] **HARD-01**: SDLT calculator uses correct 2025/26 investor rates (5% surcharge, not 3%)
-- [ ] **HARD-02**: SDLT calculator handles Scotland (LBTT + ADS) and Wales (LTT) correctly
+- [x] **HARD-01**: SDLT calculator uses correct 2025/26 investor rates (5% surcharge, not 3%)
+- [x] **HARD-02**: SDLT calculator handles Scotland (LBTT + ADS) and Wales (LTT) correctly
 - [x] **HARD-03**: Stripe `trial_used` flag is checked on signup to prevent trial abuse via re-registration
 - [x] **HARD-04**: Stripe webhooks deduplicate events by `event.id` (idempotency)
 - [x] **HARD-05**: Subscription downgrade honours `current_period_end` instead of immediate cutoff
@@ -96,8 +96,8 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| HARD-01 | Phase 1 | Pending |
-| HARD-02 | Phase 1 | Pending |
+| HARD-01 | Phase 1 | Complete |
+| HARD-02 | Phase 1 | Complete |
 | HARD-03 | Phase 1 | Complete |
 | HARD-04 | Phase 1 | Complete |
 | HARD-05 | Phase 1 | Complete |
