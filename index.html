@@ -2466,6 +2466,10 @@ function card(l){
       '<div class="card-row1"><span class="card-lot-info">' + catLabel + '</span><span class="card-price">' + esc(priceText) + '</span></div>' +
       '<div class="card-address">' + esc(l.address || 'Address not available') + '</div>' +
       '<div class="card-details">' + detailPills.map(d => '<span class="detail-pill">' + esc(d) + '</span>').join('') + '</div>' +
+      (l.epcRating || (l.floodZone && l.floodZone !== '1') ? '<div style="display:flex;gap:5px;margin-top:4px;flex-wrap:wrap">' +
+        (l.epcRating ? '<span class="detail-pill" style="color:' + (/[AB]/.test(l.epcRating) ? 'var(--accent)' : /[CD]/.test(l.epcRating) ? 'var(--accent-warn)' : 'var(--accent-danger)') + ';font-weight:600">EPC ' + esc(l.epcRating) + '</span>' : '') +
+        ((l.floodZone === '2' || l.floodZone === '3') ? '<span class="detail-pill" style="color:' + (l.floodZone === '3' ? 'var(--accent-danger)' : 'var(--accent-warn)') + ';font-weight:600">FZ' + esc(l.floodZone) + '</span>' : '') +
+      '</div>' : '') +
       (chipsHtml ? '<div class="card-chips">' + chipsHtml + '</div>' : '') +
     '</div>' +
     '<div class="card-footer">' + viewLink + bmBtn + '</div>' +
@@ -2724,6 +2728,26 @@ function expandCard(lot) {
         '<div class="exp-analysis-text">' + esc(analysisText || 'No detailed analysis available.') + '</div>' +
       '</div>' +
       (signalsHtml ? '<div class="exp-signals">' + signalsHtml + '</div>' : '') +
+      // ── EPC & Flood Enrichment (ungated — visible to ALL users) ──
+      '<div class="exp-enrichment" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:8px">' +
+        // EPC Rating badge
+        (lot.epcRating
+          ? '<div style="padding:6px 12px;border-radius:6px;font-size:.85rem;font-weight:600;' +
+            'background:' + (/[AB]/.test(lot.epcRating) ? '#e8f5ee' : /[CD]/.test(lot.epcRating) ? '#fef3e2' : '#fdf0ee') + ';' +
+            'color:' + (/[AB]/.test(lot.epcRating) ? 'var(--accent)' : /[CD]/.test(lot.epcRating) ? 'var(--accent-warn)' : 'var(--accent-danger)') + '">' +
+            'EPC: ' + esc(lot.epcRating) + (lot.epcScore ? ' (' + lot.epcScore + ')' : '') +
+            (lot.epcDate ? '<span style="font-weight:400;font-size:.75rem;margin-left:6px;opacity:.7">(assessed ' + esc(lot.epcDate) + ')</span>' : '') +
+          '</div>'
+          : '<div style="padding:6px 12px;border-radius:6px;font-size:.85rem;color:var(--text-muted,#6b7c8d);background:var(--surface2,#f0f2f5)">EPC: \u2014</div>') +
+        // Flood Zone badge
+        (lot.floodZone
+          ? '<div style="padding:6px 12px;border-radius:6px;font-size:.85rem;font-weight:600;' +
+            'background:' + (lot.floodZone === '3' ? '#fdf0ee' : lot.floodZone === '2' ? '#fef3e2' : '#e8f5ee') + ';' +
+            'color:' + (lot.floodZone === '3' ? 'var(--accent-danger)' : lot.floodZone === '2' ? 'var(--accent-warn)' : 'var(--accent)') + '">' +
+            'Flood Zone ' + esc(lot.floodZone) + ' \u2014 ' + (lot.floodZone === '3' ? 'High Risk' : lot.floodZone === '2' ? 'Medium Risk' : 'Low Risk') +
+          '</div>'
+          : '<div style="padding:6px 12px;border-radius:6px;font-size:.85rem;color:var(--text-muted,#6b7c8d);background:var(--surface2,#f0f2f5)">Flood Zone: \u2014</div>') +
+      '</div>' +
       '<div style="margin-top:14px;display:flex;flex-wrap:wrap;gap:8px">' +
         '<div style="font-size:.82rem;color:var(--text3);padding:6px 10px;background:var(--surface2);border-radius:6px;border:1px solid var(--border)">Yield Analysis' + comingSoonTag + '</div>' +
         '<div style="font-size:.82rem;color:var(--text3);padding:6px 10px;background:var(--surface2);border-radius:6px;border:1px solid var(--border)">Comparables' + comingSoonTag + '</div>' +
