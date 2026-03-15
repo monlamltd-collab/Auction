@@ -426,6 +426,44 @@ tr:hover td { background: rgba(255,255,255,.02); }
       </div>
     </div>
 
+    <!-- Missing Images -->
+    <div class="section" id="missing-images-section">
+      <div class="section-header">
+        <h2 title="Lots across all cached houses that are missing an image URL. Filter by house to investigate.">Missing Images</h2>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="badge badge-amber" id="missing-images-badge">-</span>
+          <button class="topbar-btn" onclick="loadMissingImages()" title="Refresh missing image data">Refresh</button>
+        </div>
+      </div>
+      <div style="padding:10px 18px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border);">
+        <div class="stat-label" style="margin-bottom:0;">Overall Image Coverage</div>
+        <span class="mono" id="missing-images-coverage" style="font-weight:700;font-size:1rem;">-</span>
+        <span class="text-muted" id="missing-images-summary" style="font-size:.78rem;">-</span>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:6px;">
+          <label style="font-size:.7rem;color:var(--text3);font-weight:600;text-transform:uppercase;">Filter House</label>
+          <select id="missing-images-house-filter" onchange="loadMissingImages()" style="padding:5px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:inherit;font-size:.78rem;">
+            <option value="">All houses</option>
+          </select>
+        </div>
+      </div>
+      <div style="overflow-x:auto;max-height:500px;overflow-y:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th title="Auction house name">House</th>
+              <th title="Lot number within the catalogue">Lot #</th>
+              <th title="Property address">Address</th>
+              <th title="Link to the catalogue page containing this lot">Catalogue URL</th>
+              <th title="Scheduled auction date for this lot">Auction Date</th>
+            </tr>
+          </thead>
+          <tbody id="missing-images-tbody">
+            <tr><td colspan="5" class="loading"><span class="spinner"></span> Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- Missing Houses -->
     <div class="section" id="missing-section" style="display:none;">
       <div class="section-header">
@@ -673,6 +711,70 @@ function renderFreshness() {
   }).join('');
 }
 
+async function loadMissingImages() {
+  const houseFilter = document.getElementById('missing-images-house-filter').value;
+  const params = new URLSearchParams({ limit: '200' });
+  if (houseFilter) params.set('house', houseFilter);
+  const data = await apiFetch('/api/admin/missing-images?' + params.toString());
+  if (data.error) return;
+
+  const total = data.total || 0;
+  const houses = data.houses || 0;
+  const badge = document.getElementById('missing-images-badge');
+  badge.textContent = `${total} missing`;
+  badge.className = total === 0 ? 'badge badge-green' : total > 50 ? 'badge badge-red' : 'badge badge-amber';
+
+  // Populate house filter dropdown (only once)
+  const sel = document.getElementById('missing-images-house-filter');
+  if (sel.options.length <= 1 && data.houseCounts) {
+    const sortedHouses = Object.entries(data.houseCounts).sort((a,b) => b[1] - a[1]);
+    for (const [h, count] of sortedHouses) {
+      const opt = document.createElement('option');
+      opt.value = h;
+      opt.textContent = `${h} (${count})`;
+      sel.appendChild(opt);
+    }
+    if (houseFilter) sel.value = houseFilter;
+  }
+
+  // Compute overall image coverage from quality report data
+  const qualData = await apiFetch('/api/quality-report');
+  if (qualData.houses) {
+    let totalLots = 0, totalWithImg = 0;
+    for (const h of qualData.houses) {
+      const lots = h.totalLots || 0;
+      const withImg = Math.round(lots * (h.imgCoverage || 0) / 100);
+      totalLots += lots;
+      totalWithImg += withImg;
+    }
+    const overallPct = totalLots > 0 ? Math.round(totalWithImg / totalLots * 100) : 0;
+    const covEl = document.getElementById('missing-images-coverage');
+    covEl.textContent = overallPct + '%';
+    covEl.className = `mono ${overallPct >= 80 ? 'text-green' : overallPct >= 50 ? 'text-amber' : 'text-red'}`;
+  }
+
+  document.getElementById('missing-images-summary').textContent = `${total} lots missing images across ${houses} houses`;
+
+  // Render table
+  const tbody = document.getElementById('missing-images-tbody');
+  const results = data.results || [];
+  if (results.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" class="text-muted" style="text-align:center;padding:20px;">No lots missing images' + (houseFilter ? ' for this house' : '') + '</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = results.map(r => {
+    const dateStr = r.auctionDate ? new Date(r.auctionDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '-';
+    return `<tr>
+      <td>${esc(r.house)}</td>
+      <td class="mono">${r.lotNumber || '-'}</td>
+      <td>${esc((r.address || '').substring(0, 80))}${(r.address || '').length > 80 ? '...' : ''}</td>
+      <td class="mono" style="font-size:.72rem;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><a href="${esc(r.catalogueUrl)}" target="_blank" title="${esc(r.catalogueUrl)}">${esc(r.catalogueUrl)}</a></td>
+      <td class="mono">${dateStr}</td>
+    </tr>`;
+  }).join('');
+}
+
 async function refreshAll() {
   document.getElementById('last-refresh').textContent = 'Refreshing...';
   await Promise.all([
@@ -684,6 +786,7 @@ async function refreshAll() {
     loadUsers(),
     loadAlerts(),
     loadFreshness(),
+    loadMissingImages(),
   ]);
   document.getElementById('last-refresh').textContent = 'Updated ' + new Date().toLocaleTimeString();
 }
