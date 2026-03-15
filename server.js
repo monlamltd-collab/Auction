@@ -322,6 +322,7 @@ async function scrapeWithFirecrawl(url, options = {}) {
     fcRequestCount++;
     return {
       html: data.data?.rawHtml || data.data?.html || '',
+      markdown: data.data?.markdown || '',
       sourceURL: data.data?.metadata?.sourceURL || url,
       images: data.data?.images || [],
     };
