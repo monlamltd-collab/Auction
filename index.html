@@ -852,13 +852,14 @@ footer .logo-f span{color:var(--green)}
       <button class="ex-btn" onclick="setQ('Properties needing heavy refurbishment')">✨ Heavy refurb</button>
       <button class="ex-btn" onclick="setQ('Best scoring deals')">✨ Top picks</button>
       <button class="ex-btn" onclick="setQ('Probate or executor sales')">✨ Probate</button>
-      <button class="ex-btn" onclick="toggleAdvanced()" id="fpToggleBtn">💰 Finance profile</button>
+      <button class="ex-btn" onclick="toggleAdvanced()" id="fpToggleBtn" title="Set your bridging finance parameters (cash available, property type, loan term) to see which lenders would fund each lot. Click to expand the finance filter panel.">💰 Bridging Check</button>
     </div>
     <div class="advanced" id="advancedPanel">
+      <div style="font-size:.75rem;color:#6b7c8d;padding:0 0 8px;line-height:1.4;">Set your bridging finance parameters below. Lots will show a funding badge indicating how many lenders would finance the deal and at what terms.</div>
       <div class="fp-row">
-        <div class="filter-field"><label>Cash Available (£)</label><input id="fpCash" type="number" value="0" placeholder="Deposit + costs"></div>
-        <div class="filter-field"><label>Property Focus</label><select id="fpPropType"><option value="resi">Residential</option><option value="semi">Semi-Commercial</option><option value="comm">Commercial</option><option value="land_no_pp">Land (No Planning)</option><option value="land_with_pp">Land (With Planning)</option></select></div>
-        <div class="filter-field"><label>Loan Term</label><select id="fpTerm"><option value="6">6 months</option><option value="9">9 months</option><option value="12" selected>12 months</option><option value="18">18 months</option><option value="24">24 months</option></select></div>
+        <div class="filter-field"><label>Cash Available (£)</label><input id="fpCash" type="number" value="0" placeholder="Deposit + costs" title="Total cash you have for deposit, stamp duty, legal fees, and any works. This determines which lots are within your reach."></div>
+        <div class="filter-field"><label>Property Focus</label><select id="fpPropType" title="The type of property you're targeting. Different lenders have different appetites for each type."><option value="resi">Residential</option><option value="semi">Semi-Commercial</option><option value="comm">Commercial</option><option value="land_no_pp">Land (No Planning)</option><option value="land_with_pp">Land (With Planning)</option></select></div>
+        <div class="filter-field"><label>Loan Term</label><select id="fpTerm" title="How long you need the bridging loan for. Shorter terms = lower total interest but tighter exit timeline."><option value="6">6 months</option><option value="9">9 months</option><option value="12" selected>12 months</option><option value="18">18 months</option><option value="24">24 months</option></select></div>
       </div>
       <div class="fp-checks">
         <label><input type="checkbox" id="fpRefurb" checked> Open to refurb</label>

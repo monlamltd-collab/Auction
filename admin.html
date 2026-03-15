@@ -6,6 +6,7 @@
 <title>Admin — Auction Brain</title>
 <link rel="icon" href="/public/favicon.svg" type="image/svg+xml">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
 <style>
 :root {
   --bg: #0f1117; --surface: #1a1d27; --surface2: #232733; --surface3: #2c3040;
@@ -132,6 +133,32 @@ tr:hover td { background: rgba(255,255,255,.02); }
 .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--green); border-radius: 50%; animation: spin .6s linear infinite; margin-right: 8px; vertical-align: middle; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* Tabs */
+.tab-nav { display: flex; gap: 0; padding: 0 24px; background: var(--surface); border-bottom: 1px solid var(--border); }
+.tab-btn { padding: 10px 20px; font-size: .82rem; font-weight: 600; color: var(--text3); background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; font-family: inherit; transition: all .15s; }
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { color: var(--green); border-bottom-color: var(--green); }
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+
+/* Analytics */
+.chart-container { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; margin-bottom: 16px; }
+.chart-container h3 { font-size: .85rem; margin-bottom: 12px; }
+.chart-controls { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+.range-btn { padding: 5px 12px; font-size: .72rem; font-weight: 600; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface2); color: var(--text3); cursor: pointer; font-family: inherit; }
+.range-btn.active { border-color: var(--green); color: var(--green); background: var(--green-bg); }
+.chart-toggles { display: flex; flex-wrap: wrap; gap: 6px; }
+.chart-toggle { display: flex; align-items: center; gap: 4px; font-size: .7rem; color: var(--text2); cursor: pointer; }
+.chart-toggle input { width: 14px; height: 14px; accent-color: var(--green); }
+.health-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; padding: 14px 18px; }
+.health-tile { padding: 10px 12px; border-radius: var(--radius-sm); text-align: center; font-size: .78rem; font-weight: 600; }
+.health-tile.healthy { background: var(--green-bg); color: var(--green); border: 1px solid rgba(34,197,94,.2); }
+.health-tile.degraded { background: var(--amber-bg); color: var(--amber); border: 1px solid rgba(245,158,11,.2); }
+.health-tile.broken { background: var(--red-bg); color: var(--red); border: 1px solid rgba(239,68,68,.2); }
+.health-tile .tile-lots { font-size: .65rem; color: var(--text3); font-weight: 400; margin-top: 2px; }
+.charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 900px) { .charts-grid { grid-template-columns: 1fr; } }
+
 /* Toast */
 .toast { position: fixed; bottom: 20px; right: 20px; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 18px; font-size: .82rem; z-index: 100; animation: slideIn .3s ease; }
 @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
@@ -163,7 +190,13 @@ tr:hover td { background: rgba(255,255,255,.02); }
     </div>
   </div>
 
+  <div class="tab-nav">
+    <button class="tab-btn active" data-tab="overview" onclick="switchTab('overview')">Overview</button>
+    <button class="tab-btn" data-tab="analytics" onclick="switchTab('analytics')">Analytics</button>
+  </div>
+
   <div class="main">
+    <div class="tab-pane active" id="tab-overview">
     <!-- Top Stats -->
     <div class="stats-grid" id="top-stats">
       <div class="stat-card" title="Number of auction houses with fresh (non-expired) cached data currently being served to users"><div class="stat-label">Houses Live</div><div class="stat-value green" id="s-houses">-</div><div class="stat-sub" id="s-houses-sub"></div></div>
@@ -330,6 +363,56 @@ tr:hover td { background: rgba(255,255,255,.02); }
         </table>
       </div>
     </div>
+    </div><!-- /tab-overview -->
+
+    <!-- Analytics Tab -->
+    <div class="tab-pane" id="tab-analytics">
+      <div class="chart-controls">
+        <span style="font-size:.78rem;font-weight:600;color:var(--text2);">Date range:</span>
+        <button class="range-btn active" data-days="7" onclick="setAnalyticsRange(7)">7 days</button>
+        <button class="range-btn" data-days="30" onclick="setAnalyticsRange(30)">30 days</button>
+        <button class="range-btn" data-days="0" onclick="setAnalyticsRange(0)">All time</button>
+        <button class="action-btn" onclick="seedSnapshot()" style="margin-left:auto;" title="Capture a snapshot of today's data immediately">Seed Today's Snapshot</button>
+      </div>
+
+      <div class="charts-grid">
+        <div class="chart-container">
+          <h3>Total Lots Over Time</h3>
+          <canvas id="chart-lots"></canvas>
+        </div>
+        <div class="chart-container">
+          <h3>Image Coverage % Over Time</h3>
+          <canvas id="chart-images"></canvas>
+        </div>
+        <div class="chart-container">
+          <h3>Scrape Engine Breakdown Over Time</h3>
+          <canvas id="chart-engines"></canvas>
+        </div>
+        <div class="chart-container">
+          <h3>House Health Over Time</h3>
+          <canvas id="chart-health"></canvas>
+        </div>
+      </div>
+
+      <div class="chart-container">
+        <h3>Per-House Lot Count
+          <span style="font-size:.7rem;color:var(--text3);font-weight:400;margin-left:8px;">(toggle series)</span>
+        </h3>
+        <div class="chart-toggles" id="house-toggles"></div>
+        <div style="height:350px;margin-top:10px;"><canvas id="chart-per-house"></canvas></div>
+      </div>
+
+      <div class="section">
+        <div class="section-header">
+          <h2 title="Current health status of each house based on the latest skill file. Green = healthy, amber = degraded (lot count dropped 30%+), red = broken (0 lots)">House Health Status</h2>
+          <span class="badge" id="health-badge">-</span>
+        </div>
+        <div class="health-grid" id="health-grid">
+          <div class="loading"><span class="spinner"></span> Loading...</div>
+        </div>
+      </div>
+    </div><!-- /tab-analytics -->
+
   </div>
 </div>
 
@@ -760,6 +843,167 @@ async function addAuction(e) {
   } catch (err) { toast('Error: ' + err.message, 'error'); }
 
   btn.disabled = false; btn.textContent = 'Add to Calendar';
+}
+
+// ═══ Tab Switching ═══
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.toggle('active', p.id === 'tab-' + tab));
+  if (tab === 'analytics' && !analyticsLoaded) loadAnalytics();
+}
+
+// ═══ Analytics ═══
+let analyticsLoaded = false;
+let analyticsRange = 7;
+const chartInstances = {};
+
+const CHART_COLORS = [
+  '#22c55e','#3b82f6','#f59e0b','#ef4444','#8b5cf6','#ec4899','#06b6d4','#f97316',
+  '#14b8a6','#a855f7','#eab308','#6366f1','#84cc16','#0ea5e9','#d946ef','#fb923c',
+  '#2dd4bf','#c084fc','#facc15','#818cf8','#4ade80','#38bdf8','#e879f9','#fb7185',
+  '#34d399','#60a5fa','#fbbf24','#f87171','#a78bfa','#f472b6','#22d3ee','#fdba74',
+];
+
+function setAnalyticsRange(days) {
+  analyticsRange = days;
+  document.querySelectorAll('.range-btn').forEach(b => b.classList.toggle('active', parseInt(b.dataset.days) === days));
+  loadAnalytics();
+}
+
+async function seedSnapshot() {
+  const result = await apiFetch('/api/admin/seed-snapshot', { method: 'POST' });
+  if (result.ok) { toast('Snapshot saved', 'success'); loadAnalytics(); }
+  else toast('Failed: ' + (result.error || 'unknown'), 'error');
+}
+
+function makeChart(canvasId, type, labels, datasets, opts = {}) {
+  if (chartInstances[canvasId]) chartInstances[canvasId].destroy();
+  const ctx = document.getElementById(canvasId).getContext('2d');
+  chartInstances[canvasId] = new Chart(ctx, {
+    type,
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: type !== 'line' || canvasId === 'chart-per-house' ? false : true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: opts.legend !== false, labels: { color: '#9ca3b0', font: { size: 11 } } },
+      },
+      scales: {
+        x: { ticks: { color: '#6b7280', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,.05)' } },
+        y: { ticks: { color: '#6b7280', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,.05)' }, ...(opts.yOpts || {}) },
+      },
+      ...opts.extra,
+    },
+  });
+  return chartInstances[canvasId];
+}
+
+async function loadAnalytics() {
+  const days = analyticsRange || 30;
+  const queryDays = days === 0 ? 365 : days;
+  const [analytics, skills] = await Promise.all([
+    apiFetch(`/api/admin/analytics?days=${queryDays}`),
+    apiFetch('/api/skills'),
+  ]);
+
+  if (analytics.error && skills.error) return;
+  analyticsLoaded = true;
+
+  const snapshots = analytics.snapshots || [];
+  const labels = snapshots.map(s => s.date.slice(5)); // MM-DD
+
+  // 1. Total lots line chart
+  makeChart('chart-lots', 'line', labels, [{
+    label: 'Total Lots',
+    data: snapshots.map(s => s.total_lots),
+    borderColor: '#22c55e',
+    backgroundColor: 'rgba(34,197,94,.1)',
+    fill: true,
+    tension: 0.3,
+  }], { legend: false });
+
+  // 2. Image coverage line chart
+  makeChart('chart-images', 'line', labels, [{
+    label: 'Image Coverage %',
+    data: snapshots.map(s => s.image_coverage_pct),
+    borderColor: '#3b82f6',
+    backgroundColor: 'rgba(59,130,246,.1)',
+    fill: true,
+    tension: 0.3,
+  }], { legend: false, yOpts: { min: 0, max: 100 } });
+
+  // 3. Engine breakdown stacked area
+  makeChart('chart-engines', 'line', labels, [
+    { label: 'Firecrawl', data: snapshots.map(s => (s.engine_breakdown || {}).firecrawl || 0), borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,.15)', fill: true, tension: 0.3 },
+    { label: 'Puppeteer', data: snapshots.map(s => (s.engine_breakdown || {}).puppeteer || 0), borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,.15)', fill: true, tension: 0.3 },
+    { label: 'HTTP', data: snapshots.map(s => (s.engine_breakdown || {}).http || 0), borderColor: '#6b7280', backgroundColor: 'rgba(107,114,128,.15)', fill: true, tension: 0.3 },
+  ]);
+
+  // 4. House health stacked area
+  makeChart('chart-health', 'line', labels, [
+    { label: 'Healthy', data: snapshots.map(s => s.healthy_houses || 0), borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,.15)', fill: true, tension: 0.3 },
+    { label: 'Degraded', data: snapshots.map(s => s.degraded_houses || 0), borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,.15)', fill: true, tension: 0.3 },
+    { label: 'Broken', data: snapshots.map(s => s.broken_houses || 0), borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,.15)', fill: true, tension: 0.3 },
+  ]);
+
+  // 5. Per-house lot count (toggleable)
+  const allHouses = new Set();
+  snapshots.forEach(s => { if (s.lots_by_house) Object.keys(s.lots_by_house).forEach(h => allHouses.add(h)); });
+  const houseList = [...allHouses].sort();
+
+  const togglesEl = document.getElementById('house-toggles');
+  togglesEl.innerHTML = houseList.map((h, i) => {
+    const col = CHART_COLORS[i % CHART_COLORS.length];
+    return `<label class="chart-toggle"><input type="checkbox" checked data-house="${esc(h)}" onchange="updatePerHouseChart()"><span style="width:10px;height:10px;border-radius:2px;background:${col};display:inline-block;"></span>${esc(h)}</label>`;
+  }).join('');
+
+  // Store for re-render
+  window._perHouseData = { labels, snapshots, houseList };
+  updatePerHouseChart();
+
+  // 6. Health grid from skills
+  const skillList = (skills.skills || []).sort((a, b) => a.house.localeCompare(b.house));
+  const summary = skills.summary || {};
+  const healthBadge = document.getElementById('health-badge');
+  healthBadge.textContent = `${summary.healthy || 0} healthy, ${summary.degraded || 0} degraded, ${summary.broken || 0} broken`;
+  healthBadge.className = `badge ${summary.broken > 0 ? 'badge-red' : summary.degraded > 0 ? 'badge-amber' : 'badge-green'}`;
+
+  const grid = document.getElementById('health-grid');
+  if (skillList.length === 0) {
+    grid.innerHTML = '<div class="text-muted" style="padding:20px;text-align:center;">No skill files yet — run a scrape cycle first</div>';
+  } else {
+    grid.innerHTML = skillList.map(s => {
+      const cls = s.status === 'healthy' ? 'healthy' : s.status === 'degraded' ? 'degraded' : 'broken';
+      return `<div class="health-tile ${cls}" title="${esc(s.extractor)} | ${s.imageCoverage}% images | Last: ${s.lastVerified ? s.lastVerified.slice(0, 10) : 'never'}">
+        ${esc(s.house)}
+        <div class="tile-lots">${s.lastLotCount} lots</div>
+      </div>`;
+    }).join('');
+  }
+}
+
+function updatePerHouseChart() {
+  const { labels, snapshots, houseList } = window._perHouseData || {};
+  if (!labels) return;
+
+  const checked = new Set();
+  document.querySelectorAll('#house-toggles input:checked').forEach(cb => checked.add(cb.dataset.house));
+
+  const datasets = houseList.filter(h => checked.has(h)).map((h, i) => {
+    const realIdx = houseList.indexOf(h);
+    const col = CHART_COLORS[realIdx % CHART_COLORS.length];
+    return {
+      label: h,
+      data: snapshots.map(s => (s.lots_by_house || {})[h] || 0),
+      borderColor: col,
+      backgroundColor: 'transparent',
+      tension: 0.3,
+      borderWidth: 2,
+    };
+  });
+
+  makeChart('chart-per-house', 'line', labels, datasets, { extra: { maintainAspectRatio: false } });
 }
 
 // Auto-refresh every 5 minutes
