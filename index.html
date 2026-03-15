@@ -842,7 +842,7 @@ footer .logo-f span{color:var(--green)}
       <input class="tb-search" type="text" id="fPostcode" placeholder="Postcode..." oninput="renderLots()" aria-label="Filter by postcode">
       <select class="tb-select" id="fExcludePOA" onchange="renderLots()" aria-label="Include or exclude POA lots"><option value="">Inc. POA</option><option value="yes">Excl. POA</option></select>
       <select class="tb-select" id="fLookahead" onchange="saveLookahead();renderLots()" aria-label="Auction lookahead"><option value="1">Next auction</option><option value="2">Next 2 auctions</option><option value="all" selected>All upcoming</option></select>
-      <label><input type="checkbox" id="fIncludePrevious" onchange="renderLots()" checked> Previous</label>
+      <label><input type="checkbox" id="fShowPast" onchange="onShowPastChange()"> Show past auctions</label>
       <button class="ex-btn" onclick="clearAllFilters()" style="margin-left:auto;font-weight:600;color:var(--accent-danger,#c0392b);" title="Reset all dropdown filters and search text back to defaults">Clear filters</button>
     </div>
     <!-- ROW 3: Quick filter chips + AI shortcuts -->
@@ -1081,7 +1081,7 @@ function clearAllFilters(){
   const resets={fDeal:'',fType:'',fCondition:'',fTenure:'',fLocation:'',fAfford:'all',fSoldTop:'all',fSearch:'',fSort:'score',fBeds:'',fPostcode:'',fMinPrice:'',fMaxPrice:''};
   for(const[id,val] of Object.entries(resets)){const el=$(id);if(el)el.value=val}
   if($('fExcludePOA')) $('fExcludePOA').value='';
-  if($('fIncludePrevious')) $('fIncludePrevious').checked=true;
+  if($('fShowPast')) { $('fShowPast').checked=false; onShowPastChange(); }
   _selectedHouses.clear();
   updateHouseBtn();
   updatePriceBtn();
@@ -1135,10 +1135,21 @@ function showSkeletonCards(n){
   out.innerHTML='<div class="lots-grid" id="lotsGrid">'+skelHtml+'</div>';
 }
 
+function onShowPastChange(){
+  const showPast=$('fShowPast')?.checked;
+  const url=new URL(window.location);
+  if(showPast) url.searchParams.set('showPast','true');
+  else url.searchParams.delete('showPast');
+  window.history.replaceState({},'',url);
+  loadAllLots();
+}
+
 async function loadAllLots(){
   showSkeletonCards(12);
   try{
-    const r=await fetch('/api/all-lots',{headers:getAuthHeaders()});
+    const showPast=$('fShowPast')?.checked;
+    const apiUrl='/api/all-lots'+(showPast?'?includePast=true':'');
+    const r=await fetch(apiUrl,{headers:getAuthHeaders()});
     if(!r.ok) throw new Error('Server error: '+r.status);
     const d=await r.json();
     ALL_LOTS=d.lots||[];
@@ -2295,12 +2306,7 @@ function renderLots(){
     });
   }
 
-  // Historical auction filter — hide past-auction lots unless checkbox ticked
-  const fIncludePrev=$('fIncludePrevious')?.checked||false;
-  if(!fIncludePrev){
-    const todayStr=new Date().toISOString().slice(0,10);
-    lots=lots.filter(l=>!l._auctionDate||l._auctionDate>=todayStr);
-  }
+  // Historical auction filter now handled server-side via ?includePast=true
 
   // Sort
   const sortVal=$('fSort')?.value||'score';
@@ -2310,7 +2316,7 @@ function renderLots(){
 
   // Store filtered lots for export functions
   window._filteredLots = lots;
-  console.log('[BM] renderLots: LOTS='+LOTS.length+' → filtered='+lots.length+' (lookahead='+fLook+', includePrev='+fIncludePrev+')');
+  console.log('[BM] renderLots: LOTS='+LOTS.length+' → filtered='+lots.length+' (lookahead='+fLook+')');
 
   const top=lots.filter(l=>l.score>=3);
   let statsHtml=`
@@ -2841,6 +2847,12 @@ function syncFiltersToURL(){
   if(url!==window.location.pathname+window.location.search) history.replaceState(null,'',url);
 }
 restoreFiltersFromURL();
+
+// Read showPast URL param on page load
+(function(){
+  const p=new URLSearchParams(window.location.search);
+  if(p.get('showPast')==='true'&&$('fShowPast')) $('fShowPast').checked=true;
+})();
 
 // Init
 loadCalendar();
