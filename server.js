@@ -3229,12 +3229,12 @@ app.post('/api/smart-search', async (req, res) => {
           }
         }
 
-        // Apply sold filter to delta lots
-        const soldRe = /\bSOLD\b|\bSTC\b|\bSALE.?AGREED\b|\bWITHDRAWN\b/i;
+        // Apply sold filter to delta lots (prefer lot.status, fallback to bullets regex)
+        normaliseLotStatuses(deltaLots);
         const filteredDelta = sf === 'available'
-          ? deltaLots.filter(l => !(l.bullets || []).some(b => soldRe.test(b)))
+          ? deltaLots.filter(l => l.status === 'available')
           : sf === 'sold'
-          ? deltaLots.filter(l => (l.bullets || []).some(b => soldRe.test(b)))
+          ? deltaLots.filter(l => l.status === 'sold' || l.status === 'stc' || l.status === 'withdrawn')
           : deltaLots;
 
         if (filteredDelta.length === 0) {
@@ -3404,12 +3404,12 @@ Only return lots that genuinely match the query.`, { maxTokens: 4000 });
       return res.json({ results: [], report: 'No lot data in cache. Please analyse auction catalogues first.', sources: [], searchesUsed, searchLimit });
     }
 
-    // Apply sold filter before sending to Gemini
-    const soldRe = /\bSOLD\b|\bSTC\b|\bSALE.?AGREED\b|\bWITHDRAWN\b/i;
+    // Apply sold filter before sending to Gemini (prefer lot.status, fallback to bullets regex)
+    normaliseLotStatuses(allLots);
     const filteredLots = soldFilter === 'available'
-      ? allLots.filter(l => !(l.bullets || []).some(b => soldRe.test(b)))
+      ? allLots.filter(l => l.status === 'available')
       : soldFilter === 'sold'
-      ? allLots.filter(l => (l.bullets || []).some(b => soldRe.test(b)))
+      ? allLots.filter(l => l.status === 'sold' || l.status === 'stc' || l.status === 'withdrawn')
       : allLots;
 
     // Build a compact lot summary for Gemini, prioritising query-relevant lots
@@ -3556,6 +3556,7 @@ app.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
     for (const c of cached) {
       if (!c.lots || !Array.isArray(c.lots)) continue;
       const houseLots = c.lots.map(l => ({ ...l, _house: c.house, _sourceUrl: c.url }));
+      normaliseLotStatuses(houseLots);
 
       // Phase 1: Within-house dedup by URL (keep lot with richer data)
       const byUrl = new Map();
@@ -5098,6 +5099,29 @@ function stripHtml(html) {
   // Allow up to 120k for large catalogues (Claude can handle it)
   if (text.length > 120000) text = text.substring(0, 120000);
   return text;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// LOT STATUS NORMALISATION
+// ═══════════════════════════════════════════════════════════════
+function normaliseLotStatuses(lots) {
+  for (const lot of lots) {
+    if (!lot.status) {
+      // Check bullets for legacy status detection
+      const bulletStr = (lot.bullets || []).join(' ');
+      if (/\bSOLD\b/i.test(bulletStr)) lot.status = 'sold';
+      else if (/\bSTC\b|\bSALE.?AGREED\b|\bUNDER.?OFFER\b/i.test(bulletStr)) lot.status = 'stc';
+      else if (/\bWITHDRAWN\b|\bPOSTPONED\b/i.test(bulletStr)) lot.status = 'withdrawn';
+      else lot.status = 'available';
+    }
+    // Normalise any non-standard values
+    const s = (lot.status || '').toLowerCase().trim();
+    if (/sold/i.test(s) && !/stc|agreed/i.test(s)) lot.status = 'sold';
+    else if (/stc|agreed|under.?offer/i.test(s)) lot.status = 'stc';
+    else if (/withdrawn|postponed/i.test(s)) lot.status = 'withdrawn';
+    else if (s !== 'sold' && s !== 'stc' && s !== 'withdrawn') lot.status = 'available';
+  }
+  return lots;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -9794,7 +9818,7 @@ async function autoAnalyseOne(url) {
   // Check if catalogue data actually changed + lot count regression guard
   const { data: prevCached } = await supabase
     .from('cached_analyses')
-    .select('total_lots, top_picks, title_splits')
+    .select('total_lots, top_picks, title_splits, lots')
     .eq('url', normalisedUrl)
     .single();
 
@@ -9850,6 +9874,14 @@ async function autoAnalyseOne(url) {
   }
 
   console.log(`AUTO: ✓ ${house}: ${newTotalLots} lots cached (${newTitleSplits} title splits, ${newTopPicks} top picks)${catalogueChanged ? ' [CHANGED]' : ' [unchanged]'}`);
+
+  // ── Compute per-scrape diff summary ──
+  const scrapeDiff = computeScrapeDiff(prevCached?.lots, lots);
+  try {
+    await supabase.from('house_skills')
+      .update({ last_diff: scrapeDiff })
+      .eq('slug', house);
+  } catch (diffErr) { console.warn(`DIFF: Failed to store diff for ${house}:`, diffErr.message); }
 
   // ── Skill tracking: persist to Supabase ──
   try {
