@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-03-14T05:40:47.540Z",
+  "timestamp": "2026-03-15T06:02:32.422Z",
   "results": [
     {
       "house": "savills",
@@ -19,17 +19,11 @@
     },
     {
       "house": "sdl",
-      "extractorLots": 9,
+      "extractorLots": 6,
       "universalLots": 0,
       "httpStatus": 200,
-      "imgCoverage": 100,
-      "issues": [
-        {
-          "type": "CACHE_STALE",
-          "severity": "WARNING",
-          "detail": "Cached 49 vs live 9 (82% drift)"
-        }
-      ]
+      "imgCoverage": 33,
+      "issues": []
     },
     {
       "house": "network",
@@ -66,25 +60,15 @@
     },
     {
       "house": "barnardmarcus",
-      "extractorLots": 20,
+      "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
-      "imgCoverage": 0,
+      "httpStatus": 200,
+      "imgCoverage": null,
       "issues": [
         {
-          "type": "TIMEOUT",
+          "type": "EXTRACTOR_ERROR",
           "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
-        },
-        {
-          "type": "LOW_IMAGES",
-          "severity": "WARNING",
-          "detail": "Image coverage 0% (0/20)"
-        },
-        {
-          "type": "MISSING_FROM_CACHE",
-          "severity": "WARNING",
-          "detail": "20 live lots but missing from production cache"
+          "detail": "Execution context was destroyed, most likely because of a navigation."
         }
       ]
     },
@@ -94,7 +78,13 @@
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": 100,
-      "issues": []
+      "issues": [
+        {
+          "type": "MISSING_FROM_CACHE",
+          "severity": "WARNING",
+          "detail": "238 live lots but missing from production cache"
+        }
+      ]
     },
     {
       "house": "auctionhouse",
@@ -106,7 +96,7 @@
         {
           "type": "EXTRACTOR_BROKEN",
           "severity": "BROKEN",
-          "detail": "DOM extractor returns 0, but 779 prices on page"
+          "detail": "DOM extractor returns 0, but 778 prices on page"
         }
       ]
     },
@@ -128,7 +118,7 @@
         {
           "type": "CACHE_STALE",
           "severity": "WARNING",
-          "detail": "Cached 80 vs live 4 (95% drift)"
+          "detail": "Cached 67 vs live 4 (94% drift)"
         }
       ]
     },
@@ -157,11 +147,6 @@
           "type": "LOW_IMAGES",
           "severity": "WARNING",
           "detail": "Image coverage 0% (0/93)"
-        },
-        {
-          "type": "CACHE_STALE",
-          "severity": "WARNING",
-          "detail": "Cached 506 vs live 93 (82% drift)"
         }
       ]
     },
@@ -244,13 +229,7 @@
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": 100,
-      "issues": [
-        {
-          "type": "MISSING_FROM_CACHE",
-          "severity": "WARNING",
-          "detail": "50 live lots but missing from production cache"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "cottons",
@@ -282,7 +261,13 @@
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": 100,
-      "issues": []
+      "issues": [
+        {
+          "type": "MISSING_FROM_CACHE",
+          "severity": "WARNING",
+          "detail": "30 live lots but missing from production cache"
+        }
+      ]
     },
     {
       "house": "connectuk",
@@ -328,13 +313,7 @@
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": 100,
-      "issues": [
-        {
-          "type": "MISSING_FROM_CACHE",
-          "severity": "WARNING",
-          "detail": "20 live lots but missing from production cache"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "probateauction",
@@ -363,11 +342,6 @@
           "type": "PAGINATION_MISSED",
           "severity": "WARNING",
           "detail": "Page says \"19 properties found\" but no pagination config"
-        },
-        {
-          "type": "MISSING_FROM_CACHE",
-          "severity": "WARNING",
-          "detail": "19 live lots but missing from production cache"
         }
       ]
     },
@@ -377,13 +351,7 @@
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": 100,
-      "issues": [
-        {
-          "type": "MISSING_FROM_CACHE",
-          "severity": "WARNING",
-          "detail": "51 live lots but missing from production cache"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "futureauctions",
@@ -405,13 +373,7 @@
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": 100,
-      "issues": [
-        {
-          "type": "MISSING_FROM_CACHE",
-          "severity": "WARNING",
-          "detail": "10 live lots but missing from production cache"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "firstforauctions",
@@ -419,13 +381,7 @@
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": 100,
-      "issues": [
-        {
-          "type": "MISSING_FROM_CACHE",
-          "severity": "WARNING",
-          "detail": "50 live lots but missing from production cache"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "harmanhealy",
@@ -433,13 +389,7 @@
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": 38,
-      "issues": [
-        {
-          "type": "MISSING_FROM_CACHE",
-          "severity": "WARNING",
-          "detail": "76 live lots but missing from production cache"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "seelauctions",
@@ -447,25 +397,124 @@
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": 100,
-      "issues": [
-        {
-          "type": "MISSING_FROM_CACHE",
-          "severity": "WARNING",
-          "detail": "31 live lots but missing from production cache"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "robinsonhall",
       "extractorLots": 21,
       "universalLots": 0,
       "httpStatus": 200,
+      "imgCoverage": 29,
+      "issues": [
+        {
+          "type": "LOW_IMAGES",
+          "severity": "WARNING",
+          "detail": "Image coverage 29% (6/21)"
+        }
+      ]
+    },
+    {
+      "house": "astleys",
+      "extractorLots": 0,
+      "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": null,
+      "issues": [
+        {
+          "type": "NO_EXTRACTOR",
+          "severity": "WARNING",
+          "detail": "No custom extractor — universal finds 0 but 90 prices on page"
+        }
+      ]
+    },
+    {
+      "house": "henrysykes",
+      "extractorLots": 0,
+      "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": null,
+      "issues": [
+        {
+          "type": "NO_EXTRACTOR",
+          "severity": "WARNING",
+          "detail": "No custom extractor — universal finds 0 but 60 prices on page"
+        }
+      ]
+    },
+    {
+      "house": "clarkesimpson",
+      "extractorLots": 0,
+      "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": null,
+      "issues": [
+        {
+          "type": "NO_EXTRACTOR",
+          "severity": "WARNING",
+          "detail": "No custom extractor — universal finds 0 but 31 prices on page"
+        }
+      ]
+    },
+    {
+      "house": "durrants",
+      "extractorLots": 0,
+      "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": null,
+      "issues": []
+    },
+    {
+      "house": "dawsons",
+      "extractorLots": 8,
+      "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": 100,
+      "issues": []
+    },
+    {
+      "house": "goldings",
+      "extractorLots": 30,
+      "universalLots": 0,
+      "httpStatus": 200,
       "imgCoverage": 100,
       "issues": [
         {
+          "type": "BLOCKED",
+          "severity": "BROKEN",
+          "detail": "Bot detection (Cloudflare) — 200"
+        },
+        {
           "type": "MISSING_FROM_CACHE",
           "severity": "WARNING",
-          "detail": "21 live lots but missing from production cache"
+          "detail": "30 live lots but missing from production cache"
+        }
+      ]
+    },
+    {
+      "house": "auctionhousescotland",
+      "extractorLots": 0,
+      "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": null,
+      "issues": [
+        {
+          "type": "NO_EXTRACTOR",
+          "severity": "WARNING",
+          "detail": "No custom extractor — universal finds 0 but 71 prices on page"
+        }
+      ]
+    },
+    {
+      "house": "austingray",
+      "extractorLots": 0,
+      "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": null,
+      "issues": [
+        {
+          "type": "NO_EXTRACTOR",
+          "severity": "WARNING",
+          "detail": "No custom extractor — universal finds 0 but 44 prices on page"
         }
       ]
     }
