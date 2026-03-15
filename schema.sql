@@ -99,7 +99,22 @@ CREATE TABLE IF NOT EXISTS processed_webhook_events (
 -- Auto-cleanup: delete events older than 7 days (Stripe retries max 72 hours)
 -- Cleanup is handled in application code (server.js) after webhook processing
 
--- 7. Enable Row Level Security (required by Supabase)
+-- 7. PIPELINE ALERTS
+-- Tracks pipeline failures, regressions, and coverage drops for admin alerting
+CREATE TABLE IF NOT EXISTS pipeline_alerts (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  event_type TEXT NOT NULL,          -- 'auto_analyse_failure', 'discovery_miss', 'image_coverage_drop', 'extractor_regression'
+  severity TEXT NOT NULL DEFAULT 'warning',  -- 'warning' or 'error'
+  house TEXT,                        -- auction house slug (null for system-wide alerts)
+  message TEXT NOT NULL,
+  resolved BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  resolved_at TIMESTAMPTZ
+);
+
+CREATE INDEX idx_pipeline_alerts_resolved ON pipeline_alerts(resolved, created_at DESC);
+
+-- 8. Enable Row Level Security (required by Supabase)
 ALTER TABLE cached_analyses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE rate_limits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
@@ -107,11 +122,13 @@ ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE analytics_snapshots ENABLE ROW LEVEL SECURITY;
 ALTER TABLE house_skills ENABLE ROW LEVEL SECURITY;
 ALTER TABLE processed_webhook_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pipeline_alerts ENABLE ROW LEVEL SECURITY;
 
--- 8. Policies — allow server (service_role) full access
+-- 9. Policies — allow server (service_role) full access
 CREATE POLICY "Service role full access" ON cached_analyses FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Service role full access" ON rate_limits FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Service role full access" ON users FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Service role full access" ON analytics_snapshots FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Service role full access" ON house_skills FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Service role full access" ON processed_webhook_events FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role full access" ON pipeline_alerts FOR ALL USING (true) WITH CHECK (true);
