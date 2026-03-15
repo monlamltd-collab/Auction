@@ -174,6 +174,26 @@ tr:hover td { background: rgba(255,255,255,.02); }
 .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 @media (max-width: 900px) { .charts-grid { grid-template-columns: 1fr; } }
 
+/* Alert cards */
+.alert-card { padding: 10px 14px; border-left: 3px solid var(--border); margin-bottom: 6px; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; background: var(--surface2); font-size: .82rem; display: flex; align-items: center; gap: 8px; }
+.alert-card.alert-error { border-left-color: var(--red); background: var(--red-bg); }
+.alert-card.alert-warning { border-left-color: var(--amber); background: var(--amber-bg); }
+.alert-card.alert-resolved { border-left-color: var(--green); opacity: .7; }
+.alert-card .alert-severity { flex-shrink: 0; font-size: .9rem; }
+.alert-card strong { margin-right: 4px; }
+.alert-card small { margin-left: auto; color: var(--text3); white-space: nowrap; font-size: .7rem; }
+.no-alerts { padding: 14px 18px; color: var(--text3); font-size: .82rem; }
+
+/* Status badges */
+.status-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: .7rem; font-weight: 600; }
+.status-healthy { background: var(--green-bg); color: var(--green); }
+.status-degraded { background: var(--amber-bg); color: var(--amber); }
+.status-broken { background: var(--red-bg); color: var(--red); }
+
+/* Freshness table */
+.freshness-table th { cursor: pointer; user-select: none; }
+.freshness-table th:hover { color: var(--green); }
+
 /* Toast */
 .toast { position: fixed; bottom: 20px; right: 20px; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 18px; font-size: .82rem; z-index: 100; animation: slideIn .3s ease; }
 @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
@@ -212,6 +232,42 @@ tr:hover td { background: rgba(255,255,255,.02); }
 
   <div class="main">
     <div class="tab-pane active" id="tab-overview">
+
+    <!-- Pipeline Alerts -->
+    <div class="section" id="alertsSection">
+      <div class="section-header">
+        <h2>Pipeline Alerts</h2>
+        <span class="badge badge-green" id="alert-count-badge" style="display:none">0 active</span>
+      </div>
+      <div id="activeAlerts"><div class="no-alerts">Loading alerts...</div></div>
+      <details style="border-top:1px solid var(--border)">
+        <summary style="padding:10px 18px;font-size:.78rem;color:var(--text3);cursor:pointer">Recently Resolved</summary>
+        <div id="recentAlerts"></div>
+      </details>
+    </div>
+
+    <!-- House Health / Freshness -->
+    <div class="section" id="freshnessSection">
+      <div class="section-header">
+        <h2>House Health</h2>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="freshness-table">
+          <thead>
+            <tr>
+              <th data-sort="house" onclick="sortFreshness('house')">House</th>
+              <th data-sort="last_verified" onclick="sortFreshness('last_verified')">Last Scrape</th>
+              <th data-sort="last_lot_count" onclick="sortFreshness('last_lot_count')">Lots</th>
+              <th data-sort="image_coverage" onclick="sortFreshness('image_coverage')">Image %</th>
+              <th data-sort="status" onclick="sortFreshness('status')">Status</th>
+              <th>Last Change</th>
+            </tr>
+          </thead>
+          <tbody id="freshnessBody"></tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- Top Stats -->
     <div class="stats-grid" id="top-stats">
       <div class="stat-card" title="Number of auction houses with fresh (non-expired) cached data currently being served to users"><div class="stat-label">Houses Live</div><div class="stat-value green" id="s-houses">-</div><div class="stat-sub" id="s-houses-sub"></div></div>
@@ -532,6 +588,91 @@ function timeUntil(date) {
   return `${Math.round(hrs / 24)}d`;
 }
 
+// ── Pipeline Alerts ──
+async function loadAlerts() {
+  const data = await apiFetch('/api/admin/alerts');
+  if (data.error) return;
+  const { active, recent } = data;
+
+  const badge = document.getElementById('alert-count-badge');
+  if (active.length > 0) {
+    badge.textContent = active.length + ' active';
+    badge.className = 'badge badge-red';
+    badge.style.display = '';
+  } else {
+    badge.textContent = 'All clear';
+    badge.className = 'badge badge-green';
+    badge.style.display = '';
+  }
+
+  document.getElementById('activeAlerts').innerHTML = active.length
+    ? active.map(a => `
+      <div class="alert-card alert-${esc(a.severity)}">
+        <span class="alert-severity">${a.severity === 'error' ? '\u{1F534}' : '\u{1F7E1}'}</span>
+        <strong>${esc(a.house || 'System')}</strong> ${esc(a.message)}
+        <small>${timeAgo(a.created_at)}</small>
+      </div>
+    `).join('')
+    : '<div class="no-alerts">No active alerts</div>';
+
+  document.getElementById('recentAlerts').innerHTML = recent.length
+    ? recent.map(a => `
+      <div class="alert-card alert-resolved">
+        <strong>${esc(a.house || 'System')}</strong> ${esc(a.message)}
+        <small>Resolved ${timeAgo(a.resolved_at)}</small>
+      </div>
+    `).join('')
+    : '<div class="no-alerts">No recently resolved alerts</div>';
+}
+
+// ── House Health / Freshness ──
+let freshnessData = [];
+let freshnessSortCol = 'house', freshnessSortAsc = true;
+
+async function loadFreshness() {
+  const data = await apiFetch('/api/admin/freshness');
+  if (data.error) return;
+  freshnessData = data.houses || [];
+  renderFreshness();
+}
+
+function sortFreshness(col) {
+  if (freshnessSortCol === col) freshnessSortAsc = !freshnessSortAsc;
+  else { freshnessSortCol = col; freshnessSortAsc = true; }
+  renderFreshness();
+}
+
+function renderFreshness() {
+  const sorted = [...freshnessData].sort((a, b) => {
+    let va = a[freshnessSortCol], vb = b[freshnessSortCol];
+    if (typeof va === 'string') va = (va || '').toLowerCase();
+    if (typeof vb === 'string') vb = (vb || '').toLowerCase();
+    if (va == null) va = freshnessSortAsc ? '\uffff' : '';
+    if (vb == null) vb = freshnessSortAsc ? '\uffff' : '';
+    if (va < vb) return freshnessSortAsc ? -1 : 1;
+    if (va > vb) return freshnessSortAsc ? 1 : -1;
+    return 0;
+  });
+
+  document.getElementById('freshnessBody').innerHTML = sorted.map(h => {
+    const statusClass = h.status === 'healthy' ? 'status-healthy' :
+                        h.status === 'degraded' ? 'status-degraded' : 'status-broken';
+    const statusLabel = h.status === 'healthy' ? 'Healthy' :
+                        h.status === 'degraded' ? 'Warning' : 'Broken';
+    const lastScrape = h.last_verified ? timeAgo(h.last_verified) : 'Never';
+    const diffSummary = h.last_diff?.status_changes?.join(', ') || 'No changes';
+
+    return `<tr>
+      <td>${esc(h.house || h.slug)}</td>
+      <td class="mono">${lastScrape}</td>
+      <td class="mono">${h.last_lot_count || 0}</td>
+      <td class="mono">${(h.image_coverage || 0)}%</td>
+      <td><span class="status-badge ${statusClass}">${statusLabel}</span></td>
+      <td><small class="text-muted">${esc(diffSummary)}</small></td>
+    </tr>`;
+  }).join('');
+}
+
 async function refreshAll() {
   document.getElementById('last-refresh').textContent = 'Refreshing...';
   await Promise.all([
@@ -541,6 +682,8 @@ async function refreshAll() {
     loadDailyStats(),
     loadCalendar(),
     loadUsers(),
+    loadAlerts(),
+    loadFreshness(),
   ]);
   document.getElementById('last-refresh').textContent = 'Updated ' + new Date().toLocaleTimeString();
 }
