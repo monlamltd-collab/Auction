@@ -32,9 +32,9 @@ See: .planning/PROJECT.md (updated 2026-03-15)
 **Current focus:** Phase 2 — Enrichment & House Expansion
 
 ## Current Phase
-Phase: 2 (complete)
-Plan: 3 of 3 complete
-Status: Complete — moving to Phase 3
+Phase: 3 (context gathered)
+Plan: 0 of 0
+Status: Context gathered — ready for planning
 
 ## Decisions
 - Sold/unsold: diagonal overlay banner (estate agent style), status filter dropdown
@@ -66,6 +66,7 @@ Status: Complete — moving to Phase 3
 - 2026-03-15: Plan 02-02 executed — Image coverage improvement (IMG_HELPERS, Firecrawl images format, missing-images endpoint + admin UI, test files)
 - 2026-03-15: Plan 02-01 executed — EPC & Flood Risk Enrichment Pipeline (fetchEPCByPostcode, matchEPCToLot, fetchFloodZone, enrichment_cache, frontend badges, 39 tests)
 - 2026-03-15: Plan 02-03 executed — Auction House Expansion (15 new houses, ASI bug fix, 3,315 lots, 99.6% image coverage)
+- 2026-03-15: Phase 3 context gathered — resume at .planning/phases/03-deal-stacking-tier-verification/03-CONTEXT.md
 
 ---
-*Last updated: 2026-03-15 after plan 02-03 execution*
+*Last updated: 2026-03-15 after phase 03 context gathering*
