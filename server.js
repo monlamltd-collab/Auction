@@ -4153,6 +4153,67 @@ app.get('/api/skills', async (req, res) => {
   }
 });
 
+// ── Missing images admin endpoint ──
+app.get('/api/admin/missing-images', async (req, res) => {
+  const token = req.headers['x-admin-secret'] || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
+    return res.status(403).json({ error: 'Invalid admin token' });
+  }
+
+  try {
+    const houseFilter = req.query.house || '';
+    const limit = Math.min(parseInt(req.query.limit) || 100, 500);
+    const offset = parseInt(req.query.offset) || 0;
+
+    // Fetch future/current catalogues only
+    let query = supabase
+      .from('cached_analyses')
+      .select('house, url, lots, auction_date')
+      .gte('expires_at', new Date().toISOString());
+
+    if (houseFilter) {
+      query = query.ilike('house', `%${houseFilter}%`);
+    }
+
+    const { data: catalogues, error } = await query;
+    if (error) throw error;
+
+    const missingLots = [];
+    const houseCounts = {};
+
+    for (const cat of (catalogues || [])) {
+      const lots = cat.lots || [];
+      for (const lot of lots) {
+        if (!lot.imageUrl || lot.imageUrl === '') {
+          missingLots.push({
+            house: cat.house,
+            lotNumber: lot.lot || lot.lotNumber || null,
+            address: lot.address || '',
+            catalogueUrl: cat.url,
+            auctionDate: cat.auction_date || null,
+          });
+          houseCounts[cat.house] = (houseCounts[cat.house] || 0) + 1;
+        }
+      }
+    }
+
+    // Apply pagination
+    const paginated = missingLots.slice(offset, offset + limit);
+
+    res.json({
+      total: missingLots.length,
+      houses: Object.keys(houseCounts).length,
+      houseCounts,
+      offset,
+      limit,
+      results: paginated,
+    });
+  } catch (e) {
+    log.error('Missing images endpoint error', { error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 app.get('/api/cost-monitor', async (req, res) => {
   const token = req.headers['x-admin-secret'] || '';
   if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
