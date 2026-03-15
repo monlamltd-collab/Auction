@@ -2491,7 +2491,8 @@ app.post('/api/analyse', async (req, res) => {
       ? cached.house  // cached.house is already a slug
       : Object.entries(HOUSE_DISPLAY_NAMES).find(([k, v]) => v === cached.house)?.[0] || 'unknown';
     const cachedDisplayName = HOUSE_DISPLAY_NAMES[cachedSlug] || cached.house;
-    const gatedLots = userTier === 'premium' ? cached.lots : stripAIFields(cached.lots || []);
+    const isPremiumOrTrial = userTier === 'premium' || userTier === 'trial';
+    const gatedLots = isPremiumOrTrial ? cached.lots : stripAIFields(cached.lots || []);
     return res.json({
       house: cachedDisplayName,
       houseSlug: cachedSlug,
@@ -2505,7 +2506,7 @@ app.post('/api/analyse', async (req, res) => {
       vacantCount: cached.vacant_count || 0,
       lots: gatedLots,
       cached: true,
-      blurred: userTier !== 'premium',
+      blurred: !isPremiumOrTrial,
       scansUsed: scanCount,
       scanLimit: FREE_SCAN_LIMIT,
     });
@@ -2870,7 +2871,8 @@ app.post('/api/analyse', async (req, res) => {
 
     const updatedScanCount = (user.analyses_count || 0) + 1;
 
-    const gatedAnalysed = userTier === 'premium' ? analysed : stripAIFields(analysed);
+    const isPremiumOrTrial = userTier === 'premium' || userTier === 'trial';
+    const gatedAnalysed = isPremiumOrTrial ? analysed : stripAIFields(analysed);
     sseWrite(res, 'done', {
       house: displayName,
       houseSlug: house,
@@ -2884,7 +2886,7 @@ app.post('/api/analyse', async (req, res) => {
       vacantCount: analysed.filter(l => l.vacant === true).length,
       lots: gatedAnalysed,
       cached: false,
-      blurred: userTier !== 'premium',
+      blurred: !isPremiumOrTrial,
       scansUsed: updatedScanCount,
       scanLimit: FREE_SCAN_LIMIT,
     });
@@ -3459,10 +3461,8 @@ app.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
     }
     if (imgStripped > 0) console.log(`Image sanitiser: stripped ${imgStripped} junk images`);
 
-    // Gate data for free/anon users
-    const isPremium = user && (user.tier === 'premium' || user.tier === 'trial');
-    const outputLots = isPremium ? cleanLots : stripAIFields(cleanLots);
-    res.json({ lots: outputLots, sources, blurred: !isPremium });
+    // Directory data is free to serve — no gating, no blurring
+    res.json({ lots: cleanLots, sources, blurred: false });
   } catch (e) {
     log.error('All lots error', { error: e.message });
     res.status(500).json({ error: 'Internal server error' });
