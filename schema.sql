@@ -84,6 +84,7 @@ CREATE TABLE house_skills (
   pagination_pattern text DEFAULT 'none',
   notes text DEFAULT '',
   status text DEFAULT 'healthy',
+  last_diff jsonb,               -- per-scrape diff: { lots_added, lots_removed, lots_changed, images_gained, images_lost, status_changes, timestamp }
   created_at timestamptz DEFAULT now()
 );
 
