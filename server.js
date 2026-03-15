@@ -1398,11 +1398,32 @@ app.post('/api/stripe/webhook', async (req, res) => {
           .select('id')
           .eq('stripe_subscription_id', sub.id)
           .single();
-        if (subUser && sub.status === 'active') {
-          await supabase.from('users').update({ tier: 'premium' }).eq('id', subUser.id);
-        } else if (subUser && ['past_due', 'canceled', 'unpaid'].includes(sub.status)) {
-          // Keep stripe_subscription_id so recovery events can find the user
-          await supabase.from('users').update({ tier: 'free', tier_expires_at: null }).eq('id', subUser.id);
+        if (!subUser) break;
+
+        if (sub.status === 'active') {
+          await supabase.from('users').update({ tier: 'premium', tier_expires_at: null }).eq('id', subUser.id);
+        } else if (sub.status === 'canceled') {
+          // User cancelled but period hasn't ended — keep premium until period end
+          const periodEnd = new Date(sub.current_period_end * 1000).toISOString();
+          await supabase.from('users').update({
+            tier_expires_at: periodEnd,
+          }).eq('id', subUser.id);
+          log.info(`Subscription canceled, premium until ${periodEnd}`, { userId: subUser.id });
+        } else if (sub.status === 'past_due') {
+          // Payment failed — give 3-day grace period before downgrade
+          const grace = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
+          await supabase.from('users').update({
+            tier_expires_at: grace,
+          }).eq('id', subUser.id);
+          log.warn(`Payment past_due, grace period until ${grace}`, { userId: subUser.id });
+        } else if (sub.status === 'unpaid') {
+          // All retry attempts failed — immediate downgrade
+          await supabase.from('users').update({
+            tier: 'free',
+            stripe_subscription_id: null,
+            tier_expires_at: null,
+          }).eq('id', subUser.id);
+          log.info('Subscription unpaid, immediate downgrade', { userId: subUser.id });
         }
         break;
       }
