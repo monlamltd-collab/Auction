@@ -20,7 +20,7 @@
 
 ---
 
-## Phase 2: Enrichment & House Expansion
+## Phase 2: Enrichment & House Expansion [3/3 Plans Complete - 2026-03-15]
 
 **Goal:** Add EPC rating and flood risk enrichment via free public APIs (MHCLG open data for EPC, Environment Agency for flood risk), improve lot image coverage above 80%, and add as many new UK auction houses as possible with working DOM extractors.
 **Requirements:** IMG-01, IMG-02, IMG-03, ENRH-01, ENRH-02, ENRH-03, ENRH-04, EXPN-01, EXPN-02, EXPN-03, EXPN-04
@@ -30,7 +30,7 @@
 1. Any lot with a valid postcode displays its EPC rating and flood risk zone on the lot detail card — data sourced from MHCLG and Environment Agency APIs, cached for 30 days
 2. Image coverage across all auction houses exceeds 80% — measurable via admin dashboard metric (FRSH-05 from Phase 1)
 3. Lots missing images are flagged in the admin dashboard for manual review, with a filterable list showing house name, lot number, and catalogue URL
-4. At least 5 new auction houses are added with working DOM extractors that return >0 lots on live test, capture images where available, and handle pagination correctly
+4. At least 5 new auction houses are added with working DOM extractors that return >0 lots on live test, capture images where available, and handle pagination correctly — **15 new houses added, 3,315 lots, 99.6% image coverage**
 5. Enrichment data (EPC + flood risk) is visible to all users regardless of subscription tier — not gated behind premium
 
 ---

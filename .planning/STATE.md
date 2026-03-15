@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
 status: in_progress
-last_updated: "2026-03-15T21:00:00.000Z"
+last_updated: "2026-03-15T21:06:00.000Z"
 progress:
   total_phases: 3
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 6
   completed_plans: 6
 ---
@@ -19,9 +19,9 @@ See: .planning/PROJECT.md (updated 2026-03-15)
 **Current focus:** Phase 2 — Enrichment & House Expansion
 
 ## Current Phase
-Phase: 2
+Phase: 2 (complete)
 Plan: 3 of 3 complete
-Status: In Progress
+Status: Complete — moving to Phase 3
 
 ## Decisions
 - Sold/unsold: diagonal overlay banner (estate agent style), status filter dropdown
@@ -33,6 +33,12 @@ Status: In Progress
 - Subscription cancellation: honour current_period_end via tier_expires_at
 - Image helpers: shared IMG_HELPERS injected into all DOM extractor contexts (lazy-load, background-image, thumbnail upgrade)
 - Missing images: admin endpoint + dashboard UI for tracking lots without images
+
+## Decisions (new)
+- ASI bug fix: All DOM extractors were silently broken due to `return\n(IIFE)` ASI — fixed with `.trim()`
+- Auction House UK branches: 6 regional branches added via shared extractor (3,098 lots)
+- Suttonkersh pagination: uses `start=N` offset (not `page=N`)
+- Blocked houses: Symonds & Sampson, GTH, All Wales Auction — all return 403 or ECONNREFUSED
 
 ## Blockers
 (None)
@@ -46,6 +52,7 @@ Status: In Progress
 - 2026-03-15: Plan 01-03 executed — Firecrawl markdown, lot.status pipeline, overlay banners, future-only display
 - 2026-03-15: Plan 02-02 executed — Image coverage improvement (IMG_HELPERS, Firecrawl images format, missing-images endpoint + admin UI, test files)
 - 2026-03-15: Plan 02-01 executed — EPC & Flood Risk Enrichment Pipeline (fetchEPCByPostcode, matchEPCToLot, fetchFloodZone, enrichment_cache, frontend badges, 39 tests)
+- 2026-03-15: Plan 02-03 executed — Auction House Expansion (15 new houses, ASI bug fix, 3,315 lots, 99.6% image coverage)
 
 ---
-*Last updated: 2026-03-15 after plan 02-01 execution*
+*Last updated: 2026-03-15 after plan 02-03 execution*
