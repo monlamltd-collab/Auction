@@ -225,11 +225,10 @@ const MAX_LOTS_PER_SCRAPE = 100;
 const MAX_AUCTIONS_PER_HOUSE = 2;
 const TIMEOUT = 25000;
 // Houses where catalogue pages are JS-rendered — need Puppeteer for image backfill
-const PUPPETEER_IMAGE_HOUSES = new Set([
-  'bondwolfe', 'probateauction', 'cliveemson', 'savills', 'sdl',
-  'network', 'pattinson', 'barnardmarcus', 'auctionhouselondon',
-  'strettons', 'acuitus', 'hollismorgan', 'knightfrank', 'auctionhouse',
-]);
+// All houses get rendered image backfill — every DOM extractor has image selectors.
+// Previously limited to 14 houses, leaving ~24 houses with no backfill.
+// Populated after HOUSE_ROOTS is defined (see below).
+let PUPPETEER_IMAGE_HOUSES = null;
 
 // ═══════════════════════════════════════════════════════════════
 // GEMINI MODEL SELECTION — Flash-Lite for known houses, Pro for unknown/PDF
@@ -958,6 +957,9 @@ const HOUSE_ROOTS = {
   auctionhousescotland: 'https://www.auctionhouse.co.uk/scotland/auction/search-results',
   austingray:         'https://www.auctionhouse.co.uk/sussexandhampshire',
 };
+
+// Now that HOUSE_ROOTS is defined, populate the image backfill set
+PUPPETEER_IMAGE_HOUSES = new Set(Object.keys(HOUSE_ROOTS));
 
 function getClientIP(req) {
   return req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';

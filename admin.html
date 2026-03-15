@@ -240,7 +240,7 @@ tr:hover td { background: rgba(255,255,255,.02); }
                 <th title="Number of lots flagged as high-scoring investment opportunities by the scoring engine (score based on condition, yield, opportunities)">Top Picks</th>
                 <th title="Number of lots detected as having title split potential — properties that could be split into multiple titles for added value">Title Splits</th>
                 <th title="Average estimated gross yield across lots from this house that have yield data">Yield</th>
-                <th title="Which scraping engine was used: Firecrawl (primary, green) or Puppeteer (fallback, amber)">Engine</th>
+                <th title="Which engine fetched the HTML. All houses also use a DOM extractor (custom per house) to parse lots, with Gemini AI as fallback. This column only shows the HTML fetching step.">Fetch Engine</th>
                 <th title="How long ago this house's data was last scraped and cached">Age</th>
                 <th title="Time until the cached data expires. Once expired, the house will be re-scraped on the next auto-analysis cycle">Expires</th>
               </tr>
