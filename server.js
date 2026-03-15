@@ -5059,51 +5059,62 @@ const DOM_EXTRACTORS = {
     (() => {
       const lots = [];
       const seen = new Set();
-      const cards = document.querySelectorAll('.property-card');
-      for (const card of cards) {
-        const text = card.textContent || '';
-        // Lot number — plain 3-digit text like "001", "002" at start of card
-        let lotNum = 0;
-        const lotMatch = text.match(/^\\s*(\\d{1,4})\\s/);
-        if (lotMatch) lotNum = parseInt(lotMatch[1]);
-        // URL from property link
-        let url = '';
-        const propLink = card.querySelector('a[href*="/properties/"]');
-        if (propLink) url = propLink.getAttribute('href') || '';
-        if (seen.has(url) && url) continue;
-        if (url) seen.add(url);
-        // Address from the link text (contains full address with postcode)
-        let address = '';
-        if (propLink) address = propLink.textContent.trim();
-        // If multiple links, find the one with substantive text (not just whitespace overlay)
-        if (!address || address.length < 5) {
-          const allLinks = card.querySelectorAll('a[href*="/properties/"]');
-          for (const link of allLinks) {
-            const t = link.textContent.trim();
-            if (t.length > 5 && t.match(/[A-Z]{1,2}\\d/i)) { address = t; break; }
-          }
+      // BTG Eddisons: find all property links, then walk up to their card container
+      const propLinks = document.querySelectorAll('a[href*="/properties/"]');
+      const processed = new Set();
+      for (const propLink of propLinks) {
+        const url = propLink.getAttribute('href') || '';
+        if (!url || seen.has(url)) continue;
+        // Walk up to find the card container (up to 8 levels)
+        let card = propLink;
+        for (let i = 0; i < 8; i++) {
+          if (!card.parentElement) break;
+          card = card.parentElement;
+          // Stop at a container that has both price text and a property link
+          if (card.textContent.match(/Guide\\s*Price|£[\\d,]/i) && card.querySelector('img')) break;
         }
-        if (!address) continue;
-        // Deduplicate address if it repeats (site duplicates it in overlay + content)
+        // Skip if we already processed this card
+        const cardId = card.getAttribute('data-idx') || card.innerHTML.substring(0, 100);
+        if (processed.has(cardId)) continue;
+        processed.add(cardId);
+        seen.add(url);
+        const text = card.textContent || '';
+        // Lot number — plain 3-digit text like "001", "002"
+        let lotNum = 0;
+        const lotMatch = text.match(/(?:^|\\s)(\\d{2,4})(?:\\s|$)/);
+        if (lotMatch) lotNum = parseInt(lotMatch[1]);
+        // Address from link text with postcode pattern
+        let address = '';
+        const allLinks = card.querySelectorAll('a[href*="/properties/"]');
+        for (const link of allLinks) {
+          const t = link.textContent.trim();
+          if (t.length > 10 && t.match(/[A-Z]{1,2}\\d/i)) { address = t; break; }
+        }
+        // Fallback: h3 text
+        if (!address) {
+          const h3 = card.querySelector('h3');
+          if (h3) address = h3.textContent.trim();
+        }
+        if (!address || address.length < 5) continue;
+        // Deduplicate address if it repeats (overlay + content)
         address = address.replace(/(.{20,})\\1/g, '$1').trim();
         // Price from "Guide Price: £X+" pattern
         let price = null;
         const priceMatch = text.match(/Guide\\s*Price[^£]*£([\\d,]+)/i) || text.match(/£([\\d,]+)/);
         if (priceMatch) price = parseInt(priceMatch[1].replace(/,/g, ''));
-        // Bullets — auction type, end date, property type
+        // Bullets — auction type, end date
         const bullets = [];
         const typeMatch = text.match(/(Multi-Lot Timed|Single-Lot Timed|Live Stream)\\s*Auction/i);
         if (typeMatch) bullets.push(typeMatch[0]);
         const endMatch = text.match(/Auction\\s*Ends?:\\s*(\\d{2}\\/\\d{2}\\/\\d{4})/i);
         if (endMatch) bullets.push('Auction Ends: ' + endMatch[1]);
-        // Detect sold/withdrawn status
         if (text.match(/\\bWithdrawn\\b|\\bSOLD\\b|\\bSTC\\b|\\bSale Agreed\\b/i)) {
           bullets.push('SOLD/STC');
         }
-        // Image — first real property image from swiper or img tag
+        // Image — first real property image
         let imageUrl = '';
         const imgs = card.querySelectorAll('img[src]');
-        const imgJunk = /logo|icon|\\.svg|placeholder|modal\\.png|_NYC\\.|_LCC\\.|_BMDC\\.|council|utilit|cardwell|download_\\(/i;
+        const imgJunk = /logo|icon|\\.svg|placeholder|modal\\.png|_NYC\\.|_LCC\\.|_BMDC\\.|council|utilit|cardwell|download_\\(|captcha/i;
         for (const img of imgs) {
           const s = img.getAttribute('src') || '';
           if (s && s.length > 10 && !imgJunk.test(s)) {
