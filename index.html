@@ -837,7 +837,7 @@ footer .logo-f span{color:var(--green)}
         <option value="">Any tenure</option><option value="Freehold">Freehold</option><option value="Leasehold">Leasehold</option><option value="Share of Freehold">Share of FH</option>
       </select>
       <select class="tb-select" id="fSoldTop" onchange="renderLots()" aria-label="Lot status">
-        <option value="all">All lots</option><option value="available">Available only</option><option value="sold">Sold only</option>
+        <option value="all">All statuses</option><option value="available">Available only</option><option value="sold">Sold only</option><option value="stc">Sale Agreed</option><option value="withdrawn">Withdrawn</option>
       </select>
       <input class="tb-search" type="text" id="fPostcode" placeholder="Postcode..." oninput="renderLots()" aria-label="Filter by postcode">
       <select class="tb-select" id="fExcludePOA" onchange="renderLots()" aria-label="Include or exclude POA lots"><option value="">Inc. POA</option><option value="yes">Excl. POA</option></select>
@@ -2260,8 +2260,10 @@ function renderLots(){
   if(fa==='affordable'&&fp.cash) lots=lots.filter(l=>l._affTag!=='out_of_reach');
   if(fa==='in_budget'&&fp.cash) lots=lots.filter(l=>l._affTag==='in_budget'||l._affTag==='unknown');
   if(fa==='full_finance'&&fp.cash) lots=lots.filter(l=>l._affTag==='full_finance');
-  if(fsold==='available') lots=lots.filter(l=>!(l.bullets||[]).some(b=>/\bSOLD\b|\bSTC\b|\bSALE.?AGREED\b|\bWITHDRAWN\b/i.test(b)));
-  if(fsold==='sold') lots=lots.filter(l=>(l.bullets||[]).some(b=>/\bSOLD\b|\bSTC\b|\bSALE.?AGREED\b|\bWITHDRAWN\b/i.test(b)));
+  if(fsold==='available') lots=lots.filter(l=>l.status==='available'||!l.status);
+  else if(fsold==='sold') lots=lots.filter(l=>l.status==='sold');
+  else if(fsold==='stc') lots=lots.filter(l=>l.status==='stc');
+  else if(fsold==='withdrawn') lots=lots.filter(l=>l.status==='withdrawn');
   if(fs) lots=lots.filter(l=>(l.address||'').toLowerCase().includes(fs)||(l.bullets||[]).join(' ').toLowerCase().includes(fs)||(l.opps||[]).join(' ').toLowerCase().includes(fs)||(l.risks||[]).join(' ').toLowerCase().includes(fs)||(l.dealType||'').toLowerCase().includes(fs)||(l.propType||'').toLowerCase().includes(fs)||(l._house||'').toLowerCase().includes(fs)||(l.tenure||'').toLowerCase().includes(fs));
 
   // House filter
