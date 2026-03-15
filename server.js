@@ -9001,6 +9001,73 @@ function buildLotUrl(lot, house, sourceUrl) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// ENRICHMENT: EPC & Flood Risk APIs
+// ═══════════════════════════════════════════════════════════════
+
+// EPC API credentials check (logged once at startup)
+let _epcWarningLogged = false;
+const EPC_API_EMAIL = process.env.EPC_API_EMAIL || '';
+const EPC_API_KEY = process.env.EPC_API_KEY || '';
+if (!EPC_API_EMAIL || !EPC_API_KEY) {
+  console.warn('WARNING: EPC_API_EMAIL or EPC_API_KEY not set — EPC enrichment will be skipped');
+  _epcWarningLogged = true;
+}
+
+let _lastEPCCallTime = 0;
+
+/**
+ * Fetch EPC records for a postcode from the MHCLG Open Data Communities API.
+ * Returns an array of EPC records or null on failure.
+ * Rate limited to 500ms between calls.
+ */
+async function fetchEPCByPostcode(postcode) {
+  if (!EPC_API_EMAIL || !EPC_API_KEY) return null;
+  if (!postcode) return null;
+
+  // Rate limit: 500ms between consecutive calls
+  const now = Date.now();
+  const elapsed = now - _lastEPCCallTime;
+  if (elapsed < 500) {
+    await new Promise(r => setTimeout(r, 500 - elapsed));
+  }
+  _lastEPCCallTime = Date.now();
+
+  try {
+    const encoded = encodeURIComponent(postcode.trim());
+    const url = `https://epc.opendatacommunities.org/api/v1/domestic/search?postcode=${encoded}&size=5000`;
+    const authToken = Buffer.from(EPC_API_EMAIL + ':' + EPC_API_KEY).toString('base64');
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Basic ${authToken}`,
+        'Accept': 'application/json',
+      },
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    if (!response.ok) {
+      console.warn(`EPC API ${response.status} for ${postcode}`);
+      return null;
+    }
+
+    const data = await response.json();
+    const rows = data.rows || data.results || data;
+    return Array.isArray(rows) ? rows : null;
+  } catch (e) {
+    if (e.name === 'AbortError') {
+      console.warn(`EPC API timeout for ${postcode}`);
+    } else {
+      console.warn(`EPC API error for ${postcode}: ${e.message}`);
+    }
+    return null;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
 // ENRICHMENT: Land Registry + Rental Yield per lot
 // ═══════════════════════════════════════════════════════════════
 async function enrichLots(lots, house, sourceUrl, onProgress) {
