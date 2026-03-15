@@ -10103,6 +10103,53 @@ async function saveDailySnapshot() {
   console.log(`ANALYTICS: Snapshot saved for ${today} — ${totalLots} lots, ${imageCoveragePct}% images, ${houses.length} houses`);
 }
 
+// ── Pipeline Alerts API endpoint ──
+app.get('/api/admin/alerts', async (req, res) => {
+  const token = req.headers['x-admin-secret'] || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
+    return res.status(403).json({ error: 'Invalid admin token' });
+  }
+  try {
+    const { data: active } = await supabase
+      .from('pipeline_alerts')
+      .select('*')
+      .eq('resolved', false)
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    const { data: recent } = await supabase
+      .from('pipeline_alerts')
+      .select('*')
+      .eq('resolved', true)
+      .order('resolved_at', { ascending: false })
+      .limit(20);
+
+    res.json({ active: active || [], recent: recent || [] });
+  } catch (e) {
+    log.error('Alerts endpoint error', { error: e.message });
+    res.status(500).json({ error: 'Failed to fetch alerts' });
+  }
+});
+
+// ── Data Freshness API endpoint ──
+app.get('/api/admin/freshness', async (req, res) => {
+  const token = req.headers['x-admin-secret'] || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
+    return res.status(403).json({ error: 'Invalid admin token' });
+  }
+  try {
+    const { data: houses } = await supabase
+      .from('house_skills')
+      .select('slug, house, status, last_verified, last_lot_count, image_coverage, last_diff')
+      .order('house');
+
+    res.json({ houses: houses || [] });
+  } catch (e) {
+    log.error('Freshness endpoint error', { error: e.message });
+    res.status(500).json({ error: 'Failed to fetch freshness data' });
+  }
+});
+
 // ── Analytics API endpoint ──
 app.get('/api/admin/analytics', async (req, res) => {
   const token = req.headers['x-admin-secret'] || '';
