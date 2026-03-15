@@ -2875,6 +2875,13 @@ app.post('/api/analyse', async (req, res) => {
 
     const analysed = rawLots.map(lot => analyseLot(lot)).sort((a, b) => b.score - a.score);
 
+    // ── Tenure backfill from individual lot pages ──
+    const missingTenure = analysed.filter(l => l.url && !l.tenure).length;
+    if (missingTenure > 0) {
+      console.log(`Tenure backfill: ${missingTenure} lots missing tenure, fetching lot pages...`);
+      await backfillTenureFromLotPages(analysed);
+    }
+
     // ── Enrich with Land Registry + rental yields ──
     console.log('Starting Land Registry + rental yield enrichment...');
     sseWrite(res, 'phase', { step: 'enriching', lots: analysed.length });
@@ -7991,6 +7998,41 @@ async function backfillImagesFromLotPages(lots, concurrency = 5) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// TENURE BACKFILL — fetch individual lot pages for lots missing tenure
+// ═══════════════════════════════════════════════════════════════
+async function backfillTenureFromLotPages(lots, concurrency = 5) {
+  const missing = lots.filter(l => l.url && !l.tenure && /^https?:\/\//i.test(l.url));
+  if (missing.length === 0) return 0;
+
+  let filled = 0;
+  for (let i = 0; i < missing.length; i += concurrency) {
+    const batch = missing.slice(i, i + concurrency);
+    await Promise.allSettled(batch.map(async (lot) => {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15000);
+        const resp = await fetch(lot.url, { headers: HEADERS, signal: controller.signal, redirect: 'follow' });
+        clearTimeout(timeout);
+        if (!resp.ok) return;
+        const html = await resp.text();
+        const text = html.replace(/<[^>]+>/g, ' ').toLowerCase();
+        if (/share of freehold|share\s+of\s+the\s+freehold/.test(text)) { lot.tenure = 'Share of Freehold'; filled++; }
+        else if (/flying freehold/.test(text)) { lot.tenure = 'Freehold'; filled++; }
+        else if (/\bfreehold\b/.test(text) && !/leasehold/.test(text)) { lot.tenure = 'Freehold'; filled++; }
+        else if (/\bleasehold\b|long\s+lease|lease\s+remaining|\byears?\s+(?:remaining|unexpired|left)\b|\b\d+\s*(?:year|yr)\s*lease\b/.test(text)) { lot.tenure = 'Leasehold'; filled++; }
+        // Apply freehold scoring bonus if it was missed during initial analyseLot()
+        if (lot.tenure === 'Freehold' && ['house', 'bungalow'].includes(lot.propType) && !(lot.opps || []).includes('Freehold')) {
+          lot.score = (lot.score || 0) + 0.5;
+          lot.opps = lot.opps || []; lot.opps.push('Freehold');
+        }
+      } catch { /* timeout or network error — skip */ }
+    }));
+  }
+  if (filled > 0) console.log(`Tenure backfill (lot pages): ${filled}/${missing.length} lots got tenure`);
+  return filled;
+}
+
+// ═══════════════════════════════════════════════════════════════
 // PUPPETEER IMAGE BACKFILL — for JS-rendered sites where plain HTTP fails
 // ═══════════════════════════════════════════════════════════════
 async function backfillImagesWithPuppeteer(catalogueUrl, lots, house) {
@@ -9568,6 +9610,12 @@ async function autoAnalyseOne(url) {
 
   const lots = rawLots.map(lot => analyseLot(lot)).sort((a, b) => b.score - a.score);
   await enrichLots(lots, house, url);
+
+  // Tenure backfill: fetch individual lot pages for lots missing tenure
+  const lotsMissingTenure = lots.filter(l => l.url && !l.tenure).length;
+  if (lotsMissingTenure > 0) {
+    await backfillTenureFromLotPages(lots);
+  }
 
   // Deep backfill: fetch individual lot pages for lots still missing images
   const lotsMissingImg = lots.filter(l => l.url && !l.imageUrl).length;
