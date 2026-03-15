@@ -20,7 +20,7 @@ See: .planning/PROJECT.md (updated 2026-03-15)
 
 ## Current Phase
 Phase: 2
-Plan: 2 of 3 complete
+Plan: 3 of 3 complete
 Status: In Progress
 
 ## Decisions
@@ -45,6 +45,7 @@ Status: In Progress
 - 2026-03-15: Plan 01-04 executed — Admin alerting & data freshness metrics (pipeline_alerts table, diff summaries, admin dashboard)
 - 2026-03-15: Plan 01-03 executed — Firecrawl markdown, lot.status pipeline, overlay banners, future-only display
 - 2026-03-15: Plan 02-02 executed — Image coverage improvement (IMG_HELPERS, Firecrawl images format, missing-images endpoint + admin UI, test files)
+- 2026-03-15: Plan 02-01 executed — EPC & Flood Risk Enrichment Pipeline (fetchEPCByPostcode, matchEPCToLot, fetchFloodZone, enrichment_cache, frontend badges, 39 tests)
 
 ---
-*Last updated: 2026-03-15 after plan 02-02 execution*
+*Last updated: 2026-03-15 after plan 02-01 execution*
