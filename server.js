@@ -4898,11 +4898,17 @@ async function extractLotsWithAI(pages, house, onProgress, catalogueUrl) {
     if (creditExhausted) { console.log('Skipping remaining batches — API rate limited'); break; }
     if (allLots.length >= MAX_LOTS_PER_SCRAPE) { console.log(`${house} lots cap reached at ${MAX_LOTS_PER_SCRAPE}`); break; }
     const batch = pages.slice(i, i + batchSize);
-    const strippedBatch = batch.map(p => ({ page: p.page, content: stripHtml(p.html) }));
+    // Prefer markdown for AI extraction when available (Gemini handles it natively)
+    const strippedBatch = batch.map(p => ({
+      page: p.page,
+      content: (p.markdown && p.markdown.length > 200) ? p.markdown : stripHtml(p.html),
+      usedMarkdown: !!(p.markdown && p.markdown.length > 200)
+    }));
     const totalStrippedLen = strippedBatch.reduce((sum, p) => sum + p.content.length, 0);
+    const mdCount = strippedBatch.filter(p => p.usedMarkdown).length;
     const model = getExtractionModel(house);
     const hint = HOUSE_EXTRACTION_HINTS[house];
-    console.log(`Batch ${Math.floor(i/batchSize)+1}: ${strippedBatch.length} page(s), ${totalStrippedLen} chars after stripping, model: ${model}`);
+    console.log(`Batch ${Math.floor(i/batchSize)+1}: ${strippedBatch.length} page(s), ${totalStrippedLen} chars${mdCount > 0 ? ` (${mdCount} from markdown)` : ' after stripping'}, model: ${model}`);
     const prompt = `You are extracting property auction lot data from a UK auction house catalogue (${house}).
 ${hint ? `\nStructure hint: ${hint}\n` : ''}
 Below are ${strippedBatch.length} page(s) of catalogue content. Extract EVERY auction lot you find.
