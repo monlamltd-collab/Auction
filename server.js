@@ -204,7 +204,7 @@ const RATE_LIMIT = 5;
 const CACHE_DAYS = 7; // fallback default
 const CACHE_TIERS = {
   high:   { houses: ['allsop','savills','sdl','network','bidx1'], ttlHours: 12 },
-  medium: { houses: ['cliveemson','edwardmellor','bondwolfe','strettons','countrywide','tcpa','futureauctions','firstforauctions','harmanhealy'], ttlHours: 18 },
+  medium: { houses: ['cliveemson','edwardmellor','bondwolfe','strettons','countrywide','tcpa','futureauctions','firstforauctions','harmanhealy','astleys','henrysykes','clarkesimpson','durrants','dawsons','goldings','auctionhousescotland','austingray'], ttlHours: 18 },
   low:    { houses: [], ttlHours: 24 }  // everything else
 };
 function getCacheTTL(houseKey) {
@@ -886,6 +886,14 @@ const HOUSE_EXTRACTION_HINTS = {
   harmanhealy:        'Harman Healy. EIG platform. Cards with [data-lot-item-toggle] or lot-panel divs, [data-address-searchable] for address, guide price in text.',
   seelauctions:       'Seel & Co Cardiff. EIG platform. Cards are a[href*="/lot/details/"] with h4 address, Guide Price text, and EIG CDN images.',
   robinsonhall:       'Robinson & Hall. WordPress/Elementor + EIG. Cards in article.ae-post-item with a.ae-element-custom-field (address), .guide-price (price), and EIG CDN images.',
+  astleys:            'Astleys Swansea. EIG platform (astleys.eigonlineauctions.com). Standard EIG lot-panel cards with h3.list-address, guide price in list-guideprice, and EIG CDN images.',
+  henrysykes:         'Henry Sykes Auctions. EIG platform (onlineauctions.henrysykes.co.uk). Standard EIG lot-panel cards with h3.list-address, guide price in list-guideprice, and EIG CDN images.',
+  clarkesimpson:      'Clarke & Simpson. EIG platform (clarke-simpson.eigonlineauctions.com). Standard EIG lot-panel cards with h3.list-address, guide price in list-guideprice, and EIG CDN images.',
+  durrants:           'Durrants Norfolk/Suffolk. EIG platform (auctions.durrants.com). Standard EIG lot-panel cards with h3.list-address, guide price in list-guideprice, and EIG CDN images.',
+  dawsons:            'Dawsons South Wales. EIG platform (dawsonsproperty.co.uk). Standard EIG lot-panel cards with h3.list-address, guide price in list-guideprice, and EIG CDN images.',
+  goldings:           'Goldings Ipswich. EIG platform (goldingsauctions.co.uk). Standard EIG lot-panel cards with h3.list-address, guide price in list-guideprice, and EIG CDN images.',
+  auctionhousescotland: 'Auction House Scotland. Auction House UK network (auctionhouse.co.uk/scotland). Cards in div.lot-search-result with p.grid-address, guide price in div.grid-view-guide, img.lot-image.',
+  austingray:         'Austin Gray / Auction House Sussex & Hampshire. Auction House UK network (auctionhouse.co.uk/sussexandhampshire). Cards in div.lot-search-result with p.grid-address, guide price in div.grid-view-guide, img.lot-image.',
 };
 
 function getExtractionModel(house) {
@@ -938,6 +946,15 @@ const HOUSE_ROOTS = {
   harmanhealy:        'https://www.harman-healy.co.uk/search',
   seelauctions:       'https://online.seelauctions.co.uk/search?view=Grid&showall=true',
   robinsonhall:       'https://robinsonandhallauctions.co.uk/auctions/available-lots/',
+  // ── EIG batch (March 2026) ──
+  astleys:            'https://astleys.eigonlineauctions.com/search',
+  henrysykes:         'https://onlineauctions.henrysykes.co.uk/search',
+  clarkesimpson:      'https://clarke-simpson.eigonlineauctions.com/search',
+  durrants:           'https://durrants.com/property-auctions/next-property-auction',
+  dawsons:            'https://www.dawsonsproperty.co.uk/auctions.php',
+  goldings:           'https://www.goldingsauctions.co.uk/auctions/next-auction/',
+  auctionhousescotland: 'https://www.auctionhouse.co.uk/scotland/auction/search-results',
+  austingray:         'https://www.auctionhouse.co.uk/sussexandhampshire',
 };
 
 function getClientIP(req) {
@@ -2086,6 +2103,64 @@ const FALLBACK_CALENDAR = [
       date: '2026-04-08', title: '8 April 2026', lots: null,
       url: 'https://robinsonandhallauctions.co.uk/auctions/available-lots/',
       location: 'Bedford / Milton Keynes', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
+
+    // ── NEW EIG HOUSES (March 2026 batch) ──
+    {
+      house: 'Astleys', houseSlug: 'astleys', logo: '🏴󠁧󠁢󠁷󠁬󠁳󠁿',
+      date: '2026-03-25', title: 'March 2026 — Swansea', lots: null,
+      url: 'https://astleys.eigonlineauctions.com/search',
+      location: 'Swansea', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
+    {
+      house: 'Henry Sykes Auctions', houseSlug: 'henrysykes', logo: '🔨',
+      date: '2026-03-25', title: 'March 2026 — Online', lots: null,
+      url: 'https://onlineauctions.henrysykes.co.uk/search',
+      location: 'National (Franchise)', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
+    {
+      house: 'Clarke & Simpson', houseSlug: 'clarkesimpson', logo: '🔨',
+      date: '2026-03-25', title: 'March 2026 — Suffolk', lots: null,
+      url: 'https://clarke-simpson.eigonlineauctions.com/search',
+      location: 'Suffolk', type: 'Residential & Land', status: 'upcoming',
+      catalogueReady: true,
+    },
+    {
+      house: 'Durrants', houseSlug: 'durrants', logo: '🏡',
+      date: '2026-03-25', title: '25 March 2026', lots: null,
+      url: 'https://durrants.com/property-auctions/next-property-auction',
+      location: 'Norfolk / Suffolk', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
+    {
+      house: 'Dawsons', houseSlug: 'dawsons', logo: '🏴󠁧󠁢󠁷󠁬󠁳󠁿',
+      date: '2026-03-20', title: 'March 2026 — South Wales', lots: null,
+      url: 'https://www.dawsonsproperty.co.uk/auctions.php',
+      location: 'South Wales', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
+    {
+      house: 'Goldings', houseSlug: 'goldings', logo: '🔨',
+      date: '2026-05-06', title: '6 May 2026 — Ipswich', lots: null,
+      url: 'https://www.goldingsauctions.co.uk/auctions/next-auction/',
+      location: 'Ipswich / Suffolk', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
+    {
+      house: 'Auction House Scotland', houseSlug: 'auctionhousescotland', logo: '🏴󠁧󠁢󠁳󠁣󠁴󠁿',
+      date: '2026-03-26', title: '26 March 2026', lots: null,
+      url: 'https://www.auctionhouse.co.uk/scotland/auction/search-results',
+      location: 'Scotland', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
+    {
+      house: 'Auction House Sussex & Hampshire', houseSlug: 'austingray', logo: '🏠',
+      date: '2026-03-26', title: '26 March 2026', lots: null,
+      url: 'https://www.auctionhouse.co.uk/sussexandhampshire',
+      location: 'Sussex & Hampshire', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: true,
     },
 ];
@@ -3758,6 +3833,8 @@ function detectAuctionHouse(url) {
   if (u.includes('bondwolfe')) return 'bondwolfe';
   if (u.includes('barnardmarcusauctions') || u.includes('barnardmarcus')) return 'barnardmarcus';
   if (u.includes('auctionhouselondon')) return 'auctionhouselondon';
+  if (u.includes('auctionhouse.co.uk/scotland')) return 'auctionhousescotland';
+  if (u.includes('auctionhouse.co.uk/sussexandhampshire')) return 'austingray';
   if (u.includes('auctionhouse.co.uk')) return 'auctionhouse';
   if (u.includes('cliveemson')) return 'cliveemson';
   if (u.includes('strettons')) return 'strettons';
@@ -3795,6 +3872,13 @@ function detectAuctionHouse(url) {
   if (u.includes('harman-healy') || u.includes('harmanhealy')) return 'harmanhealy';
   if (u.includes('seelauctions') || u.includes('seelandco')) return 'seelauctions';
   if (u.includes('robinsonandhallauctions') || u.includes('robinsonandhall')) return 'robinsonhall';
+  // ── EIG batch (March 2026) ──
+  if (u.includes('astleys.eigonlineauctions') || u.includes('astleys.net')) return 'astleys';
+  if (u.includes('henrysykes.co.uk') || u.includes('onlineauctions.henrysykes')) return 'henrysykes';
+  if (u.includes('clarke-simpson.eigonlineauctions') || u.includes('clarkeandsimpson')) return 'clarkesimpson';
+  if (u.includes('durrants.com') || u.includes('auctions.durrants')) return 'durrants';
+  if (u.includes('dawsonsproperty')) return 'dawsons';
+  if (u.includes('goldingsauctions')) return 'goldings';
   return 'unknown';
 }
 
@@ -3815,6 +3899,9 @@ const HOUSE_DISPLAY_NAMES = {
   kivells: 'Kivells', firstforauctions: 'First For Auctions',
   suttonkersh: 'Sutton Kersh', harmanhealy: 'Harman Healy',
   seelauctions: 'Seel & Co', robinsonhall: 'Robinson & Hall',
+  astleys: 'Astleys', henrysykes: 'Henry Sykes Auctions', clarkesimpson: 'Clarke & Simpson',
+  durrants: 'Durrants', dawsons: 'Dawsons', goldings: 'Goldings',
+  auctionhousescotland: 'Auction House Scotland', austingray: 'Auction House Sussex & Hampshire',
 };
 
 function getHouseDisplayName(slug, url) {
@@ -4007,6 +4094,33 @@ function rewriteUrl(url, house) {
   // Robinson & Hall: WordPress/Elementor, needs Puppeteer
   if (house === 'robinsonhall') {
     return { baseUrl: url, isApi: false, paginateAs: null, preferPuppeteer: true };
+  }
+
+  // ── New EIG houses (March 2026 batch) ──
+  if (house === 'astleys') {
+    return { baseUrl: 'https://astleys.eigonlineauctions.com/search', isApi: false, paginateAs: null, preferPuppeteer: true };
+  }
+  if (house === 'henrysykes') {
+    return { baseUrl: 'https://onlineauctions.henrysykes.co.uk/search', isApi: false, paginateAs: null, preferPuppeteer: true };
+  }
+  if (house === 'clarkesimpson') {
+    return { baseUrl: 'https://clarke-simpson.eigonlineauctions.com/search', isApi: false, paginateAs: null, preferPuppeteer: true };
+  }
+  if (house === 'durrants') {
+    return { baseUrl: 'https://durrants.com/property-auctions/next-property-auction', isApi: false, paginateAs: null, preferPuppeteer: true };
+  }
+  if (house === 'dawsons') {
+    return { baseUrl: 'https://www.dawsonsproperty.co.uk/auctions.php', isApi: false, paginateAs: null, preferPuppeteer: true };
+  }
+  if (house === 'goldings') {
+    return { baseUrl: 'https://www.goldingsauctions.co.uk/auctions/next-auction/', isApi: false, paginateAs: null, preferPuppeteer: true };
+  }
+  // Auction House UK branches
+  if (house === 'auctionhousescotland') {
+    return { baseUrl: 'https://www.auctionhouse.co.uk/scotland/auction/search-results', isApi: false, paginateAs: null, preferPuppeteer: true };
+  }
+  if (house === 'austingray') {
+    return { baseUrl: 'https://www.auctionhouse.co.uk/sussexandhampshire', isApi: false, paginateAs: null, preferPuppeteer: true };
   }
 
   // Hunters: Bamboo Auctions React SPA, needs Puppeteer
@@ -6597,7 +6711,7 @@ const DOM_EXTRACTORS = {
   eigplatform: `
     (() => {
       const lots = [];
-      // Strategy 1: lot-panel cards (grid view)
+      // Strategy 1: lot-panel cards (grid/list view)
       let cards = document.querySelectorAll('.lot-panel');
       if (cards.length === 0) cards = document.querySelectorAll('a[href*="/lot/details/"]');
       if (cards.length === 0) cards = document.querySelectorAll('[data-lot-item-toggle]');
@@ -6606,11 +6720,11 @@ const DOM_EXTRACTORS = {
         if (text.length < 10) continue;
         const lotMatch = text.match(/Lot\\s*(\\d+)/i);
         const num = lotMatch ? parseInt(lotMatch[1]) : lots.length + 1;
-        const priceMatch = text.match(/(?:Guide Price|Opening Bid)[^£]*£([\\d,]+)/i) || text.match(/£([\\d,]+)/);
+        const priceMatch = text.match(/(?:Guide Price|Opening Bid|Minimum Opening Bid)[^£]*£([\\d,]+)/i) || text.match(/£([\\d,]+)/);
         const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
-        // Address from known selectors
+        // Address from known selectors (h3.list-address for list view, h4.grid-address for grid)
         let address = '';
-        const addrEl = card.querySelector('h4.grid-address, .lot-address, [data-address-searchable], h4');
+        const addrEl = card.querySelector('h3.list-address, h4.grid-address, .lot-address, [data-address-searchable], h4, h3');
         if (addrEl) address = addrEl.textContent.trim().replace(/\\u00a0/g, ' ');
         if (!address) {
           const lines = text.split('\\n').map(s => s.trim()).filter(s => s.length > 5 && s.length < 200);
@@ -6624,7 +6738,43 @@ const DOM_EXTRACTORS = {
         if (link) url = link.getAttribute('href') || '';
         else if (card.tagName === 'A') url = card.getAttribute('href') || '';
         let imageUrl = '';
-        const img = card.querySelector('img[src*="eigpropertyauctions"], img.grid-img, img.img-responsive');
+        const img = card.querySelector('img[src*="eigpropertyauctions"], img.list-image, img.grid-img, img.img-responsive');
+        if (img) imageUrl = img.getAttribute('src') || img.dataset.src || '';
+        const bullets = [];
+        const ribbon = card.querySelector('[data-ribbon]');
+        if (ribbon) { const r = ribbon.getAttribute('data-ribbon'); if (r) bullets.push(r); }
+        else if (text.match(/\\bSOLD\\b|\\bSALE.?AGREED\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) bullets.push('SOLD/STC');
+        lots.push({ lot: num, address: address.substring(0, 200), price, url, bullets, imageUrl: imageUrl || undefined });
+      }
+      return lots;
+    })()
+  `,
+
+  // ── AUCTION HOUSE UK TEMPLATE (auctionhouse.co.uk branches) ──
+  auctionhouseuk: `
+    (() => {
+      const lots = [];
+      const cards = document.querySelectorAll('.lot-search-result, .lot-search-wrapper');
+      for (const card of cards) {
+        const text = card.textContent || '';
+        if (text.length < 10) continue;
+        const lotMatch = text.match(/Lot\\s*(\\d+)/i);
+        const num = lotMatch ? parseInt(lotMatch[1]) : lots.length + 1;
+        const priceMatch = text.match(/Guide[^£]*£([\\d,]+)/i) || text.match(/£([\\d,]+)/);
+        const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
+        let address = '';
+        const addrEl = card.querySelector('p.grid-address, .grid-address');
+        if (addrEl) address = addrEl.textContent.trim();
+        if (!address) {
+          const typeEl = card.querySelector('p.fw-bold.blue-text');
+          if (typeEl) address = typeEl.textContent.trim();
+        }
+        if (!address || address.length < 5) continue;
+        let url = '';
+        const link = card.querySelector('a[href*="/auction/lot/"], a.home-lot-wrapper-link');
+        if (link) url = link.getAttribute('href') || '';
+        let imageUrl = '';
+        const img = card.querySelector('img.lot-image, img[loading="lazy"]');
         if (img) imageUrl = img.getAttribute('src') || img.dataset.src || '';
         const bullets = [];
         if (text.match(/\\bSOLD\\b|\\bSALE.?AGREED\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) bullets.push('SOLD/STC');
@@ -6634,7 +6784,133 @@ const DOM_EXTRACTORS = {
     })()
   `,
 
+  // ── GOLDINGS (goldingsauctions.co.uk) ──
+  // Clean BEM structure: div.property-card with data-lotid
+  goldings: `
+    (() => {
+      const lots = [];
+      const cards = document.querySelectorAll('.property-card, .block-lot-listing__lot');
+      for (const card of cards) {
+        const text = card.textContent || '';
+        if (text.length < 10) continue;
+        let lotNum = lots.length + 1;
+        const lotEl = card.querySelector('.property-card__lot-no strong');
+        if (lotEl) lotNum = parseInt(lotEl.textContent.trim()) || lotNum;
+        let address = '';
+        const addrEl = card.querySelector('.property-card__additional-meta__address');
+        if (addrEl) address = addrEl.textContent.trim();
+        if (!address || address.length < 5) continue;
+        let price = null;
+        const priceEl = card.querySelector('.property-card__meta-price span');
+        if (priceEl) {
+          const pm = priceEl.textContent.match(/([\\d,]+)/);
+          if (pm) price = parseInt(pm[1].replace(/,/g, ''));
+        }
+        let url = '';
+        const link = card.querySelector('a[href*="/lot/"]');
+        if (link) url = link.getAttribute('href') || '';
+        let imageUrl = '';
+        const img = card.querySelector('.property-card__gallery-main-image img, .property-card__gallery img');
+        if (img) imageUrl = img.getAttribute('src') || img.dataset.src || '';
+        const bullets = [];
+        const tagline = card.querySelector('.property-card__additional-meta__tagline');
+        if (tagline) bullets.push(tagline.textContent.trim().substring(0, 200));
+        const soldFlag = card.querySelector('.property-card__sold-flag');
+        if (soldFlag || text.match(/\\bSOLD\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) bullets.push('SOLD/STC');
+        lots.push({ lot: lotNum, address: address.substring(0, 200), price, url, bullets, imageUrl: imageUrl || undefined });
+      }
+      return lots;
+    })()
+  `,
+
+  // ── DAWSONS (dawsonsproperty.co.uk) ──
+  // Bootstrap layout with div.homes-content for each lot
+  dawsons: `
+    (() => {
+      const lots = [];
+      const contentBlocks = document.querySelectorAll('.homes-content');
+      for (const block of contentBlocks) {
+        const text = block.textContent || '';
+        if (text.length < 10) continue;
+        let address = '';
+        const h3 = block.querySelector('h3');
+        if (h3) address = h3.textContent.trim();
+        if (!address || address.length < 5) continue;
+        let price = null;
+        const priceEl = block.querySelector('.price-properties .title, .price-properties h3');
+        if (priceEl) {
+          const pm = priceEl.textContent.match(/([\\d,]+)/);
+          if (pm) price = parseInt(pm[1].replace(/,/g, ''));
+        }
+        let url = '';
+        const link = block.querySelector('a[href*="/auction/"]');
+        if (link) url = link.getAttribute('href') || '';
+        let imageUrl = '';
+        // Images are in sibling col or in modal carousel
+        const parent = block.closest('.row') || block.parentElement;
+        if (parent) {
+          const img = parent.querySelector('img.d-block, img.img-fluid, img[src*="auction"]');
+          if (img) imageUrl = img.getAttribute('src') || '';
+        }
+        const bullets = [];
+        const beds = block.querySelector('.fa-bed');
+        if (beds && beds.nextElementSibling) bullets.push(beds.nextElementSibling.textContent.trim() + ' bed');
+        if (text.match(/\\bSOLD\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) bullets.push('SOLD/STC');
+        lots.push({ lot: lots.length + 1, address: address.substring(0, 200), price, url, bullets, imageUrl: imageUrl || undefined });
+      }
+      return lots;
+    })()
+  `,
+
+  // ── DURRANTS (durrants.com) ──
+  // Elementor page builder — lots are manual sections with elementor-icon-list-text containing "Lot N"
+  durrants: `
+    (() => {
+      const lots = [];
+      // Find all "Lot N" markers
+      const lotMarkers = document.querySelectorAll('.elementor-icon-list-text');
+      for (const marker of lotMarkers) {
+        const lotMatch = marker.textContent.match(/Lot\\s*(\\d+)/i);
+        if (!lotMatch) continue;
+        const lotNum = parseInt(lotMatch[1]);
+        // Walk up to the container section
+        const section = marker.closest('.e-con, .elementor-section, .elementor-element');
+        if (!section) continue;
+        const text = section.textContent || '';
+        // Address and price are in <p><strong> tags within text-editor widgets
+        let address = '', price = null;
+        const strongs = section.querySelectorAll('.elementor-widget-text-editor p strong, .elementor-text-editor p strong');
+        for (const s of strongs) {
+          const t = s.textContent.trim();
+          const priceM = t.match(/(?:Guide Price|Auction Guide Price)[^£]*£([\\d,]+)/i);
+          if (priceM) { price = parseInt(priceM[1].replace(/,/g, '')); continue; }
+          if (t.match(/[A-Z]{1,2}\\d[A-Z\\d]?\\s*\\d[A-Z]{2}/i) && !address) { address = t; }
+        }
+        if (!address || address.length < 5) continue;
+        let url = '';
+        const link = section.querySelector('a[href*="/property/"], a.elementor-button');
+        if (link) url = link.getAttribute('href') || '';
+        let imageUrl = '';
+        const img = section.querySelector('img[src*="durrants"], img[src*="property"]');
+        if (img) imageUrl = img.getAttribute('src') || img.dataset.src || '';
+        const bullets = [];
+        if (text.match(/\\bSOLD\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) bullets.push('SOLD/STC');
+        lots.push({ lot: lotNum, address: address.substring(0, 200), price, url, bullets, imageUrl: imageUrl || undefined });
+      }
+      return lots;
+    })()
+  `,
+
 };
+
+// Wire up EIG house aliases to the shared eigplatform extractor
+for (const slug of ['astleys', 'henrysykes', 'clarkesimpson']) {
+  DOM_EXTRACTORS[slug] = DOM_EXTRACTORS.eigplatform;
+}
+// Wire up Auction House UK branches to the shared auctionhouseuk extractor
+for (const slug of ['auctionhousescotland', 'austingray']) {
+  DOM_EXTRACTORS[slug] = DOM_EXTRACTORS.auctionhouseuk;
+}
 
 // Universal DOM extractor — works on any auction site by detecting common patterns
 const UNIVERSAL_DOM_EXTRACTOR = `
@@ -7713,6 +7989,47 @@ function buildLotUrl(lot, house, sourceUrl) {
     case 'robinsonhall':
       if (lot.url && lot.url.startsWith('/')) {
         return `https://robinsonandhallauctions.co.uk${lot.url}`;
+      }
+      break;
+    // ── New EIG houses (March 2026 batch) ──
+    case 'astleys':
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://astleys.eigonlineauctions.com${lot.url}`;
+      }
+      break;
+    case 'henrysykes':
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://onlineauctions.henrysykes.co.uk${lot.url}`;
+      }
+      break;
+    case 'clarkesimpson':
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://clarke-simpson.eigonlineauctions.com${lot.url}`;
+      }
+      break;
+    case 'durrants':
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://durrants.com${lot.url}`;
+      }
+      break;
+    case 'dawsons':
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://www.dawsonsproperty.co.uk${lot.url}`;
+      }
+      break;
+    case 'goldings':
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://www.goldingsauctions.co.uk${lot.url}`;
+      }
+      break;
+    case 'auctionhousescotland':
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://www.auctionhouse.co.uk${lot.url}`;
+      }
+      break;
+    case 'austingray':
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://www.auctionhouse.co.uk${lot.url}`;
       }
       break;
   }
