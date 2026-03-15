@@ -1059,6 +1059,28 @@ const HOUSE_ROOTS = {
   auctionhousekent:       'https://www.auctionhouse.co.uk/kent/auction/search-results',
 };
 
+/*
+ * ── LIVE EXTRACTION TEST RESULTS (Plan 02-03, 2026-03-15) ──
+ * All 15 new houses PASS with >0 lots. Total 3,315 lots (page 1), 99.6% images.
+ *
+ * agentsproperty:          84 lots,  84 imgs, 100% price — WordPress cards
+ * andrewcraig:             24 lots,  24 imgs, 100% price — Estate Apps
+ * buttersjohnbee:          12 lots,   0 imgs, 100% price — Rex v2 (images need Firecrawl)
+ * cheffins:                10 lots,  10 imgs,  50% price — Own platform (catalogue-view)
+ * cheffinstimed:           15 lots,  15 imgs,  60% price — EIG platform
+ * fssproperty:              1 lots,   1 imgs, 100% price — Same CMS as Hollis Morgan
+ * iamsold:                  5 lots,   5 imgs, 100% price — data-bkimage cards
+ * brownco:                 50 lots,  50 imgs,  96% price — EIG platform
+ * suttonkersh:             16 lots,  16 imgs,  94% price — start=N pagination (108 total)
+ * auctionhouseeastanglia: 506 lots, 506 imgs,  88% price — AH UK branch
+ * auctionhousenorthwest:  916 lots, 916 imgs,  81% price — AH UK branch
+ * auctionhousenortheast:  722 lots, 722 imgs,  81% price — AH UK branch
+ * auctionhousewales:      606 lots, 606 imgs,  72% price — AH UK branch
+ * auctionhousebirmingham: 206 lots, 206 imgs,  62% price — AH UK branch
+ * auctionhousekent:       142 lots, 142 imgs,  68% price — AH UK branch
+ *
+ * Blocked/inaccessible (not added): Symonds & Sampson, GTH, All Wales Auction
+ */
 // Now that HOUSE_ROOTS is defined, populate the image backfill set
 PUPPETEER_IMAGE_HOUSES = new Set(Object.keys(HOUSE_ROOTS));
 
