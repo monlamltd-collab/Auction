@@ -16,7 +16,7 @@ import { randomBytes, timingSafeEqual, createHash } from 'crypto';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createClient } from '@supabase/supabase-js';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
-import { readFileSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'fs';
 import { lookup } from 'dns/promises';
 import { JSDOM } from 'jsdom';
 let puppeteer = null;
@@ -24,6 +24,8 @@ try { puppeteer = (await import('puppeteer')).default; } catch {}
 import Stripe from 'stripe';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const SKILLS_DIR = join(__dirname, 'skills');
+try { mkdirSync(SKILLS_DIR, { recursive: true }); } catch {}
 
 // ═══════════════════════════════════════════════════════════════
 // ENV VAR VALIDATION
@@ -3706,6 +3708,26 @@ app.get('/api/admin/daily-stats', async (req, res) => {
   } catch (e) {
     log.error('Daily stats error', { error: e.message });
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ── Per-house skill files (health dashboard) ──
+app.get('/api/skills', (req, res) => {
+  const token = req.headers['x-admin-secret'] || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
+    return res.status(403).json({ error: 'Invalid admin token' });
+  }
+  try {
+    const files = readdirSync(SKILLS_DIR).filter(f => f.endsWith('.json'));
+    const skills = files.map(f => {
+      try { return JSON.parse(readFileSync(join(SKILLS_DIR, f), 'utf8')); } catch { return null; }
+    }).filter(Boolean);
+    const healthy = skills.filter(s => s.status === 'healthy').length;
+    const degraded = skills.filter(s => s.status === 'degraded').length;
+    const broken = skills.filter(s => s.status === 'broken').length;
+    res.json({ skills, summary: { total: skills.length, healthy, degraded, broken } });
+  } catch {
+    res.json({ skills: [], summary: { total: 0, healthy: 0, degraded: 0, broken: 0 } });
   }
 });
 
@@ -8422,6 +8444,10 @@ async function _doAutoAnalyseAll() {
   }
 
   console.log(`═══ AUTO-ANALYSIS COMPLETE: ${analysed} analysed, ${skipped} cached, ${failed} failed ═══\n`);
+
+  // ── Save daily analytics snapshot ──
+  try { await saveDailySnapshot(); } catch (e) { console.warn('Daily snapshot failed:', e.message); }
+
   return { analysed, skipped, failed, total: ready.length };
 }
 
@@ -8858,7 +8884,189 @@ async function autoAnalyseOne(url) {
   }
 
   console.log(`AUTO: ✓ ${house}: ${newTotalLots} lots cached (${newTitleSplits} title splits, ${newTopPicks} top picks)${catalogueChanged ? ' [CHANGED]' : ' [unchanged]'}`);
+
+  // ── Skill tracking: write per-house skill file ──
+  try {
+    updateHouseSkill(house, {
+      catalogueUrl: url,
+      lotCount: newTotalLots,
+      imageCoverage: lots.length > 0 ? Math.round(lots.filter(l => l.imageUrl).length / lots.length * 100) : 0,
+      scrapedWith: _lastScrapeEngine,
+      requiresPuppeteer: !!rewritten.preferPuppeteer,
+    });
+  } catch (skillErr) {
+    console.warn(`SKILL: Failed to update skill for ${house}: ${skillErr.message}`);
+  }
 }
+
+// ═══════════════════════════════════════════════════════════════
+// PER-HOUSE SKILL TRACKING
+// ═══════════════════════════════════════════════════════════════
+
+function updateHouseSkill(slug, { catalogueUrl, lotCount, imageCoverage, scrapedWith, requiresPuppeteer }) {
+  const filePath = join(SKILLS_DIR, `${slug}.json`);
+  let existing = null;
+  try { existing = JSON.parse(readFileSync(filePath, 'utf8')); } catch {}
+
+  const now = new Date().toISOString();
+  const displayName = HOUSE_DISPLAY_NAMES[slug] || slug;
+  const rootUrl = HOUSE_ROOTS[slug] || catalogueUrl;
+
+  // Determine extractor type
+  let extractor = 'gemini';
+  if (DOM_EXTRACTORS[slug]) {
+    // Check if it's an alias (eigplatform, auctionhouseuk) or custom
+    if (DOM_EXTRACTORS[slug] === DOM_EXTRACTORS.eigplatform) extractor = 'eigplatform';
+    else if (DOM_EXTRACTORS[slug] === DOM_EXTRACTORS.auctionhouseuk) extractor = 'auctionhouseuk';
+    else extractor = `${slug}_dom`;
+  }
+
+  // Calculate rolling average lot count
+  const prevAvg = existing?.averageLotCount || lotCount;
+  const averageLotCount = Math.round((prevAvg * 0.7) + (lotCount * 0.3)); // EMA
+
+  // Determine pagination pattern
+  let paginationPattern = existing?.paginationPattern || 'none';
+  if (rootUrl.includes('?page=')) paginationPattern = '?page=N';
+  else if (rootUrl.includes('/page/')) paginationPattern = '/page/N';
+
+  // Determine status
+  let status = 'healthy';
+  if (lotCount === 0) {
+    status = 'broken';
+  } else if (existing?.averageLotCount && lotCount < existing.averageLotCount * 0.7) {
+    status = 'degraded';
+  }
+
+  const skill = {
+    house: displayName,
+    slug,
+    catalogueUrl: rootUrl,
+    extractor,
+    lastVerified: now,
+    lastLotCount: lotCount,
+    averageLotCount,
+    imageCoverage,
+    requiresPuppeteer: !!requiresPuppeteer,
+    requiresFirecrawl: scrapedWith === 'firecrawl',
+    paginationPattern,
+    notes: existing?.notes || '',
+    status,
+  };
+
+  writeFileSync(filePath, JSON.stringify(skill, null, 2));
+  console.log(`SKILL: ${displayName} → ${status} (${lotCount} lots, ${imageCoverage}% images)`);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DAILY ANALYTICS SNAPSHOTS
+// ═══════════════════════════════════════════════════════════════
+
+async function saveDailySnapshot() {
+  const today = new Date().toISOString().slice(0, 10);
+
+  // Check if we already saved today's snapshot
+  const { data: existing } = await supabase
+    .from('analytics_snapshots')
+    .select('id')
+    .eq('date', today)
+    .maybeSingle();
+
+  // Gather current state from cached_analyses
+  const { data: cached } = await supabase
+    .from('cached_analyses')
+    .select('house, total_lots, lots, scraped_with')
+    .gt('expires_at', new Date().toISOString());
+
+  const houses = cached || [];
+  let totalLots = 0;
+  let totalWithImages = 0;
+  let totalLotsForImages = 0;
+  const lotsByHouse = {};
+  const engineCounts = { firecrawl: 0, puppeteer: 0, http: 0 };
+
+  for (const h of houses) {
+    totalLots += h.total_lots || 0;
+    lotsByHouse[h.house] = h.total_lots || 0;
+    if (h.scraped_with && engineCounts[h.scraped_with] !== undefined) {
+      engineCounts[h.scraped_with]++;
+    }
+    const lots = h.lots || [];
+    totalLotsForImages += lots.length;
+    totalWithImages += lots.filter(l => l.imageUrl).length;
+  }
+
+  const imageCoveragePct = totalLotsForImages > 0 ? Math.round(totalWithImages / totalLotsForImages * 100) : 0;
+
+  // Read skill files for health status
+  let healthyHouses = 0, degradedHouses = 0, brokenHouses = 0;
+  try {
+    const files = readdirSync(SKILLS_DIR).filter(f => f.endsWith('.json'));
+    for (const f of files) {
+      try {
+        const skill = JSON.parse(readFileSync(join(SKILLS_DIR, f), 'utf8'));
+        if (skill.status === 'healthy') healthyHouses++;
+        else if (skill.status === 'degraded') degradedHouses++;
+        else if (skill.status === 'broken') brokenHouses++;
+      } catch {}
+    }
+  } catch {}
+
+  const snapshot = {
+    date: today,
+    total_lots: totalLots,
+    image_coverage_pct: imageCoveragePct,
+    lots_by_house: lotsByHouse,
+    engine_breakdown: engineCounts,
+    healthy_houses: healthyHouses,
+    degraded_houses: degradedHouses,
+    broken_houses: brokenHouses,
+  };
+
+  if (existing) {
+    await supabase.from('analytics_snapshots').update(snapshot).eq('date', today);
+  } else {
+    await supabase.from('analytics_snapshots').insert(snapshot);
+  }
+
+  console.log(`ANALYTICS: Snapshot saved for ${today} — ${totalLots} lots, ${imageCoveragePct}% images, ${houses.length} houses`);
+}
+
+// ── Analytics API endpoint ──
+app.get('/api/admin/analytics', async (req, res) => {
+  const token = req.headers['x-admin-secret'] || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
+    return res.status(403).json({ error: 'Invalid admin token' });
+  }
+  try {
+    const days = parseInt(req.query.days) || 30;
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const { data, error } = await supabase
+      .from('analytics_snapshots')
+      .select('*')
+      .gte('date', since)
+      .order('date', { ascending: true });
+    if (error) throw error;
+    res.json({ snapshots: data || [] });
+  } catch (e) {
+    log.error('Analytics endpoint error', { error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ── Seed today's snapshot on demand ──
+app.post('/api/admin/seed-snapshot', async (req, res) => {
+  const token = req.headers['x-admin-secret'] || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
+    return res.status(403).json({ error: 'Invalid admin token' });
+  }
+  try {
+    await saveDailySnapshot();
+    res.json({ ok: true, message: 'Snapshot saved' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
 // ═══════════════════════════════════════════════════════════════
 // ACTIVITY LOGGING & STATS
