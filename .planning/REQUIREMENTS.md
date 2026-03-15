@@ -13,13 +13,13 @@
 - [x] **HARD-04**: Stripe webhooks deduplicate events by `event.id` (idempotency)
 - [x] **HARD-05**: Subscription downgrade honours `current_period_end` instead of immediate cutoff
 - [ ] **HARD-06**: Broken `calcDealAnalysis()` replaced with correct deal stacking logic
-- [ ] **HARD-07**: Firecrawl requests use `['markdown', 'rawHtml']` format for better Gemini extraction
+- [x] **HARD-07**: Firecrawl requests use `['markdown', 'rawHtml']` format for better Gemini extraction
 
 ### Data Freshness
 
-- [ ] **FRSH-01**: Frontend defaults to future-only auctions (past catalogues hidden unless user opts in)
-- [ ] **FRSH-02**: Lot-level sold/unsold status reliably detected and displayed across all auction houses
-- [ ] **FRSH-03**: Standardised `lot.status` field in extraction pipeline (available/sold/STC/withdrawn)
+- [x] **FRSH-01**: Frontend defaults to future-only auctions (past catalogues hidden unless user opts in)
+- [x] **FRSH-02**: Lot-level sold/unsold status reliably detected and displayed across all auction houses
+- [x] **FRSH-03**: Standardised `lot.status` field in extraction pipeline (available/sold/STC/withdrawn)
 - [x] **FRSH-04**: Alerting fires when auto-analyse fails or discovery misses catalogues (email + webhook)
 - [x] **FRSH-05**: Admin dashboard shows data freshness metrics (last scrape time, image coverage %, lot count trends)
 
@@ -102,10 +102,10 @@
 | HARD-04 | Phase 1 | Complete |
 | HARD-05 | Phase 1 | Complete |
 | HARD-06 | Phase 3 | Pending |
-| HARD-07 | Phase 1 | Pending |
-| FRSH-01 | Phase 1 | Pending |
-| FRSH-02 | Phase 1 | Pending |
-| FRSH-03 | Phase 1 | Pending |
+| HARD-07 | Phase 1 | Complete |
+| FRSH-01 | Phase 1 | Complete |
+| FRSH-02 | Phase 1 | Complete |
+| FRSH-03 | Phase 1 | Complete |
 | FRSH-04 | Phase 1 | Complete |
 | FRSH-05 | Phase 1 | Complete |
 | IMG-01 | Phase 2 | Pending |
@@ -138,4 +138,4 @@
 
 ---
 *Requirements defined: 2026-03-15*
-*Last updated: 2026-03-15 after initial definition*
+*Last updated: 2026-03-15 after plan 01-03 completion*

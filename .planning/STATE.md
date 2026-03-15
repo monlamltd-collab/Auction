@@ -28,6 +28,7 @@ Status: Complete
 - 2026-03-15: Plan 01-02 executed — Stripe hardening (trial abuse, webhook idempotency, downgrade logic)
 - 2026-03-15: Plan 01-01 executed — SDLT calculator fix for England, Scotland & Wales
 - 2026-03-15: Plan 01-04 executed — Admin alerting & data freshness metrics (pipeline_alerts table, diff summaries, admin dashboard)
+- 2026-03-15: Plan 01-03 executed — Firecrawl markdown, lot.status pipeline, overlay banners, future-only display
 
 ---
-*Last updated: 2026-03-15 after plan 01-04 execution — Phase 1 complete*
+*Last updated: 2026-03-15 after plan 01-03 execution — Phase 1 complete*
