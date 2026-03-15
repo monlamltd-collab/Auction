@@ -105,7 +105,9 @@ tr:hover td { background: rgba(255,255,255,.02); }
 @media (max-width: 800px) { .two-col { grid-template-columns: 1fr; } }
 
 /* Quick actions */
-.actions-grid { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px 18px; }
+.actions-grid { display: flex; flex-wrap: wrap; gap: 12px; padding: 14px 18px; }
+.action-item { display: flex; flex-direction: column; gap: 4px; min-width: 180px; max-width: 240px; }
+.action-desc { font-size: .7rem; color: var(--muted); line-height: 1.35; margin: 0; padding: 0 2px; }
 .action-btn { padding: 8px 16px; font-size: .78rem; font-weight: 600; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface2); color: var(--text); cursor: pointer; font-family: inherit; transition: all .15s; }
 .action-btn:hover { border-color: var(--green); color: var(--green); background: var(--green-bg); }
 .action-btn.danger { color: var(--red); }
@@ -292,11 +294,26 @@ tr:hover td { background: rgba(255,255,255,.02); }
     <div class="section">
       <div class="section-header"><h2>Quick Actions</h2></div>
       <div class="actions-grid">
-        <button class="action-btn" onclick="triggerAction('analyse-all')">Force Re-Analyse All</button>
-        <button class="action-btn" onclick="triggerAction('backfill-images')">Backfill Images</button>
-        <button class="action-btn" onclick="triggerAction('discover-catalogues')">Discover Catalogues</button>
-        <button class="action-btn" onclick="triggerAction('refresh-cache')">Refresh Cache (async)</button>
-        <button class="action-btn danger" onclick="triggerAction('clear-cache')">Clear All Cache</button>
+        <div class="action-item">
+          <button class="action-btn" onclick="triggerAction('analyse-all')">Force Re-Analyse All</button>
+          <p class="action-desc">Re-scrapes every auction house from scratch, ignoring cache. Takes 30-60 min. Use after fixing an extractor or when lots look stale.</p>
+        </div>
+        <div class="action-item">
+          <button class="action-btn" onclick="triggerAction('backfill-images')">Backfill Images</button>
+          <p class="action-desc">Finds lots with missing images and fetches them (Firecrawl then Puppeteer). Safe to run anytime — only touches lots without images.</p>
+        </div>
+        <div class="action-item">
+          <button class="action-btn" onclick="triggerAction('discover-catalogues')">Discover Catalogues</button>
+          <p class="action-desc">Visits each house's website to find new auction dates and catalogue URLs. Updates the calendar only — does not scrape lots.</p>
+        </div>
+        <div class="action-item">
+          <button class="action-btn" onclick="triggerAction('refresh-cache')">Refresh Cache (async)</button>
+          <p class="action-desc">Re-analyses only houses whose cached data has expired. Lighter than Force Re-Analyse. Runs in the background.</p>
+        </div>
+        <div class="action-item">
+          <button class="action-btn danger" onclick="triggerAction('clear-cache')">Clear All Cache</button>
+          <p class="action-desc">Deletes all cached lot data. Frontend will show 0 lots until next analysis runs. Use with caution — mainly for debugging.</p>
+        </div>
       </div>
     </div>
 

@@ -2,12 +2,12 @@
 
 ## Project Overview
 
-Bridgematch is a UK property auction directory and AI-powered catalogue analyser, live at [bridgematch.co.uk](https://bridgematch.co.uk). It scrapes upcoming auction catalogues from UK auction houses, uses Google Gemini AI to extract structured lot data, scores each lot for investment potential, and presents results in a filterable frontend.
+Bridgematch is a UK property auction directory and AI-powered catalogue analyser, live at [auctions.bridgematch.co.uk](https://auctions.bridgematch.co.uk). It scrapes upcoming auction catalogues from UK auction houses, uses Google Gemini AI to extract structured lot data, scores each lot for investment potential, and presents results in a filterable frontend.
 
 **Owner:** Simon Deeming
 **Repo:** `monlamltd-collab/Auction`
 **Hosting:** Railway (Express server) — was originally Vercel but migrated
-**Domain:** bridgematch.co.uk
+**Domain:** `auctions.bridgematch.co.uk` (the root `bridgematch.co.uk` serves the Bridging Finance tool)
 **Stack:** Node.js (Express), Firecrawl (primary scraper) + Puppeteer (fallback), Google Gemini API (free tier), vanilla JS frontend
 
 ---
@@ -18,6 +18,9 @@ Bridgematch is a UK property auction directory and AI-powered catalogue analyser
 server.js (Express, ~131K)
 ├── GET  /api/auctions        → Returns upcoming auction dates (curated list)
 ├── POST /api/analyse          → Scrapes catalogue URL, Gemini extracts lots, scores them
+├── GET  /api/diag             → Temporary diagnostics (uptime, credit status, flags)
+├── GET  /api/cost-monitor     → Firecrawl credit usage stats
+├── POST /api/admin/calendar   → Add auction URLs (x-admin-secret auth)
 ├── GET  /auctions             → Serves index.html (directory view)
 ├── GET  /analyse              → Serves index.html (analyser view)
 └── GET  /                     → Serves index.html
@@ -27,6 +30,9 @@ script.js (~105K)
 
 index.html (~79K)
 └── Single-page app with tab switching between /auctions and /analyse views
+
+admin.html
+└── Admin dashboard — auction management, calendar, "Add Auction URL" form, backfill triggers
 ```
 
 ### Key Dependencies
@@ -49,10 +55,21 @@ index.html (~79K)
 7. Frontend displays lots with filters (price, type, score, opportunities)
 
 ### Extraction Pipeline
-- **Primary:** DOM extractors — custom per-house selectors that parse HTML directly
-- **Fallback:** Gemini API extraction — when DOM extractors return 0 lots, the stripped HTML is sent to Gemini with structured extraction prompts
+- **Primary:** DOM extractors — custom per-house selectors that parse HTML directly via JSDOM
+- **Fallback:** Gemini API extraction — when DOM extractors return < 3 lots, the stripped HTML is sent to Gemini with structured extraction prompts
+- **DOM→Gemini merge:** When Gemini fallback is triggered, the DOM extractor is re-run on the raw HTML to harvest URLs and images, which are then merged into Gemini's lot data by lot number (with position-based fallback). This prevents the "cascading image loss" problem where Gemini extraction strips URLs/images from the HTML.
 - **Models:** `gemini-2.0-flash` for known houses (fast, free), `gemini-2.5-pro` for unknown houses and PDF extraction
 - **Rate limiting:** Built-in 4.1s gap between calls to stay under Gemini free tier 15 RPM limit
+
+### Image Extraction Pipeline
+Images are extracted through multiple strategies in priority order:
+1. **DOM extractors** — per-house selectors extract `imageUrl` directly from HTML
+2. **Firecrawl `images` format** — returns all image URLs from the rendered page alongside `rawHtml`
+3. **Firecrawl `executeJavascript`** — forces `data-src`/`data-lazy-src` → `src` swap to trigger lazy-loaded images before capture
+4. **Two-pass backfill** — for lots still missing images after extraction:
+   - Pass 1: `backfillImagesWithFirecrawl()` — fetches catalogue page, extracts images via JSDOM + Firecrawl images array, matches by lot number/URL/address/position
+   - Pass 2: `backfillImagesWithPuppeteer()` — Puppeteer fallback for remaining misses (houses in `PUPPETEER_IMAGE_HOUSES`)
+5. **Matching strategies** (in `extractWithJSDOM` and backfill): lot number in URL path → URL path overlap → address keyword → position-based (nth image = nth lot)
 
 ### Scraping Architecture (Three-Tier Fallback)
 1. **Firecrawl** (primary) — Managed scraping API (`scrapeWithFirecrawl()`). Handles JS rendering, anti-bot, proxy rotation. Returns raw HTML which is parsed locally with JSDOM (`extractWithJSDOM()`). Controlled by `FIRECRAWL_API_KEY` env var.
@@ -60,10 +77,11 @@ index.html (~79K)
 3. **Plain HTTP** (last resort) — `fetchPage()` for static HTML pages.
 
 Key functions:
-- `scrapeRenderedPage(url, house)` — Orchestrates the three-tier fallback
-- `extractWithJSDOM(html, house, baseUrl)` — Runs DOM extractors in JSDOM (same pattern as test suite)
+- `scrapeRenderedPage(url, house)` — Orchestrates the three-tier fallback, includes scroll actions + `executeJavascript` for lazy images
+- `extractWithJSDOM(html, house, baseUrl, firecrawlImages)` — Runs DOM extractors in JSDOM, matches Firecrawl images to lots
 - `scrapePageWithFirecrawl(url, house)` — Multi-page wrapper with pagination
-- `backfillImagesWithFirecrawl(url, lots, house)` — Image backfill via rendered page
+- `backfillImagesWithFirecrawl(url, lots, house)` — Image backfill via rendered page + JSDOM extraction
+- `backfillImagesWithPuppeteer(url, lots, house)` — Puppeteer fallback for image backfill
 
 ### Firecrawl Credit Management
 - Monthly budget cap via `FIRECRAWL_MONTHLY_BUDGET` env var (default 15000)
@@ -159,9 +177,12 @@ These are computed from lot data fields: `price`, `estGrossYield`, `opportunitie
 
 1. **Gemini rate limits** — Free tier is 15 RPM / 1500 RPD. Built-in rate limiter handles this, but large batch runs may hit daily limits
 2. **Puppeteer memory** — Railway has limited RAM; use skip lists for houses that won't work anyway
-3. **DOM extractor failures** — When a house redesigns their site, the DOM extractor breaks and falls back to Gemini API (free, but slower due to rate limiting)
-4. **Pagination** — Each auction house has different pagination patterns; these are handled per-house in server.js
-5. **vercel.json still present** — Legacy from when this was on Vercel; now on Railway with Express. The vercel.json is vestigial
+3. **DOM extractor failures** — When a house redesigns their site, the DOM extractor breaks and falls back to Gemini API. The DOM→Gemini merge pattern mitigates URL/image loss during fallback.
+4. **Cascading image loss** — If DOM extractor returns < 3 lots → Gemini fallback strips HTML → lots get empty URLs/images → backfill can't match. Fixed by DOM→Gemini merge but monitor image coverage for regressions.
+5. **Firecrawl lazy-load images** — Firecrawl's `rawHtml` doesn't reliably capture lazy-loaded images. Mitigated with `executeJavascript` action + `images` format + two-pass backfill.
+6. **Pagination** — Each auction house has different pagination patterns; these are handled per-house in server.js
+7. **vercel.json still present** — Legacy from when this was on Vercel; now on Railway with Express. The vercel.json is vestigial
+8. **`/api/diag` endpoint** — Temporary debugging endpoint, remove after Firecrawl integration is stable
 
 ---
 
