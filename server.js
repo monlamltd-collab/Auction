@@ -9473,6 +9473,35 @@ No catalogues? Return {"catalogues": []}`, { maxTokens: 1500 });
   }
 
   console.log(`AUTO-DISCOVER: Complete — ${discovered} new catalogues found, ${errors} errors`);
+
+  // ── Pipeline alerting: discovery failures and consecutive misses ──
+  if (errors > 0) {
+    try {
+      await supabase.from('pipeline_alerts').insert({
+        event_type: 'discovery_miss',
+        severity: 'warning',
+        house: null,
+        message: `Calendar discovery had ${errors} errors out of ${slugs.length} houses`
+      });
+    } catch (alertErr) { console.warn('ALERT: Failed to record discovery errors:', alertErr.message); }
+  }
+
+  // Track consecutive runs with 0 new catalogues
+  if (discovered === 0) {
+    discoverAndUpdateCalendar._consecutiveMisses = (discoverAndUpdateCalendar._consecutiveMisses || 0) + 1;
+    if (discoverAndUpdateCalendar._consecutiveMisses >= 3) {
+      try {
+        await supabase.from('pipeline_alerts').insert({
+          event_type: 'discovery_miss',
+          severity: 'warning',
+          house: null,
+          message: `${discoverAndUpdateCalendar._consecutiveMisses} consecutive discovery runs found 0 new catalogues`
+        });
+      } catch (alertErr) { console.warn('ALERT: Failed to record consecutive miss:', alertErr.message); }
+    }
+  } else {
+    discoverAndUpdateCalendar._consecutiveMisses = 0;
+  }
 }
 
 async function autoAnalyseOne(url) {
