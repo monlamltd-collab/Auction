@@ -133,6 +133,17 @@ tr:hover td { background: rgba(255,255,255,.02); }
 .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--green); border-radius: 50%; animation: spin .6s linear infinite; margin-right: 8px; vertical-align: middle; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* Pipeline badges */
+.pipe { display: inline-flex; align-items: center; gap: 3px; font-size: .65rem; font-family: var(--mono); }
+.pipe-tag { padding: 1px 5px; border-radius: 3px; font-weight: 600; white-space: nowrap; }
+.pipe-fc { background: var(--green-bg); color: var(--green); }
+.pipe-pupp { background: var(--amber-bg); color: var(--amber); }
+.pipe-http { background: rgba(107,114,128,.15); color: var(--text3); }
+.pipe-dom { background: var(--blue-bg); color: var(--blue); }
+.pipe-eig { background: rgba(139,92,246,.12); color: var(--violet); }
+.pipe-gemini { background: var(--red-bg); color: var(--red); }
+.pipe-arrow { color: var(--text3); font-size: .6rem; }
+
 /* Tabs */
 .tab-nav { display: flex; gap: 0; padding: 0 24px; background: var(--surface); border-bottom: 1px solid var(--border); }
 .tab-btn { padding: 10px 20px; font-size: .82rem; font-weight: 600; color: var(--text3); background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; font-family: inherit; transition: all .15s; }
@@ -240,7 +251,7 @@ tr:hover td { background: rgba(255,255,255,.02); }
                 <th title="Number of lots flagged as high-scoring investment opportunities by the scoring engine (score based on condition, yield, opportunities)">Top Picks</th>
                 <th title="Number of lots detected as having title split potential — properties that could be split into multiple titles for added value">Title Splits</th>
                 <th title="Average estimated gross yield across lots from this house that have yield data">Yield</th>
-                <th title="Which engine fetched the HTML. All houses also use a DOM extractor (custom per house) to parse lots, with Gemini AI as fallback. This column only shows the HTML fetching step.">Fetch Engine</th>
+                <th title="Full extraction pipeline: Fetch (how HTML was obtained) → Extract (how lots were parsed from HTML) → Images (how lot images were obtained)">Pipeline</th>
                 <th title="How long ago this house's data was last scraped and cached">Age</th>
                 <th title="Time until the cached data expires. Once expired, the house will be re-scraped on the next auto-analysis cycle">Expires</th>
               </tr>
@@ -559,8 +570,6 @@ async function loadCacheStatus() {
         totalUnder100k += h.under_100k || 0;
         if (h.avg_yield) { yieldSum += h.avg_yield; yieldCount++; }
       }
-      const engineLabel = h.scraped_with || '-';
-      const engineCls = engineLabel === 'firecrawl' ? 'text-green' : engineLabel === 'puppeteer' ? 'text-amber' : 'text-muted';
       return `<tr style="${isExpired ? 'opacity:.5;' : ''}">
         <td><span class="status-dot ${dotClass}"></span>${statusText}</td>
         <td><strong>${esc(h.house)}</strong></td>
@@ -569,7 +578,7 @@ async function loadCacheStatus() {
         <td class="mono">${h.top_picks || 0}</td>
         <td class="mono">${h.title_splits || 0}</td>
         <td class="mono ${h.avg_yield ? 'text-green' : 'text-muted'}">${h.avg_yield ? h.avg_yield + '%' : '-'}</td>
-        <td class="mono ${engineCls}">${engineLabel}</td>
+        <td>${getPipelineHtml(h.house, h.scraped_with, h.extracted_with)}</td>
         <td class="mono">${timeAgo(h.last_scraped_at || h.created_at)}</td>
         <td class="mono ${isExpired ? 'text-amber' : ''}">${isExpired ? 'expired' : timeUntil(h.expires_at)}</td>
       </tr>`;
@@ -771,6 +780,36 @@ async function triggerAction(action) {
 }
 
 function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+// ── Pipeline display ──
+// Maps house slug → extractor type for the pipeline column
+const EXTRACTOR_TYPE = {
+  // EIG platform houses
+  paulfosh:'eig', firstforauctions:'eig', harmanhealy:'eig', seelauctions:'eig',
+  robinsonhall:'eig', tcpa:'eig', astleys:'eig', henrysykes:'eig', clarkesimpson:'eig',
+  // Auction House UK template
+  auctionhousescotland:'ahuk', austingray:'ahuk',
+};
+function getPipelineHtml(house, engine, extractedWith) {
+  // Fetch tag
+  const fetchTag = engine === 'firecrawl' ? '<span class="pipe-tag pipe-fc">Firecrawl</span>'
+    : engine === 'puppeteer' ? '<span class="pipe-tag pipe-pupp">Puppeteer</span>'
+    : '<span class="pipe-tag pipe-http">HTTP</span>';
+
+  // Extractor tag — use actual data if available, otherwise infer from house
+  let extractTag;
+  if (extractedWith === 'gemini') {
+    extractTag = '<span class="pipe-tag pipe-gemini">Gemini AI</span>';
+  } else {
+    const slug = Object.entries(KNOWN_HOUSES).find(([k, v]) => v === house)?.[0] || '';
+    const ext = EXTRACTOR_TYPE[slug];
+    if (ext === 'eig') extractTag = '<span class="pipe-tag pipe-eig">EIG DOM</span>';
+    else if (ext === 'ahuk') extractTag = '<span class="pipe-tag pipe-eig">AHUK DOM</span>';
+    else extractTag = '<span class="pipe-tag pipe-dom">DOM</span>';
+  }
+
+  return `<span class="pipe">${fetchTag}<span class="pipe-arrow">&rarr;</span>${extractTag}</span>`;
+}
 
 // ── Add Auction ──
 const KNOWN_HOUSES = {

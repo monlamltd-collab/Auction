@@ -14,7 +14,11 @@ CREATE TABLE cached_analyses (
   top_picks integer,
   lots jsonb NOT NULL,
   created_at timestamptz DEFAULT now(),
-  expires_at timestamptz DEFAULT (now() + interval '7 days')
+  expires_at timestamptz DEFAULT (now() + interval '7 days'),
+  scraped_with text,
+  extracted_with text,
+  last_scraped_at timestamptz,
+  content_hash text
 );
 
 CREATE INDEX idx_cached_url ON cached_analyses(url);

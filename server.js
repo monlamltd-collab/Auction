@@ -363,6 +363,7 @@ function extractWithJSDOM(html, house, baseUrl, firecrawlImages) {
       if (Array.isArray(result) && result.length > 0) {
         console.log(`JSDOM extractor for ${house}: found ${result.length} lots`);
         lots = result;
+        _lastExtractorUsed = 'dom';
       }
     } catch (err) {
       log.warn('JSDOM extractor error', { house, error: err.message });
@@ -562,8 +563,9 @@ function extractWithJSDOM(html, house, baseUrl, firecrawlImages) {
   return lots;
 }
 
-// Track which scraping engine was last used (for cache metadata)
+// Track which scraping engine and extractor were last used (for cache metadata)
 let _lastScrapeEngine = 'http';
+let _lastExtractorUsed = 'dom';
 
 async function scrapeRenderedPage(url, house, options = {}) {
   // Tier 1: Firecrawl (if available and not skipped/exhausted)
@@ -2677,6 +2679,7 @@ app.post('/api/analyse', async (req, res) => {
               console.log(`${house}: capping ${rawLots.length} lots to ${MAX_LOTS_PER_SCRAPE}`);
               rawLots = rawLots.slice(0, MAX_LOTS_PER_SCRAPE);
             }
+            _lastExtractorUsed = 'dom';
             console.log(`${house} total: ${rawLots.length} lots via DOM extraction (no Claude needed)`);
           } else {
             // Fall back to Claude extraction
@@ -2831,6 +2834,7 @@ app.post('/api/analyse', async (req, res) => {
       expires_at: expiresAt,
       last_scraped_at: new Date().toISOString(),
       scraped_with: _lastScrapeEngine,
+    extracted_with: _lastExtractorUsed,
     }, { onConflict: 'url' });
 
     // Mark preset cache entries as partially stale (only the changed catalogue needs re-searching)
@@ -3468,7 +3472,7 @@ app.get('/api/cache-status', async (req, res) => {
   try {
     const { data: cached } = await supabase
       .from('cached_analyses')
-      .select('house, url, total_lots, title_splits, top_picks, under_100k, avg_yield, dev_potential, vacant_count, created_at, expires_at, scraped_with, last_scraped_at')
+      .select('house, url, total_lots, title_splits, top_picks, under_100k, avg_yield, dev_potential, vacant_count, created_at, expires_at, scraped_with, extracted_with, last_scraped_at')
       .order('house');
 
     const normaliseUrl = u => (u || '').trim().replace(/\/+$/, '').toLowerCase();
@@ -4529,6 +4533,7 @@ async function scrapeWithPuppeteer(url, house) {
 // AI EXTRACTION (Gemini)
 // ═══════════════════════════════════════════════════════════════
 async function extractLotsWithAI(pages, house, onProgress, catalogueUrl) {
+  _lastExtractorUsed = 'gemini';
   const allLots = [];
   const seenLots = new Set();
   const batchSize = 3;
@@ -8943,6 +8948,7 @@ async function autoAnalyseOne(url) {
     content_hash: autoAnalyseOne._lastContentHash || null,
     last_scraped_at: new Date().toISOString(),
     scraped_with: _lastScrapeEngine,
+    extracted_with: _lastExtractorUsed,
   }, { onConflict: 'url' });
 
   // Mark preset cache entries as partially stale (only the changed catalogue needs re-searching)
