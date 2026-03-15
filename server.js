@@ -276,7 +276,7 @@ async function scrapeWithFirecrawl(url, options = {}) {
   if (fcCreditExhausted) throw new Error('Firecrawl credits exhausted');
   if (fcTemporarilyDown && Date.now() - fcDownAt < 600000) throw new Error('Firecrawl temporarily down');
 
-  const formats = options.formats || ['rawHtml'];
+  const formats = options.formats || ['markdown', 'rawHtml'];
   const body = {
     url,
     formats,
@@ -1359,19 +1359,33 @@ app.post('/api/stripe/webhook', async (req, res) => {
 
       case 'customer.subscription.deleted': {
         const sub = event.data.object;
-        // Find user by subscription ID and downgrade
+        // Find user by subscription ID
         const { data: subUser } = await supabase
           .from('users')
           .select('id')
           .eq('stripe_subscription_id', sub.id)
           .single();
         if (subUser) {
-          await supabase.from('users').update({
-            tier: 'free',
-            stripe_subscription_id: null,
-            tier_expires_at: null,
-          }).eq('id', subUser.id);
-          log.info('Subscription cancelled', { userId: subUser.id });
+          const periodEnd = sub.current_period_end
+            ? new Date(sub.current_period_end * 1000)
+            : null;
+
+          if (periodEnd && periodEnd > new Date()) {
+            // Honour paid period — keep premium until current_period_end
+            await supabase.from('users').update({
+              stripe_subscription_id: null,
+              tier_expires_at: periodEnd.toISOString(),
+            }).eq('id', subUser.id);
+            log.info(`Subscription deleted, premium until ${periodEnd.toISOString()}`, { userId: subUser.id });
+          } else {
+            // Period already ended, downgrade now
+            await supabase.from('users').update({
+              tier: 'free',
+              stripe_subscription_id: null,
+              tier_expires_at: null,
+            }).eq('id', subUser.id);
+            log.info('Subscription deleted, immediate downgrade', { userId: subUser.id });
+          }
         }
         break;
       }
