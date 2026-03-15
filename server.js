@@ -369,7 +369,7 @@ function extractWithJSDOM(html, house, baseUrl, firecrawlImages) {
   const extractor = DOM_EXTRACTORS[house];
   if (extractor) {
     try {
-      const fn = new Function('document', `${IMG_HELPERS}\nreturn ${extractor}`);
+      const fn = new Function('document', `${IMG_HELPERS}\nreturn ${extractor.trim()}`);
       const result = fn(document);
       if (Array.isArray(result) && result.length > 0) {
         console.log(`JSDOM extractor for ${house}: found ${result.length} lots`);
@@ -384,7 +384,7 @@ function extractWithJSDOM(html, house, baseUrl, firecrawlImages) {
   // Fall back to universal extractor
   if (!lots) {
     try {
-      const fn = new Function('document', `${IMG_HELPERS}\nreturn ${UNIVERSAL_DOM_EXTRACTOR}`);
+      const fn = new Function('document', `${IMG_HELPERS}\nreturn ${UNIVERSAL_DOM_EXTRACTOR.trim()}`);
       const result = fn(document);
       if (Array.isArray(result) && result.length > 0) {
         console.log(`JSDOM universal extractor for ${house}: found ${result.length} lots`);
@@ -1045,7 +1045,8 @@ const HOUSE_ROOTS = {
   andrewcraig:        'https://www.andrewcraig.co.uk/auction-property-for-sale',
   buttersjohnbee:     'https://www.buttersjohnbee.com/listings?auction=1&status=all',
   brownco:            'https://brownandco.eigonlineauctions.com/search',
-  cheffins:           'https://www.cheffins.co.uk/property-auctions.htm',
+  cheffins:           'https://www.cheffins.co.uk/property-auctions/catalogue-view,march-2026_576.htm',
+  cheffinstimed:      'https://timedpropertyauctions.cheffins.co.uk/search',
   fssproperty:        'https://www.fssproperty.co.uk/search-auction/',
   iamsold:            'https://www.iamsold.co.uk/available-properties/',
 };
@@ -4402,7 +4403,8 @@ function detectAuctionHouse(url) {
   if (u.includes('andrewcraig.co.uk')) return 'andrewcraig';
   if (u.includes('buttersjohnbee.com')) return 'buttersjohnbee';
   if (u.includes('brown-co.com') || u.includes('brownandco.eigonlineauctions')) return 'brownco';
-  if (u.includes('cheffins.co.uk') || u.includes('timedpropertyauctions.cheffins')) return 'cheffins';
+  if (u.includes('timedpropertyauctions.cheffins')) return 'cheffinstimed';
+  if (u.includes('cheffins.co.uk')) return 'cheffins';
   if (u.includes('fssproperty.co.uk')) return 'fssproperty';
   if (u.includes('iamsold.co.uk')) return 'iamsold';
   return 'unknown';
@@ -4430,7 +4432,7 @@ const HOUSE_DISPLAY_NAMES = {
   auctionhousescotland: 'Auction House Scotland', austingray: 'Auction House Sussex & Hampshire',
   agentsproperty: 'Agents Property Auction', andrewcraig: 'Andrew Craig',
   buttersjohnbee: 'Butters John Bee', brownco: 'Brown & Co',
-  cheffins: 'Cheffins', fssproperty: 'Feather Smailes & Scales',
+  cheffins: 'Cheffins', cheffinstimed: 'Cheffins Timed', fssproperty: 'Feather Smailes & Scales',
   iamsold: 'iamsold',
 };
 
@@ -7311,9 +7313,11 @@ const DOM_EXTRACTORS = {
         const num = lotMatch ? parseInt(lotMatch[1]) : lots.length + 1;
         const priceMatch = text.match(/(?:Guide Price|Opening Bid|Minimum Opening Bid)[^£]*£([\\d,]+)/i) || text.match(/£([\\d,]+)/);
         const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
-        // Address from known selectors (h3.list-address for list view, h4.grid-address for grid)
+        // Address from known selectors — try specific selectors first, then generic
         let address = '';
-        const addrEl = card.querySelector('h3.list-address, h4.grid-address, .lot-address, [data-address-searchable], h4, h3');
+        const addrEl = card.querySelector('h3.list-address') || card.querySelector('h4.grid-address')
+          || card.querySelector('.lot-address') || card.querySelector('[data-address-searchable]')
+          || card.querySelector('h4.lot-data-heading');
         if (addrEl) address = addrEl.textContent.trim().replace(/\\u00a0/g, ' ');
         if (!address) {
           const lines = text.split('\\n').map(s => s.trim()).filter(s => s.length > 5 && s.length < 200);
@@ -7614,68 +7618,54 @@ const DOM_EXTRACTORS = {
     })()
   `,
 
-  // ── Butters John Bee (Rex Software platform, buttersjohnbee.com) ──
-  // Cards: <a href="/listings/{type}-{id}-{location}"> (entire card is a link)
-  // Address: h4 inside card, Price: bold/strong with £, Image: img[alt="Listing image"]
-  // Rooms: .listing__rooms .room, Pagination: ?page=N
+  // ── Butters John Bee (Rex Software v2 platform, buttersjohnbee.com) ──
+  // Cards: h4 address headings near a[href*="/listings/"] links
+  // Image in sibling <a> with img, Price in text, Pagination: ?page=N
   buttersjohnbee: `
     (() => {
       const lots = [];
       const seen = new Set();
-      // Each card is an <a> tag linking to /listings/
-      const links = document.querySelectorAll('a[href*="/listings/"]');
+      // Find all h4 elements that look like addresses (near listing links)
+      const h4s = document.querySelectorAll('h4');
       let lotNum = 0;
-      for (const link of links) {
+      for (const h4 of h4s) {
+        const t = (h4.textContent || '').trim();
+        if (t.length < 5 || t.length > 200) continue;
+        if (t.match(/^\\d+$/) || t.match(/^(Guide|£|Auction|Search|Filter|Sort)/i)) continue;
+        // Walk up to find parent container with listing link
+        let container = h4.parentElement;
+        let link = null;
+        for (let i = 0; i < 8 && container; i++) {
+          link = container.querySelector('a[href*="/listings/"]');
+          if (link) break;
+          container = container.parentElement;
+        }
+        if (!link) continue;
         const href = link.getAttribute('href') || '';
-        if (!href.match(/\\/listings\\/\\w+_\\w+-/)) continue;
+        if (!href.match(/\\/listings\\//)) continue;
         if (seen.has(href)) continue;
         seen.add(href);
         lotNum++;
-        const text = link.textContent || '';
-        // Address from h4 inside the card
-        let address = '';
-        const h4s = link.querySelectorAll('h4');
-        for (const h of h4s) {
-          const t = (h.textContent || '').trim();
-          // Skip room count h4s (single digits like "3", "1", "2")
-          if (t.length > 5 && !t.match(/^\\d+$/) && !t.match(/^Guide|^£/i)) {
-            address = t;
-            break;
-          }
-        }
-        if (!address || address.length < 3) continue;
-        // Price from bold/strong text
+        // Price from container text
         let price = null;
-        const strongs = link.querySelectorAll('strong, b');
-        for (const s of strongs) {
-          const pm = (s.textContent || '').match(/£([\\d,]+)/);
-          if (pm) { price = parseInt(pm[1].replace(/,/g, '')); break; }
-        }
-        if (!price) {
-          const pm = text.match(/(?:Guide\\s*Price\\s*)?£([\\d,]+)/i);
-          if (pm) price = parseInt(pm[1].replace(/,/g, ''));
-        }
-        // Image
+        const cText = container ? (container.textContent || '') : '';
+        const pm = cText.match(/(?:Guide\\s*Price\\s*)?£([\\d,]+)/i);
+        if (pm) price = parseInt(pm[1].replace(/,/g, ''));
+        // Image from the img link
         let imageUrl = '';
-        const img = link.querySelector('img');
-        if (img) {
-          const src = img.getAttribute('src') || '';
-          if (src && !src.startsWith('data:')) imageUrl = src;
+        if (container) {
+          const img = container.querySelector('img');
+          if (img) imageUrl = getBestImgSrc(img);
+          if (isJunkImage(imageUrl)) imageUrl = '';
+          if (!imageUrl) imageUrl = extractCardImage(container);
         }
-        // Bullets from room stats
+        // Bullets from text
         const bullets = [];
-        const rooms = link.querySelectorAll('.listing__rooms .room');
-        for (const room of rooms) {
-          const rt = (room.textContent || '').trim();
-          if (rt.match(/\\d+.*bed/i)) bullets.push(rt);
-          else if (rt.match(/\\d+.*bath/i)) bullets.push(rt);
-          else if (rt.match(/sq\\s*ft/i)) bullets.push(rt);
-        }
-        if (!bullets.length) {
-          const bedMatch = text.match(/(\\d+)\\s*Bed/i);
-          if (bedMatch) bullets.push(bedMatch[1] + ' bedrooms');
-        }
-        lots.push({ lot: lotNum, address: address.substring(0, 200), price, url: href, bullets, imageUrl: imageUrl || undefined });
+        const bedMatch = cText.match(/(\\d+)\\s*bed/i);
+        if (bedMatch) bullets.push(bedMatch[1] + ' bedrooms');
+        const bathMatch = cText.match(/(\\d+)\\s*bath/i);
+        if (bathMatch) bullets.push(bathMatch[1] + ' bathrooms');
+        lots.push({ lot: lotNum, address: t.substring(0, 200), price, url: href, bullets, imageUrl: imageUrl || undefined });
       }
       return lots;
     })()
@@ -7787,56 +7777,78 @@ const DOM_EXTRACTORS = {
     })()
   `,
 
-  // ── iamsold (JS-rendered React app, needs Puppeteer) ──
+  // ── iamsold (server-rendered with data-bkimage for images) ──
   iamsold: `
     (() => {
       const lots = [];
       const seen = new Set();
-      // iamsold renders property cards with links to /property/{slug}
-      const links = document.querySelectorAll('a[href*="/property/"]');
-      const cardMap = new Map();
-      for (const link of links) {
-        const href = link.getAttribute('href') || '';
-        if (!href.match(/\\/property\\/.+/)) continue;
-        if (cardMap.has(href)) continue;
-        let card = link;
-        for (let i = 0; i < 8; i++) { if (card.parentElement) card = card.parentElement; }
-        cardMap.set(href, card);
-      }
+      // iamsold uses div.c__property cards with structured content
+      const cards = document.querySelectorAll('.c__property, .c__propertyAlt');
       let lotNum = 0;
-      for (const [href, card] of cardMap) {
+      for (const card of cards) {
         lotNum++;
         const text = card.textContent || '';
+        // Address from .c__property__address (contains bed count + street + area + postcode)
         let address = '';
-        const headings = card.querySelectorAll('h2, h3, h4, p');
-        for (const h of headings) {
-          const t = (h.textContent || '').trim();
-          // Address usually contains a postcode or comma-separated location
-          if (t.length > 10 && (t.match(/[A-Z]{1,2}\\d/) || t.includes(','))) { address = t; break; }
+        const addrEl = card.querySelector('.c__property__address');
+        if (addrEl) {
+          address = (addrEl.textContent || '').replace(/\\s+/g, ' ').trim();
+          // Remove leading "X bed Type" prefix (e.g. "2 bed Apartment")
+          address = address.replace(/^\\d+\\s+bed\\s+\\w+\\s*/i, '').trim();
         }
-        if (!address) {
-          // Try slug from URL
-          const slug = href.split('/property/')[1]?.replace(/\\/$/, '').replace(/-/g, ' ');
-          if (slug && slug.length > 5) address = slug.replace(/\\b\\w/g, c => c.toUpperCase());
+        if (!address || address.length < 5) {
+          // Fallback: try link slug
+          const link = card.querySelector('a[href*="/property/"]');
+          if (link) {
+            const href = link.getAttribute('href') || '';
+            const slug = href.split('/property/')[1];
+            if (slug) address = slug.replace(/\\/$/, '').replace(/-/g, ' ').replace(/\\b\\w/g, c => c.toUpperCase());
+          }
         }
         if (!address || address.length < 5) continue;
+        // Price from tags or status text
         let price = null;
-        const priceMatch = text.match(/(?:Starting\\s*Bid|Guide\\s*Price)?\\s*£([\\d,]+)/i);
-        if (priceMatch) price = parseInt(priceMatch[1].replace(/,/g, ''));
-        let imageUrl = '';
-        const img = card.querySelector('img[src*="http"]');
-        if (img) {
-          const src = img.getAttribute('src') || '';
-          if (!src.match(/logo|icon|placeholder|avatar/i)) imageUrl = src;
+        const tags = card.querySelectorAll('.c__property__tags li, .c__property__infoPoints li');
+        for (const tag of tags) {
+          const tm = (tag.textContent || '').match(/(?:Starting\\s*bid|Guide\\s*Price)[:\\s]*£([\\d,]+)/i);
+          if (tm) { price = parseInt(tm[1].replace(/,/g, '')); break; }
         }
+        if (!price) {
+          const pm = text.match(/(?:Starting\\s*bid|Guide\\s*Price)[:\\s]*£([\\d,]+)/i);
+          if (pm) price = parseInt(pm[1].replace(/,/g, ''));
+        }
+        if (!price) {
+          const pm = text.match(/£([\\d,]+)/);
+          if (pm) price = parseInt(pm[1].replace(/,/g, ''));
+        }
+        // Image from data-bkimage (cloudfront CDN)
+        let imageUrl = '';
+        const bkImg = card.querySelector('[data-bkimage]');
+        if (bkImg) imageUrl = bkImg.getAttribute('data-bkimage') || '';
+        if (!imageUrl) {
+          const webpAlt = card.querySelector('[data-webpalt]');
+          if (webpAlt) imageUrl = webpAlt.getAttribute('data-webpalt') || '';
+        }
+        if (!imageUrl) imageUrl = extractCardImage(card);
+        // URL
+        let url = '';
+        const link = card.querySelector('a[href*="/property/"]');
+        if (link) url = link.getAttribute('href') || '';
+        // Bullets
         const bullets = [];
         const bedMatch = text.match(/(\\d+)\\s*bed/i);
         if (bedMatch) bullets.push(bedMatch[1] + ' bedrooms');
-        const typeMatch = text.match(/\\b(Detached|Semi|Terrace|Flat|Bungalow|House|Cottage|Land|Commercial)\\b/i);
+        const typeMatch = text.match(/\\b(Detached|Semi-Detached|Terrace|Flat|Apartment|Bungalow|House|Cottage|Land|Commercial)\\b/i);
         if (typeMatch) bullets.push(typeMatch[0]);
-        if (seen.has(address)) continue;
-        seen.add(address);
-        lots.push({ lot: lotNum, address: address.substring(0, 200), price, url: href, bullets, imageUrl: imageUrl || undefined });
+        // Status tag
+        const statusEl = card.querySelector('.c__property__status');
+        if (statusEl) {
+          const st = (statusEl.textContent || '').trim();
+          if (st && st !== 'Available') bullets.push(st);
+        }
+        if (seen.has(url || address)) continue;
+        seen.add(url || address);
+        lots.push({ lot: lotNum, address: address.substring(0, 200), price, url, bullets, imageUrl: imageUrl || undefined });
       }
       return lots;
     })()
@@ -7845,7 +7857,7 @@ const DOM_EXTRACTORS = {
 };
 
 // Wire up EIG house aliases to the shared eigplatform extractor
-for (const slug of ['astleys', 'henrysykes', 'clarkesimpson', 'brownco']) {
+for (const slug of ['astleys', 'henrysykes', 'clarkesimpson', 'brownco', 'cheffinstimed']) {
   DOM_EXTRACTORS[slug] = DOM_EXTRACTORS.eigplatform;
 }
 // Wire up Auction House UK branches to the shared auctionhouseuk extractor
