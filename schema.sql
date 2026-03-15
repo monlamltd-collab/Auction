@@ -89,17 +89,29 @@ CREATE TABLE house_skills (
 
 CREATE INDEX idx_skills_status ON house_skills(status);
 
--- 6. Enable Row Level Security (required by Supabase)
+-- 6. PROCESSED WEBHOOK EVENTS
+-- Idempotency table for Stripe webhook deduplication
+CREATE TABLE IF NOT EXISTS processed_webhook_events (
+  event_id TEXT PRIMARY KEY,
+  processed_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Auto-cleanup: delete events older than 7 days (Stripe retries max 72 hours)
+-- Cleanup is handled in application code (server.js) after webhook processing
+
+-- 7. Enable Row Level Security (required by Supabase)
 ALTER TABLE cached_analyses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE rate_limits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 
 ALTER TABLE analytics_snapshots ENABLE ROW LEVEL SECURITY;
 ALTER TABLE house_skills ENABLE ROW LEVEL SECURITY;
+ALTER TABLE processed_webhook_events ENABLE ROW LEVEL SECURITY;
 
--- 7. Policies — allow server (service_role) full access
+-- 8. Policies — allow server (service_role) full access
 CREATE POLICY "Service role full access" ON cached_analyses FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Service role full access" ON rate_limits FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Service role full access" ON users FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Service role full access" ON analytics_snapshots FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Service role full access" ON house_skills FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role full access" ON processed_webhook_events FOR ALL USING (true) WITH CHECK (true);

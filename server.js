@@ -1286,6 +1286,9 @@ app.post('/api/stripe/checkout', rateLimit(60000, 5), async (req, res) => {
   }
 });
 
+// Webhook event counter for periodic cleanup of processed_webhook_events
+let webhookEventCounter = 0;
+
 // POST /api/stripe/webhook — Stripe event handler
 app.post('/api/stripe/webhook', async (req, res) => {
   if (!stripe) return res.sendStatus(400);
@@ -1402,6 +1405,20 @@ app.post('/api/stripe/webhook', async (req, res) => {
   } catch (err) {
     log.error('Stripe webhook handler error', { error: err.message, eventType: event.type });
     return res.status(500).json({ error: 'Webhook handler failed' });
+  }
+
+  // Periodic cleanup: delete processed webhook events older than 7 days (every 100th webhook)
+  webhookEventCounter++;
+  if (webhookEventCounter % 100 === 0) {
+    const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    supabase.from('processed_webhook_events')
+      .delete()
+      .lt('processed_at', cutoff)
+      .then(({ error }) => {
+        if (error) log.warn('Webhook event cleanup failed', { error: error.message });
+        else log.info('Webhook event cleanup completed');
+      })
+      .catch(() => {});
   }
 
   res.json({ received: true });
