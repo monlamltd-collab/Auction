@@ -426,6 +426,11 @@ footer .logo-f span{color:var(--green)}
 .lot-card.blurred::after{content:'Upgrade for full address, AI scores & listing link';position:absolute;bottom:44px;left:0;right:0;background:linear-gradient(transparent,rgba(255,255,255,.95) 40%);padding:32px 16px 4px;text-align:center;font-weight:600;font-size:.8rem;color:var(--accent);pointer-events:none;z-index:1}
 .card-image-wrapper{position:relative;height:200px;width:100%;overflow:hidden;background:#eef2f7}
 .card-image{width:100%;height:100%;object-fit:cover;object-position:center;display:block}
+.lot-status-overlay{position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;z-index:2;pointer-events:none}
+.lot-status-overlay::after{position:absolute;font-weight:700;font-size:1.1rem;letter-spacing:2px;padding:6px 60px;transform:rotate(-35deg);white-space:nowrap;color:#fff}
+.lot-status-sold::after{content:'SOLD';background:rgba(195,57,43,0.85)}
+.lot-status-stc::after{content:'SALE AGREED';background:rgba(230,126,34,0.85)}
+.lot-status-withdrawn::after{content:'WITHDRAWN';background:rgba(127,140,141,0.85)}
 .card-image-placeholder{height:100%;background:linear-gradient(135deg,#eef2f7 0%,#e4eaf2 50%,#dde5ef 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}
 .card-image-placeholder svg{width:48px;height:48px;fill:#c0cad6;opacity:.7}
 .card-image-placeholder .ph-label{font-size:.72rem;color:#a0aab4;font-weight:500;letter-spacing:.03em}
@@ -2622,10 +2627,17 @@ function isValidImageUrl(url) {
   return false;
 }
 
+function getStatusOverlay(lot) {
+  if (!lot.status || lot.status === 'available') return '';
+  return '<div class="lot-status-overlay lot-status-' + lot.status + '"></div>';
+}
+
 function getCardImageHtml(lot) {
+  const overlay = getStatusOverlay(lot);
   if (!lot.imageUrl || !isValidImageUrl(lot.imageUrl)) {
     return '<div class="card-image-wrapper">' +
       getPlaceholderHtml(lot.propType) +
+      overlay +
       getCardImageBadges(lot) +
     '</div>';
   }
@@ -2635,6 +2647,7 @@ function getCardImageHtml(lot) {
     'onload="this.previousElementSibling.style.display=\'none\';if(this.naturalWidth<120||this.naturalHeight<90){this.outerHTML=getPlaceholderHtml(this.dataset.proptype)}" ' +
     'onerror="this.outerHTML=getPlaceholderHtml(this.dataset.proptype)"' +
     ' data-proptype="' + esc(lot.propType || 'house') + '">' +
+    overlay +
     getCardImageBadges(lot) +
   '</div>';
 }
