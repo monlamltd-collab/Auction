@@ -461,7 +461,7 @@ function matchLenders(price,cash,propType,isRefurb,works,gdv,addlVal,addlMort,lo
   const loanNeeded=Math.max(0,price-cash);
   const ltv=price>0?(loanNeeded/price)*100:0;
   const cashForDeposit=Math.min(cash,price);
-  const stampDuty=price<=250000?0:price<=925000?(price-250000)*0.05:(price-250000)*0.05+(price>925000?(price-925000)*0.05:0);
+  let stampDuty=Math.round(price<=250000?price*0.05:price<=925000?250000*0.05+(price-250000)*0.1:price<=1500000?250000*0.05+675000*0.1+(price-925000)*0.15:250000*0.05+675000*0.1+575000*0.15+(price-1500000)*0.17);
   const estCosts=price*0.04;
   const totalCashNeeded=stampDuty+estCosts;
 
@@ -826,7 +826,7 @@ function renderResults(r){
     <div class="reg-notice" id="regNotice">
       <strong>⚠️ Regulated Mortgage Enquiry</strong><br>
       As you or a family member will occupy this property, this enquiry involves a regulated mortgage. In order to comply with FCA regulations, your enquiry will be referred to <strong>Mortgage Style</strong>, who are authorised and regulated by the Financial Conduct Authority.<br>
-      <span class="fca-num">Mortgage Style — FCA Registration Number: [XXXXXX]</span>
+      <span class="fca-num">Mortgage Style — FCA Registration Number: [FCA_NUMBER_NEEDED]</span>
     </div>
 
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
@@ -852,7 +852,7 @@ function renderResults(r){
     </div>
 
     <div class="consent-row">
-      <input type="checkbox" id="leadConsent" checked>
+      <input type="checkbox" id="leadConsent">
       <label for="leadConsent">I consent to BridgeMatch sharing my contact details and deal information with a bridging finance specialist who will contact me about this enquiry.</label>
     </div>
 
@@ -911,13 +911,13 @@ function submitLead(price, loan, ltv, works, count, propType) {
     document.getElementById('leadName').focus();
     return;
   }
-  if (!email || !email.includes('@')) {
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
     errEl.textContent = 'Please enter your email address';
     errEl.style.display = 'block';
     document.getElementById('leadEmail').focus();
     return;
   }
-  if (!phone || phone.length < 10) {
+  if (!phone || !/^\+?[\d\s()-]{10,15}$/.test(phone.trim())) {
     errEl.textContent = 'Please enter your phone number';
     errEl.style.display = 'block';
     document.getElementById('leadPhone').focus();
@@ -957,6 +957,7 @@ function submitLead(price, loan, ltv, works, count, propType) {
     depositRange: deposit,
     experienceLevel: experience,
     auctionUrl: window.location.href,
+    consent: !!consent,
     dealData: {
       price: decodeURIComponent(price),
       loan: decodeURIComponent(loan),
@@ -982,7 +983,7 @@ function submitLead(price, loan, ltv, works, count, propType) {
     if (data.isRegulated) {
       formEl.outerHTML = `<div class="lead-success regulated">
         <h3>⚠️ Regulated Enquiry Received</h3>
-        <p>Thank you, ${esc(name)}. As this involves a regulated mortgage, your enquiry will be handled by <strong>Mortgage Style</strong>, authorised and regulated by the Financial Conduct Authority (FCA No: [XXXXXX]).</p>
+        <p>Thank you, ${esc(name)}. As this involves a regulated mortgage, your enquiry will be handled by <strong>Mortgage Style</strong>, authorised and regulated by the Financial Conduct Authority (FCA No: [FCA_NUMBER_NEEDED]).</p>
         <p style="margin-top:8px">A specialist advisor will be in touch within 24 hours to discuss your deal.</p>
       </div>`;
     } else {

@@ -467,7 +467,10 @@ footer .logo-f span{color:var(--green)}
 .card-bm-btn:hover{background:var(--green2);transform:translateY(-1px);text-decoration:none!important}
 
 /* ── EXPANDED CARD PANEL ── */
-.expanded-panel{grid-column:1/-1;background:var(--white);border:1px solid #d5dde5;border-radius:0 0 var(--radius) var(--radius);padding:20px 24px;display:grid;grid-template-columns:60% 40%;gap:24px;animation:slideDown .25s ease}
+.expanded-panel{grid-column:1/-1;background:var(--white);border:1px solid #d5dde5;border-radius:0 0 var(--radius) var(--radius);padding:20px 24px;display:grid;grid-template-columns:60% 40%;gap:24px;animation:slideDown .25s ease;position:relative}
+.exp-close-btn{position:absolute;top:10px;right:10px;width:32px;height:32px;border-radius:50%;border:1px solid var(--border);background:var(--white);color:var(--text2);font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:5;transition:all .15s;line-height:1;padding:0;font-family:inherit;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+.exp-close-btn:hover{background:var(--red-light);color:var(--red);border-color:var(--red)}
+.coming-soon-label{display:inline-block;font-size:.65rem;font-weight:700;padding:2px 7px;border-radius:10px;background:var(--amber-light);color:var(--amber);margin-left:6px;vertical-align:middle;letter-spacing:.3px;text-transform:uppercase}
 @keyframes slideDown{from{opacity:0;max-height:0}to{opacity:1;max-height:1000px}}
 .expanded-panel .exp-left{}
 .expanded-panel .exp-right{}
@@ -674,7 +677,7 @@ footer .logo-f span{color:var(--green)}
           </div>
           <div class="acct-divider"></div>
           <a class="acct-item" id="acctManage" onclick="openBillingPortal();closeAccountMenu()">Manage plan</a>
-          <a class="acct-item" onclick="showPaywall();closeAccountMenu()">Upgrade</a>
+          <a class="acct-item" id="acctUpgrade" onclick="showPaywall();closeAccountMenu()">Upgrade</a>
           <div class="acct-divider"></div>
           <a class="acct-item acct-signout" onclick="signOut();closeAccountMenu()">Sign out</a>
         </div>
@@ -1015,11 +1018,11 @@ footer .logo-f span{color:var(--green)}
     <form class="ec-form" id="ecForm" onsubmit="return submitEmailCapture(event)" aria-label="Subscribe to auction deal alerts">
       <input type="text" name="name" placeholder="Your name" required autocomplete="name" aria-label="Your name">
       <input type="email" name="email" placeholder="Email address" required autocomplete="email" aria-label="Email address">
+      <label style="display:flex;align-items:flex-start;gap:6px;font-size:.75rem;color:var(--text4);margin:8px 0 4px;cursor:pointer"><input type="checkbox" name="consent" required style="margin-top:2px"> I consent to receiving weekly auction deal alerts by email. You can unsubscribe at any time.</label>
       <button type="submit" id="ecSubmitBtn">Subscribe</button>
     </form>
     <div class="ec-error" id="ecError"></div>
     <div class="ec-success" id="ecSuccess">You're in! We'll send your first deal alert soon.</div>
-    <p class="ec-note">We respect your privacy.</p>
   </section>
 
   <footer>
@@ -1038,7 +1041,7 @@ const AUTH_ENABLED = window.__AUTH_ENABLED__ || false;
 </script>
 <script>
 const $=id=>document.getElementById(id);
-function esc(s){if(s==null)return '';const d=document.createElement('div');d.textContent=String(s);return d.innerHTML;}
+function esc(s){if(s==null)return '';const d=document.createElement('div');d.textContent=String(s);return d.innerHTML.replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 function safeHref(u){if(!u)return '#';const s=String(u).trim();if(!/^https?:\/\//i.test(s))return '#';if(/google\.\w+\/maps|maps\.google|maps\.app\.goo|waze\.com|bing\.com\/maps/i.test(s))return '#';return esc(s);}
 let LOTS=[], SMART_RESULTS=null;
 let ALL_LOTS=[], ALL_SOURCES=[];
@@ -1046,7 +1049,7 @@ let LENDER_DATA=[];
 const BATCH_SIZE=60;
 let _pendingCards=[];
 let _batchObserver=null;
-const PREMIUM_ENABLED=true; // TODO: gate behind auth when auction tool gets subscriptions
+function isPremium(){return window._userTier==='premium';} // Gated behind auth
 let _searchAbort=null; // AbortController for in-flight searches
 let _searchTimers=[]; // setTimeout IDs for step animations
 let _searchReader=null; // SSE ReadableStreamDefaultReader (for cleanup on abort)
@@ -1120,6 +1123,7 @@ async function loadAllLots(){
   showSkeletonCards(12);
   try{
     const r=await fetch('/api/all-lots',{headers:getAuthHeaders()});
+    if(!r.ok) throw new Error('Server error: '+r.status);
     const d=await r.json();
     ALL_LOTS=d.lots||[];
     ALL_SOURCES=d.sources||[];
@@ -1129,6 +1133,10 @@ async function loadAllLots(){
     if(lsEl) lsEl.dataset.target = ALL_LOTS.length;
 
     // Auto-show all lots on page load
+    if(!ALL_LOTS.length){
+      const out=$('lotsGrid');
+      if(out)out.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:3rem 1rem;color:#6b7c8d"><div style="font-size:1.2rem">No auction lots currently available</div><div>Check back soon for new listings.</div></div>';
+    }
     if(ALL_LOTS.length && !document.body.classList.contains('view-results')){
       LOTS=ALL_LOTS;
       $('resultsTitle').textContent=ALL_LOTS.length.toLocaleString()+' auction lots';
@@ -1142,6 +1150,8 @@ async function loadAllLots(){
     }
   }catch(e){
     console.log('Failed to load lots:',e);
+    const out=$('lotsGrid');
+    if(out)out.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:3rem 1rem;color:#6b7c8d"><div style="font-size:1.2rem;margin-bottom:0.5rem">Unable to load auction lots</div><div>Please check your connection and <a href="javascript:location.reload()" style="color:#2e7d32">try again</a>.</div></div>';
   }
 }
 
@@ -1368,11 +1378,11 @@ function calcAffordability(cash,propType,termMo){
 function getAffordabilityTag(lot,aff){
   if(!lot.price||!aff||!aff.maxStd)return 'unknown';
   if(lot.price<=aff.maxStd)return 'in_budget';
-  if(PREMIUM_ENABLED&&$('fpRefurb')?.checked){
+  if(isPremium()&&$('fpRefurb')?.checked){
     const isRefurb=lot.condition==='needs work'||lot.condition==='poor'||lot.dealType==='Refurb'||lot.dealType==='Refurb+Extend'||lot.dealType==='Development';
     if(isRefurb&&aff.maxRefurb&&lot.price<=aff.maxRefurb)return 'stretch_refurb';
   }
-  if(PREMIUM_ENABLED&&$('fpTitleSplit')?.checked){
+  if(isPremium()&&$('fpTitleSplit')?.checked){
     if(lot.titleSplit&&aff.maxTS&&lot.price<=aff.maxTS)return aff.fullFinance?'full_finance':'stretch_split';
   }
   return 'out_of_reach';
@@ -1400,7 +1410,7 @@ function updateFinanceProfile(){
   if(!el)return{cash,aff:null};
 
   // Toggle title split settings panel visibility
-  const tsChecked=PREMIUM_ENABLED&&$('fpTitleSplit')?.checked;
+  const tsChecked=isPremium()&&$('fpTitleSplit')?.checked;
   const tsPanel=$('fpTsSettings');
   if(tsPanel){tsChecked?tsPanel.classList.add('show'):tsPanel.classList.remove('show')}
 
@@ -1433,7 +1443,7 @@ function updateFinanceProfile(){
   const isLand=propType==='land_no_pp'||propType==='land_with_pp';
   const lbl=isLand?(propType==='land_with_pp'?'Land (with planning)':'Land (no planning)'):'Standard bridge';
   let html=`${lbl}: <b>${fmtK(aff.maxStd)}</b> max <span style="color:var(--text4)">(best ${aff.bestStdNet}% net LTV)</span>`;
-  if(!isLand&&PREMIUM_ENABLED&&$('fpRefurb')?.checked&&aff.maxRefurb>aff.maxStd){
+  if(!isLand&&isPremium()&&$('fpRefurb')?.checked&&aff.maxRefurb>aff.maxStd){
     html+=`<br>Refurb projects: <span class="fp-refurb"><b>${fmtK(aff.maxRefurb)}</b> max</span> <span style="color:var(--text4)">(${aff.bestRefurbNet}% net day-1 LTV)</span>`;
   }
   if(!isLand&&tsChecked&&aff.maxTS>aff.maxStd){
@@ -1703,12 +1713,14 @@ async function openBillingPortal() {
 // Payment success toast
 (function checkPaymentSuccess() {
   const params = new URLSearchParams(window.location.search);
-  if (params.get('payment') === 'success') {
+  const paymentStatus = params.get('payment');
+  if (paymentStatus === 'success' || paymentStatus === 'cancelled') {
     window.history.replaceState({}, '', window.location.pathname);
     setTimeout(() => {
       const toast = document.createElement('div');
-      toast.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#2e7d32;color:white;padding:12px 24px;border-radius:8px;font-weight:600;z-index:999;font-size:.9rem;box-shadow:0 4px 20px rgba(0,0,0,.15)';
-      toast.textContent = 'Payment successful! You now have Pro access.';
+      const isSuccess = paymentStatus === 'success';
+      toast.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:' + (isSuccess ? '#2e7d32' : '#6b7c8d') + ';color:white;padding:12px 24px;border-radius:8px;font-weight:600;z-index:999;font-size:.9rem;box-shadow:0 4px 20px rgba(0,0,0,.15)';
+      toast.textContent = isSuccess ? 'Payment successful! You now have Pro access.' : 'Checkout cancelled. You can upgrade any time from your account menu.';
       document.body.appendChild(toast);
       setTimeout(() => toast.remove(), 5000);
     }, 500);
@@ -1746,10 +1758,12 @@ async function updateProStatus() {
       $('acctTier').textContent = 'Pro';
       $('acctTier').classList.add('pro');
       if ($('acctManage')) $('acctManage').style.display = '';
+      if ($('acctUpgrade')) $('acctUpgrade').style.display = 'none';
     } else {
       $('acctTier').textContent = 'Free';
       $('acctTier').classList.remove('pro');
       if ($('acctManage')) $('acctManage').style.display = 'none';
+      if ($('acctUpgrade')) $('acctUpgrade').style.display = '';
     }
     // Store for search counter display
     window._userTier = data.tier;
@@ -2080,7 +2094,7 @@ async function runSmartSearch(query) {
     if(e.name==='AbortError') return; // Silently ignore aborted requests
     console.error('Analysis error:', e);
     $('progressPanel').innerHTML=`<div class="scan-animation" style="background:var(--red)">
-      <div class="scan-title">✗ ${e.message || 'Analysis failed'}</div>
+      <div class="scan-title">✗ ${esc(e.message || 'Analysis failed')}</div>
       <div class="scan-label"><a href="#" onclick="backToAuctions();return false" style="color:white;text-decoration:underline">← Back to auctions</a></div>
     </div>`;
   }
@@ -2219,8 +2233,8 @@ function renderLots(){
   if(ft) lots=lots.filter(l=>l.propType===ft);
   if(fd) lots=lots.filter(l=>l.dealType===fd);
   if(ften) lots=lots.filter(l=>l.tenure===ften);
-  if(fco==='needs work') lots=lots.filter(l=>l.condition==='needs work');
-  else if(fco==='good') lots=lots.filter(l=>l.condition!=='needs work');
+  if(fco==='needs work') lots=lots.filter(l=>l.condition==='needs work'||l.condition==='poor');
+  else if(fco==='good') lots=lots.filter(l=>l.condition==='good');
   else if(fco==='vacant') lots=lots.filter(l=>l.vacant);
   else if(fco==='tenanted') lots=lots.filter(l=>l.vacant===false);
   if(floc) lots=lots.filter(l=>matchesRegion(l.address, floc));
@@ -2230,7 +2244,7 @@ function renderLots(){
   if(fa==='full_finance'&&fp.cash) lots=lots.filter(l=>l._affTag==='full_finance');
   if(fsold==='available') lots=lots.filter(l=>!(l.bullets||[]).some(b=>/\bSOLD\b|\bSTC\b|\bSALE.?AGREED\b|\bWITHDRAWN\b/i.test(b)));
   if(fsold==='sold') lots=lots.filter(l=>(l.bullets||[]).some(b=>/\bSOLD\b|\bSTC\b|\bSALE.?AGREED\b|\bWITHDRAWN\b/i.test(b)));
-  if(fs) lots=lots.filter(l=>(l.address||'').toLowerCase().includes(fs)||(l.bullets||[]).join(' ').toLowerCase().includes(fs));
+  if(fs) lots=lots.filter(l=>(l.address||'').toLowerCase().includes(fs)||(l.bullets||[]).join(' ').toLowerCase().includes(fs)||(l.opps||[]).join(' ').toLowerCase().includes(fs)||(l.risks||[]).join(' ').toLowerCase().includes(fs)||(l.dealType||'').toLowerCase().includes(fs)||(l.propType||'').toLowerCase().includes(fs)||(l._house||'').toLowerCase().includes(fs)||(l.tenure||'').toLowerCase().includes(fs));
 
   // House filter
   const selectedHouses=getSelectedHouses();
@@ -2274,6 +2288,9 @@ function renderLots(){
   else if(sortVal==='price_desc') lots.sort((a,b)=>((b.price||0)-(a.price||0)));
   else if(sortVal==='yield') lots.sort((a,b)=>((b.estGrossYield||0)-(a.estGrossYield||0)));
 
+  // Store filtered lots for export functions
+  window._filteredLots = lots;
+
   const top=lots.filter(l=>l.score>=3);
   let statsHtml=`
     <div class="stat-card"><div class="v g">${LOTS.length}</div><div class="l">Total lots</div></div>
@@ -2311,7 +2328,7 @@ function renderLots(){
 
   // Highlight active filters in unified bar
   document.querySelectorAll('.unified-bar .tb-select').forEach(sel=>{
-    sel.classList.toggle('active-filter',sel.value!==''&&sel.value!=='all'&&sel.value!=='available'&&sel.value!=='score');
+    sel.classList.toggle('active-filter',sel.value!==''&&sel.value!=='all'&&sel.value!=='score');
   });
 
   expandedLotId = null;
@@ -2334,10 +2351,11 @@ function renderLots(){
   if(sortVal!=='score'){
     lots.forEach(l=>allItems.push({html:card(l)}));
   } else {
-    const tsL=lots.filter(l=>l.titleSplit&&l.score>=2);
-    const topL=lots.filter(l=>l.score>=3&&!(showTSGroup&&l.titleSplit&&l.score>=2));
-    const midL=lots.filter(l=>l.score>=1.5&&l.score<3&&!(showTSGroup&&l.titleSplit&&l.score>=2));
-    const rest=lots.filter(l=>l.score<1.5&&!(showTSGroup&&l.titleSplit&&l.score>=2));
+    const scoreThenPrice=(a,b)=>(b.score-a.score)||((a.price||Infinity)-(b.price||Infinity));
+    const tsL=lots.filter(l=>l.titleSplit&&l.score>=2).sort(scoreThenPrice);
+    const topL=lots.filter(l=>l.score>=3&&!(showTSGroup&&l.titleSplit&&l.score>=2)).sort(scoreThenPrice);
+    const midL=lots.filter(l=>l.score>=1.5&&l.score<3&&!(showTSGroup&&l.titleSplit&&l.score>=2)).sort(scoreThenPrice);
+    const rest=lots.filter(l=>l.score<1.5&&!(showTSGroup&&l.titleSplit&&l.score>=2)).sort(scoreThenPrice);
 
     if(topL.length){allItems.push({html:divider('Top Picks',topL.length),isDivider:true});topL.forEach(l=>allItems.push({html:card(l)}))}
     if(tsL.length && showTSGroup){allItems.push({html:divider('Title Splits',tsL.length),isDivider:true});tsL.forEach(l=>allItems.push({html:card(l)}))}
@@ -2407,14 +2425,15 @@ function card(l){
   const chipsHtml = getSignalChips(l);
 
   // Category label
-  const catLabel = 'Lot ' + esc(l.lot || '—') + ' · ' + esc(l.dealType || 'Standard');
+  const catLabel = 'Lot ' + esc(l.lot || '—') + ' · ' + esc(l.blurred ? '—' : (l.dealType || 'Standard'));
 
   // Card footer links
   const viewLink = l.url ? '<a href="' + safeHref(l.url) + '" target="_blank" rel="noopener noreferrer" class="card-view-link" onclick="event.stopPropagation()">View listing ↗</a>' : '<span></span>';
   const bmBtn = l.price ? '<button class="card-bm-btn" onclick="bridgeMatchLot(' + l._idx + ',event)">🧩 BridgeMatch It</button>' : '';
 
   const endedClass = (l._auctionDate && l._auctionDate < new Date().toISOString().slice(0,10)) ? ' card-ended' : '';
-  return '<div class="lot-card' + endedClass + '" id="lot-' + l._idx + '" tabindex="0" role="article" aria-label="Lot ' + esc(l.lot || '') + ' — ' + esc(l.address || 'Address not available') + '" onclick="expandCard(LOTS[' + l._idx + '])" onkeydown="if(event.key===\'Enter\'){this.click()}">' +
+  const blurredClass = l.blurred ? ' blurred' : '';
+  return '<div class="lot-card' + endedClass + blurredClass + '" id="lot-' + l._idx + '" tabindex="0" role="article" aria-label="Lot ' + esc(l.lot || '') + ' — ' + esc(l.address || 'Address not available') + '" onclick="expandCard(LOTS[' + l._idx + '])" onkeydown="if(event.key===\'Enter\'){this.click()}">' +
     getCardImageHtml(l) +
     '<div class="card-body">' +
       '<div class="card-row1"><span class="card-lot-info">' + catLabel + '</span><span class="card-price">' + esc(priceText) + '</span></div>' +
@@ -2453,13 +2472,14 @@ function calcDealAnalysis(guidePrice,streetAvg,grossYield,monthlyRent){
 }
 
 // Downloads
-function dlCSV(){
+function dlCSV(){if(window._userTier!=='premium'){showPaywall('CSV export is a Pro feature. Upgrade for full data exports.');return;}
+  const exportLots = window._filteredLots || LOTS;
   const rows=[['Rank','Lot','Score','Deal','TitleSplit','Units','Address','Guide','Affordability','Type','Beds','Tenure','Condition','Sqft','StreetAvg','BelowMkt%','EstYield%','EstRent/mo','Opps','Risks','URL']];
-  LOTS.forEach((l,i)=>{
+  exportLots.forEach((l,i)=>{
     rows.push([i+1,l.lot,l.score,l.dealType,l.titleSplit?'YES':'',l.units||'',l.address,l.price||'TBA',l._affTag||'',l.propType,l.beds??'',l.tenure,l.condition,l.sqft||'',l.streetAvg||'',l.belowMarket||'',l.estGrossYield||'',l.estMonthlyRent||'',(l.opps||[]).join(' | '),(l.risks||[]).join(' | '),l.url])});
   dl(rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n'),'auction_analysis.csv','text/csv');
 }
-function dlJSON(){dl(JSON.stringify(LOTS,null,2),'auction_analysis.json','application/json')}
+function dlJSON(){if(window._userTier!=='premium'){showPaywall('JSON export is a Pro feature. Upgrade for full data exports.');return;}const exportLots=window._filteredLots||LOTS;dl(JSON.stringify(exportLots,null,2),'auction_analysis.json','application/json')}
 function dl(c,n,t){const b=new Blob([c],{type:t}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=n;a.click()}
 
 // ═══════════════════════════════
@@ -2512,9 +2532,11 @@ function getPlaceholderHtml(type) {
 function getCardImageBadges(lot) {
   let html = '';
   if (lot._house) html += '<div class="card-badge badge-house">' + esc(lot._house) + '</div>';
-  const sc = lot.score >= 3 ? 'high' : lot.score >= 1 ? 'mid' : 'low';
-  const sign = lot.score > 0 ? '+' : '';
-  html += '<div class="card-badge badge-score ' + sc + '">' + sign + lot.score + '</div>';
+  const rawScore = lot.score ?? 0;
+  const clampedScore = Math.max(0, Math.min(10, rawScore));
+  const sc = clampedScore >= 3 ? 'high' : clampedScore >= 1 ? 'mid' : 'low';
+  const sign = clampedScore > 0 ? '+' : '';
+  html += '<div class="card-badge badge-score ' + sc + '">' + sign + clampedScore + '</div>';
   if (lot.vacant) html += '<div class="badge-vacant">Vacant possession</div>';
   // Urgency / ended badge
   if (lot._auctionDate) {
@@ -2538,9 +2560,9 @@ function getCardImageHtml(lot) {
   }
   return '<div class="card-image-wrapper">' +
     '<div class="card-image-shimmer"></div>' +
-    '<img class="card-image" src="' + esc(lot.imageUrl) + '" alt="' + esc((lot.address || 'Auction property') + ' — ' + (lot.house || 'auction lot')) + '" loading="lazy" ' +
-    'onload="this.previousElementSibling.style.display=\'none\';if(this.naturalWidth<120||this.naturalHeight<90){this.parentElement.innerHTML=getPlaceholderHtml(this.dataset.proptype)}" ' +
-    'onerror="this.parentElement.innerHTML=getPlaceholderHtml(this.dataset.proptype)"' +
+    '<img class="card-image" src="' + esc(lot.imageUrl) + '" alt="' + esc((lot.address || 'Auction property') + ' — ' + (lot._house || 'auction lot')) + '" loading="lazy" ' +
+    'onload="this.previousElementSibling.style.display=\'none\';if(this.naturalWidth<120||this.naturalHeight<90){this.outerHTML=getPlaceholderHtml(this.dataset.proptype)}" ' +
+    'onerror="this.outerHTML=getPlaceholderHtml(this.dataset.proptype)"' +
     ' data-proptype="' + esc(lot.propType || 'house') + '">' +
     getCardImageBadges(lot) +
   '</div>';
@@ -2563,6 +2585,7 @@ function getSignalChips(lot) {
 }
 
 function expandCard(lot) {
+  if (lot.blurred) { showPaywall('Upgrade to Pro for full lot details, AI analysis, and finance checks.'); return; }
   // Close any existing expanded panel
   const existing = document.querySelector('.expanded-panel');
   if (existing) existing.remove();
@@ -2580,7 +2603,7 @@ function expandCard(lot) {
 
   // Build expanded panel
   const imgHtml = lot.imageUrl
-    ? '<img class="exp-large-img" src="' + esc(lot.imageUrl) + '" alt="' + esc(lot.address) + '">'
+    ? '<img class="exp-large-img" src="' + esc(lot.imageUrl) + '" alt="' + esc(lot.address || 'Auction property') + '" onerror="this.outerHTML=\'<div class=exp-large-img-placeholder>' + getPropertyTypeIcon(lot.propType) + '</div>\'">'
     : '<div class="exp-large-img-placeholder">' + getPropertyTypeIcon(lot.propType) + '</div>';
 
   const analysisText = (lot.bullets || []).join('. ');
@@ -2595,7 +2618,12 @@ function expandCard(lot) {
   const panel = document.createElement('div');
   panel.className = 'expanded-panel';
   panel.id = 'expanded-' + lot._idx;
+
+  // "Coming Soon" labels for premium-only features when user is not premium
+  const comingSoonTag = !isPremium() ? '<span class="coming-soon-label">Coming Soon</span>' : '';
+
   panel.innerHTML =
+    '<button class="exp-close-btn" onclick="closeExpandedPanel()" aria-label="Close panel" title="Close">&times;</button>' +
     '<div class="exp-left">' +
       imgHtml +
       '<div class="exp-analysis">' +
@@ -2603,6 +2631,11 @@ function expandCard(lot) {
         '<div class="exp-analysis-text">' + esc(analysisText || 'No detailed analysis available.') + '</div>' +
       '</div>' +
       (signalsHtml ? '<div class="exp-signals">' + signalsHtml + '</div>' : '') +
+      '<div style="margin-top:14px;display:flex;flex-wrap:wrap;gap:8px">' +
+        '<div style="font-size:.82rem;color:var(--text3);padding:6px 10px;background:var(--surface2);border-radius:6px;border:1px solid var(--border)">Yield Analysis' + comingSoonTag + '</div>' +
+        '<div style="font-size:.82rem;color:var(--text3);padding:6px 10px;background:var(--surface2);border-radius:6px;border:1px solid var(--border)">Comparables' + comingSoonTag + '</div>' +
+        '<div style="font-size:.82rem;color:var(--text3);padding:6px 10px;background:var(--surface2);border-radius:6px;border:1px solid var(--border)">Deal Stacking' + comingSoonTag + '</div>' +
+      '</div>' +
     '</div>' +
     '<div class="exp-right">' +
       '<div class="finance-widget" id="finance-widget-' + lot._idx + '">' +
@@ -2621,6 +2654,17 @@ function expandCard(lot) {
 
   // Insert after the card
   cardEl.after(panel);
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function closeExpandedPanel() {
+  const existing = document.querySelector('.expanded-panel');
+  if (existing) existing.remove();
+  if (expandedLotId !== null) {
+    const cardEl = document.getElementById('lot-' + expandedLotId);
+    if (cardEl) cardEl.classList.remove('expanded');
+    expandedLotId = null;
+  }
 }
 
 function updateLTV(idx, val) {
@@ -2634,15 +2678,15 @@ function triggerFinanceCheck(idx) {
   const lot = LOTS.find(l => l._idx === idx);
   if (!lot || !lot.price) return;
 
-  const ltv = parseInt(document.getElementById('ltv-slider-' + idx)?.value || 70);
+  const ltv = parseInt(document.getElementById('ltv-slider-' + idx)?.value ?? '70', 10);
   const resultsEl = document.getElementById('fw-results-' + idx);
   if (!resultsEl) return;
 
   resultsEl.innerHTML = '<div class="fw-loading"><div class="fw-count fw-pulse">...</div><div class="fw-count-label">Checking lenders</div></div>';
 
   const loanAmount = Math.round(lot.price * ltv / 100);
-  const propType = lot.propType || 'house';
-  const apiType = propType.includes('flat') ? 'flat' : propType.includes('commercial') ? 'commercial' : propType.includes('land') ? 'land' : 'house';
+  const propType = (lot.propType || 'house').toLowerCase();
+  const apiType = /flat|apartment|maisonette/.test(propType) ? 'flat' : /commercial|mixed/.test(propType) ? 'commercial' : /land/.test(propType) ? 'land' : 'house';
 
   _financeDebounce = setTimeout(async () => {
     try {
@@ -2731,7 +2775,7 @@ function submitEmailCapture(e) {
 
   errEl.style.display = 'none';
   if (!name || !email) { errEl.textContent = 'Please fill in both fields.'; errEl.style.display = 'block'; return false; }
-  if (!email.includes('@')) { errEl.textContent = 'Please enter a valid email.'; errEl.style.display = 'block'; return false; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { errEl.textContent = 'Please enter a valid email.'; errEl.style.display = 'block'; return false; }
 
   btn.disabled = true;
   btn.textContent = 'Subscribing...';
@@ -2739,9 +2783,9 @@ function submitEmailCapture(e) {
   fetch('/api/leads', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, email, source: 'landing-page' })
+    body: JSON.stringify({ name, email, source: 'landing-page', consent: true })
   })
-  .then(r => r.json().then(d => ({ ok: r.ok, data: d })))
+  .then(r => { if(!r.ok) return r.json().then(d=>{throw new Error(d.error||'Something went wrong')}).catch(()=>{throw new Error('Something went wrong')}); return r.json().then(d=>({ok:true,data:d})); })
   .then(({ ok, data }) => {
     if (!ok) throw new Error(data.error || 'Something went wrong');
     form.style.display = 'none';
