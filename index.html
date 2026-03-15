@@ -2457,14 +2457,44 @@ function card(l){
   '</div>';
 }
 
-// SDLT calculator (investor rates 2025/26 — includes 5% surcharge)
-function calcSDLT(price){
-  if(price<=250000) return Math.round(price*0.05);
-  let sdlt=250000*0.05;
-  if(price<=925000) sdlt+=(price-250000)*0.1;
-  else{sdlt+=(925000-250000)*0.1;sdlt+=(Math.min(price,1500000)-925000)*0.15;}
-  if(price>1500000) sdlt+=(price-1500000)*0.17;
-  return Math.round(sdlt);
+// SDLT/LBTT/LTT calculator (investor rates 2025/26 — England, Scotland & Wales)
+function calcSDLT(price, country){
+  if(!country) country='england';
+  switch(country){
+    case 'scotland': {
+      // LBTT bands + 6% ADS (Additional Dwelling Supplement) on full price
+      const ads=price*0.06;
+      let lbtt=0;
+      if(price>145000) lbtt+=(Math.min(price,250000)-145000)*0.02;
+      if(price>250000) lbtt+=(Math.min(price,325000)-250000)*0.05;
+      if(price>325000) lbtt+=(Math.min(price,750000)-325000)*0.10;
+      if(price>750000) lbtt+=(price-750000)*0.12;
+      return Math.round(ads+lbtt);
+    }
+    case 'wales': {
+      // LTT higher rates (replace standard rates for additional dwellings)
+      let ltt=0;
+      if(price<=180000) ltt=price*0.04;
+      else{
+        ltt=180000*0.04;
+        ltt+=(Math.min(price,250000)-180000)*0.075;
+        if(price>250000) ltt+=(Math.min(price,400000)-250000)*0.09;
+        if(price>400000) ltt+=(Math.min(price,750000)-400000)*0.115;
+        if(price>750000) ltt+=(Math.min(price,1500000)-750000)*0.14;
+        if(price>1500000) ltt+=(price-1500000)*0.16;
+      }
+      return Math.round(ltt);
+    }
+    default: {
+      // England SDLT with 5% surcharge
+      if(price<=250000) return Math.round(price*0.05);
+      let sdlt=250000*0.05;
+      if(price<=925000) sdlt+=(price-250000)*0.1;
+      else{sdlt+=(925000-250000)*0.1;sdlt+=(Math.min(price,1500000)-925000)*0.15;}
+      if(price>1500000) sdlt+=(price-1500000)*0.17;
+      return Math.round(sdlt);
+    }
+  }
 }
 
 // Deal analysis calculator
