@@ -637,6 +637,10 @@ function extractWithJSDOM(html, house, baseUrl, firecrawlImages) {
     }
   }
 
+  // Final image coverage logging
+  const lotsWithImages = lots.filter(l => l.imageUrl).length;
+  console.log(`[IMG] ${house}: ${lotsWithImages}/${lots.length} lots have images after extraction + Firecrawl merge`);
+
   dom.window.close();
   return lots;
 }
@@ -672,7 +676,7 @@ async function scrapeRenderedPage(url, house, options = {}) {
         const result = await scrapeWithFirecrawl(url, {
           waitFor: options.waitFor || 3000,
           actions: options.actions || fcActions,
-          formats: ['rawHtml', 'images'],
+          formats: ['markdown', 'rawHtml', 'images'],
         });
         if (result.html && result.html.length > 500) {
           console.log(`Firecrawl: got ${result.html.length} chars for ${house}`);
@@ -8117,12 +8121,18 @@ async function backfillImagesFromLotPages(lots, concurrency = 5) {
   const missing = lots.filter(l => l.url && !l.imageUrl && /^https?:\/\//i.test(l.url));
   if (missing.length === 0) return 0;
 
-  const junk = /logo|icon|\.svg|placeholder|no-image|modal\.png|_NYC\.|_LCC\.|_BMDC\.|council|utilit|cardwell|badge|spacer|pixel|facebook|twitter|1x1/i;
+  // Cap at 50 lot pages per catalogue run to respect rate limits
+  const MAX_LOT_PAGES = 50;
+  const capped = missing.slice(0, MAX_LOT_PAGES);
+
+  const junk = /logo|icon|nav|sprite|\.svg|placeholder|no-image|modal\.png|_NYC\.|_LCC\.|_BMDC\.|council|utilit|cardwell|badge|spacer|pixel|facebook|twitter|1x1/i;
 
   let filled = 0;
   // Process in batches to limit concurrency
-  for (let i = 0; i < missing.length; i += concurrency) {
-    const batch = missing.slice(i, i + concurrency);
+  for (let i = 0; i < capped.length; i += concurrency) {
+    // 500ms delay between batches to respect rate limits
+    if (i > 0) await new Promise(r => setTimeout(r, 500));
+    const batch = capped.slice(i, i + concurrency);
     const results = await Promise.allSettled(batch.map(async (lot) => {
       try {
         const controller = new AbortController();
@@ -8132,7 +8142,7 @@ async function backfillImagesFromLotPages(lots, concurrency = 5) {
         if (!resp.ok) return null;
         const html = await resp.text();
         // Find first non-junk property image (new regex per call to avoid shared lastIndex)
-        const imgRe = /<img[^>]+(?:src|data-src|data-lazy-src)="([^"]+)"/gi;
+        const imgRe = /<img[^>]+(?:src|data-src|data-lazy-src|data-original)="([^"]+)"/gi;
         let m;
         while ((m = imgRe.exec(html)) !== null) {
           const src = m[1];
@@ -9088,25 +9098,25 @@ function matchEPCToLot(epcRecords, lotAddress) {
   if (!epcRecords || !epcRecords.length || !lotAddress) return null;
 
   function normalise(addr) {
-    return (addr || "")
+    return (addr || '')
       .toLowerCase()
-      .replace(/(flat|apartment|unit|apt)/gi, "")
+      .replace(/\b(flat|apartment|unit|apt)\b/gi, '')
       .replace(/,/g, ' ')
-      .replace(/s+/g, ' ')
+      .replace(/\s+/g, ' ')
       .trim();
   }
 
   function extractNumber(addr) {
-    const m = addr.match(/^(d+[a-z]?)/i) || addr.match(/(d+[a-z]?)s/i);
+    const m = addr.match(/^(\d+[a-z]?)\b/i) || addr.match(/\b(\d+[a-z]?)\s/i);
     return m ? m[1].toLowerCase() : null;
   }
 
   function extractStreetName(addr) {
     const cleaned = addr
-      .replace(/^d+[a-z]?s+/i, '')
-      .replace(/[a-z]{1,2}d[a-zd]?s*d[a-z]{2}/i, "")
+      .replace(/^\d+[a-z]?\s+/i, '')
+      .replace(/\b[a-z]{1,2}\d[a-z\d]?\s*\d[a-z]{2}\b/i, '')
       .trim();
-    return cleaned.split(/s+/).slice(0, 3).join(' ') || null;
+    return cleaned.split(/\s+/).slice(0, 3).join(' ') || null;
   }
 
   const normLot = normalise(lotAddress);
@@ -9116,11 +9126,11 @@ function matchEPCToLot(epcRecords, lotAddress) {
   if (!lotNumber || !lotStreet) return null;
 
   let bestMatch = null;
-  let bestDate = "";
+  let bestDate = '';
 
   for (const rec of epcRecords) {
     const epcAddr = normalise(
-      [rec.address1 || rec.address || "", rec.address2 || "", rec.address3 || ""].join(' ')
+      [rec.address1 || rec.address || '', rec.address2 || '', rec.address3 || ''].join(' ')
     );
 
     const epcNumber = extractNumber(epcAddr);
@@ -9129,17 +9139,17 @@ function matchEPCToLot(epcRecords, lotAddress) {
     if (!epcNumber || !epcStreet) continue;
     if (epcNumber !== lotNumber) continue;
 
-    const streetWords = lotStreet.split(/s+/);
-    const epcStreetWords = epcStreet.split(/s+/);
+    const streetWords = lotStreet.split(/\s+/);
+    const epcStreetWords = epcStreet.split(/\s+/);
     if (streetWords[0] !== epcStreetWords[0] &&
         !epcAddr.includes(streetWords[0]) &&
         !normLot.includes(epcStreetWords[0])) {
       continue;
     }
 
-    const rating = (rec["current-energy-rating"] || rec.currentEnergyRating || "").toUpperCase();
-    const score = parseInt(rec["current-energy-efficiency"] || rec.currentEnergyEfficiency || "0", 10);
-    const date = rec["lodgement-date"] || rec.lodgementDate || "";
+    const rating = (rec['current-energy-rating'] || rec.currentEnergyRating || '').toUpperCase();
+    const score = parseInt(rec['current-energy-efficiency'] || rec.currentEnergyEfficiency || '0', 10);
+    const date = rec['lodgement-date'] || rec.lodgementDate || '';
 
     if (!/^[A-G]$/.test(rating)) continue;
     if (score < 1 || score > 100) continue;
