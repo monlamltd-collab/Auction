@@ -9,89 +9,97 @@
 ## Summary
 
 - **40 houses researched**
-- **~25 genuinely new houses** (not already in system or absorbed into existing ones)
-- **6 defunct/absorbed:** Andrews & Robertson (now BidX1), Graham Penny (now BTG Eddisons), Andrew Grant (parked domain), Drivers Norris (now iamsold), Bamboo Auctions (B2B platform only), Hackney & Leigh (ad-hoc only)
-- **Key platforms:** EIG dominates (~12 houses), iamsold (~4 houses), Bamboo/Proptech (B2B only)
+- **8 ready to add** (active catalogues, directly scrapeable)
+- **5 possible** (may need Puppeteer or have intermittent catalogues)
+- **16 already in system** (verified)
+- **6 defunct/absorbed**
+- **5 not viable** (no persistent catalogue, blocked, or inactive)
 
 ---
 
-## New Houses (not yet in system)
+## Ready to Add (Active catalogues, scrapeable)
 
-| # | House | Catalogue URL | Volume | Confidence | Notes |
-|---|-------|--------------|--------|------------|-------|
-| 1 | Cheffins | https://www.cheffins.co.uk/property-auctions/catalogue-view,march-2026_576.htm | Small | HIGH | URL changes per auction (month/year suffix). Also has timed auctions at timedpropertyauctions.cheffins.co.uk/search. East Anglia focus. |
-| 2 | Countrywide Property Auctions | https://www.countrywidepropertyauctions.co.uk/search.php | Large | HIGH | Operates via sub-brands: Sutton Kersh (Liverpool, ~108 lots) and Property Auction South West (Exeter, ~24 lots). Already in system as `countrywide` slug. |
-| 3 | Butters John Bee | https://buttersjohnbee.com/listings?viewType=gallery&sortby=dateListed-desc&saleOrRental=Sale&auction=1&status=available_under_contract | Small | HIGH | EIG platform. ~16 lots. |
-| 4 | Carter Jonas | https://www.carterjonas.co.uk/property-auctions | Small | MEDIUM | Requires account to bid/view legal docs. Low volume. |
-| 5 | Fisher German | https://www.fishergerman.co.uk/current-auctions | Medium | MEDIUM | Returns 403 to bots. Strong in commercial, land & rural. Online auctions with 4-week listings. |
-| 6 | Howkins & Harrison | https://howkinsandharrison.co.uk/auctions/ | Small | LOW | Primarily farm/machinery dispersals. Property auctions via EIG. Very low property volume. |
-| 7 | Feather Smailes & Scales | https://www.fssproperty.co.uk/auction/online-auctions.html | Small | HIGH | Note: domain is fssproperty.co.uk (not feathersmailes.co.uk). ~28 lots/year. Harrogate, North Yorkshire. |
-| 8 | Arnolds Keys | https://www.arnoldskeys.com/auctions-2/ | Small | LOW | Currently inactive — "no date for next auction". Norfolk-based. |
-| 9 | Brown & Co | https://www.brown-co.com/auctions/property-land/online-auctions | Small-Medium | HIGH | EIG platform (lots at brownandco.eigonlineauctions.com). Timed auctions with rolling catalogue. ~16 lots. Norfolk/Suffolk/East Anglia. |
-| 10 | Hobbs Parker | https://www.hobbsparker.co.uk/estate-agents/property-for-sale/?statusDescGroup=Auction | Small | MEDIUM | Kent/Sussex. 0 lots at time of check — may be between auctions. Historical PDF catalogues. |
-| 11 | Clarke & Simpson | https://clarke-simpson.eigonlineauctions.com/search | Medium | HIGH | EIG platform. Up to ~140 lots. Suffolk-based. |
-| 12 | Austin Gray | https://www.auctionhouse.co.uk/sussexandhampshire | Medium | HIGH | Operates as Auction House Sussex & Hampshire (part of Auction House UK network). Lots on auctionhouse.co.uk, not austingray.co.uk. |
-| 13 | Durrants | https://durrants.com/property-auctions/ | Small | HIGH | EIG platform. Norfolk/Suffolk. ~9 lots/year. Monthly online sales. |
-| 14 | Goldings | https://www.goldingsauctions.co.uk/auctions/next-auction/ | Small-Medium | HIGH | EIG platform. Note: domain is goldingsauctions.co.uk (not goldings.co.uk). Ipswich-based. ~15 lots per auction. |
-| 15 | Clarke Gammon | https://www.iamsold.co.uk/estate-agent/clarkegammon/properties | Small | MEDIUM | iamsold platform. Note: domain is clarkegammon.co.uk (not clarkeandgammon.co.uk). 0 lots at check — may be between auctions. |
-| 16 | All Wales Auction | https://www.tppuk.com/live-auction | MEDIUM | Medium | Lots hosted on TPPUK (The Property Portal UK) platform. Own site at allwalesauction.com has /catalogue.php but redirects to TPPUK. |
-| 17 | Dawsons | https://www.dawsonsproperty.co.uk/auctions-grid.php | Small | HIGH | EIG platform. ~8 lots. South Wales. |
-| 18 | Agents Property Auction | https://www.agentspropertyauction.com/property-search/ | Large | HIGH | Note: .co.uk domain is dead, actual site is .com. ~146 lots. North East & Cumbria. Partner agent network. |
-| 19 | Andrew Craig | https://www.andrewcraig.co.uk/auction-property-for-sale | Medium | HIGH | Custom platform. ~35 lots. |
-| 20 | Henry Sykes Auctions | https://onlineauctions.henrysykes.co.uk/search | Small | HIGH | Note: henrysykes.com is wrong site (designer portfolio). Actual domain is henrysykes.co.uk. EIG platform. ~39 lots. Franchise model. |
-| 21 | Astleys | https://astleys.eigonlineauctions.com/search | Small | HIGH | Note: astleys.co.uk is an industrial supplies company. Actual site is astleys.net. EIG platform. ~28 lots. Swansea. |
-| 22 | Symonds & Sampson | https://www.symondsandsampson.co.uk/auctions/search | Medium | MEDIUM | Returns 403 to bots. Also has auction subdomain: auctions.symondsandsampson.co.uk. EIG live stream. South West. |
-| 23 | Bond Oxborough Phillips | https://bopproperty.iamsold.co.uk/ | Small | HIGH | bopauctions.co.uk is dead. Uses iamsold platform. Main site is bopproperty.com. North Devon/Cornwall. |
-| 24 | Greenslade Taylor Hunt | https://www.gth.net/properties/sales/tag-auction | Medium | MEDIUM | Returns 403 to bots. EIG platform for live-stream auctions. Also has agricultural auctions at gth.auctionmarts.com. South West. |
-| 25 | Auction House Scotland | https://www.auctionhouse.co.uk/scotland | Medium | HIGH | Part of Auction House UK network. EIG platform. ~67 lots. Covers all Scotland. |
+| # | House | Catalogue URL | Lots | Confidence | Notes |
+|---|-------|--------------|------|------------|-------|
+| 1 | **Cheffins** | `https://www.cheffins.co.uk/property-auctions.htm` | ~10 | HIGH | Own platform. Catalogue URL is date-specific (e.g. `/catalogue-view,march-2026_576.htm`). Also has timed auctions at `timedpropertyauctions.cheffins.co.uk/search`. East Anglia. |
+| 2 | **Butters John Bee** | `https://www.buttersjohnbee.com/listings?auction=1&status=all` | ~32 | HIGH | Own website with auction filter. Gallery/list/map views. Also publishes PDF catalogues. Uses EI Group for legal packs. |
+| 3 | **Feather Smailes & Scales** | `https://www.fssproperty.co.uk/search-auction/` | ~5 | HIGH | Domain is `fssproperty.co.uk` (NOT feathersmailes.co.uk). Own platform. ~5 auctions/year. Harrogate, North Yorkshire. |
+| 4 | **Brown & Co** | `https://www.brown-co.com/auctions/property-land` | ~11 | HIGH | Active listings. Runs online timed + livestream auctions. Modern JS-based CMS. Norfolk/Suffolk/East Anglia. |
+| 5 | **Agents Property Auction** | `https://www.agentspropertyauction.com/next-auction/` | ~87 | HIGH | Domain is `.com` NOT `.co.uk`. WordPress site. North East England & Cumbria. Partner agent network. |
+| 6 | **Andrew Craig** | `https://www.andrewcraig.co.uk/auction-property-for-sale` | ~35 | HIGH | Estate Apps platform. North East (South Shields, Hebburn, Jarrow, Sunderland). |
+| 7 | **iamsold** | `https://www.iamsold.co.uk/available-properties/` | 100s | HIGH | National online auction platform. Property cards with starting bids, status, photos. Also powers other agents (Drivers & Norris, BOP, Clarke Gammon). |
+| 8 | **EIG Property Auctions** | `https://www.eigpropertyauctions.co.uk/search` | 1000s | HIGH | Aggregator: "virtually every property auction in the UK" (600k+ historic lots). Filters for location, type, price, live streaming. |
 
 ---
 
-## Already In System (verification)
+## Possible to Add (May need work)
 
-| House | Current System URL | Verified URL | Status | Notes |
-|-------|-------------------|-------------|--------|-------|
-| Knight Frank Auctions | knightfrankauctions.com | https://www.knightfrankauctions.com/ | Correct | knightfrank.co.uk/residential/services/property-auctions is info-only, links to knightfrankauctions.com. EIG platform. |
-| Pattinson | pattinson.co.uk/auction/property-search | https://www.pattinson.co.uk/auction/property-search | Correct | Returns 403 to bots. 1500+ lots. Proprietary platform. White-label subdomains for partners. |
-| BTG Eddisons | btgeddisonspropertyauctions.com/properties/ | https://www.btgeddisonspropertyauctions.com/properties | Correct | ~378 lots. EIG-related. |
-| Barnett Ross | barnettross.co.uk/current.php | https://www.barnettross.co.uk/current-online-auctions.php | Check | System has /current.php, actual page may be /current-online-auctions.php. Also has /lotlist.php. |
-| Town & Country | townandcountrypropertyauctions.co.uk/search | https://www.townandcountrypropertyauctions.co.uk/search | Correct | tcpa.co.uk redirects here. EIG platform. |
-| Harman Healy | harman-healy.co.uk/search | https://harman-healy.co.uk/current-auction | Check | System has /search, but /current-auction may be more specific. EIG platform. ~4 lots currently. |
-| Countrywide / Sutton Kersh | countrywidepropertyauctions.co.uk/search.php | https://www.countrywidepropertyauctions.co.uk/search.php | Correct | Already in system. |
-| Future Property Auctions | futurepropertyauctions.co.uk/catalogue_viewall.asp | https://www.futurepropertyauctions.co.uk/catalogue_viewall.asp | Correct | Note: futureproperty.co.uk has SSL issues. Correct domain is futurepropertyauctions.co.uk. Scotland's largest. 300+ lots. |
+| # | House | Catalogue URL | Confidence | Notes |
+|---|-------|--------------|------------|-------|
+| 1 | **Symonds & Sampson** | `https://www.symondsandsampson.co.uk/auctions/search` | MEDIUM | Blocks automated fetches (403). Also has `auctions.symondsandsampson.co.uk`. Monthly auctions, 198 properties/year. Dorset/Devon/Somerset. May need Puppeteer. |
+| 2 | **Greenslade Taylor Hunt** | `https://www.gth.net/properties/sales/tag-auction` | MEDIUM | Blocks automated fetches (403). Also has `/auctions/property-and-land-auction-sales-calendar`. Somerset/Devon. May need Puppeteer. |
+| 3 | **Howkins & Harrison** | `https://www.howkinsandharrison.co.uk/online-auctions/` | MEDIUM | Property auctions via online portal. Also has `howkinsandharrison.auctionmarts.com`. Primarily machinery/farm dispersal. |
+| 4 | **All Wales Auction** | `https://allwalesauction.com/latest-lots.php` | MEDIUM | PHP site. Lots hosted externally on TPP UK platform (`tppuk.com/live-auction`). |
+| 5 | **Hobbs Parker** | `https://www.hobbsparker.co.uk/estate-agents/property-for-sale/?statusDescGroup=Auction` | MEDIUM | WordPress with Property Hive plugin. 0 results at time of check — may list lots closer to auction dates. Kent/Sussex. |
+
+---
+
+## Already In System (16 houses verified)
+
+| House | Slug | Status | Notes |
+|---|---|---|---|
+| Countrywide / Sutton Kersh | `countrywide` | Correct | Also covers Property Auction South West |
+| Knight Frank Auctions | `knightfrank` | Correct | `knightfrank.co.uk` is info-only, actual catalogue at `knightfrankauctions.com` |
+| Clarke & Simpson | `clarkesimpson` | Correct | EIG platform |
+| Austin Gray | `austingray` | Correct | Auction House UK network (Sussex & Hampshire) |
+| Durrants | `durrants` | Correct | EIG platform |
+| Future Property Auctions | `futureauctions` | Correct | Domain is `futurepropertyauctions.co.uk` (not `futureproperty.co.uk`) |
+| Goldings | `goldings` | Correct | Domain is `goldingsauctions.co.uk` (not `goldings.co.uk`) |
+| Harman Healy | `harmanhealy` | Correct | EIG platform |
+| Dawsons | `dawsons` | Correct | EIG platform |
+| Town & Country | `tcpa` | Correct | `tcpa.co.uk` redirects to `townandcountrypropertyauctions.co.uk` |
+| Henry Sykes | `henrysykes` | Correct | Domain is `henrysykes.co.uk` (not `henrysykes.com`) |
+| Astleys | `astleys` | Correct | Domain is `astleys.net` (not `astleys.co.uk`) |
+| Pattinson | `pattinson` | Correct | Returns 403 to bots, needs Puppeteer |
+| BTG Eddisons | `sdl` | Correct | ~378 lots. Graham Penny was absorbed into this. |
+| Barnett Ross | `barnettross` | Check | System has `/lotlist.php`, may also need `/current-online-auctions.php` |
+| Auction House Scotland | `auctionhousescotland` | Correct | Auction House UK network |
 
 ---
 
 ## Defunct / Absorbed / Not Viable
 
 | House | Status | Details |
-|-------|--------|---------|
-| Andrews & Robertson | Absorbed into BidX1 | Domain defunct. Acquired by BidX1 in 2018. All lots now on bidx1.com. |
-| Graham Penny | Absorbed into BTG Eddisons | Domain parked on GoDaddy. Acquired by SDL Group in 2016, now BTG Eddisons. |
-| Andrew Grant | Domain parked | andrewgrant.co.uk is for sale on GoDaddy. andrewgrant.com uses iamsold but 0 lots currently. |
-| Drivers & Norris | Now on iamsold | driversnorris.co.uk is down. Actual site is drivers.co.uk. Auctions via iamsold platform. |
-| Bamboo Auctions | B2B platform only | Rebranded to Bamboo Proptech (bambooproptech.com). B2B SaaS for estate agents, not a direct auction house. |
-| Hackney & Leigh | Ad-hoc only | No regular auctions or active catalogue. Lake District/Cumbria. Auctions are occasional. |
+|---|---|---|
+| **Graham Penny** | Absorbed into **BTG Eddisons** | `grahampenny.com` is parked. Acquired by SDL Group in 2016, now BTG Eddisons. |
+| **Andrews & Robertson** | Absorbed into **BidX1** | Domain defunct. Acquired by BidX1 in 2018. |
+| **Drivers & Norris** | Uses **iamsold** platform | `driversnorris.co.uk` is down. Actual site is `drivers.co.uk`. |
+| **Bond Oxborough Phillips** | Uses **iamsold** platform | `bopauctions.co.uk` is down. Actual site is `bopproperty.com`. |
+| **Bamboo Auctions** | Pivoted to **B2B proptech** | `bambooauctions.com` redirects to `bambooproptech.com`. No consumer catalogue. |
+| **Carter Jonas** | No visible catalogue | Service info page only. May require login. Low volume. |
+| **Fisher German** | Blocks all access (403) | Runs exclusively online auctions. Strong in commercial/land/rural. |
+| **Hackney & Leigh** | Ad-hoc only | No regular auctions. Informational page only. Lake District. |
+| **Clarke Gammon** | Uses iamsold, 0 lots | `clarkegammon.co.uk` (not `clarkeandgammon.co.uk`). May list sporadically. |
+| **Arnolds Keys** | Inactive | "No date for next auction." Norfolk. |
+| **Andrew Grant** | Domain parked | `andrewgrant.co.uk` is for sale. `andrewgrant.com` has 0 lots. |
 
 ---
 
 ## Platform Networks
 
 | Platform | Houses Using It |
-|----------|----------------|
-| **EIG** | Brown & Co, Butters John Bee, Clarke & Simpson, Durrants, Dawsons, Feather Smailes & Scales, Goldings, Henry Sykes, Astleys, Howkins & Harrison, Town & Country, Auction House Scotland, Greenslade Taylor Hunt, Symonds & Sampson, Harman Healy, Knight Frank |
-| **iamsold** | Clarke Gammon, Drivers & Norris, Andrew Grant, Bond Oxborough Phillips, iamsold (aggregator at iamsold.co.uk/available-properties/) |
-| **Auction House UK** | Austin Gray (Sussex & Hampshire), Auction House Scotland |
-| **TPPUK** | All Wales Auction |
+|---|---|
+| **EIG** | Brown & Co, Clarke & Simpson, Durrants, Dawsons, Feather Smailes & Scales, Goldings, Henry Sykes, Astleys, Howkins & Harrison, Town & Country, Greenslade Taylor Hunt, Symonds & Sampson, Harman Healy, Knight Frank, Paul Fosh, Seel Auctions, First for Auctions, Robinson & Hall |
+| **iamsold** | Clarke Gammon, Drivers & Norris, Bond Oxborough Phillips, iamsold (aggregator) |
+| **Auction House UK** | Austin Gray (Sussex & Hampshire), Auction House Scotland, Auction House London |
+| **TPP UK** | All Wales Auction |
 
 ---
 
 ## Domain Corrections
 
-Several provided domains were wrong or inactive:
-
 | Provided Domain | Actual Working Domain |
-|----------------|----------------------|
+|---|---|
 | driversnorris.co.uk | drivers.co.uk (iamsold) |
 | feathersmailes.co.uk | fssproperty.co.uk |
 | goldings.co.uk | goldingsauctions.co.uk |
@@ -100,6 +108,6 @@ Several provided domains were wrong or inactive:
 | astleys.co.uk | astleys.net |
 | henrysykes.com | henrysykes.co.uk |
 | andrewgrant.co.uk | andrewgrant.com |
-| bopauctions.co.uk | bopproperty.com / bopproperty.iamsold.co.uk |
+| bopauctions.co.uk | bopproperty.com |
 | agentspropertyauction.co.uk | agentspropertyauction.com |
-| clarkeandgammon.co.uk | clarkegammon.co.uk (iamsold) |
+| clarkeandgammon.co.uk | clarkegammon.co.uk |
