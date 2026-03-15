@@ -7,17 +7,21 @@ See: .planning/PROJECT.md (updated 2026-03-15)
 
 ## Current Phase
 Phase: 1
-Status: Not started
+Status: Context gathered
 Plans: 0
 
 ## Decisions
-(None yet)
+- Sold/unsold: diagonal overlay banner (estate agent style), status filter dropdown
+- Future-only: server-side filtering, 7-day grace period, URL param persistence
+- Alerting: admin dashboard log only, auto-resolve, 4 event types
+- Admin metrics: per-house health table with diff summaries per scrape run
 
 ## Blockers
 (None)
 
 ## Session Log
 - 2026-03-15: Project initialized, research complete, roadmap created
+- 2026-03-15: Phase 1 context gathered — resume at .planning/phases/01-hardening-data-freshness/01-CONTEXT.md
 
 ---
-*Last updated: 2026-03-15*
+*Last updated: 2026-03-15 after context gathering*
