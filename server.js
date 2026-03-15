@@ -8232,9 +8232,13 @@ function analyseLot(raw) {
   }
   if (/studio/.test(t) && L.beds === null) L.beds = 0;
 
-  if (/share of freehold/.test(t)) L.tenure = 'Share of Freehold';
-  else if (/freehold/.test(t) && !/leasehold/.test(t)) L.tenure = 'Freehold';
-  else if (/leasehold/.test(t)) L.tenure = 'Leasehold';
+  // Tenure — expanded regex to catch common catalogue phrasings
+  if (/share of freehold|share\s+of\s+the\s+freehold/.test(t)) L.tenure = 'Share of Freehold';
+  else if (/flying freehold/.test(t)) L.tenure = 'Freehold';
+  else if (/\bfreehold\b/.test(t) && !/leasehold/.test(t)) L.tenure = 'Freehold';
+  else if (/long\s+lease(?:hold)?|\bleasehold\b|\blease\s+remaining\b|\byears?\s+(?:remaining|unexpired|left)\b|\b\d+\s*(?:year|yr)\s*lease\b/.test(t)) L.tenure = 'Leasehold';
+  // Infer from property type when tenure not stated: flats are almost always leasehold, houses freehold
+  if (!L.tenure && L.propType === 'flat' && /\b\d{2,3}\s*(?:year|yr)s?\b/.test(t)) L.tenure = 'Leasehold';
 
   if (/modernis|refurbishment|renovation|updating|in need of|improvement|for improve/.test(t)) L.condition = 'needs work';
   else if (/good order|good decorative|well maintained|recently refurbished/.test(t)) L.condition = 'good';

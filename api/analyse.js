@@ -291,10 +291,12 @@ function analyseLot(raw) {
   if (bm) { const v = bm[1].toLowerCase(); L.beds = W2N[v] || (v.match(/^\d+$/) ? +v : null); }
   if (/studio/.test(t) && L.beds === null) L.beds = 0;
 
-  // Tenure
-  if (/share of freehold/.test(t)) L.tenure = 'Share of Freehold';
-  else if (/freehold/.test(t) && !/leasehold/.test(t)) L.tenure = 'Freehold';
-  else if (/leasehold/.test(t)) L.tenure = 'Leasehold';
+  // Tenure — expanded regex to catch common catalogue phrasings
+  if (/share of freehold|share\s+of\s+the\s+freehold/.test(t)) L.tenure = 'Share of Freehold';
+  else if (/flying freehold/.test(t)) L.tenure = 'Freehold';
+  else if (/\bfreehold\b/.test(t) && !/leasehold/.test(t)) L.tenure = 'Freehold';
+  else if (/long\s+lease(?:hold)?|\bleasehold\b|\blease\s+remaining\b|\byears?\s+(?:remaining|unexpired|left)\b|\b\d+\s*(?:year|yr)\s*lease\b/.test(t)) L.tenure = 'Leasehold';
+  if (!L.tenure && L.propType === 'flat' && /\b\d{2,3}\s*(?:year|yr)s?\b/.test(t)) L.tenure = 'Leasehold';
 
   // Condition
   if (/modernis|refurbishment|renovation|updating|in need of/.test(t)) L.condition = 'needs work';
