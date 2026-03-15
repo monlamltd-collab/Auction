@@ -838,6 +838,7 @@ footer .logo-f span{color:var(--green)}
       <select class="tb-select" id="fExcludePOA" onchange="renderLots()" aria-label="Include or exclude POA lots"><option value="">Inc. POA</option><option value="yes">Excl. POA</option></select>
       <select class="tb-select" id="fLookahead" onchange="saveLookahead();renderLots()" aria-label="Auction lookahead"><option value="1">Next auction</option><option value="2">Next 2 auctions</option><option value="all" selected>All upcoming</option></select>
       <label><input type="checkbox" id="fIncludePrevious" onchange="renderLots()" checked> Previous</label>
+      <button class="ex-btn" onclick="clearAllFilters()" style="margin-left:auto;font-weight:600;color:var(--accent-danger,#c0392b);" title="Reset all dropdown filters and search text back to defaults">Clear filters</button>
     </div>
     <!-- ROW 3: Quick filter chips + AI shortcuts -->
     <div class="chip-row">
@@ -1063,16 +1064,24 @@ function resetSearchState(){
   _searchTimers=[];
   LOTS=[];
   SMART_RESULTS=null;
-  const filterResets={fDeal:'',fType:'',fCondition:'',fTenure:'',fLocation:'',fAfford:'all',fSoldTop:'all',fSearch:'',fSort:'score',fBeds:'',fPostcode:'',fMinPrice:'',fMaxPrice:''};
-  if($('fExcludePOA')) $('fExcludePOA').value='';
-  if($('fIncludePrevious')) $('fIncludePrevious').checked=true;
-  _selectedHouses.clear();
-  for(const[id,val] of Object.entries(filterResets)){const el=$(id);if(el)el.value=val}
-  updatePriceBtn();
+  // Don't reset dropdown filters — they should layer on top of AI results
   const _rp=$('resultsPanel'); if(_rp) _rp.style.display='none';
   const _lb=$('logBox'); if(_lb) _lb.innerHTML='';
   const _mb=$('mainBtn'); if(_mb) _mb.disabled=true;
   const _sc=document.querySelector('.search-counter'); if(_sc) _sc.remove();
+}
+
+function clearAllFilters(){
+  const resets={fDeal:'',fType:'',fCondition:'',fTenure:'',fLocation:'',fAfford:'all',fSoldTop:'all',fSearch:'',fSort:'score',fBeds:'',fPostcode:'',fMinPrice:'',fMaxPrice:''};
+  for(const[id,val] of Object.entries(resets)){const el=$(id);if(el)el.value=val}
+  if($('fExcludePOA')) $('fExcludePOA').value='';
+  if($('fIncludePrevious')) $('fIncludePrevious').checked=true;
+  _selectedHouses.clear();
+  updateHouseBtn();
+  updatePriceBtn();
+  $('smartQuery').value='';
+  if(SMART_RESULTS){ LOTS=ALL_LOTS; SMART_RESULTS=null; $('resultsTitle').textContent=ALL_LOTS.length.toLocaleString()+' auction lots'; }
+  renderLots();
 }
 
 // Price popover toggle
