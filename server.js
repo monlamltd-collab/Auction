@@ -732,7 +732,7 @@ async function scrapeRenderedPage(url, house, options = {}) {
 async function scrapePageWithFirecrawl(url, house) {
   const result = await scrapeRenderedPage(url, house);
   if (!result.html) return [];
-  const pages = [{ page: 1, html: result.html }];
+  const pages = [{ page: 1, html: result.html, markdown: result.markdown }];
 
   // Detect total pages from first page HTML
   const totalPages = detectTotalPages(result.html, url, house);
@@ -745,7 +745,7 @@ async function scrapePageWithFirecrawl(url, house) {
       try {
         const pageResult = await scrapeRenderedPage(pageUrl, house);
         if (pageResult.html && pageResult.html.length > 500) {
-          pages.push({ page: p, html: pageResult.html });
+          pages.push({ page: p, html: pageResult.html, markdown: pageResult.markdown });
         } else {
           console.log(`Firecrawl: page ${p} empty for ${house}, stopping`);
           break;
@@ -2870,7 +2870,7 @@ app.post('/api/analyse', async (req, res) => {
               console.log(`DOM extractor found only ${domLots.length} lots for ${house} (below threshold of 3), falling back to Claude`);
             }
             console.log(`Got ${firstResult.html.length} chars, sending to Claude...`);
-            const renderedPages = [{ page: 1, html: firstResult.html }];
+            const renderedPages = [{ page: 1, html: firstResult.html, markdown: firstResult.markdown }];
             sseWrite(res, 'phase', { step: 'extracting' });
             rawLots = await extractLotsWithAI(renderedPages, house, onExtract, scrapeUrl);
             console.log(`Claude extracted ${rawLots.length} lots from rendered content`);
@@ -2926,7 +2926,7 @@ app.post('/api/analyse', async (req, res) => {
               rawLots = renderedLots;
               console.log(`Rendered scraping got ${rawLots.length} lots via DOM extraction`);
             } else {
-              const renderedPages = [{ page: 1, html: rendered.html }];
+              const renderedPages = [{ page: 1, html: rendered.html, markdown: rendered.markdown }];
               sseWrite(res, 'phase', { step: 'extracting' });
               rawLots = await extractLotsWithAI(renderedPages, house, onExtract, scrapeUrl);
               console.log(`Claude extracted ${rawLots.length} lots from rendered content`);
@@ -9474,6 +9474,7 @@ async function autoAnalyseOne(url) {
   if (!urlCheck.ok) { log.warn('autoAnalyseOne skipped — invalid URL', { url, reason: urlCheck.error }); return []; }
   const house = detectAuctionHouse(url);
 
+  try {
   // Skip Knight Frank forthcoming-auctions index page — it's a discovery page, not a catalogue.
   // Actual catalogue URLs like /auction/3833/... are discovered and analysed separately.
   if (house === 'knightfrank' && url.toLowerCase().includes('forthcoming-auctions')) {
@@ -9620,7 +9621,7 @@ async function autoAnalyseOne(url) {
         console.log(`AUTO: ${house} total: ${rawLots.length} lots`);
       } else {
         // Fall back to Claude extraction
-        const renderedPages = [{ page: 1, html: firstResult.html }];
+        const renderedPages = [{ page: 1, html: firstResult.html, markdown: firstResult.markdown }];
         rawLots = await extractLotsWithAI(renderedPages, house, null, scrapeUrl);
         console.log(`AUTO: ${house}: ${rawLots.length} lots via Claude fallback`);
 
@@ -9670,7 +9671,7 @@ async function autoAnalyseOne(url) {
           if (renderedLots && renderedLots.length > 0) {
             rawLots = renderedLots;
           } else {
-            const renderedPages = [{ page: 1, html: rendered.html }];
+            const renderedPages = [{ page: 1, html: rendered.html, markdown: rendered.markdown }];
             rawLots = await extractLotsWithAI(renderedPages, house, null, scrapeUrl);
             // DOM→Gemini merge for this fallback path too
             if (rawLots.length > 0) {
@@ -9702,6 +9703,19 @@ async function autoAnalyseOne(url) {
 
   if (rawLots.length === 0) {
     console.log(`AUTO: ${house}: 0 lots found, skipping cache`);
+    // Extractor regression alert: 0 lots when previously had >0
+    try {
+      const { data: prevSkill } = await supabase.from('house_skills').select('last_lot_count').eq('slug', house).maybeSingle();
+      if (prevSkill && prevSkill.last_lot_count > 0) {
+        await supabase.from('pipeline_alerts').insert({
+          event_type: 'extractor_regression',
+          severity: 'error',
+          house,
+          message: `${HOUSE_DISPLAY_NAMES[house] || house} returned 0 lots (previously had ${prevSkill.last_lot_count})`
+        });
+        console.log(`ALERT: Extractor regression for ${house} (0 lots, was ${prevSkill.last_lot_count})`);
+      }
+    } catch (alertErr) { console.warn('ALERT: Failed to record extractor regression:', alertErr.message); }
     return;
   }
 
@@ -9808,6 +9822,27 @@ async function autoAnalyseOne(url) {
     });
   } catch (skillErr) {
     console.warn(`SKILL: Failed to update skill for ${house}: ${skillErr.message}`);
+  }
+
+  // ── Auto-resolve alerts: successful scrape clears existing alerts for this house ──
+  try {
+    await supabase.from('pipeline_alerts')
+      .update({ resolved: true, resolved_at: new Date().toISOString() })
+      .eq('house', house)
+      .eq('resolved', false);
+  } catch (resolveErr) { console.warn('ALERT: Failed to auto-resolve alerts:', resolveErr.message); }
+
+  } catch (autoErr) {
+    // ── Pipeline alert: auto-analyse failure ──
+    console.error(`AUTO: autoAnalyseOne failed for ${house}:`, autoErr.message);
+    try {
+      await supabase.from('pipeline_alerts').insert({
+        event_type: 'auto_analyse_failure',
+        severity: 'error',
+        house,
+        message: `Auto-analyse failed for ${HOUSE_DISPLAY_NAMES[house] || house}: ${autoErr.message}`
+      });
+    } catch (alertErr) { console.warn('ALERT: Failed to record auto-analyse failure:', alertErr.message); }
   }
 }
 
