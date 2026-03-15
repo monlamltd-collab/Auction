@@ -861,6 +861,7 @@ footer .logo-f span{color:var(--green)}
         <div class="filter-field"><label>Cash Available (£)</label><input id="fpCash" type="number" value="0" placeholder="Deposit + costs" title="Total cash you have for deposit, stamp duty, legal fees, and any works. This determines which lots are within your reach."></div>
         <div class="filter-field"><label>Property Focus</label><select id="fpPropType" title="The type of property you're targeting. Different lenders have different appetites for each type."><option value="resi">Residential</option><option value="semi">Semi-Commercial</option><option value="comm">Commercial</option><option value="land_no_pp">Land (No Planning)</option><option value="land_with_pp">Land (With Planning)</option></select></div>
         <div class="filter-field"><label>Loan Term</label><select id="fpTerm" title="How long you need the bridging loan for. Shorter terms = lower total interest but tighter exit timeline."><option value="6">6 months</option><option value="9">9 months</option><option value="12" selected>12 months</option><option value="18">18 months</option><option value="24">24 months</option></select></div>
+        <div class="filter-field"><label>Region (Stamp Duty)</label><select id="sdltCountry" title="Select the property region. England uses SDLT, Scotland uses LBTT + ADS, and Wales uses LTT. This affects stamp duty calculations."><option value="england">England</option><option value="scotland">Scotland</option><option value="wales">Wales</option></select></div>
       </div>
       <div class="fp-checks">
         <label><input type="checkbox" id="fpRefurb" checked> Open to refurb</label>
@@ -1467,7 +1468,7 @@ function updateFinanceProfile(){
   el.innerHTML=html;
 
   // Persist to localStorage
-  try{localStorage.setItem('bm_finance_profile',JSON.stringify({cash,propType,termMo,refurb:$('fpRefurb')?.checked,titleSplit:$('fpTitleSplit')?.checked,splitPremium:+($('fpSplitPremium')?.value)||30}))}catch(e){}
+  try{localStorage.setItem('bm_finance_profile',JSON.stringify({cash,propType,termMo,refurb:$('fpRefurb')?.checked,titleSplit:$('fpTitleSplit')?.checked,splitPremium:+($('fpSplitPremium')?.value)||30,sdltCountry:$('sdltCountry')?.value||'england'}))}catch(e){}
 
   return{cash,aff};
 }
@@ -1483,13 +1484,14 @@ try{
       if(saved.refurb!=null&&$('fpRefurb'))$('fpRefurb').checked=saved.refurb;
       if(saved.titleSplit!=null&&$('fpTitleSplit'))$('fpTitleSplit').checked=saved.titleSplit;
       if(saved.splitPremium&&$('fpSplitPremium'))$('fpSplitPremium').value=saved.splitPremium;
+      if(saved.sdltCountry&&$('sdltCountry'))$('sdltCountry').value=saved.sdltCountry;
       updateFinanceProfile();
     });
   }
 }catch(e){}
 
 // Wire up input listeners
-['fpCash','fpPropType','fpTerm','fpRefurb','fpTitleSplit','fpSplitPremium'].forEach(id=>{
+['fpCash','fpPropType','fpTerm','fpRefurb','fpTitleSplit','fpSplitPremium','sdltCountry'].forEach(id=>{
   const el=$(id);
   if(el)el.addEventListener(el.type==='checkbox'?'change':'input',()=>{updateFinanceProfile();if(typeof renderLots==='function')renderLots()});
 });
@@ -2497,11 +2499,30 @@ function calcSDLT(price, country){
   }
 }
 
+// Auto-detect country/region from address or postcode
+function detectCountry(address){
+  if(!address)return 'england';
+  const a=address.toUpperCase();
+  // Scottish postcode prefixes
+  const scotPc=/\b(AB|DD|DG|EH|FK|G[0-9]|HS|IV|KA|KW|KY|ML|PA|PH|TD|ZE)\d/;
+  if(scotPc.test(a))return 'scotland';
+  // Scottish cities
+  if(/\b(EDINBURGH|GLASGOW|ABERDEEN|DUNDEE|INVERNESS|STIRLING|PERTH|FALKIRK|PAISLEY|KILMARNOCK|AYR|DUMFRIES)\b/.test(a))return 'scotland';
+  if(/\bSCOTLAND\b/.test(a))return 'scotland';
+  // Welsh postcode prefixes
+  const walesPc=/\b(CF|SA|NP|LL|SY|LD|HR)\d/;
+  if(walesPc.test(a))return 'wales';
+  // Welsh cities
+  if(/\b(CARDIFF|SWANSEA|NEWPORT|WREXHAM|BANGOR|ABERYSTWYTH|LLANELLI|NEATH|BRIDGEND|BARRY|CAERPHILLY|PONTYPRIDD|MERTHYR|RHONDDA)\b/.test(a))return 'wales';
+  if(/\bWALES\b/.test(a))return 'wales';
+  return 'england';
+}
+
 // Deal analysis calculator
-function calcDealAnalysis(guidePrice,streetAvg,grossYield,monthlyRent){
+function calcDealAnalysis(guidePrice,streetAvg,grossYield,monthlyRent,country){
   const uplift=streetAvg-guidePrice;
   const upliftPct=guidePrice>0?Math.round((uplift/guidePrice)*100):0;
-  const sdlt=calcSDLT(guidePrice);
+  const sdlt=calcSDLT(guidePrice,country);
   const loanAmt=guidePrice*0.75; // assume 75% LTV
   const bridgingCost=Math.round(loanAmt*0.0075*12); // 0.75%/mo for 12 months
   const otherCosts=Math.round(guidePrice*0.04); // legal, survey, arrangement ~4%
