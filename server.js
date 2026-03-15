@@ -1049,6 +1049,7 @@ const HOUSE_ROOTS = {
   cheffinstimed:      'https://timedpropertyauctions.cheffins.co.uk/search',
   fssproperty:        'https://www.fssproperty.co.uk/search-auction/',
   iamsold:            'https://www.iamsold.co.uk/available-properties/',
+  suttonkersh:        'https://www.suttonkersh.co.uk/properties/gallery/?section=auction&auctionPeriod=current',
   // ── Auction House UK regional branches (March 2026 batch 3) ──
   auctionhouseeastanglia: 'https://www.auctionhouse.co.uk/eastanglia/auction/search-results',
   auctionhousenorthwest:  'https://www.auctionhouse.co.uk/northwest/auction/search-results',
@@ -7098,7 +7099,7 @@ const DOM_EXTRACTORS = {
   suttonkersh: `
     (() => {
       const lots = [];
-      const cards = document.querySelectorAll('.galleryProperty, .propertyBox.auctionBox');
+      const cards = document.querySelectorAll('.propertyBox.auctionBox');
       for (const card of cards) {
         const text = card.textContent || '';
         // Address from h1 > a inside .info
