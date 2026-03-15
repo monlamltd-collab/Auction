@@ -742,7 +742,7 @@ async function scrapePageWithFirecrawl(url, house) {
   const totalPages = detectTotalPages(result.html, url, house);
   if (totalPages > 1) {
     const pageCap = Math.min(totalPages, MAX_PUPPETEER_PAGES);
-    console.log(`Firecrawl multi-page: ${house} has ${totalPages} pages, loading up to ${pageCap}`);
+    console.log(`[PAGINATION] ${house}: ${totalPages} pages detected, loading up to ${pageCap}`);
     for (let p = 2; p <= pageCap; p++) {
       if (fcCreditExhausted) { console.log(`Firecrawl: credits exhausted at page ${p}, stopping`); break; }
       const pageUrl = buildPageUrl(url, p, house);
@@ -4857,6 +4857,17 @@ function buildPageUrl(baseUrl, page, house) {
     case 'bondwolfe': return clean.includes('?') ? `${clean}&page=${page}` : `${clean}?page=${page}`;
     case 'barnardmarcus': return clean.includes('?') ? `${clean}&page=${page}` : `${clean}?page=${page}`;
     case 'acuitus': return clean.includes('?') ? `${clean}&page=${page}` : `${clean}?page=${page}`;
+    // ── New houses (pagination) ──
+    case 'agentsproperty': return `${clean.replace(/\/page\/\d+\/?/, '')}/page/${page}/`;
+    case 'suttonkersh': {
+      const skClean = clean.replace(/[?&]start=\d+/i, '');
+      const offset = (page - 1) * 16;
+      return skClean.includes('?') ? `${skClean}&start=${offset}` : `${skClean}?start=${offset}`;
+    }
+    case 'buttersjohnbee': return clean.includes('?') ? `${clean}&page=${page}` : `${clean}?page=${page}`;
+    case 'brownco': return clean.includes('?') ? `${clean}&page=${page}` : `${clean}?page=${page}`;
+    case 'iamsold': return clean.includes('?') ? `${clean}&page=${page}` : `${clean}?page=${page}`;
+    case 'andrewcraig': return clean.includes('?') ? `${clean}&page=${page}` : `${clean}?page=${page}`;
     default:
       if (baseUrl.includes('/page-')) return `${clean}/page-${page}`;
       return clean.includes('?') ? `${clean}&page=${page}` : `${clean}?page=${page}`;
