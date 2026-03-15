@@ -273,7 +273,7 @@ tr:hover td { background: rgba(255,255,255,.02); }
         </div>
         <div style="overflow-x:auto; max-height: 400px; overflow-y: auto;">
           <table>
-            <thead><tr><th title="Auction house name">House</th><th title="Scheduled auction date">Date</th><th title="Ready = catalogue URL confirmed and scrapeable. Pending = date known but catalogue not yet available">Ready</th></tr></thead>
+            <thead><tr><th title="Auction house name">House</th><th title="Scheduled auction date">Date</th><th title="Ready = catalogue URL confirmed and scrapeable. Pending = date known but catalogue not yet available">Ready</th><th title="Remove this calendar entry"></th></tr></thead>
             <tbody id="calendar-tbody">
               <tr><td colspan="3" class="loading"><span class="spinner"></span> Loading...</td></tr>
             </tbody>
@@ -342,6 +342,10 @@ tr:hover td { background: rgba(255,255,255,.02); }
         <div class="action-item">
           <button class="action-btn" onclick="triggerAction('refresh-cache')" title="Re-analyses only houses whose cached data has expired. Lighter than Force Re-Analyse. Runs in the background">Refresh Cache (async)</button>
           <p class="action-desc">Re-analyses only houses whose cached data has expired. Lighter than Force Re-Analyse. Runs in the background.</p>
+        </div>
+        <div class="action-item">
+          <button class="action-btn" onclick="triggerAction('dedup-calendar')" title="Removes duplicate calendar entries (same house + date + URL). Keeps the one marked catalogue-ready. Safe to run anytime.">Dedup Calendar</button>
+          <p class="action-desc">Removes duplicate calendar entries (same house + date + URL). Keeps the best entry per group. Safe to run anytime.</p>
         </div>
         <div class="action-item">
           <button class="action-btn danger" onclick="triggerAction('clear-cache')" title="CAUTION: Deletes ALL cached lot data. The frontend will show 0 lots until the next analysis cycle completes. Only use for debugging">Clear All Cache</button>
@@ -688,7 +692,7 @@ async function loadCalendar() {
 
   const tbody = document.getElementById('calendar-tbody');
   if (auctions.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="3" class="text-muted" style="text-align:center;">No upcoming auctions</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" class="text-muted" style="text-align:center;">No upcoming auctions</td></tr>';
     return;
   }
   // Sort by date
@@ -696,12 +700,21 @@ async function loadCalendar() {
   tbody.innerHTML = auctions.slice(0, 50).map(a => {
     const readyDot = a.catalogueReady ? '<span class="status-dot dot-green"></span>Ready' : '<span class="status-dot dot-grey"></span>Pending';
     const dateStr = new Date(a.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    const delBtn = a.id ? `<button class="action-btn danger" style="padding:2px 8px;font-size:.65rem;" onclick="deleteCalendarEntry('${a.id}')">x</button>` : '';
     return `<tr>
       <td>${esc(a.house)}</td>
       <td class="mono">${dateStr}</td>
       <td>${readyDot}</td>
+      <td>${delBtn}</td>
     </tr>`;
   }).join('');
+}
+
+async function deleteCalendarEntry(id) {
+  if (!confirm('Remove this calendar entry?')) return;
+  const result = await apiFetch(`/api/admin/calendar/${id}`, { method: 'DELETE', body: JSON.stringify({ secret: SECRET }) });
+  if (result.error) toast('Failed: ' + result.error, 'error');
+  else { toast('Entry removed', 'success'); loadCalendar(); }
 }
 
 async function loadUsers() {
@@ -732,6 +745,10 @@ async function triggerAction(action) {
     } else if (action === 'refresh-cache') {
       result = await apiFetch('/api/refresh-cache', { method: 'POST', body: JSON.stringify({ secret: SECRET }) });
       toast('Cache refresh triggered (running in background)', 'success');
+    } else if (action === 'dedup-calendar') {
+      toast('Deduplicating calendar...');
+      result = await apiFetch('/api/admin/dedup-calendar', { method: 'POST', body: JSON.stringify({ secret: SECRET }) });
+      if (result.removed !== undefined) toast(`Removed ${result.removed} duplicates`, 'success');
     } else if (action === 'clear-cache') {
       if (!confirm('This will delete ALL cached analysis data. Houses will be re-analysed on the next cycle. Continue?')) {
         btn.disabled = false; btn.textContent = origText; return;

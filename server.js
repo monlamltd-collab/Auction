@@ -2180,7 +2180,17 @@ async function getAuctionCalendar() {
       .order('date', { ascending: true });
 
     if (!error && data && data.length > 0) {
-      return data.map(row => ({
+      // Deduplicate: keep one entry per house+date+url (prefer catalogue_ready=true)
+      const seen = new Map();
+      for (const row of data) {
+        const key = `${(row.house || '').toLowerCase()}|${row.date}|${(row.url || '').trim().replace(/\/+$/, '').toLowerCase()}`;
+        const existing = seen.get(key);
+        if (!existing || (row.catalogue_ready && !existing.catalogue_ready)) {
+          seen.set(key, row);
+        }
+      }
+      return [...seen.values()].map(row => ({
+        id: row.id,
         house: row.house,
         houseSlug: row.house_slug,
         logo: row.logo,
@@ -2270,6 +2280,44 @@ app.post('/api/admin/calendar', async (req, res) => {
     res.json({ message: 'Auction saved', auction: row });
   } catch (e) {
     log.error('Calendar save error', { error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Admin: deduplicate the calendar — remove duplicate rows keeping the best one per house+date+url
+app.post('/api/admin/dedup-calendar', async (req, res) => {
+  const token = req.headers['x-admin-secret'] || req.body?.secret || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
+    return res.status(403).json({ error: 'Invalid admin secret' });
+  }
+  try {
+    const { data, error } = await supabase.from('auction_calendar').select('id, house, date, url, catalogue_ready');
+    if (error) throw error;
+
+    const groups = new Map();
+    for (const row of (data || [])) {
+      const key = `${(row.house || '').toLowerCase()}|${row.date}|${(row.url || '').trim().replace(/\/+$/, '').toLowerCase()}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(row);
+    }
+
+    const toDelete = [];
+    for (const [, rows] of groups) {
+      if (rows.length <= 1) continue;
+      // Keep the one with catalogue_ready=true, or the first one
+      rows.sort((a, b) => (b.catalogue_ready ? 1 : 0) - (a.catalogue_ready ? 1 : 0));
+      for (let i = 1; i < rows.length; i++) toDelete.push(rows[i].id);
+    }
+
+    if (toDelete.length > 0) {
+      for (const id of toDelete) {
+        await supabase.from('auction_calendar').delete().eq('id', id);
+      }
+    }
+
+    res.json({ message: `Removed ${toDelete.length} duplicate calendar entries`, removed: toDelete.length });
+  } catch (e) {
+    log.error('Calendar dedup error', { error: e.message });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
