@@ -9093,6 +9093,59 @@ async function enrichLots(lots, house, sourceUrl, onProgress) {
   return lots;
 }
 // ═══════════════════════════════════════════════════════════════
+// ENRICHMENT CACHE TABLE INIT
+// ═══════════════════════════════════════════════════════════════
+async function ensureEnrichmentCacheTable() {
+  if (!supabase) return;
+  try {
+    // Check if table exists by attempting a simple query
+    const { error } = await supabase.from('enrichment_cache').select('postcode').limit(1);
+    if (error && error.code === '42P01') {
+      // Table doesn't exist — create via raw SQL using rpc
+      console.log('Creating enrichment_cache table...');
+      const { error: createErr } = await supabase.rpc('exec_sql', {
+        sql: `
+          CREATE TABLE IF NOT EXISTS enrichment_cache (
+            postcode TEXT PRIMARY KEY,
+            epc_data JSONB,
+            flood_zone TEXT,
+            flood_data JSONB,
+            lat NUMERIC(9,6),
+            lon NUMERIC(9,6),
+            cached_at TIMESTAMPTZ DEFAULT NOW(),
+            expires_at TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '30 days')
+          );
+          CREATE INDEX IF NOT EXISTS idx_enrichment_expires ON enrichment_cache(expires_at);
+        `
+      });
+      if (createErr) {
+        console.warn('enrichment_cache table creation via rpc failed (create manually in Supabase dashboard):', createErr.message);
+        console.log(`SQL to run manually:
+CREATE TABLE IF NOT EXISTS enrichment_cache (
+  postcode TEXT PRIMARY KEY,
+  epc_data JSONB,
+  flood_zone TEXT,
+  flood_data JSONB,
+  lat NUMERIC(9,6),
+  lon NUMERIC(9,6),
+  cached_at TIMESTAMPTZ DEFAULT NOW(),
+  expires_at TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '30 days')
+);
+CREATE INDEX IF NOT EXISTS idx_enrichment_expires ON enrichment_cache(expires_at);
+ALTER TABLE enrichment_cache ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Service role full access" ON enrichment_cache FOR ALL USING (true) WITH CHECK (true);`);
+      } else {
+        console.log('enrichment_cache table created successfully');
+      }
+    } else if (!error) {
+      console.log('enrichment_cache table exists');
+    }
+  } catch (e) {
+    console.warn('enrichment_cache table check failed:', e.message);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
 // STARTUP SYNC: Calendar + house-name migrations
 // ═══════════════════════════════════════════════════════════════
 const HOUSE_NAME_MIGRATIONS = {
@@ -9143,6 +9196,9 @@ app.listen(PORT, () => {
   if (!process.env.SUPABASE_URL) log.warn('missing_env', { var: 'SUPABASE_URL' });
   if (!process.env.SUPABASE_SERVICE_KEY) log.warn('missing_env', { var: 'SUPABASE_SERVICE_KEY' });
   if (!process.env.GEMINI_API_KEY) log.warn('missing_env', { var: 'GEMINI_API_KEY' });
+
+  // ── Ensure enrichment_cache table exists ──
+  setTimeout(() => ensureEnrichmentCacheTable(), 3000);
 
   // ── Sync calendar + fix stale house names on startup ──
   setTimeout(() => syncCalendarAndHouseNames(), 5000);
