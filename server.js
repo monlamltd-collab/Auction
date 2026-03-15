@@ -551,10 +551,16 @@ function extractWithJSDOM(html, house, baseUrl, firecrawlImages) {
   }
 
   // Post-processing: filter junk images (same blocklist as extractWithDOM)
-  const imgBlocklist = /logo|icon|placeholder|no-image|default|blank|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|1x1|noimage|favicon|banner|advert|sponsor|newsletter|widget|thumb_generic|modal\.png|_NYC\.|_LCC\.|_BMDC\.|Unit[ie]*d?_?Utilit|Cardwells|themes\/.*assets\/images\/|download_\(\d+\)\./i;
+  const imgBlocklist = /logo|icon|placeholder|no-image|default|blank|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|1x1|noimage|favicon|banner|advert|sponsor|newsletter|widget|thumb_generic|modal\.png|_NYC\.|_LCC\.|_BMDC\.|Unit[ie]*d?_?Utilit|Cardwells|themes\/.*assets\/images\/|download_\(\d+\)\.|watchLIVEauction|property-top-image|auc2-logo/i;
   const imgDomainBlock = /flannels|kirklees|rdw\b|council\.gov|\.gov\.uk\/|googleads|doubleclick|analytics|hotjar|intercom|crisp\.chat|tawk\.to|zendesk|hubspot|mailchimp|sendgrid/i;
+  const hollisJunk = house === 'hollismorgan' || house === 'maggsandallen';
   for (const lot of lots) {
-    if (lot.imageUrl && (imgBlocklist.test(lot.imageUrl) || imgDomainBlock.test(lot.imageUrl))) {
+    if (!lot.imageUrl) continue;
+    if (imgBlocklist.test(lot.imageUrl) || imgDomainBlock.test(lot.imageUrl)) {
+      lot.imageUrl = '';
+    } else if (hollisJunk && lot.imageUrl.includes('hollismorgan.co.uk') && !lot.imageUrl.includes('/resize/')) {
+      lot.imageUrl = '';
+    } else if (hollisJunk && lot.imageUrl.includes('maggsandallen.co.uk') && !lot.imageUrl.includes('/resize/')) {
       lot.imageUrl = '';
     }
   }
@@ -4889,24 +4895,23 @@ const DOM_EXTRACTORS = {
         if (cardText.match(/\\bSOLD\\b|\\bSALEAGREED\\b|\\bSALE AGREED\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) {
           if (!bullets.some(b => b.match(/SOLD|STC|WITHDRAWN|SALE AGREED/i))) bullets.push('SOLD/STC');
         }
-        // Image: look for <img> in card, or background-image on .auction-property-image
+        // Image: property photos use img.property-grid-image with /resize/ URLs
         let imageUrl = '';
-        const cardImg = card.querySelector('img.main-image, img.img-responsive, .auction-property-image, .property-grid-image img');
+        const cardImg = card.querySelector('img.property-grid-image');
         if (cardImg) {
-          if (cardImg.tagName === 'IMG') {
-            imageUrl = cardImg.getAttribute('src') || cardImg.dataset.src || '';
-          } else {
-            const bg = cardImg.style.backgroundImage || getComputedStyle(cardImg).backgroundImage || '';
-            const bgMatch = bg.match(/url\\(['"]?([^'"\\)]+)/);
-            if (bgMatch) imageUrl = bgMatch[1];
+          imageUrl = cardImg.getAttribute('src') || cardImg.dataset.src || '';
+        }
+        // Fallback: any img whose src contains /resize/ (property photo pattern)
+        if (!imageUrl) {
+          const imgs = card.querySelectorAll('img[src]');
+          for (const img of imgs) {
+            const s = img.getAttribute('src') || '';
+            if (s.includes('/resize/') && !s.includes('.svg')) { imageUrl = s; break; }
           }
         }
-        if (!imageUrl) {
-          const anyImg = card.querySelector('img[src]');
-          if (anyImg) {
-            const s = anyImg.getAttribute('src') || '';
-            if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) imageUrl = s;
-          }
+        // Filter out non-property images (icons, logos, banners)
+        if (imageUrl && (imageUrl.includes('.svg') || imageUrl.includes('/images/') || imageUrl.includes('logo') || imageUrl.includes('icon') || imageUrl.includes('banner'))) {
+          imageUrl = '';
         }
         lots.push({ lot: lotNum, address, price, url, bullets, imageUrl: imageUrl || undefined });
         lotIndex++;
@@ -7565,11 +7570,19 @@ async function extractWithDOM(page, house) {
   }
 
   // Post-processing: filter out non-property images (logos, icons, placeholders, known junk)
-  const imgBlocklist = /logo|icon|placeholder|no-image|default|blank|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|1x1|noimage|favicon|banner|advert|sponsor|newsletter|widget|thumb_generic|modal\.png|_NYC\.|_LCC\.|_BMDC\.|Unit[ie]*d?_?Utilit|Cardwells|themes\/.*assets\/images\/|download_\(\d+\)\./i;
+  const imgBlocklist = /logo|icon|placeholder|no-image|default|blank|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|1x1|noimage|favicon|banner|advert|sponsor|newsletter|widget|thumb_generic|modal\.png|_NYC\.|_LCC\.|_BMDC\.|Unit[ie]*d?_?Utilit|Cardwells|themes\/.*assets\/images\/|download_\(\d+\)\.|watchLIVEauction|property-top-image|auc2-logo/i;
   // Known non-property domains and brand names that appear as junk images
   const imgDomainBlock = /flannels|kirklees|rdw\b|council\.gov|\.gov\.uk\/|googleads|doubleclick|analytics|hotjar|intercom|crisp\.chat|tawk\.to|zendesk|hubspot|mailchimp|sendgrid/i;
+  // House-specific: Hollis Morgan property photos always use /resize/ path
+  const hollisJunk = house === 'hollismorgan' || house === 'maggsandallen';
   for (const lot of lots) {
-    if (lot.imageUrl && (imgBlocklist.test(lot.imageUrl) || imgDomainBlock.test(lot.imageUrl))) {
+    if (!lot.imageUrl) continue;
+    if (imgBlocklist.test(lot.imageUrl) || imgDomainBlock.test(lot.imageUrl)) {
+      lot.imageUrl = undefined;
+    } else if (hollisJunk && lot.imageUrl.includes('hollismorgan.co.uk') && !lot.imageUrl.includes('/resize/')) {
+      // Hollis Morgan: only /resize/ URLs are property photos; everything else is junk
+      lot.imageUrl = undefined;
+    } else if (hollisJunk && lot.imageUrl.includes('maggsandallen.co.uk') && !lot.imageUrl.includes('/resize/')) {
       lot.imageUrl = undefined;
     }
   }
