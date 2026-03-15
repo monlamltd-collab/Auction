@@ -9,9 +9,9 @@
 
 - [ ] **HARD-01**: SDLT calculator uses correct 2025/26 investor rates (5% surcharge, not 3%)
 - [ ] **HARD-02**: SDLT calculator handles Scotland (LBTT + ADS) and Wales (LTT) correctly
-- [ ] **HARD-03**: Stripe `trial_used` flag is checked on signup to prevent trial abuse via re-registration
-- [ ] **HARD-04**: Stripe webhooks deduplicate events by `event.id` (idempotency)
-- [ ] **HARD-05**: Subscription downgrade honours `current_period_end` instead of immediate cutoff
+- [x] **HARD-03**: Stripe `trial_used` flag is checked on signup to prevent trial abuse via re-registration
+- [x] **HARD-04**: Stripe webhooks deduplicate events by `event.id` (idempotency)
+- [x] **HARD-05**: Subscription downgrade honours `current_period_end` instead of immediate cutoff
 - [ ] **HARD-06**: Broken `calcDealAnalysis()` replaced with correct deal stacking logic
 - [ ] **HARD-07**: Firecrawl requests use `['markdown', 'rawHtml']` format for better Gemini extraction
 
@@ -98,9 +98,9 @@
 |-------------|-------|--------|
 | HARD-01 | Phase 1 | Pending |
 | HARD-02 | Phase 1 | Pending |
-| HARD-03 | Phase 1 | Pending |
-| HARD-04 | Phase 1 | Pending |
-| HARD-05 | Phase 1 | Pending |
+| HARD-03 | Phase 1 | Complete |
+| HARD-04 | Phase 1 | Complete |
+| HARD-05 | Phase 1 | Complete |
 | HARD-06 | Phase 3 | Pending |
 | HARD-07 | Phase 1 | Pending |
 | FRSH-01 | Phase 1 | Pending |
