@@ -3793,7 +3793,7 @@ app.post('/api/admin/rescrape', async (req, res) => {
     const cleared = deleted ? deleted.length : 0;
 
     // 2. Find calendar URLs for this house to re-scrape
-    const calendar = getAuctionCalendar();
+    const calendar = await getAuctionCalendar();
     const urls = calendar
       .filter(a => a.houseSlug === house || (a.house || '').toLowerCase().replace(/[^a-z]/g, '') === house)
       .map(a => a.url)
