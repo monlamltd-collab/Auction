@@ -4808,14 +4808,16 @@ For each lot, return a JSON object with these fields:
 - address: string (full address including postcode)
 - price: number or null (guide price in pounds, null if TBA/not stated)
 - url: string (detail page URL if found, empty string if not)
-- bullets: array of strings (key features/description points - tenure, bedrooms, condition, sq ft, special circumstances etc)
+- tenure: string or null — one of "Freehold", "Leasehold", "Share of Freehold", or null. Look for: freehold, leasehold, share of freehold, flying freehold, long leasehold, years remaining/unexpired. If not explicitly stated, infer from context (e.g. "125 year lease" = Leasehold, ground rent mentioned = Leasehold). Only return null if there is genuinely no indication.
+- bullets: array of strings (key features/description points - bedrooms, condition, sq ft, special circumstances etc)
 
 Return ONLY a JSON array of lot objects, no other text. If a page has no lots, return an empty array.
 
 Important:
 - Extract the COMPLETE address including postcode
 - Guide prices may be shown as "Guide Price £X" or "Guide £X" or just "£X"
-- Bullet points include things like: property type, bedrooms, tenure (freehold/leasehold), condition, sq ft, vacant/tenanted, executor sale, development potential, completion terms
+- Tenure is a PRIORITY field — always look for it in the description, legal pack summary, and property details
+- Bullet points include things like: property type, bedrooms, condition, sq ft, vacant/tenanted, executor sale, development potential, completion terms
 - Include ALL lots, even commercial ones or land
 
 ${strippedBatch.map(p => `=== PAGE ${p.page} ===\n${p.content}`).join('\n\n')}
@@ -4907,14 +4909,16 @@ For each lot, return a JSON object with these fields:
 - address: string (full address including postcode)
 - price: number or null (guide price in pounds, null if TBA/not stated)
 - url: string (empty string — PDFs don't have lot URLs)
-- bullets: array of strings (key features/description points - tenure, bedrooms, condition, sq ft, special circumstances etc)
+- tenure: string or null — one of "Freehold", "Leasehold", "Share of Freehold", or null. Look for: freehold, leasehold, share of freehold, flying freehold, long leasehold, years remaining/unexpired. If not explicitly stated, infer from context (e.g. "125 year lease" = Leasehold, ground rent mentioned = Leasehold). Only return null if there is genuinely no indication.
+- bullets: array of strings (key features/description points - bedrooms, condition, sq ft, special circumstances etc)
 
 Return ONLY a JSON array of lot objects, no other text.
 
 Important:
 - Extract the COMPLETE address including postcode
 - Guide prices may be shown as "Guide Price £X" or "Guide £X" or just "£X"
-- Bullet points include things like: property type, bedrooms, tenure (freehold/leasehold), condition, sq ft, vacant/tenanted, executor sale, development potential, completion terms
+- Tenure is a PRIORITY field — always look for it in the description, legal pack summary, and property details
+- Bullet points include things like: property type, bedrooms, condition, sq ft, vacant/tenanted, executor sale, development potential, completion terms
 - Include ALL lots, even commercial ones or land
 - Do NOT include terms & conditions, legal text, or non-lot pages
 
@@ -8232,11 +8236,19 @@ function analyseLot(raw) {
   }
   if (/studio/.test(t) && L.beds === null) L.beds = 0;
 
-  // Tenure — expanded regex to catch common catalogue phrasings
-  if (/share of freehold|share\s+of\s+the\s+freehold/.test(t)) L.tenure = 'Share of Freehold';
-  else if (/flying freehold/.test(t)) L.tenure = 'Freehold';
-  else if (/\bfreehold\b/.test(t) && !/leasehold/.test(t)) L.tenure = 'Freehold';
-  else if (/long\s+lease(?:hold)?|\bleasehold\b|\blease\s+remaining\b|\byears?\s+(?:remaining|unexpired|left)\b|\b\d+\s*(?:year|yr)\s*lease\b/.test(t)) L.tenure = 'Leasehold';
+  // Tenure — prefer structured field from Gemini, then fall back to regex
+  const rawTenure = (raw.tenure || '').trim().toLowerCase();
+  if (/share.?of.?freehold/.test(rawTenure)) L.tenure = 'Share of Freehold';
+  else if (/freehold/.test(rawTenure) && !/leasehold/.test(rawTenure)) L.tenure = 'Freehold';
+  else if (/leasehold/.test(rawTenure)) L.tenure = 'Leasehold';
+
+  // Regex fallback on bullets + address text
+  if (!L.tenure) {
+    if (/share of freehold|share\s+of\s+the\s+freehold/.test(t)) L.tenure = 'Share of Freehold';
+    else if (/flying freehold/.test(t)) L.tenure = 'Freehold';
+    else if (/\bfreehold\b/.test(t) && !/leasehold/.test(t)) L.tenure = 'Freehold';
+    else if (/long\s+lease(?:hold)?|\bleasehold\b|\blease\s+remaining\b|\byears?\s+(?:remaining|unexpired|left)\b|\b\d+\s*(?:year|yr)\s*lease\b/.test(t)) L.tenure = 'Leasehold';
+  }
   // Infer from property type when tenure not stated: flats are almost always leasehold, houses freehold
   if (!L.tenure && L.propType === 'flat' && /\b\d{2,3}\s*(?:year|yr)s?\b/.test(t)) L.tenure = 'Leasehold';
 
