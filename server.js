@@ -3936,6 +3936,44 @@ app.get('/api/diag', (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
+// TENURE DIAGNOSTIC (temporary — remove after tenure coverage hits 90%+)
+// ═══════════════════════════════════════════════════════════════
+app.get('/api/diag/tenure', async (req, res) => {
+  try {
+    const { data: cached } = await supabase
+      .from('cached_analyses')
+      .select('house, lots')
+      .gt('expires_at', new Date().toISOString());
+    if (!cached) return res.json({ error: 'no data' });
+
+    const counts = { freehold: 0, leasehold: 0, shareOfFreehold: 0, empty: 0, total: 0 };
+    const byHouse = {};
+    for (const c of cached) {
+      if (!Array.isArray(c.lots)) continue;
+      for (const l of c.lots) {
+        counts.total++;
+        const t = (l.tenure || '').trim().toLowerCase();
+        if (t === 'freehold') counts.freehold++;
+        else if (t === 'leasehold') counts.leasehold++;
+        else if (t.includes('share')) counts.shareOfFreehold++;
+        else counts.empty++;
+
+        if (!t) {
+          byHouse[c.house] = (byHouse[c.house] || 0) + 1;
+        }
+      }
+    }
+    const populated = counts.total - counts.empty;
+    res.json({
+      summary: { ...counts, populated, pct: counts.total ? Math.round(populated / counts.total * 100) : 0 },
+      nullsByHouse: Object.entries(byHouse).sort((a, b) => b[1] - a[1]).map(([house, count]) => ({ house, count })),
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
 // BRIDGEMATCH LITE
 // ═══════════════════════════════════════════════════════════════
 app.get('/check', (req, res) => {
