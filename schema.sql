@@ -68,15 +68,38 @@ CREATE TABLE analytics_snapshots (
 
 CREATE INDEX idx_analytics_date ON analytics_snapshots(date);
 
--- 5. Enable Row Level Security (required by Supabase)
+-- 5. HOUSE SKILLS
+-- Per-house scraping skill tracking — persists what works for each auction house
+CREATE TABLE house_skills (
+  slug text PRIMARY KEY,
+  house text NOT NULL,
+  catalogue_url text,
+  extractor text,
+  last_verified timestamptz,
+  last_lot_count integer DEFAULT 0,
+  average_lot_count integer DEFAULT 0,
+  image_coverage integer DEFAULT 0,
+  requires_puppeteer boolean DEFAULT false,
+  requires_firecrawl boolean DEFAULT false,
+  pagination_pattern text DEFAULT 'none',
+  notes text DEFAULT '',
+  status text DEFAULT 'healthy',
+  created_at timestamptz DEFAULT now()
+);
+
+CREATE INDEX idx_skills_status ON house_skills(status);
+
+-- 6. Enable Row Level Security (required by Supabase)
 ALTER TABLE cached_analyses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE rate_limits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 
 ALTER TABLE analytics_snapshots ENABLE ROW LEVEL SECURITY;
+ALTER TABLE house_skills ENABLE ROW LEVEL SECURITY;
 
--- 6. Policies — allow server (service_role) full access
+-- 7. Policies — allow server (service_role) full access
 CREATE POLICY "Service role full access" ON cached_analyses FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Service role full access" ON rate_limits FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Service role full access" ON users FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Service role full access" ON analytics_snapshots FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role full access" ON house_skills FOR ALL USING (true) WITH CHECK (true);

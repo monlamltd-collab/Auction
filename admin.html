@@ -1117,9 +1117,9 @@ async function loadAnalytics() {
   } else {
     grid.innerHTML = skillList.map(s => {
       const cls = s.status === 'healthy' ? 'healthy' : s.status === 'degraded' ? 'degraded' : 'broken';
-      return `<div class="health-tile ${cls}" title="${esc(s.extractor)} | ${s.imageCoverage}% images | Last: ${s.lastVerified ? s.lastVerified.slice(0, 10) : 'never'}">
+      return `<div class="health-tile ${cls}" title="${esc(s.extractor)} | ${s.image_coverage || s.imageCoverage || 0}% images | Last: ${(s.last_verified || s.lastVerified || '').slice(0, 10) || 'never'}">
         ${esc(s.house)}
-        <div class="tile-lots">${s.lastLotCount} lots</div>
+        <div class="tile-lots">${s.last_lot_count || s.lastLotCount || 0} lots</div>
       </div>`;
     }).join('');
   }

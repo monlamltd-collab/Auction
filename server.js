@@ -16,7 +16,7 @@ import { randomBytes, timingSafeEqual, createHash } from 'crypto';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createClient } from '@supabase/supabase-js';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
-import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'fs';
+import { readFileSync } from 'fs';
 import { lookup } from 'dns/promises';
 import { JSDOM } from 'jsdom';
 let puppeteer = null;
@@ -24,8 +24,6 @@ try { puppeteer = (await import('puppeteer')).default; } catch {}
 import Stripe from 'stripe';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const SKILLS_DIR = join(__dirname, 'skills');
-try { mkdirSync(SKILLS_DIR, { recursive: true }); } catch {}
 
 // ═══════════════════════════════════════════════════════════════
 // ENV VAR VALIDATION
@@ -3828,21 +3826,21 @@ app.get('/api/admin/daily-stats', async (req, res) => {
 });
 
 // ── Per-house skill files (health dashboard) ──
-app.get('/api/skills', (req, res) => {
+app.get('/api/skills', async (req, res) => {
   const token = req.headers['x-admin-secret'] || '';
   if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
     return res.status(403).json({ error: 'Invalid admin token' });
   }
   try {
-    const files = readdirSync(SKILLS_DIR).filter(f => f.endsWith('.json'));
-    const skills = files.map(f => {
-      try { return JSON.parse(readFileSync(join(SKILLS_DIR, f), 'utf8')); } catch { return null; }
-    }).filter(Boolean);
+    const { data, error } = await supabase.from('house_skills').select('*').order('slug');
+    if (error) throw error;
+    const skills = data || [];
     const healthy = skills.filter(s => s.status === 'healthy').length;
     const degraded = skills.filter(s => s.status === 'degraded').length;
     const broken = skills.filter(s => s.status === 'broken').length;
     res.json({ skills, summary: { total: skills.length, healthy, degraded, broken } });
-  } catch {
+  } catch (e) {
+    log.error('Skills endpoint error', { error: e.message });
     res.json({ skills: [], summary: { total: 0, healthy: 0, degraded: 0, broken: 0 } });
   }
 });
@@ -9045,9 +9043,9 @@ async function autoAnalyseOne(url) {
 
   console.log(`AUTO: ✓ ${house}: ${newTotalLots} lots cached (${newTitleSplits} title splits, ${newTopPicks} top picks)${catalogueChanged ? ' [CHANGED]' : ' [unchanged]'}`);
 
-  // ── Skill tracking: write per-house skill file ──
+  // ── Skill tracking: persist to Supabase ──
   try {
-    updateHouseSkill(house, {
+    await updateHouseSkill(house, {
       catalogueUrl: url,
       lotCount: newTotalLots,
       imageCoverage: lots.length > 0 ? Math.round(lots.filter(l => l.imageUrl).length / lots.length * 100) : 0,
@@ -9063,10 +9061,13 @@ async function autoAnalyseOne(url) {
 // PER-HOUSE SKILL TRACKING
 // ═══════════════════════════════════════════════════════════════
 
-function updateHouseSkill(slug, { catalogueUrl, lotCount, imageCoverage, scrapedWith, requiresPuppeteer }) {
-  const filePath = join(SKILLS_DIR, `${slug}.json`);
-  let existing = null;
-  try { existing = JSON.parse(readFileSync(filePath, 'utf8')); } catch {}
+async function updateHouseSkill(slug, { catalogueUrl, lotCount, imageCoverage, scrapedWith, requiresPuppeteer }) {
+  // Read existing skill from Supabase
+  const { data: existing } = await supabase
+    .from('house_skills')
+    .select('*')
+    .eq('slug', slug)
+    .maybeSingle();
 
   const now = new Date().toISOString();
   const displayName = HOUSE_DISPLAY_NAMES[slug] || slug;
@@ -9075,18 +9076,17 @@ function updateHouseSkill(slug, { catalogueUrl, lotCount, imageCoverage, scraped
   // Determine extractor type
   let extractor = 'gemini';
   if (DOM_EXTRACTORS[slug]) {
-    // Check if it's an alias (eigplatform, auctionhouseuk) or custom
     if (DOM_EXTRACTORS[slug] === DOM_EXTRACTORS.eigplatform) extractor = 'eigplatform';
     else if (DOM_EXTRACTORS[slug] === DOM_EXTRACTORS.auctionhouseuk) extractor = 'auctionhouseuk';
     else extractor = `${slug}_dom`;
   }
 
-  // Calculate rolling average lot count
-  const prevAvg = existing?.averageLotCount || lotCount;
-  const averageLotCount = Math.round((prevAvg * 0.7) + (lotCount * 0.3)); // EMA
+  // Calculate rolling average lot count (EMA)
+  const prevAvg = existing?.average_lot_count || lotCount;
+  const averageLotCount = Math.round((prevAvg * 0.7) + (lotCount * 0.3));
 
   // Determine pagination pattern
-  let paginationPattern = existing?.paginationPattern || 'none';
+  let paginationPattern = existing?.pagination_pattern || 'none';
   if (rootUrl.includes('?page=')) paginationPattern = '?page=N';
   else if (rootUrl.includes('/page/')) paginationPattern = '/page/N';
 
@@ -9094,27 +9094,31 @@ function updateHouseSkill(slug, { catalogueUrl, lotCount, imageCoverage, scraped
   let status = 'healthy';
   if (lotCount === 0) {
     status = 'broken';
-  } else if (existing?.averageLotCount && lotCount < existing.averageLotCount * 0.7) {
+  } else if (existing?.average_lot_count && lotCount < existing.average_lot_count * 0.7) {
     status = 'degraded';
   }
 
   const skill = {
-    house: displayName,
     slug,
-    catalogueUrl: rootUrl,
+    house: displayName,
+    catalogue_url: rootUrl,
     extractor,
-    lastVerified: now,
-    lastLotCount: lotCount,
-    averageLotCount,
-    imageCoverage,
-    requiresPuppeteer: !!requiresPuppeteer,
-    requiresFirecrawl: scrapedWith === 'firecrawl',
-    paginationPattern,
+    last_verified: now,
+    last_lot_count: lotCount,
+    average_lot_count: averageLotCount,
+    image_coverage: imageCoverage,
+    requires_puppeteer: !!requiresPuppeteer,
+    requires_firecrawl: scrapedWith === 'firecrawl',
+    pagination_pattern: paginationPattern,
     notes: existing?.notes || '',
     status,
   };
 
-  writeFileSync(filePath, JSON.stringify(skill, null, 2));
+  const { error } = await supabase
+    .from('house_skills')
+    .upsert(skill, { onConflict: 'slug' });
+
+  if (error) throw new Error(`Supabase skill upsert failed: ${error.message}`);
   console.log(`SKILL: ${displayName} → ${status} (${lotCount} lots, ${imageCoverage}% images)`);
 }
 
@@ -9158,17 +9162,14 @@ async function saveDailySnapshot() {
 
   const imageCoveragePct = totalLotsForImages > 0 ? Math.round(totalWithImages / totalLotsForImages * 100) : 0;
 
-  // Read skill files for health status
+  // Read skill health status from Supabase
   let healthyHouses = 0, degradedHouses = 0, brokenHouses = 0;
   try {
-    const files = readdirSync(SKILLS_DIR).filter(f => f.endsWith('.json'));
-    for (const f of files) {
-      try {
-        const skill = JSON.parse(readFileSync(join(SKILLS_DIR, f), 'utf8'));
-        if (skill.status === 'healthy') healthyHouses++;
-        else if (skill.status === 'degraded') degradedHouses++;
-        else if (skill.status === 'broken') brokenHouses++;
-      } catch {}
+    const { data: skills } = await supabase.from('house_skills').select('status');
+    for (const s of (skills || [])) {
+      if (s.status === 'healthy') healthyHouses++;
+      else if (s.status === 'degraded') degradedHouses++;
+      else if (s.status === 'broken') brokenHouses++;
     }
   } catch {}
 
