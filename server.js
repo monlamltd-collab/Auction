@@ -1304,6 +1304,18 @@ app.post('/api/stripe/webhook', async (req, res) => {
     return res.status(400).send('Webhook signature verification failed');
   }
 
+  // Idempotency: skip already-processed events
+  const { data: existingEvent } = await supabase
+    .from('processed_webhook_events')
+    .select('event_id')
+    .eq('event_id', event.id)
+    .maybeSingle();
+
+  if (existingEvent) {
+    log.info(`Webhook event ${event.id} already processed, skipping`);
+    return res.json({ received: true, duplicate: true });
+  }
+
   try {
     switch (event.type) {
       case 'checkout.session.completed': {
@@ -1406,6 +1418,14 @@ app.post('/api/stripe/webhook', async (req, res) => {
     log.error('Stripe webhook handler error', { error: err.message, eventType: event.type });
     return res.status(500).json({ error: 'Webhook handler failed' });
   }
+
+  // Record event as processed (upsert handles race conditions)
+  await supabase
+    .from('processed_webhook_events')
+    .upsert(
+      { event_id: event.id, processed_at: new Date().toISOString() },
+      { onConflict: 'event_id', ignoreDuplicates: true }
+    );
 
   // Periodic cleanup: delete processed webhook events older than 7 days (every 100th webhook)
   webhookEventCounter++;
