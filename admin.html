@@ -552,7 +552,9 @@ async function loadCacheStatus() {
   const { summary, cached, missing } = data;
   document.getElementById('s-houses').textContent = summary.totalCached;
   document.getElementById('s-houses-sub').textContent = `${summary.totalReady} calendar-ready`;
-  document.getElementById('s-lots').textContent = (summary.totalLots || 0).toLocaleString();
+  document.getElementById('s-lots').textContent = (summary.activeLots || summary.totalLots || 0).toLocaleString();
+  const sLotsEl = document.getElementById('s-lots');
+  if (sLotsEl && summary.expiredLots) sLotsEl.title = `${summary.activeLots} active + ${summary.expiredLots} expired = ${summary.totalLots} total`;
   document.getElementById('houses-badge').textContent = `${summary.totalCached} houses`;
 
   // Build house table

@@ -3355,6 +3355,10 @@ app.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
 
     if (!cached || cached.length === 0) return res.json({ lots: [], sources: [] });
 
+    // ── Diagnostic: raw lot count before any filtering/dedup ──
+    const rawTotal = (cached || []).reduce((s, c) => s + (Array.isArray(c.lots) ? c.lots.length : 0), 0);
+    log.info('all-lots query', { cachedRows: cached.length, rawLotCount: rawTotal });
+
     const lots = [];
     const sources = [];
     for (const c of cached) {
@@ -3472,8 +3476,29 @@ app.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
       if (!lot.url && lot._sourceUrl) lot.url = lot._sourceUrl;
     }
 
+    // ── Diagnostic: pipeline summary ──
+    log.info('all-lots pipeline', {
+      rawFromDb: rawTotal,
+      afterWithinHouseDedup: lots.length,
+      afterCrossAuctionDedup: finalLots.length,
+      afterJunkRemoval: cleanLots.length,
+      junkRemoved: junkLotRemoved,
+      imgStripped
+    });
+
     // Directory data is free to serve — no gating, no blurring
-    res.json({ lots: cleanLots, sources, blurred: false });
+    res.json({
+      lots: cleanLots,
+      sources,
+      blurred: false,
+      _debug: {
+        cachedRows: cached.length,
+        rawLotCount: rawTotal,
+        afterWithinHouseDedup: lots.length,
+        afterCrossAuctionDedup: finalLots.length,
+        afterJunkRemoval: cleanLots.length
+      }
+    });
   } catch (e) {
     log.error('All lots error', { error: e.message });
     res.status(500).json({ error: 'Internal server error' });
@@ -3498,17 +3523,26 @@ app.get('/api/cache-status', async (req, res) => {
     const ready = allAuctions.filter(a => a.catalogueReady);
     const cachedUrls = new Set((cached || []).map(c => normaliseUrl(c.url)));
 
+    const now = new Date().toISOString();
+    const activeCached = (cached || []).filter(c => c.expires_at > now);
+    const expiredCached = (cached || []).filter(c => c.expires_at <= now);
     const totalLots = (cached || []).reduce((s, c) => s + (c.total_lots || 0), 0);
+    const activeLots = activeCached.reduce((s, c) => s + (c.total_lots || 0), 0);
+    const expiredLots = expiredCached.reduce((s, c) => s + (c.total_lots || 0), 0);
     const missing = ready.filter(a => !cachedUrls.has(normaliseUrl(a.url)));
 
     res.json({
       summary: {
         totalCached: (cached || []).length,
+        activeCached: activeCached.length,
+        expiredCached: expiredCached.length,
         totalReady: ready.length,
         totalLots,
+        activeLots,
+        expiredLots,
         missingCount: missing.length,
       },
-      cached: cached || [],
+      cached: (cached || []).map(c => ({ ...c, _expired: c.expires_at <= now })),
       missing: missing.map(a => ({ house: a.house, url: a.url, date: a.date })),
     });
   } catch (e) {

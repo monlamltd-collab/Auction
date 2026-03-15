@@ -1137,6 +1137,7 @@ async function loadAllLots(){
     const d=await r.json();
     ALL_LOTS=d.lots||[];
     ALL_SOURCES=d.sources||[];
+    if(d._debug) console.log('[BM] all-lots pipeline:',d._debug);
 
     // Update dynamic stats
     const lsEl = document.querySelector('.ls-val[data-target="2000"]');
@@ -2300,6 +2301,7 @@ function renderLots(){
 
   // Store filtered lots for export functions
   window._filteredLots = lots;
+  console.log('[BM] renderLots: LOTS='+LOTS.length+' → filtered='+lots.length+' (lookahead='+fLook+', includePrev='+fIncludePrev+')');
 
   const top=lots.filter(l=>l.score>=3);
   let statsHtml=`
