@@ -2327,7 +2327,7 @@ function renderLots(){
       bannerEl.style.cssText='background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:8px;padding:8px 12px;margin:8px 0;font-size:.85rem;display:flex;align-items:center;justify-content:space-between';
       const sr=$('statsRow');if(sr)sr.parentNode.insertBefore(bannerEl,sr.nextSibling);
     }
-    if(bannerEl)bannerEl.innerHTML='⚠️ Showing multiple auction dates — '+dupCount+' lots appear in more than one catalogue. <button onclick="sessionStorage.setItem(\'bm_dismiss_lookahead\',\'1\');this.parentNode.remove()" style="background:none;border:none;cursor:pointer;font-size:1rem;color:#856404">✕</button>';
+    if(bannerEl)bannerEl.innerHTML='⚠️ Showing multiple auction dates — '+dupCount+' lots appear in more than one catalogue. Change from "All upcoming" to "Next auction only" in the Auction Date filter to show just one. <button onclick="sessionStorage.setItem(\'bm_dismiss_lookahead\',\'1\');this.parentNode.remove()" style="background:none;border:none;cursor:pointer;font-size:1rem;color:#856404">✕</button>';
   }else if(bannerEl){
     bannerEl.remove();
   }
