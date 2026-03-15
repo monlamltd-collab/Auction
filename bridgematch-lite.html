@@ -288,6 +288,16 @@ select{padding-left:14px;cursor:pointer;appearance:none;
         </select>
       </div>
     </div>
+    <div class="row" style="margin-bottom:14px">
+      <div class="field">
+        <label>Region (Stamp Duty)</label>
+        <select id="sdltCountry">
+          <option value="england">England (SDLT)</option>
+          <option value="scotland">Scotland (LBTT + ADS)</option>
+          <option value="wales">Wales (LTT)</option>
+        </select>
+      </div>
+    </div>
 
     <!-- Refurb toggle -->
     <label class="toggle-row" id="refurbToggle">
@@ -447,21 +457,60 @@ function runMatch(){
 
   setTimeout(()=>{
     const loanTerm=parseInt(document.getElementById('loanTerm').value)||12;
-    const results=matchLenders(price,cash,propType,isRefurb,works,gdv,addlVal,addlMort,loanTerm);
+    const sdltCountry=document.getElementById('sdltCountry')?.value||'england';
+    const results=matchLenders(price,cash,propType,isRefurb,works,gdv,addlVal,addlMort,loanTerm,sdltCountry);
     renderResults(results);
     document.getElementById('loading').classList.remove('visible');
     document.getElementById('runBtn').disabled=false;
   },800);
 }
 
-function matchLenders(price,cash,propType,isRefurb,works,gdv,addlVal,addlMort,loanTermMonths){
+// SDLT/LBTT/LTT calculator (investor rates 2025/26 — England, Scotland & Wales)
+function calcSDLT(price, country){
+  if(!country) country='england';
+  switch(country){
+    case 'scotland': {
+      const ads=price*0.06;
+      let lbtt=0;
+      if(price>145000) lbtt+=(Math.min(price,250000)-145000)*0.02;
+      if(price>250000) lbtt+=(Math.min(price,325000)-250000)*0.05;
+      if(price>325000) lbtt+=(Math.min(price,750000)-325000)*0.10;
+      if(price>750000) lbtt+=(price-750000)*0.12;
+      return Math.round(ads+lbtt);
+    }
+    case 'wales': {
+      let ltt=0;
+      if(price<=180000) ltt=price*0.04;
+      else{
+        ltt=180000*0.04;
+        ltt+=(Math.min(price,250000)-180000)*0.075;
+        if(price>250000) ltt+=(Math.min(price,400000)-250000)*0.09;
+        if(price>400000) ltt+=(Math.min(price,750000)-400000)*0.115;
+        if(price>750000) ltt+=(Math.min(price,1500000)-750000)*0.14;
+        if(price>1500000) ltt+=(price-1500000)*0.16;
+      }
+      return Math.round(ltt);
+    }
+    default: {
+      if(price<=250000) return Math.round(price*0.05);
+      let sdlt=250000*0.05;
+      if(price<=925000) sdlt+=(price-250000)*0.1;
+      else{sdlt+=(925000-250000)*0.1;sdlt+=(Math.min(price,1500000)-925000)*0.15;}
+      if(price>1500000) sdlt+=(price-1500000)*0.17;
+      return Math.round(sdlt);
+    }
+  }
+}
+
+function matchLenders(price,cash,propType,isRefurb,works,gdv,addlVal,addlMort,loanTermMonths,country){
   if(!loanTermMonths)loanTermMonths=12;
+  if(!country) country='england';
   // Day-1 loan calculation: pure purchase price minus cash deposit
   // SDLT, legal fees, works costs are the investor's responsibility — not factored into loan requirement
   const loanNeeded=Math.max(0,price-cash);
   const ltv=price>0?(loanNeeded/price)*100:0;
   const cashForDeposit=Math.min(cash,price);
-  let stampDuty=Math.round(price<=250000?price*0.05:price<=925000?250000*0.05+(price-250000)*0.1:price<=1500000?250000*0.05+675000*0.1+(price-925000)*0.15:250000*0.05+675000*0.1+575000*0.15+(price-1500000)*0.17);
+  let stampDuty=calcSDLT(price,country);
   const estCosts=price*0.04;
   const totalCashNeeded=stampDuty+estCosts;
 
@@ -648,7 +697,7 @@ function matchLenders(price,cash,propType,isRefurb,works,gdv,addlVal,addlMort,lo
   }
 
   return{eligible,excluded,ltv,loanNeeded,stampDuty,estCosts,totalCashNeeded,cashForDeposit,
-    isRefurb,works,gdv,worksRatio,intensity,ltgdv,addlEquity,combinedLTV,price,cash,totalProject:price+works,loanTermMonths};
+    isRefurb,works,gdv,worksRatio,intensity,ltgdv,addlEquity,combinedLTV,price,cash,totalProject:price+works,loanTermMonths,country};
 }
 
 function renderResults(r){
@@ -797,7 +846,7 @@ function renderResults(r){
   // Other costs note
   html+=`<div class="insight-box" style="margin-top:8px">
     <strong>Other costs to budget for:</strong><br>
-    Stamp Duty (SDLT): ~${fmtCurrency(r.stampDuty)} &nbsp;·&nbsp; Legal/Survey/Fees: ~${fmtCurrency(r.estCosts)}
+    ${r.country==='scotland'?'LBTT + ADS':r.country==='wales'?'LTT (Higher Rate)':'Stamp Duty (SDLT)'}: ~${fmtCurrency(r.stampDuty)} &nbsp;·&nbsp; Legal/Survey/Fees: ~${fmtCurrency(r.estCosts)}
     ${r.isRefurb?`<br>Works budget: ${fmtCurrency(r.works)} — how this is funded depends on the lender (see above)`:''}
     <br><span style="font-size:0.78rem;color:var(--text3)">These costs are separate from your deposit and loan. A broker can advise on exact figures for your deal.</span>
   </div>`;
