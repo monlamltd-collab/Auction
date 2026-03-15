@@ -962,6 +962,14 @@ const HOUSE_ROOTS = {
   goldings:           'https://www.goldingsauctions.co.uk/auctions/next-auction/',
   auctionhousescotland: 'https://www.auctionhouse.co.uk/scotland/auction/search-results',
   austingray:         'https://www.auctionhouse.co.uk/sussexandhampshire',
+  // ── New houses (March 2026 batch 2) ──
+  agentsproperty:     'https://www.agentspropertyauction.com/next-auction/',
+  andrewcraig:        'https://www.andrewcraig.co.uk/auction-property-for-sale',
+  buttersjohnbee:     'https://www.buttersjohnbee.com/listings?auction=1&status=all',
+  brownco:            'https://brownandco.eigonlineauctions.com/search',
+  cheffins:           'https://www.cheffins.co.uk/property-auctions.htm',
+  fssproperty:        'https://www.fssproperty.co.uk/search-auction/',
+  iamsold:            'https://www.iamsold.co.uk/available-properties/',
 };
 
 // Now that HOUSE_ROOTS is defined, populate the image backfill set
@@ -4008,7 +4016,6 @@ function detectAuctionHouse(url) {
   if (u.includes('loveitts')) return 'loveitts';
   if (u.includes('hunters.com') || u.includes('bambooauctions.com')) return 'hunters';
   if (u.includes('probate.auction') || u.includes('timedauctions.probate.auction')) return 'probateauction';
-  // buttersjohnbee — PDF-only catalogues, not supported for DOM extraction
   if (u.includes('auctionhouselondon')) return 'auctionhouselondon';
   if (u.includes('auctionhouse.co.uk')) return 'auctionhouse';
   if (u.includes('pughauctions') || u.includes('pugh')) return 'sdl';
@@ -4029,6 +4036,14 @@ function detectAuctionHouse(url) {
   if (u.includes('durrants.com') || u.includes('auctions.durrants')) return 'durrants';
   if (u.includes('dawsonsproperty')) return 'dawsons';
   if (u.includes('goldingsauctions')) return 'goldings';
+  // ── New houses (March 2026 batch 2) ──
+  if (u.includes('agentspropertyauction.com')) return 'agentsproperty';
+  if (u.includes('andrewcraig.co.uk')) return 'andrewcraig';
+  if (u.includes('buttersjohnbee.com')) return 'buttersjohnbee';
+  if (u.includes('brown-co.com') || u.includes('brownandco.eigonlineauctions')) return 'brownco';
+  if (u.includes('cheffins.co.uk') || u.includes('timedpropertyauctions.cheffins')) return 'cheffins';
+  if (u.includes('fssproperty.co.uk')) return 'fssproperty';
+  if (u.includes('iamsold.co.uk')) return 'iamsold';
   return 'unknown';
 }
 
@@ -4052,6 +4067,10 @@ const HOUSE_DISPLAY_NAMES = {
   astleys: 'Astleys', henrysykes: 'Henry Sykes Auctions', clarkesimpson: 'Clarke & Simpson',
   durrants: 'Durrants', dawsons: 'Dawsons', goldings: 'Goldings',
   auctionhousescotland: 'Auction House Scotland', austingray: 'Auction House Sussex & Hampshire',
+  agentsproperty: 'Agents Property Auction', andrewcraig: 'Andrew Craig',
+  buttersjohnbee: 'Butters John Bee', brownco: 'Brown & Co',
+  cheffins: 'Cheffins', fssproperty: 'Feather Smailes & Scales',
+  iamsold: 'iamsold',
 };
 
 function getHouseDisplayName(slug, url) {
@@ -7062,10 +7081,362 @@ const DOM_EXTRACTORS = {
     })()
   `,
 
+  // ── Agents Property Auction (WordPress, agentspropertyauction.com) ──
+  // Cards: article.card--property inside div.card-grid-item
+  // Lot: span.pill--pink ("Lot 1"), Address: h3.card-title--property a, Price: p.card-price
+  // Image: background-image on div.card-img-bg, Link: a.u-link-cover
+  agentsproperty: `
+    (() => {
+      const lots = [];
+      const seen = new Set();
+      const cards = document.querySelectorAll('div.card-grid-item');
+      for (const card of cards) {
+        // Lot number from pill badge
+        let lotNum = 0;
+        const pill = card.querySelector('span.pill--pink, span.card-img-meta');
+        if (pill) {
+          const m = (pill.textContent || '').match(/Lot\\s+(\\d+)/i);
+          if (m) lotNum = parseInt(m[1]);
+        }
+        // Address from title link
+        let address = '';
+        const titleLink = card.querySelector('h3.card-title--property a, h3.card-title a');
+        if (titleLink) address = (titleLink.textContent || '').replace(/<br\\s*\\/?>/gi, ', ').trim();
+        if (!address || address.length < 5) continue;
+        // Price from p.card-price
+        let price = null;
+        const priceEl = card.querySelector('p.card-price');
+        if (priceEl) {
+          const pm = (priceEl.textContent || '').match(/£([\\d,]+)/);
+          if (pm) price = parseInt(pm[1].replace(/,/g, ''));
+        }
+        // Image: CSS background-image on div.card-img-bg
+        let imageUrl = '';
+        const imgBg = card.querySelector('div.card-img-bg');
+        if (imgBg) {
+          const style = imgBg.getAttribute('style') || '';
+          const urlMatch = style.match(/url\\(([^)]+)\\)/);
+          if (urlMatch) imageUrl = urlMatch[1].replace(/['"]/g, '');
+        }
+        // Detail link
+        let url = '';
+        const detailLink = card.querySelector('a.u-link-cover, h3.card-title--property a');
+        if (detailLink) url = detailLink.getAttribute('href') || '';
+        // Bullets from card-excerpt
+        const bullets = [];
+        const excerpt = card.querySelector('div.card-excerpt');
+        if (excerpt) {
+          const t = (excerpt.textContent || '').trim();
+          const bedMatch = t.match(/(\\d+)\\s*Bed/i);
+          if (bedMatch) bullets.push(bedMatch[1] + ' bedrooms');
+          const bathMatch = t.match(/(\\d+)\\s*Bath/i);
+          if (bathMatch) bullets.push(bathMatch[1] + ' bathrooms');
+          const recMatch = t.match(/(\\d+)\\s*Recep/i);
+          if (recMatch) bullets.push(recMatch[1] + ' receptions');
+        }
+        // Status
+        const banner = card.querySelector('span.card-img-banner');
+        if (banner) {
+          const status = (banner.textContent || '').trim();
+          if (status && status !== 'Upcoming') bullets.push(status);
+        }
+        if (seen.has(address)) continue;
+        seen.add(address);
+        lots.push({ lot: lotNum, address: address.substring(0, 200), price, url, bullets, imageUrl: imageUrl || undefined });
+      }
+      return lots;
+    })()
+  `,
+
+  // ── Andrew Craig (Estate Apps platform, andrewcraig.co.uk) ──
+  // Cards: div.card[data-id], Address: div.card-content > a.card-image-container (text)
+  // Price: span.price-value, Image: img[data-src] (lazy loaded), Link: a.card-image-container[href]
+  // Pagination: ?page=N, No lot numbers — uses property IDs
+  andrewcraig: `
+    (() => {
+      const lots = [];
+      const seen = new Set();
+      const cards = document.querySelectorAll('div.card[data-id]');
+      let lotNum = 0;
+      for (const card of cards) {
+        // Skip CTA cards
+        if (card.classList.contains('card--property-worth')) continue;
+        lotNum++;
+        // Address from the text link in card-content
+        let address = '';
+        const addrLink = card.querySelector('div.card-content > a.card-image-container');
+        if (addrLink) address = (addrLink.textContent || '').trim();
+        // Clean "X bed Y for sale in" prefix
+        address = address.replace(/^\\d+\\s+bed\\s+\\w+\\s+for\\s+sale\\s+in\\s+/i, '').trim();
+        if (!address || address.length < 5) continue;
+        // Price from span.price-value
+        let price = null;
+        const priceEl = card.querySelector('span.price-value');
+        if (priceEl) {
+          const pm = (priceEl.textContent || '').match(/£([\\d,]+)/);
+          if (pm) price = parseInt(pm[1].replace(/,/g, ''));
+        }
+        // Image: data-src (lazy loaded with base64 placeholder in src)
+        let imageUrl = '';
+        const img = card.querySelector('div.card-image img');
+        if (img) {
+          imageUrl = img.getAttribute('data-src') || '';
+          if (!imageUrl || imageUrl.startsWith('data:')) imageUrl = img.getAttribute('src') || '';
+          if (imageUrl.startsWith('data:')) imageUrl = '';
+        }
+        // Detail link
+        let url = '';
+        const link = card.querySelector('a.card-image-container');
+        if (link) url = link.getAttribute('href') || '';
+        // Bullets: bedroom/bathroom counts from span.number elements
+        const bullets = [];
+        const numbers = card.querySelectorAll('div.card-content__detail__left span.number');
+        if (numbers.length >= 1) bullets.push(numbers[0].textContent.trim() + ' bedrooms');
+        if (numbers.length >= 2) bullets.push(numbers[1].textContent.trim() + ' bathrooms');
+        if (numbers.length >= 3) bullets.push(numbers[2].textContent.trim() + ' receptions');
+        // Property tag (e.g. "Land")
+        const tag = card.querySelector('span.property-tag');
+        if (tag) bullets.push((tag.textContent || '').trim());
+        if (seen.has(address)) continue;
+        seen.add(address);
+        lots.push({ lot: lotNum, address: address.substring(0, 200), price, url, bullets, imageUrl: imageUrl || undefined });
+      }
+      return lots;
+    })()
+  `,
+
+  // ── Butters John Bee (Rex Software platform, buttersjohnbee.com) ──
+  // Cards: <a href="/listings/{type}-{id}-{location}"> (entire card is a link)
+  // Address: h4 inside card, Price: bold/strong with £, Image: img[alt="Listing image"]
+  // Rooms: .listing__rooms .room, Pagination: ?page=N
+  buttersjohnbee: `
+    (() => {
+      const lots = [];
+      const seen = new Set();
+      // Each card is an <a> tag linking to /listings/
+      const links = document.querySelectorAll('a[href*="/listings/"]');
+      let lotNum = 0;
+      for (const link of links) {
+        const href = link.getAttribute('href') || '';
+        if (!href.match(/\\/listings\\/\\w+_\\w+-/)) continue;
+        if (seen.has(href)) continue;
+        seen.add(href);
+        lotNum++;
+        const text = link.textContent || '';
+        // Address from h4 inside the card
+        let address = '';
+        const h4s = link.querySelectorAll('h4');
+        for (const h of h4s) {
+          const t = (h.textContent || '').trim();
+          // Skip room count h4s (single digits like "3", "1", "2")
+          if (t.length > 5 && !t.match(/^\\d+$/) && !t.match(/^Guide|^£/i)) {
+            address = t;
+            break;
+          }
+        }
+        if (!address || address.length < 3) continue;
+        // Price from bold/strong text
+        let price = null;
+        const strongs = link.querySelectorAll('strong, b');
+        for (const s of strongs) {
+          const pm = (s.textContent || '').match(/£([\\d,]+)/);
+          if (pm) { price = parseInt(pm[1].replace(/,/g, '')); break; }
+        }
+        if (!price) {
+          const pm = text.match(/(?:Guide\\s*Price\\s*)?£([\\d,]+)/i);
+          if (pm) price = parseInt(pm[1].replace(/,/g, ''));
+        }
+        // Image
+        let imageUrl = '';
+        const img = link.querySelector('img');
+        if (img) {
+          const src = img.getAttribute('src') || '';
+          if (src && !src.startsWith('data:')) imageUrl = src;
+        }
+        // Bullets from room stats
+        const bullets = [];
+        const rooms = link.querySelectorAll('.listing__rooms .room');
+        for (const room of rooms) {
+          const rt = (room.textContent || '').trim();
+          if (rt.match(/\\d+.*bed/i)) bullets.push(rt);
+          else if (rt.match(/\\d+.*bath/i)) bullets.push(rt);
+          else if (rt.match(/sq\\s*ft/i)) bullets.push(rt);
+        }
+        if (!bullets.length) {
+          const bedMatch = text.match(/(\\d+)\\s*Bed/i);
+          if (bedMatch) bullets.push(bedMatch[1] + ' bedrooms');
+        }
+        lots.push({ lot: lotNum, address: address.substring(0, 200), price, url: href, bullets, imageUrl: imageUrl || undefined });
+      }
+      return lots;
+    })()
+  `,
+
+  // ── Cheffins (cheffins.co.uk, EIG-based catalogue pages) ──
+  // Cards: div.property-card, Lot: div.pc-tag ("Lot number: N"), Address: div.pc-add
+  // Price: div.pc-price, Image: div.pc-slide div[data-img] (EIG CDN), Link: a.btn--alt
+  cheffins: `
+    (() => {
+      const lots = [];
+      const seen = new Set();
+      const cards = document.querySelectorAll('div.property-card');
+      for (const card of cards) {
+        // Lot number from pc-tag
+        let lotNum = 0;
+        const tag = card.querySelector('div.pc-tag');
+        if (tag) {
+          const m = (tag.textContent || '').match(/Lot\\s*(?:number)?:?\\s*(\\d+)/i);
+          if (m) lotNum = parseInt(m[1]);
+        }
+        // Address from pc-add
+        let address = '';
+        const addrEl = card.querySelector('div.pc-add');
+        if (addrEl) address = (addrEl.textContent || '').trim();
+        if (!address || address.length < 5) continue;
+        // Price from pc-price
+        let price = null;
+        const priceEl = card.querySelector('div.pc-price');
+        if (priceEl) {
+          const pt = (priceEl.textContent || '').trim();
+          const pm = pt.match(/£([\\d,]+)/);
+          if (pm) price = parseInt(pm[1].replace(/,/g, ''));
+        }
+        // Image: data-img attribute on slider divs (EIG CDN)
+        let imageUrl = '';
+        const imgDiv = card.querySelector('div.pc-slide > div[data-img]');
+        if (imgDiv) imageUrl = imgDiv.getAttribute('data-img') || '';
+        // Detail link
+        let url = '';
+        const detailBtn = card.querySelector('a.btn--alt, a.btn');
+        if (detailBtn) url = detailBtn.getAttribute('href') || '';
+        // Bullets: status from pc-extraInfo
+        const bullets = [];
+        const extraInfo = card.querySelector('div.pc-extraInfo');
+        if (extraInfo) {
+          const status = (extraInfo.textContent || '').trim();
+          if (status && status !== 'New') bullets.push(status);
+        }
+        // Description summary
+        const summ = card.querySelector('div.pc-summ');
+        if (summ) {
+          const st = (summ.textContent || '').trim();
+          if (st.match(/\\bland\\b/i)) bullets.push('Land');
+          if (st.match(/\\bgarage\\b/i)) bullets.push('Garage');
+          if (st.match(/\\bbarn\\b/i)) bullets.push('Barn');
+          const bedMatch = st.match(/(\\d+)\\s*(?:bed|Bed)/i);
+          if (bedMatch) bullets.push(bedMatch[1] + ' bedrooms');
+        }
+        if (seen.has(address)) continue;
+        seen.add(address);
+        lots.push({ lot: lotNum, address: address.substring(0, 200), price, url, bullets, imageUrl: imageUrl || undefined });
+      }
+      return lots;
+    })()
+  `,
+
+  // ── Feather Smailes & Scales (fssproperty.co.uk, same CMS as Hollis Morgan) ──
+  fssproperty: `
+    (() => {
+      const lots = [];
+      const seen = new Set();
+      const cards = document.querySelectorAll('#search-results .property, .property');
+      let lotNum = 0;
+      for (const card of cards) {
+        lotNum++;
+        const text = card.textContent || '';
+        // Lot number from description
+        const lotMatch = text.match(/LOT\\s+(\\d+)/i);
+        if (lotMatch) lotNum = parseInt(lotMatch[1]);
+        // Address from first h3 > a[href*="/property-details/"]
+        let address = '';
+        const addrLink = card.querySelector('a[href*="/property-details/"]');
+        if (addrLink) address = (addrLink.textContent || '').trim();
+        if (!address || address.length < 5) continue;
+        // Price from second h3
+        let price = null;
+        const h3s = card.querySelectorAll('h3');
+        for (const h of h3s) {
+          const t = (h.textContent || '').trim();
+          const pm = t.match(/£([\\d,]+)/);
+          if (pm) { price = parseInt(pm[1].replace(/,/g, '')); break; }
+        }
+        // Image: /resize/ pattern (same as Hollis Morgan)
+        let imageUrl = '';
+        const img = card.querySelector('img[src*="/resize/"]');
+        if (img) imageUrl = img.getAttribute('src') || '';
+        // URL
+        let url = '';
+        if (addrLink) url = addrLink.getAttribute('href') || '';
+        const bullets = [];
+        const bedMatch = text.match(/(\\d+)\\s*(?:bed|Bed)/i);
+        if (bedMatch) bullets.push(bedMatch[1] + ' bedrooms');
+        if (seen.has(address)) continue;
+        seen.add(address);
+        lots.push({ lot: lotNum, address: address.substring(0, 200), price, url, bullets, imageUrl: imageUrl || undefined });
+      }
+      return lots;
+    })()
+  `,
+
+  // ── iamsold (JS-rendered React app, needs Puppeteer) ──
+  iamsold: `
+    (() => {
+      const lots = [];
+      const seen = new Set();
+      // iamsold renders property cards with links to /property/{slug}
+      const links = document.querySelectorAll('a[href*="/property/"]');
+      const cardMap = new Map();
+      for (const link of links) {
+        const href = link.getAttribute('href') || '';
+        if (!href.match(/\\/property\\/.+/)) continue;
+        if (cardMap.has(href)) continue;
+        let card = link;
+        for (let i = 0; i < 8; i++) { if (card.parentElement) card = card.parentElement; }
+        cardMap.set(href, card);
+      }
+      let lotNum = 0;
+      for (const [href, card] of cardMap) {
+        lotNum++;
+        const text = card.textContent || '';
+        let address = '';
+        const headings = card.querySelectorAll('h2, h3, h4, p');
+        for (const h of headings) {
+          const t = (h.textContent || '').trim();
+          // Address usually contains a postcode or comma-separated location
+          if (t.length > 10 && (t.match(/[A-Z]{1,2}\\d/) || t.includes(','))) { address = t; break; }
+        }
+        if (!address) {
+          // Try slug from URL
+          const slug = href.split('/property/')[1]?.replace(/\\/$/, '').replace(/-/g, ' ');
+          if (slug && slug.length > 5) address = slug.replace(/\\b\\w/g, c => c.toUpperCase());
+        }
+        if (!address || address.length < 5) continue;
+        let price = null;
+        const priceMatch = text.match(/(?:Starting\\s*Bid|Guide\\s*Price)?\\s*£([\\d,]+)/i);
+        if (priceMatch) price = parseInt(priceMatch[1].replace(/,/g, ''));
+        let imageUrl = '';
+        const img = card.querySelector('img[src*="http"]');
+        if (img) {
+          const src = img.getAttribute('src') || '';
+          if (!src.match(/logo|icon|placeholder|avatar/i)) imageUrl = src;
+        }
+        const bullets = [];
+        const bedMatch = text.match(/(\\d+)\\s*bed/i);
+        if (bedMatch) bullets.push(bedMatch[1] + ' bedrooms');
+        const typeMatch = text.match(/\\b(Detached|Semi|Terrace|Flat|Bungalow|House|Cottage|Land|Commercial)\\b/i);
+        if (typeMatch) bullets.push(typeMatch[0]);
+        if (seen.has(address)) continue;
+        seen.add(address);
+        lots.push({ lot: lotNum, address: address.substring(0, 200), price, url: href, bullets, imageUrl: imageUrl || undefined });
+      }
+      return lots;
+    })()
+  `,
+
 };
 
 // Wire up EIG house aliases to the shared eigplatform extractor
-for (const slug of ['astleys', 'henrysykes', 'clarkesimpson']) {
+for (const slug of ['astleys', 'henrysykes', 'clarkesimpson', 'brownco']) {
   DOM_EXTRACTORS[slug] = DOM_EXTRACTORS.eigplatform;
 }
 // Wire up Auction House UK branches to the shared auctionhouseuk extractor
@@ -8204,6 +8575,42 @@ function buildLotUrl(lot, house, sourceUrl) {
     case 'austingray':
       if (lot.url && lot.url.startsWith('/')) {
         return `https://www.auctionhouse.co.uk${lot.url}`;
+      }
+      break;
+    // ── New houses (March 2026 batch 2) ──
+    case 'agentsproperty':
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://www.agentspropertyauction.com${lot.url}`;
+      }
+      break;
+    case 'andrewcraig':
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://www.andrewcraig.co.uk${lot.url}`;
+      }
+      break;
+    case 'buttersjohnbee':
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://www.buttersjohnbee.com${lot.url}`;
+      }
+      break;
+    case 'brownco':
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://brownandco.eigonlineauctions.com${lot.url}`;
+      }
+      break;
+    case 'cheffins':
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://www.cheffins.co.uk${lot.url}`;
+      }
+      break;
+    case 'fssproperty':
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://www.fssproperty.co.uk${lot.url}`;
+      }
+      break;
+    case 'iamsold':
+      if (lot.url && lot.url.startsWith('/')) {
+        return `https://www.iamsold.co.uk${lot.url}`;
       }
       break;
   }
