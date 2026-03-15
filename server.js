@@ -3344,12 +3344,14 @@ app.get('/api/cache-status', async (req, res) => {
       .select('house, url, total_lots, title_splits, top_picks, under_100k, avg_yield, dev_potential, vacant_count, created_at, expires_at, scraped_with, last_scraped_at')
       .order('house');
 
+    const normaliseUrl = u => (u || '').trim().replace(/\/+$/, '').toLowerCase();
+
     const allAuctions = await getCalendarAuctions();
     const ready = allAuctions.filter(a => a.catalogueReady);
-    const cachedUrls = new Set((cached || []).map(c => c.url));
-    
+    const cachedUrls = new Set((cached || []).map(c => normaliseUrl(c.url)));
+
     const totalLots = (cached || []).reduce((s, c) => s + (c.total_lots || 0), 0);
-    const missing = ready.filter(a => !cachedUrls.has(a.url.trim().replace(/\/+$/, '').toLowerCase()));
+    const missing = ready.filter(a => !cachedUrls.has(normaliseUrl(a.url)));
 
     res.json({
       summary: {
@@ -3359,7 +3361,7 @@ app.get('/api/cache-status', async (req, res) => {
         missingCount: missing.length,
       },
       cached: cached || [],
-      missing: missing.map(a => ({ house: a.house, url: a.url })),
+      missing: missing.map(a => ({ house: a.house, url: a.url, date: a.date })),
     });
   } catch (e) {
     log.error('Cache status error', { error: e.message });
@@ -7920,6 +7922,54 @@ async function _doAutoAnalyseAll() {
   console.log('\n═══ AUTO-ANALYSIS: checking all catalogue-ready auctions ═══');
   if (!process.env.GEMINI_API_KEY) { console.log('AUTO: No Gemini API key, skipping'); return; }
 
+  // ── Step 0: Purge cached_analyses rows for past auctions ──
+  // Cross-reference with auction_calendar to find cached rows whose auction
+  // date has passed. These are stale data from completed auctions that should
+  // not be served or re-scraped.
+  // IMPORTANT: Some houses reuse the same URL across multiple auction dates
+  // (e.g. BidX1, BTG Eddisons). Only purge URLs that appear ONLY in past
+  // entries — never delete cache for a URL that also has an upcoming auction.
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const normalise = u => (u || '').trim().replace(/\/+$/, '').toLowerCase();
+
+    // Get URLs from past calendar entries
+    const { data: pastCalendar } = await supabase
+      .from('auction_calendar')
+      .select('url')
+      .lt('date', today);
+
+    // Get URLs from upcoming calendar entries (to protect from purge)
+    const { data: upcomingCalendar } = await supabase
+      .from('auction_calendar')
+      .select('url')
+      .gte('date', today);
+
+    if (pastCalendar && pastCalendar.length > 0) {
+      const upcomingUrls = new Set((upcomingCalendar || []).map(r => normalise(r.url)));
+      // Only purge URLs that do NOT also appear in upcoming auctions
+      const purgeable = [...new Set(pastCalendar.map(r => normalise(r.url)).filter(Boolean))]
+        .filter(u => !upcomingUrls.has(u));
+
+      const BATCH = 50;
+      let purged = 0;
+      for (let i = 0; i < purgeable.length; i += BATCH) {
+        const batch = purgeable.slice(i, i + BATCH);
+        const { data: deleted, error } = await supabase
+          .from('cached_analyses')
+          .delete()
+          .in('url', batch)
+          .select('url');
+        if (!error && deleted) purged += deleted.length;
+      }
+      if (purged > 0) {
+        console.log(`AUTO-PURGE: Removed ${purged} cached_analyses rows for past-only auctions (${pastCalendar.length} past, ${purgeable.length} purgeable after protecting ${upcomingUrls.size} upcoming URLs)`);
+      }
+    }
+  } catch (e) {
+    console.warn('AUTO-PURGE: cleanup failed (non-fatal) —', e.message);
+  }
+
   // ── Step 1: Discover new catalogues from house root pages ──
   // Runs once per cycle to find new auction URLs that aren't in the calendar yet.
   await discoverAndUpdateCalendar().catch(e =>
@@ -8512,17 +8562,21 @@ async function logActivityEvent(action, detail = {}, email = null, ip = null) {
 
 // Helper: get catalogue-ready auctions (used by auto-analyse)
 async function getCalendarAuctions() {
+  const today = new Date().toISOString().slice(0, 10);
   // Try Supabase first
   try {
     const { data, error } = await supabase
       .from('auction_calendar')
-      .select('house, url, catalogue_ready')
-      .eq('catalogue_ready', true);
+      .select('house, url, date, catalogue_ready')
+      .eq('catalogue_ready', true)
+      .gte('date', today)
+      .order('date', { ascending: true });
 
     if (!error && data && data.length > 0) {
       return data.map(row => ({
         house: row.house,
         url: row.url,
+        date: row.date,
         catalogueReady: row.catalogue_ready,
       }));
     }
@@ -8531,9 +8585,12 @@ async function getCalendarAuctions() {
   }
 
   // Fallback to hardcoded
-  return FALLBACK_CALENDAR.filter(a => a.catalogueReady).map(a => ({
-    house: a.house,
-    url: a.url,
-    catalogueReady: a.catalogueReady,
-  }));
+  return FALLBACK_CALENDAR
+    .filter(a => a.catalogueReady && a.date >= today)
+    .map(a => ({
+      house: a.house,
+      url: a.url,
+      date: a.date,
+      catalogueReady: a.catalogueReady,
+    }));
 }
