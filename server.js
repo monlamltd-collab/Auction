@@ -369,7 +369,7 @@ function extractWithJSDOM(html, house, baseUrl, firecrawlImages) {
   const extractor = DOM_EXTRACTORS[house];
   if (extractor) {
     try {
-      const fn = new Function('document', `return ${extractor}`);
+      const fn = new Function('document', `${IMG_HELPERS}\nreturn ${extractor}`);
       const result = fn(document);
       if (Array.isArray(result) && result.length > 0) {
         console.log(`JSDOM extractor for ${house}: found ${result.length} lots`);
@@ -384,7 +384,7 @@ function extractWithJSDOM(html, house, baseUrl, firecrawlImages) {
   // Fall back to universal extractor
   if (!lots) {
     try {
-      const fn = new Function('document', `return ${UNIVERSAL_DOM_EXTRACTOR}`);
+      const fn = new Function('document', `${IMG_HELPERS}\nreturn ${UNIVERSAL_DOM_EXTRACTOR}`);
       const result = fn(document);
       if (Array.isArray(result) && result.length > 0) {
         console.log(`JSDOM universal extractor for ${house}: found ${result.length} lots`);
@@ -5146,6 +5146,60 @@ function normaliseLotStatuses(lots) {
 // Returns structured lot data directly, no Claude needed for extraction
 // ═══════════════════════════════════════════════════════════════
 
+// ── Image extraction helpers (embedded as string in DOM extractors) ──
+// Provides getBestImgSrc(img) for lazy-load fallback chain and
+// upgradeThumbnailUrl(url) for full-size image resolution.
+// isJunkImage(url) filters out non-property images.
+const IMG_HELPERS = `
+  function getBestImgSrc(img) {
+    if (!img) return '';
+    return img.getAttribute('data-src')
+      || img.getAttribute('data-lazy-src')
+      || img.getAttribute('data-original')
+      || img.getAttribute('src')
+      || (img.getAttribute('srcset') ? img.getAttribute('srcset').split(',')[0].trim().split(/\\s+/)[0] : '')
+      || '';
+  }
+  function getBackgroundImageUrl(el) {
+    if (!el) return '';
+    const style = el.getAttribute('style') || '';
+    const m = style.match(/background(?:-image)?:\\s*url\\(['"]?([^'"\\)]+)/i);
+    return (m && m[1] && !m[1].startsWith('data:')) ? m[1] : '';
+  }
+  function upgradeThumbnailUrl(url) {
+    if (!url) return url;
+    return url
+      .replace(/\\/thumb\\//gi, '/large/')
+      .replace(/\\/small\\//gi, '/medium/')
+      .replace(/_thumb\\./gi, '.')
+      .replace(/_tn\\./gi, '.')
+      .replace(/[?&]w=\\d{2,3}(?=&|$)/gi, function(m) { return m.replace(/\\d+/, '800'); })
+      .replace(/[?&]width=\\d{2,3}(?=&|$)/gi, function(m) { return m.replace(/\\d+/, '800'); });
+  }
+  function isJunkImage(src) {
+    if (!src || src.length < 10 || src.startsWith('data:')) return true;
+    return /logo|icon|nav|sprite|placeholder|arrow|spacer|pixel|\\.svg|facebook|twitter|linkedin|badge|spinner|loading|cookie|emoji|1x1|favicon|banner|advert/i.test(src);
+  }
+  function extractCardImage(card) {
+    // Strategy 1: img with lazy-load attributes
+    const imgs = card.querySelectorAll('img');
+    for (const img of imgs) {
+      const s = getBestImgSrc(img);
+      if (!isJunkImage(s)) return upgradeThumbnailUrl(s);
+    }
+    // Strategy 2: background-image on card or child elements
+    const bgEls = card.querySelectorAll('[style*="background"]');
+    for (const el of bgEls) {
+      const s = getBackgroundImageUrl(el);
+      if (!isJunkImage(s)) return upgradeThumbnailUrl(s);
+    }
+    // Strategy 3: background-image on the card itself
+    const cardBg = getBackgroundImageUrl(card);
+    if (!isJunkImage(cardBg)) return upgradeThumbnailUrl(cardBg);
+    return '';
+  }
+`;
+
 const DOM_EXTRACTORS = {
   // ─── SAVILLS ───────────────────────────────────────────────
   // auctions.savills.co.uk — each lot is a <li> containing:
@@ -5838,12 +5892,7 @@ const DOM_EXTRACTORS = {
         const link = card.querySelector('a[href*="/lot"], a[href*="/property"], a[href*="/auction"], a[href]');
         const url = link ? link.getAttribute('href') : '';
         // Image
-        let imageUrl = '';
-        const img = card.querySelector('img[src]');
-        if (img) {
-          const s = img.getAttribute('src') || img.dataset.src || '';
-          if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) imageUrl = s;
-        }
+        let imageUrl = extractCardImage(card);
         const bullets = [];
         card.querySelectorAll('li, .description, .feature, [class*="description"]').forEach(el => {
           const t = el.textContent.trim();
@@ -5881,12 +5930,7 @@ const DOM_EXTRACTORS = {
         if (priceMatch) price = parseInt(priceMatch[1].replace(/,/g, ''));
         const link = card.querySelector('a[href*="/property/"], a[href]');
         const url = link ? link.getAttribute('href') : '';
-        let imageUrl = '';
-        const img = card.querySelector('img[src]');
-        if (img) {
-          const s = img.getAttribute('src') || '';
-          if (s && !s.includes('logo') && !s.includes('icon') && s.length > 10) imageUrl = s;
-        }
+        let imageUrl = extractCardImage(card);
         const bullets = [];
         const yieldEl = card.querySelector('.yield, [class*="yield"]');
         if (yieldEl && yieldEl.textContent.trim()) bullets.push('Yield: ' + yieldEl.textContent.trim());
@@ -5929,13 +5973,8 @@ const DOM_EXTRACTORS = {
         if (text.match(/\\bSOLD\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) {
           if (!bullets.some(b => b.match(/SOLD|STC|WITHDRAWN/i))) bullets.push('SOLD/STC');
         }
-        // Image from card
-        let imageUrl = '';
-        const cardImg = card.querySelector('img[src]');
-        if (cardImg) {
-          const s = cardImg.getAttribute('src') || cardImg.dataset.src || '';
-          if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) imageUrl = s;
-        }
+        // Image from card — uses lazy-load helpers for data-src/data-lazy-src/background-image fallback
+        let imageUrl = extractCardImage(card);
         lots.push({ lot: num, address, price, url, bullets, imageUrl: imageUrl || undefined });
       }
       return lots;
@@ -5956,13 +5995,8 @@ const DOM_EXTRACTORS = {
         const pcMatch = text.match(/[A-Z]{1,2}\\d{1,2}[A-Z]?\\s*\\d[A-Z]{2}/i);
         const address = text.replace(/lot\\s*\\d+/i, '').replace(/£[\\d,]+/g, '').replace(/guide\\s*price/i, '').trim().split('\\n')[0].trim();
         if (address && address.length > 5) {
-          // Image from card
-          let imageUrl = '';
-          const elImg = el.querySelector('img[src]');
-          if (elImg) {
-            const s = elImg.getAttribute('src') || elImg.dataset.src || '';
-            if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) imageUrl = s;
-          }
+          // Image from card — uses lazy-load helpers
+          let imageUrl = extractCardImage(el);
           const bullets = [];
           if (text.match(/\\bSOLD\\b|\\bSALE.?AGREED\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) bullets.push('SOLD/STC');
           lots.push({ lot: num, address: address.substring(0, 150), price, url: href, bullets, imageUrl: imageUrl || undefined });
@@ -5986,12 +6020,7 @@ const DOM_EXTRACTORS = {
         const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
         const address = text.split('\\n').find(l => l.trim().length > 10 && !l.match(/^(?:lot|starting|current|guide|£|bid)/i));
         if (address) {
-          let imageUrl = '';
-          const cardImg = card.querySelector('img[src]');
-          if (cardImg) {
-            const s = cardImg.getAttribute('src') || cardImg.dataset.src || '';
-            if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) imageUrl = s;
-          }
+          let imageUrl = extractCardImage(card);
           const bullets = [];
           if (text.match(/\\bSOLD\\b|\\bSALE.?AGREED\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) bullets.push('SOLD/STC');
           lots.push({ lot: num, address: address.trim().substring(0, 150), price, url: href, bullets, imageUrl: imageUrl || undefined });
@@ -6014,12 +6043,7 @@ const DOM_EXTRACTORS = {
         const lines = text.split('\\n').map(l => l.trim()).filter(l => l.length > 5);
         const address = lines.find(l => !l.match(/^(?:€|£|\\d+\\s*bed|guide|reserve|sold)/i));
         if (address) {
-          let imageUrl = '';
-          const cardImg = card.querySelector('img[src]');
-          if (cardImg) {
-            const s = cardImg.getAttribute('src') || cardImg.dataset.src || '';
-            if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) imageUrl = s;
-          }
+          let imageUrl = extractCardImage(card);
           const bullets = [];
           if (text.match(/\\bSOLD\\b|\\bSALE.?AGREED\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) bullets.push('SOLD/STC');
           lots.push({ lot: lots.length + 1, address: address.substring(0, 150), price, url: href, bullets, imageUrl: imageUrl || undefined });
@@ -6043,12 +6067,7 @@ const DOM_EXTRACTORS = {
         const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
         const address = text.replace(/lot\\s*\\d+/i, '').replace(/guide\\s*price\\s*£[\\d,]+/i, '').replace(/£[\\d,]+/g, '').trim().split('\\n')[0].trim();
         if (address && address.length > 5) {
-          let imageUrl = '';
-          const elImg = el.querySelector('img[src]');
-          if (elImg) {
-            const s = elImg.getAttribute('src') || elImg.dataset.src || '';
-            if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) imageUrl = s;
-          }
+          let imageUrl = extractCardImage(el);
           const bullets = [];
           if (text.match(/\\bSOLD\\b|\\bSALE.?AGREED\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) bullets.push('SOLD/STC');
           lots.push({ lot: num, address: address.substring(0, 150), price, url: href, bullets, imageUrl: imageUrl || undefined });
@@ -6411,12 +6430,7 @@ const DOM_EXTRACTORS = {
           const t = li.textContent.trim();
           if (t.length > 5 && t.length < 200) bullets.push(t);
         });
-        let imageUrl = '';
-        const cardImg = card.querySelector('img[src]');
-        if (cardImg) {
-          const s = cardImg.getAttribute('src') || cardImg.dataset.src || '';
-          if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) imageUrl = s;
-        }
+        let imageUrl = extractCardImage(card);
         if (text.match(/\\bSOLD\\b|\\bSALE.?AGREED\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) {
           if (!bullets.some(b => b.match(/SOLD|STC|WITHDRAWN|SALE AGREED/i))) bullets.push('SOLD/STC');
         }
@@ -6493,12 +6507,7 @@ const DOM_EXTRACTORS = {
           const t = li.textContent.trim();
           if (t.length > 5 && t.length < 200) bullets.push(t);
         });
-        let imageUrl = '';
-        const cardImg = card.querySelector('img[src]');
-        if (cardImg) {
-          const s = cardImg.getAttribute('src') || cardImg.dataset.src || '';
-          if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) imageUrl = s;
-        }
+        let imageUrl = extractCardImage(card);
         if (text.match(/\\bSOLD\\b|\\bSALE.?AGREED\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) {
           if (!bullets.some(b => b.match(/SOLD|STC|WITHDRAWN|SALE AGREED/i))) bullets.push('SOLD/STC');
         }
@@ -9065,6 +9074,83 @@ async function fetchEPCByPostcode(postcode) {
     }
     return null;
   }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ENRICHMENT: EPC Address Matching
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Match EPC records to a specific lot address.
+ * Returns { epcRating, epcScore, epcDate } or null if no confident match.
+ */
+function matchEPCToLot(epcRecords, lotAddress) {
+  if (!epcRecords || !epcRecords.length || !lotAddress) return null;
+
+  function normalise(addr) {
+    return (addr || "")
+      .toLowerCase()
+      .replace(/(flat|apartment|unit|apt)/gi, "")
+      .replace(/,/g, ' ')
+      .replace(/s+/g, ' ')
+      .trim();
+  }
+
+  function extractNumber(addr) {
+    const m = addr.match(/^(d+[a-z]?)/i) || addr.match(/(d+[a-z]?)s/i);
+    return m ? m[1].toLowerCase() : null;
+  }
+
+  function extractStreetName(addr) {
+    const cleaned = addr
+      .replace(/^d+[a-z]?s+/i, '')
+      .replace(/[a-z]{1,2}d[a-zd]?s*d[a-z]{2}/i, "")
+      .trim();
+    return cleaned.split(/s+/).slice(0, 3).join(' ') || null;
+  }
+
+  const normLot = normalise(lotAddress);
+  const lotNumber = extractNumber(normLot);
+  const lotStreet = extractStreetName(normLot);
+
+  if (!lotNumber || !lotStreet) return null;
+
+  let bestMatch = null;
+  let bestDate = "";
+
+  for (const rec of epcRecords) {
+    const epcAddr = normalise(
+      [rec.address1 || rec.address || "", rec.address2 || "", rec.address3 || ""].join(' ')
+    );
+
+    const epcNumber = extractNumber(epcAddr);
+    const epcStreet = extractStreetName(epcAddr);
+
+    if (!epcNumber || !epcStreet) continue;
+    if (epcNumber !== lotNumber) continue;
+
+    const streetWords = lotStreet.split(/s+/);
+    const epcStreetWords = epcStreet.split(/s+/);
+    if (streetWords[0] !== epcStreetWords[0] &&
+        !epcAddr.includes(streetWords[0]) &&
+        !normLot.includes(epcStreetWords[0])) {
+      continue;
+    }
+
+    const rating = (rec["current-energy-rating"] || rec.currentEnergyRating || "").toUpperCase();
+    const score = parseInt(rec["current-energy-efficiency"] || rec.currentEnergyEfficiency || "0", 10);
+    const date = rec["lodgement-date"] || rec.lodgementDate || "";
+
+    if (!/^[A-G]$/.test(rating)) continue;
+    if (score < 1 || score > 100) continue;
+
+    if (!bestMatch || date > bestDate) {
+      bestMatch = { epcRating: rating, epcScore: score, epcDate: date };
+      bestDate = date;
+    }
+  }
+
+  return bestMatch;
 }
 
 // ═══════════════════════════════════════════════════════════════
