@@ -9148,6 +9148,142 @@ async function fetchEPCByPostcode(postcode) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// ENRICHMENT: Flood Zone Lookup (Postcodes.io + EA)
+// ═══════════════════════════════════════════════════════════════
+
+let _lastEACallTime = 0;
+const EA_RATE_LIMIT_MS = 200;
+
+/**
+ * Geocode a postcode via Postcodes.io, then check EA flood zones.
+ * Returns { floodZone, floodRiskLevel, lat, lon } or null on failure.
+ */
+async function fetchFloodZone(postcode) {
+  if (!postcode) return null;
+
+  try {
+    // Step 1: Geocode via Postcodes.io
+    const encoded = encodeURIComponent(postcode.trim());
+    const geoController = new AbortController();
+    const geoTimeout = setTimeout(() => geoController.abort(), 5000);
+
+    const geoRes = await fetch(`https://api.postcodes.io/postcodes/${encoded}`, {
+      signal: geoController.signal,
+    });
+    clearTimeout(geoTimeout);
+
+    if (!geoRes.ok) {
+      console.warn(`Postcodes.io ${geoRes.status} for ${postcode}`);
+      return null;
+    }
+
+    const geoData = await geoRes.json();
+    const lat = geoData?.result?.latitude;
+    const lon = geoData?.result?.longitude;
+    if (!lat || !lon) {
+      console.warn(`Postcodes.io no coords for ${postcode}`);
+      return null;
+    }
+
+    // Step 2: Check EA flood zones via WFS (Zone 3 first, then Zone 2)
+    let floodZone = "1";
+    let floodRiskLevel = "Low";
+    let floodData = null;
+    let usedWFS = false;
+
+    try {
+      // Rate limit EA calls
+      const now = Date.now();
+      const elapsed = now - _lastEACallTime;
+      if (elapsed < EA_RATE_LIMIT_MS) {
+        await new Promise(r => setTimeout(r, EA_RATE_LIMIT_MS - elapsed));
+      }
+      _lastEACallTime = Date.now();
+
+      // Check Zone 3 first
+      const z3FullUrl = `https://environment.data.gov.uk/spatialdata/flood-map-for-planning-rivers-and-sea-flood-zone-3/wfs?service=WFS&version=2.0.0&request=GetFeature&typeNames=Flood_Map_for_Planning_Rivers_and_Sea_Flood_Zone_3&outputFormat=application/json&count=1&srsName=EPSG:4326&CQL_FILTER=INTERSECTS(shape,POINT(${lon} ${lat}))`;
+
+      const z3Controller = new AbortController();
+      const z3Timeout = setTimeout(() => z3Controller.abort(), 5000);
+      const z3Res = await fetch(z3FullUrl, { signal: z3Controller.signal });
+      clearTimeout(z3Timeout);
+
+      if (z3Res.ok) {
+        const z3Data = await z3Res.json();
+        if (z3Data.features && z3Data.features.length > 0) {
+          floodZone = "3";
+          floodRiskLevel = "High";
+          floodData = { source: "EA_WFS", zone: 3 };
+          usedWFS = true;
+        } else {
+          // Rate limit between Zone 3 and Zone 2 check
+          await new Promise(r => setTimeout(r, EA_RATE_LIMIT_MS));
+          _lastEACallTime = Date.now();
+
+          // Check Zone 2
+          const z2FullUrl = `https://environment.data.gov.uk/spatialdata/flood-map-for-planning-rivers-and-sea-flood-zone-2/wfs?service=WFS&version=2.0.0&request=GetFeature&typeNames=Flood_Map_for_Planning_Rivers_and_Sea_Flood_Zone_2&outputFormat=application/json&count=1&srsName=EPSG:4326&CQL_FILTER=INTERSECTS(shape,POINT(${lon} ${lat}))`;
+
+          const z2Controller = new AbortController();
+          const z2Timeout = setTimeout(() => z2Controller.abort(), 5000);
+          const z2Res = await fetch(z2FullUrl, { signal: z2Controller.signal });
+          clearTimeout(z2Timeout);
+
+          if (z2Res.ok) {
+            const z2Data = await z2Res.json();
+            if (z2Data.features && z2Data.features.length > 0) {
+              floodZone = "2";
+              floodRiskLevel = "Medium";
+              floodData = { source: "EA_WFS", zone: 2 };
+              usedWFS = true;
+            } else {
+              floodData = { source: "EA_WFS", zone: 1 };
+              usedWFS = true;
+            }
+          }
+        }
+      }
+    } catch (wfsErr) {
+      console.warn(`EA WFS failed for ${postcode}: ${wfsErr.message}, trying flood monitoring API`);
+    }
+
+    // Fallback: flood monitoring API if WFS failed
+    if (!usedWFS) {
+      try {
+        await new Promise(r => setTimeout(r, EA_RATE_LIMIT_MS));
+        _lastEACallTime = Date.now();
+
+        const fmController = new AbortController();
+        const fmTimeout = setTimeout(() => fmController.abort(), 5000);
+        const fmUrl = `https://environment.data.gov.uk/flood-monitoring/id/floods?lat=${lat}&long=${lon}&dist=5`;
+
+        const fmRes = await fetch(fmUrl, { signal: fmController.signal });
+        clearTimeout(fmTimeout);
+
+        if (fmRes.ok) {
+          const fmData = await fmRes.json();
+          const items = fmData.items || [];
+          if (items.length > 0) {
+            floodRiskLevel = "Alert";
+            floodZone = "2";
+            floodData = { source: "EA_monitoring", activeWarnings: items.length };
+          } else {
+            floodData = { source: "EA_monitoring", activeWarnings: 0 };
+          }
+        }
+      } catch (fmErr) {
+        console.warn(`EA flood monitoring API also failed for ${postcode}: ${fmErr.message}`);
+        floodData = { source: "none", error: "both_apis_failed" };
+      }
+    }
+
+    return { floodZone, floodRiskLevel, floodData, lat, lon };
+  } catch (e) {
+    console.warn(`fetchFloodZone error for ${postcode}: ${e.message}`);
+    return null;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
 // ENRICHMENT: EPC Address Matching
 // ═══════════════════════════════════════════════════════════════
 
