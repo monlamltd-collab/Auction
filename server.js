@@ -1648,20 +1648,44 @@ async function validateUserFromReq(req) {
         }
       }
 
-      // Auto-create new user with 14-day Pro trial
-      const trialStart = new Date();
-      const trialEnd = new Date(trialStart.getTime() + 14 * 24 * 60 * 60 * 1000);
-      const { data: newUser, error: insertErr } = await supabase
+      // Auto-create new user — check trial_used to prevent trial abuse
+      const normalEmail = (email || '').toLowerCase().trim();
+      const { data: existingByEmail } = await supabase
         .from('users')
-        .insert({
-          email: (email || '').toLowerCase().trim(),
+        .select('id, trial_used')
+        .eq('email', normalEmail)
+        .maybeSingle();
+      log.info('Trial check', { email: normalEmail, trial_used: existingByEmail?.trial_used || false });
+
+      let insertData;
+      if (existingByEmail && existingByEmail.trial_used) {
+        // User previously used a trial — no second trial
+        insertData = {
+          email: normalEmail,
+          supabase_auth_id: authId,
+          tier: 'free',
+          tier_expires_at: null,
+          trial_started_at: null,
+          trial_expires_at: null,
+          trial_used: true,
+        };
+      } else {
+        // New user or trial not yet used — grant 14-day Pro trial
+        const trialStart = new Date();
+        const trialEnd = new Date(trialStart.getTime() + 14 * 24 * 60 * 60 * 1000);
+        insertData = {
+          email: normalEmail,
           supabase_auth_id: authId,
           tier: 'premium',
           tier_expires_at: trialEnd.toISOString(),
           trial_started_at: trialStart.toISOString(),
           trial_expires_at: trialEnd.toISOString(),
           trial_used: true,
-        })
+        };
+      }
+      const { data: newUser, error: insertErr } = await supabase
+        .from('users')
+        .insert(insertData)
         .select('id, email, name, tier, analyses_count, stripe_customer_id, tier_expires_at, stripe_subscription_id, trial_started_at, trial_expires_at, trial_used, ai_searches_today, ai_searches_date')
         .single();
       if (!insertErr && newUser) {
