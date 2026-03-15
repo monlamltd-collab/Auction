@@ -8,7 +8,7 @@ See: .planning/PROJECT.md (updated 2026-03-15)
 ## Current Phase
 Phase: 1
 Status: Context gathered
-Plans: 0
+Plans: 4
 
 ## Decisions
 - Sold/unsold: diagonal overlay banner (estate agent style), status filter dropdown
