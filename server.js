@@ -9447,6 +9447,121 @@ async function enrichLots(lots, house, sourceUrl, onProgress) {
     }
   }
 
+
+  // ── EPC & Flood Risk Enrichment (best-effort, never blocks pipeline) ──
+  try {
+    const ENRICH_CONCURRENCY = 3;
+    const enrichmentPostcodes = postcodes.filter(Boolean);
+    console.log(`EPC/Flood enrichment: processing ${enrichmentPostcodes.length} postcodes...`);
+
+    // Clean expired cache entries once per enrichLots cycle
+    if (supabase) {
+      try {
+        await supabase.from('enrichment_cache').delete().lt('expires_at', new Date().toISOString());
+      } catch (cleanErr) {
+        // Non-fatal
+      }
+    }
+
+    for (let i = 0; i < enrichmentPostcodes.length; i += ENRICH_CONCURRENCY) {
+      const batch = enrichmentPostcodes.slice(i, i + ENRICH_CONCURRENCY);
+
+      const results = await Promise.allSettled(batch.map(async (pc) => {
+        let epcRecords = null;
+        let floodResult = null;
+
+        // Check cache first
+        if (supabase) {
+          try {
+            const { data: cached } = await supabase
+              .from('enrichment_cache')
+              .select('*')
+              .eq('postcode', pc)
+              .gt('expires_at', new Date().toISOString())
+              .single();
+
+            if (cached) {
+              epcRecords = cached.epc_data;
+              floodResult = {
+                floodZone: cached.flood_zone,
+                floodRiskLevel: cached.flood_zone === "3" ? "High" : cached.flood_zone === "2" ? "Medium" : "Low",
+                floodData: cached.flood_data,
+                lat: parseFloat(cached.lat),
+                lon: parseFloat(cached.lon),
+              };
+              return { pc, epcRecords, floodResult, fromCache: true };
+            }
+          } catch (cacheErr) {
+            // Cache miss or table not ready — proceed with API calls
+          }
+        }
+
+        // Cache miss — fetch from APIs
+        const [epcResult, floodRes] = await Promise.allSettled([
+          fetchEPCByPostcode(pc),
+          fetchFloodZone(pc),
+        ]);
+
+        epcRecords = epcResult.status === 'fulfilled' ? epcResult.value : null;
+        floodResult = floodRes.status === 'fulfilled' ? floodRes.value : null;
+
+        // Store in cache
+        if (supabase && (epcRecords || floodResult)) {
+          try {
+            await supabase.from('enrichment_cache').upsert({
+              postcode: pc,
+              epc_data: epcRecords,
+              flood_zone: floodResult?.floodZone || null,
+              flood_data: floodResult?.floodData || null,
+              lat: floodResult?.lat || null,
+              lon: floodResult?.lon || null,
+              cached_at: new Date().toISOString(),
+              expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+            }, { onConflict: 'postcode' });
+          } catch (upsertErr) {
+            // Cache write failure is non-fatal
+            console.warn(`enrichment_cache upsert failed for ${pc}: ${upsertErr.message}`);
+          }
+        }
+
+        return { pc, epcRecords, floodResult, fromCache: false };
+      }));
+
+      // Apply enrichment data to lots in this batch
+      for (const result of results) {
+        if (result.status !== 'fulfilled') continue;
+        const { pc, epcRecords, floodResult } = result.value;
+        const lotsForPc = postcodeMap[pc] || [];
+
+        for (const lot of lotsForPc) {
+          // EPC matching
+          if (epcRecords && epcRecords.length > 0) {
+            const epcMatch = matchEPCToLot(epcRecords, lot.address);
+            if (epcMatch) {
+              lot.epcRating = epcMatch.epcRating;
+              lot.epcScore = epcMatch.epcScore;
+              lot.epcDate = epcMatch.epcDate;
+            }
+          }
+
+          // Flood zone
+          if (floodResult) {
+            lot.floodZone = floodResult.floodZone;
+            lot.floodRiskLevel = floodResult.floodRiskLevel;
+          }
+
+          lot.enrichedAt = new Date().toISOString();
+        }
+      }
+    }
+
+    const epcCount = lots.filter(l => l.epcRating).length;
+    const floodCount = lots.filter(l => l.floodZone).length;
+    console.log(`EPC/Flood enrichment done: ${epcCount} lots with EPC, ${floodCount} lots with flood zone`);
+  } catch (enrichErr) {
+    console.warn(`EPC/Flood enrichment failed (non-fatal): ${enrichErr.message}`);
+  }
+
   // Re-sort by score after enrichment
   lots.sort((a, b) => b.score - a.score);
   console.log(`Enrichment complete. ${Object.values(lrCache).flat().length} total Land Registry sales found.`);
