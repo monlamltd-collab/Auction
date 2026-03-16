@@ -234,12 +234,13 @@ let PUPPETEER_IMAGE_HOUSES = null;
 const MODEL_PRO   = 'gemini-2.5-pro';
 const MODEL_FLASH = 'gemini-2.5-flash-lite';
 
-// ── Gemini client & rate limiter (free tier: 15 RPM) ──
+// ── Gemini client & rate limiter (paid Tier 1: ~2000 RPM for flash-lite) ──
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const GEMINI_MIN_GAP = parseInt(process.env.GEMINI_MIN_GAP_MS || '100');
 let geminiLastCall = 0;
 async function geminiRateLimited(fn) {
   const now = Date.now();
-  const earliest = geminiLastCall + 4100;
+  const earliest = geminiLastCall + GEMINI_MIN_GAP;
   const wait = Math.max(0, earliest - now);
   geminiLastCall = now + wait; // claim this slot immediately to prevent concurrent overlap
   if (wait > 0) await new Promise(r => setTimeout(r, wait));
@@ -3410,7 +3411,7 @@ Only return lots that genuinely match the query.`, { maxTokens: 4000 });
   if (creditExhausted) {
     const exhaustedAgo = creditExhaustedAt ? Math.round((Date.now() - creditExhaustedAt) / 60000) : '?';
     log.warn('smart-search: blocked by creditExhausted flag', { exhaustedMinutesAgo: exhaustedAgo });
-    return res.status(503).json({ error: 'ai_quota_exhausted', message: `Gemini API daily quota hit ${exhaustedAgo}min ago. Auto-resets after 1 hour. Try again soon.`, exhaustedMinutesAgo: exhaustedAgo });
+    return res.status(503).json({ error: 'ai_quota_exhausted', message: `Gemini API rate limit hit ${exhaustedAgo}min ago. Auto-resets after 1 hour. Try again soon.`, exhaustedMinutesAgo: exhaustedAgo });
   }
   // Pre-flight: log which key/model will be used
   const keyPrefix = (process.env.GEMINI_API_KEY || '').substring(0, 10);
@@ -3560,7 +3561,7 @@ Only return lots that genuinely match the query. If nothing matches well, say so
     log.error('Smart search error', { error: msg, status: err.status, stack: err.stack?.split('\n').slice(0, 3).join(' | ') });
     if (err.status === 429 || /quota|rate.limit|resource.exhausted/i.test(msg)) {
       creditExhausted = true; creditExhaustedAt = Date.now();
-      return res.status(503).json({ error: 'ai_quota_exhausted', message: 'Gemini API daily quota hit. Auto-resets after 1 hour.', provider: 'gemini', model: MODEL_FLASH });
+      return res.status(503).json({ error: 'ai_quota_exhausted', message: 'Gemini API rate limit hit. Auto-resets after 1 hour.', provider: 'gemini', model: MODEL_FLASH });
     }
     if (err.status === 401 || err.status === 403 || /invalid.api.key|unauthorized|forbidden/i.test(msg)) {
       return res.status(500).json({ error: 'key_invalid', message: 'Gemini API key is invalid or expired. Check GEMINI_API_KEY in Railway.', provider: 'gemini' });
