@@ -853,7 +853,7 @@ footer .logo-f span{color:var(--green)}
       </select>
       <input class="tb-search" type="text" id="fPostcode" placeholder="Postcode..." oninput="renderLots()" aria-label="Filter by postcode">
       <select class="tb-select" id="fExcludePOA" onchange="renderLots()" aria-label="Include or exclude POA lots"><option value="">Inc. POA</option><option value="yes">Excl. POA</option></select>
-      <select class="tb-select" id="fLookahead" onchange="saveLookahead();renderLots()" aria-label="Auction lookahead"><option value="1">Next auction</option><option value="2">Next 2 auctions</option><option value="all" selected>All upcoming</option></select>
+      <select class="tb-select" id="fLookahead" onchange="saveLookahead();renderLots()" aria-label="Auction lookahead"><option value="1">Next auction</option><option value="2" selected>Next 2 auctions</option><option value="all">All upcoming</option></select>
       <label><input type="checkbox" id="fShowPast" onchange="onShowPastChange()"> Show past auctions</label>
       <button class="ex-btn" onclick="clearAllFilters()" style="margin-left:auto;font-weight:600;color:var(--accent-danger,#c0392b);" title="Reset all dropdown filters and search text back to defaults">Clear filters</button>
     </div>
@@ -1125,7 +1125,7 @@ function updatePriceBtn(){
 // LOOKAHEAD FILTER PERSISTENCE
 // ═══════════════════════════════
 function saveLookahead(){try{localStorage.setItem('bm_lookahead',$('fLookahead').value)}catch(e){}}
-function restoreLookahead(){try{const v=localStorage.getItem('bm_lookahead');if(v==='1'){localStorage.removeItem('bm_lookahead');return}if(v&&$('fLookahead'))$('fLookahead').value=v}catch(e){}}
+function restoreLookahead(){try{const v=localStorage.getItem('bm_lookahead');if(v&&$('fLookahead'))$('fLookahead').value=v}catch(e){}}
 restoreLookahead();
 
 let _currentPage=1;

@@ -569,7 +569,7 @@ function extractWithJSDOM(html, house, baseUrl, firecrawlImages) {
   }
 
   // Post-processing: filter junk images (same blocklist as extractWithDOM)
-  const imgBlocklist = /logo|icon|placeholder|no-image|default|blank|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|1x1|noimage|favicon|banner|advert|sponsor|newsletter|widget|thumb_generic|modal\.png|_NYC\.|_LCC\.|_BMDC\.|Unit[ie]*d?_?Utilit|Cardwells|themes\/.*assets\/images\/|download_\(\d+\)\.|watchLIVEauction|property-top-image|auc2-logo/i;
+  const imgBlocklist = /logo|icon|placeholder|no-image|default|blank|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|1x1|noimage|favicon|banner|advert|sponsor|newsletter|widget|thumb_generic|modal\.png|_NYC\.|_LCC\.|_BMDC\.|Unit[ie]*d?_?Utilit|Cardwells|themes\/.*assets\/images\/|download_\(\d+\)\.|watchLIVEauction|property-top-image|auc2-logo|gavel|backdrop|generic[_-]?image|auction[_-]?house[_-]?(?:logo|image)|coming[_-]?soon/i;
   const imgDomainBlock = /flannels|kirklees|rdw\b|council\.gov|\.gov\.uk\/|googleads|doubleclick|analytics|hotjar|intercom|crisp\.chat|tawk\.to|zendesk|hubspot|mailchimp|sendgrid/i;
   const hollisJunk = house === 'hollismorgan' || house === 'maggsandallen';
   for (const lot of lots) {
@@ -3014,19 +3014,26 @@ app.post('/api/analyse', async (req, res) => {
 
     const analysed = rawLots.map(lot => analyseLot(lot)).sort((a, b) => b.score - a.score);
 
+    // ── Enrich with Land Registry + rental yields (also resolves lot URLs) ──
+    console.log('Starting Land Registry + rental yield enrichment...');
+    sseWrite(res, 'phase', { step: 'enriching', lots: analysed.length });
+    await enrichLots(analysed, house, url, (done, total) => {
+      sseWrite(res, 'enrich', { postcodes: done, total });
+    });
+
+    // ── Address backfill from individual lot pages (runs after enrichLots resolves URLs) ──
+    const missingAddr = analysed.filter(l => l.url && (!l.address || l.address.trim().length < 5)).length;
+    if (missingAddr > 0) {
+      console.log(`Address backfill: ${missingAddr} lots missing address, fetching lot pages...`);
+      await backfillAddressFromLotPages(analysed);
+    }
+
     // ── Tenure backfill from individual lot pages ──
     const missingTenure = analysed.filter(l => l.url && !l.tenure).length;
     if (missingTenure > 0) {
       console.log(`Tenure backfill: ${missingTenure} lots missing tenure, fetching lot pages...`);
       await backfillTenureFromLotPages(analysed);
     }
-
-    // ── Enrich with Land Registry + rental yields ──
-    console.log('Starting Land Registry + rental yield enrichment...');
-    sseWrite(res, 'phase', { step: 'enriching', lots: analysed.length });
-    await enrichLots(analysed, house, url, (done, total) => {
-      sseWrite(res, 'enrich', { postcodes: done, total });
-    });
 
     // ── Cache results ──
     const displayName = getHouseDisplayName(house, url);
@@ -5304,7 +5311,7 @@ const IMG_HELPERS = `
   }
   function isJunkImage(src) {
     if (!src || src.length < 10 || src.startsWith('data:')) return true;
-    return /logo|icon|nav|sprite|placeholder|arrow|spacer|pixel|\\.svg|facebook|twitter|linkedin|badge|spinner|loading|cookie|emoji|1x1|favicon|banner|advert/i.test(src);
+    return /logo|icon|nav|sprite|placeholder|arrow|spacer|pixel|\\.svg|facebook|twitter|linkedin|badge|spinner|loading|cookie|emoji|1x1|favicon|banner|advert|gavel|backdrop|generic[_-]?image|coming[_-]?soon/i.test(src);
   }
   function extractCardImage(card) {
     // Strategy 1: img with lazy-load attributes
@@ -6673,10 +6680,10 @@ const DOM_EXTRACTORS = {
         }
         // Fallback: use title + address combo or just title
         if (!address && title) address = title;
-        if (!address) continue;
+        // Don't skip lots with missing address — backfillAddressFromLotPages will fill them later
 
         // Combine title and address if they differ
-        let fullAddress = address;
+        let fullAddress = address || '';
         if (title && address && !address.toUpperCase().includes(title.substring(0, 10).toUpperCase())) {
           fullAddress = title + ', ' + address;
         }
@@ -8257,7 +8264,7 @@ async function backfillImagesFromLotPages(lots, concurrency = 5) {
   const MAX_LOT_PAGES = 50;
   const capped = missing.slice(0, MAX_LOT_PAGES);
 
-  const junk = /logo|icon|nav|sprite|\.svg|placeholder|no-image|modal\.png|_NYC\.|_LCC\.|_BMDC\.|council|utilit|cardwell|badge|spacer|pixel|facebook|twitter|1x1/i;
+  const junk = /logo|icon|nav|sprite|\.svg|placeholder|no-image|modal\.png|_NYC\.|_LCC\.|_BMDC\.|council|utilit|cardwell|badge|spacer|pixel|facebook|twitter|1x1|gavel|backdrop|generic[_-]?image|coming[_-]?soon/i;
 
   let filled = 0;
   // Process in batches to limit concurrency
@@ -8294,6 +8301,77 @@ async function backfillImagesFromLotPages(lots, concurrency = 5) {
     }));
   }
   if (filled > 0) console.log(`Deep image backfill (lot pages): ${filled}/${missing.length} lots got images`);
+  return filled;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ADDRESS BACKFILL — fetch individual lot pages for lots missing address
+// ═══════════════════════════════════════════════════════════════
+async function backfillAddressFromLotPages(lots, concurrency = 5) {
+  const missing = lots.filter(l => l.url && (!l.address || l.address.trim().length < 5) && /^https?:\/\//i.test(l.url));
+  if (missing.length === 0) return 0;
+
+  const junk = /logo|icon|nav|sprite|\.svg|placeholder|no-image|badge|spacer|pixel|facebook|twitter|1x1|gavel|backdrop|generic[_-]?image|coming[_-]?soon/i;
+  let filled = 0;
+  for (let i = 0; i < missing.length; i += concurrency) {
+    if (i > 0) await new Promise(r => setTimeout(r, 500));
+    const batch = missing.slice(i, i + concurrency);
+    await Promise.allSettled(batch.map(async (lot) => {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15000);
+        const resp = await fetch(lot.url, { headers: HEADERS, signal: controller.signal, redirect: 'follow' });
+        clearTimeout(timeout);
+        if (!resp.ok) return;
+        const html = await resp.text();
+
+        // Extract address from common patterns: <h1>, <h2>, og:title, title tag
+        let address = '';
+        // Try og:title first (most reliable for property pages)
+        const ogMatch = html.match(/<meta[^>]+property="og:title"[^>]+content="([^"]+)"/i) ||
+                         html.match(/<meta[^>]+content="([^"]+)"[^>]+property="og:title"/i);
+        if (ogMatch) address = ogMatch[1].trim();
+        // Fallback: first h1 with substantial text
+        if (!address) {
+          const h1Match = html.match(/<h1[^>]*>([^<]{10,})<\/h1>/i);
+          if (h1Match) address = h1Match[1].trim();
+        }
+        // Fallback: title tag (strip site name suffix)
+        if (!address) {
+          const titleMatch = html.match(/<title>([^<]+)<\/title>/i);
+          if (titleMatch) {
+            address = titleMatch[1].replace(/\s*[-|].*$/, '').trim();
+          }
+        }
+        // Clean up HTML entities and excess whitespace
+        if (address) {
+          address = address.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#?\w+;/g, ' ').replace(/\s+/g, ' ').trim();
+        }
+        if (address && address.length >= 5) {
+          lot.address = address;
+          filled++;
+        }
+
+        // Also backfill image if missing
+        if (!lot.imageUrl) {
+          const imgRe = /<img[^>]+(?:src|data-src|data-lazy-src|data-original)="([^"]+)"/gi;
+          let m;
+          while ((m = imgRe.exec(html)) !== null) {
+            const src = m[1];
+            if (src && src.length > 20 && !src.startsWith('data:') && !junk.test(src)) {
+              let imgUrl = src;
+              if (!/^https?:\/\//i.test(imgUrl)) {
+                try { imgUrl = new URL(imgUrl, resp.url || lot.url).href; } catch { continue; }
+              }
+              lot.imageUrl = imgUrl;
+              break;
+            }
+          }
+        }
+      } catch { /* timeout or network error — skip */ }
+    }));
+  }
+  if (filled > 0) console.log(`Address backfill (lot pages): ${filled}/${missing.length} lots got addresses`);
   return filled;
 }
 
@@ -8527,7 +8605,7 @@ async function extractWithDOM(page, house) {
   }
 
   // Post-processing: filter out non-property images (logos, icons, placeholders, known junk)
-  const imgBlocklist = /logo|icon|placeholder|no-image|default|blank|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|1x1|noimage|favicon|banner|advert|sponsor|newsletter|widget|thumb_generic|modal\.png|_NYC\.|_LCC\.|_BMDC\.|Unit[ie]*d?_?Utilit|Cardwells|themes\/.*assets\/images\/|download_\(\d+\)\.|watchLIVEauction|property-top-image|auc2-logo/i;
+  const imgBlocklist = /logo|icon|placeholder|no-image|default|blank|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|1x1|noimage|favicon|banner|advert|sponsor|newsletter|widget|thumb_generic|modal\.png|_NYC\.|_LCC\.|_BMDC\.|Unit[ie]*d?_?Utilit|Cardwells|themes\/.*assets\/images\/|download_\(\d+\)\.|watchLIVEauction|property-top-image|auc2-logo|gavel|backdrop|generic[_-]?image|auction[_-]?house[_-]?(?:logo|image)|coming[_-]?soon/i;
   // Known non-property domains and brand names that appear as junk images
   const imgDomainBlock = /flannels|kirklees|rdw\b|council\.gov|\.gov\.uk\/|googleads|doubleclick|analytics|hotjar|intercom|crisp\.chat|tawk\.to|zendesk|hubspot|mailchimp|sendgrid/i;
   // House-specific: Hollis Morgan property photos always use /resize/ path
@@ -10419,6 +10497,12 @@ async function autoAnalyseOne(url) {
 
   const lots = rawLots.map(lot => analyseLot(lot)).sort((a, b) => b.score - a.score);
   await enrichLots(lots, house, url);
+
+  // Address backfill: fetch individual lot pages for lots missing address
+  const lotsMissingAddr = lots.filter(l => l.url && (!l.address || l.address.trim().length < 5)).length;
+  if (lotsMissingAddr > 0) {
+    await backfillAddressFromLotPages(lots);
+  }
 
   // Tenure backfill: fetch individual lot pages for lots missing tenure
   const lotsMissingTenure = lots.filter(l => l.url && !l.tenure).length;
