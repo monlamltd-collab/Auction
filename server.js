@@ -1285,6 +1285,18 @@ app.get('/api/auth/me', async (req, res) => {
 // STRIPE: Checkout, Webhook, Portal, Status
 // ═══════════════════════════════════════════════════════════════
 
+// GET /api/stripe/diag — check Stripe config (temporary diagnostic)
+app.get('/api/stripe/diag', (req, res) => {
+  const key = process.env.STRIPE_SECRET_KEY || '';
+  const priceId = process.env.STRIPE_MONTHLY_PRICE_ID || '';
+  res.json({
+    hasStripe: !!stripe,
+    keyPrefix: key ? key.slice(0, 8) + '...' : 'MISSING',
+    priceId: priceId ? priceId.slice(0, 10) + '...' : 'MISSING',
+    hasWebhookSecret: !!process.env.STRIPE_WEBHOOK_SECRET,
+  });
+});
+
 // POST /api/stripe/checkout — create Stripe Checkout session
 app.post('/api/stripe/checkout', rateLimit(60000, 5), async (req, res) => {
   log.info('Stripe checkout requested', { hasStripe: !!stripe, hasKey: !!process.env.STRIPE_SECRET_KEY, hasPriceId: !!process.env.STRIPE_MONTHLY_PRICE_ID });
@@ -1327,8 +1339,7 @@ app.post('/api/stripe/checkout', rateLimit(60000, 5), async (req, res) => {
     res.json({ url: session.url });
   } catch (err) {
     log.error('Stripe checkout error', { error: err.message, type: err.type, code: err.code, userId: user.id });
-    const detail = err.type === 'StripeInvalidRequestError' ? `: ${err.message}` : '';
-    res.status(500).json({ error: `Failed to create checkout session${detail}` });
+    res.status(500).json({ error: `Failed to create checkout session: ${err.message}` });
   }
 });
 
