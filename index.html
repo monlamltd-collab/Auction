@@ -2522,7 +2522,7 @@ function card(l){
   const chipsHtml = getSignalChips(l);
 
   // Category label
-  const catLabel = 'Lot ' + esc(l.lot || '—') + ' · ' + esc(l.blurred ? '—' : (l.dealType || 'Standard'));
+  const catLabel = 'Lot ' + esc(l.lot || '—') + ' · ' + esc(l.blurred ? '—' : l.anonGated ? 'Sign up for deal type' : (l.dealType || 'Standard'));
 
   // Card footer links
   const viewLink = l.url ? '<a href="' + safeHref(l.url) + '" target="_blank" rel="noopener noreferrer" class="card-view-link" onclick="event.stopPropagation()">View listing ↗</a>' : '<span></span>';
@@ -2869,11 +2869,16 @@ function getPlaceholderHtml(type) {
 function getCardImageBadges(lot) {
   let html = '';
   if (lot._house) html += '<div class="card-badge badge-house">' + esc(lot._house) + '</div>';
-  const rawScore = lot.score ?? 0;
-  const clampedScore = Math.max(0, Math.min(10, rawScore));
-  const sc = clampedScore >= 3 ? 'high' : clampedScore >= 1 ? 'mid' : 'low';
-  const sign = clampedScore > 0 ? '+' : '';
-  html += '<div class="card-badge badge-score ' + sc + '">' + sign + clampedScore + '</div>';
+  if (lot.anonGated) {
+    // Anonymous user — show teaser badge instead of score
+    html += '<div class="card-badge badge-score mid" style="cursor:pointer;font-size:.65rem" onclick="event.stopPropagation();$(\'signupModal\').classList.add(\'show\')">Sign up for AI scores</div>';
+  } else {
+    const rawScore = lot.score ?? 0;
+    const clampedScore = Math.max(0, Math.min(10, rawScore));
+    const sc = clampedScore >= 3 ? 'high' : clampedScore >= 1 ? 'mid' : 'low';
+    const sign = clampedScore > 0 ? '+' : '';
+    html += '<div class="card-badge badge-score ' + sc + '">' + sign + clampedScore + '</div>';
+  }
   if (lot.vacant) html += '<div class="badge-vacant">Vacant possession</div>';
   // Urgency / ended badge
   if (lot._auctionDate) {
@@ -2922,6 +2927,7 @@ function getCardImageHtml(lot) {
 }
 
 function getSignalChips(lot) {
+  if (lot.anonGated) return '';  // No AI chips for anonymous users
   let chips = [];
   (lot.opps || []).forEach(o => chips.push({text: '+ ' + o, type: 'pos'}));
   (lot.risks || []).forEach(r => chips.push({text: '\u26a0 ' + r, type: 'neg'}));
@@ -2938,6 +2944,7 @@ function getSignalChips(lot) {
 }
 
 function expandCard(lot) {
+  if (lot.anonGated) { $('signupModal').classList.add('show'); return; }
   if (lot.blurred) { showPaywall('Upgrade to Pro for full lot details, AI analysis, and finance checks.'); return; }
   // Close any existing expanded panel
   const existing = document.querySelector('.expanded-panel');

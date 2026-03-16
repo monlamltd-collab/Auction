@@ -3791,13 +3791,31 @@ app.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
       imgStripped
     });
 
-    // Directory data is free to serve — no gating, no blurring
-    // Safety: strip any stale blurred flags that may have leaked into cached lot data
-    for (const lot of cleanLots) { delete lot.blurred; }
+    // Directory data: free for all, but AI analysis layer requires signup
+    // Anonymous users see address/price/image/house but not scores/opps/risks/dealType
+    const isSignedIn = !!user;
+    if (!isSignedIn) {
+      for (const lot of cleanLots) {
+        lot.score = null;
+        lot.opps = [];
+        lot.risks = [];
+        lot.scoreBreakdown = [];
+        lot.dealType = null;
+        lot.condition = null;
+        lot.vacant = null;
+        lot.titleSplit = null;
+        lot.estGrossYield = null;
+        lot.anonGated = true;   // Signal to frontend to show signup prompt
+        delete lot.blurred;
+      }
+    } else {
+      for (const lot of cleanLots) { delete lot.blurred; }
+    }
     res.json({
       lots: cleanLots,
       sources,
       blurred: false,
+      anonGated: !isSignedIn,
       _debug: {
         cachedRows: cached.length,
         rawLotCount: rawTotal,
