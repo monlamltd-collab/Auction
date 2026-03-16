@@ -287,7 +287,7 @@ async function scrapeWithFirecrawl(url, options = {}) {
   if (options.actions) body.actions = options.actions;
 
   const doFetch = async () => {
-    const resp = await fetch('https://api.firecrawl.dev/v1/scrape', {
+    const resp = await fetch('https://api.firecrawl.dev/v2/scrape', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${FIRECRAWL_API_KEY}`,
@@ -682,7 +682,7 @@ async function scrapeRenderedPage(url, house, options = {}) {
         const result = await scrapeWithFirecrawl(url, {
           waitFor: options.waitFor || 3000,
           actions: options.actions || fcActions,
-          formats: ['markdown', 'rawHtml'],
+          formats: ['markdown', 'rawHtml', 'images'],
         });
         if (result.html && result.html.length > 500) {
           console.log(`Firecrawl: got ${result.html.length} chars for ${house}`);
