@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A UK property auction directory and AI-powered catalogue analyser, live at auctions.bridgematch.co.uk. Scrapes upcoming auction catalogues from ~21 UK auction houses, uses Google Gemini AI to extract structured lot data, scores each lot for investment potential, and presents results in a filterable frontend. Includes Bridgematch Lite — an investor-facing bridging finance matching tool that shows how many lenders would fund each deal.
+A UK property auction directory and AI-powered catalogue analyser, live at auctions.bridgematch.co.uk. Scrapes upcoming auction catalogues from ~36 UK auction houses, uses Google Gemini AI to extract structured lot data, enriches with EPC ratings and flood risk data, scores each lot for investment potential, and presents results in a filterable frontend with deal stacking analysis. Includes Bridgematch Lite — an investor-facing bridging finance matching tool that shows how many lenders would fund each deal.
 
 **Owner:** Simon Deeming
 **Stack:** Node.js (Express monolith), Firecrawl + Puppeteer scraping, Gemini AI extraction, Supabase (auth + DB), Stripe payments, Railway hosting
@@ -32,47 +32,54 @@ Every upcoming UK auction lot, with complete data (images, links, metadata), sco
 - ✓ Land Registry enrichment (street averages, yield estimates, comps) — existing
 - ✓ Auto-analyse pipeline (6-hour cycle, hash dedup, regression guard) — existing
 - ✓ Nightly audit via GitHub Actions with auto-fix — existing
-- ✓ SDLT calculator (investor rates 2025/26) — existing
-- ✓ Basic deal analysis function (calcDealAnalysis) — existing
-- ✓ Image extraction pipeline (DOM → Firecrawl images → executeJavascript → two-pass backfill) — existing
-- ✓ ~21 auction houses with DOM extractors — existing
 - ✓ Tenure extraction from catalogues — existing
+- ✓ Multi-country SDLT calculator (England 5% surcharge, Scotland LBTT+ADS, Wales LTT) — v1.1
+- ✓ Stripe hardening: trial abuse prevention, webhook idempotency, graceful downgrade — v1.1
+- ✓ Future-only auction display with server-side filtering and 7-day grace — v1.1
+- ✓ Standardised lot.status field (available/sold/stc/withdrawn) with overlay banners — v1.1
+- ✓ Firecrawl markdown-first extraction format — v1.1
+- ✓ Pipeline alerting (4 event types) with admin freshness dashboard — v1.1
+- ✓ EPC rating enrichment via MHCLG open data API (free, 30-day cache) — v1.1
+- ✓ Flood risk enrichment via Environment Agency API (free, 30-day cache) — v1.1
+- ✓ IMG_HELPERS module for DOM extractors with lazy-load fallback chain — v1.1
+- ✓ Missing-image admin dashboard with coverage metrics — v1.1
+- ✓ ~36 auction houses with DOM extractors (15 new in v1.1) — v1.1
+- ✓ Deal stacking calculator (lender-matched bridging, flip/hold scenarios) — v1.1
+- ✓ Premium features wired: Yield Analysis, Comparables, Deal Stacking — v1.1
+- ✓ Tier lifecycle verified: trial expiry, resubscription, payment grace, cross-tab sync — v1.1
 
 ### Active
 
-<!-- This milestone's scope -->
+<!-- Next milestone scope — to be defined via /gsd:new-milestone -->
 
-- [ ] Default frontend to future-only auctions (hide past catalogues by default)
-- [ ] Improve sold/unsold detection reliability across auction houses
-- [ ] Alerting when auto-analyse fails or discovery misses catalogues
-- [ ] Improve lot image coverage — biggest data quality gap currently
-- [ ] Better leverage Firecrawl's structured output capabilities (markdown, metadata, not just raw HTML)
-- [ ] Firecrawl-powered enrichment via Zoopla/Rightmove (comps, rental estimates, sold prices) — supplements existing Land Registry data, available to all users
-- [ ] Add more auction houses to expand directory coverage
-- [ ] Verify subscription tier flows end-to-end (trial expiry, downgrade, resubscribe edge cases)
-- [ ] Deal stacking calculator MVP — user inputs GDV, works cost, legal costs, expected rental; tool calculates SDLT + finance costs from Bridgematch lender data; outputs full investment stack (total cost in, profit, ROI, cash-on-cash)
-- [ ] Wire up "Coming Soon" premium features (Yield Analysis, Comparables, Deal Stacking UI)
+- [ ] Email alerts when new catalogues drop for followed auction houses
+- [ ] Blog/content section for organic SEO traffic
+- [ ] Frontend redesign
+- [ ] Individual lot pages with SEO-friendly URLs
 
 ### Out of Scope
 
-- Frontend redesign — future milestone
-- Email alerts for new catalogues — future milestone
-- Blog/content section for SEO — future milestone
 - Full Bridgematch integration (auto-finance per lot) — future milestone
 - Branding split (AuctionBrain vs Bridgematch) — future consideration
-- EPC rating lookups — future milestone
 - Automated calendar scraping via cron — partially exists via discovery, full automation deferred
+- Mobile app — web-first, mobile later
+- Zoopla/Rightmove scraping — ToS violation, use free public APIs instead
 
 ## Context
 
-- **Firecrawl is underutilised** — currently used mainly for raw HTML, but its USP is LLM-ready structured data. Should be leveraged for better image capture, metadata extraction, and property research enrichment.
-- **Missing images are the #1 data quality issue** — lots without photos look unprofessional and reduce user trust.
-- **Enrichment strategy:** Land Registry provides sold prices and basic comps. Firecrawl can supplement with Zoopla/Rightmove data (rental estimates, market context, recent sales). Enrichment data is free for all users — upgrade case comes from AI analysis and deal stacking.
+- **Shipped v1.1** with ~2,400 new lines across 8 files. ~15,755 LOC total (JS/HTML).
+- **~36 auction houses** with DOM extractors (up from ~21). ASI bug fix in v1.1 resolved silent failures across all extractors.
+- **Firecrawl now used for markdown+rawHtml** — better Gemini extraction at zero additional credit cost.
+- **Image coverage significantly improved** — IMG_HELPERS module, 99.6% coverage on new houses, admin tooling for missing images.
+- **Enrichment pipeline live** — EPC (MHCLG) + flood risk (EA) with 30-day Supabase cache. Free for all users.
+- **Deal stacking is the premium upgrade driver** — free users see blurred preview + upgrade CTA.
 - **Tier gating strategy:** Directory data always free, only AI features gated (per memory: `project_tier_strategy.md`).
 - **Future lead model:** Broker pool/marketplace for regulated leads (per memory: `project_broker_marketplace.md`).
-- **server.js is ~9,750 lines** — monolith containing all backend logic. No immediate plans to split.
-- **Gemini free tier limits:** 15 RPM, 1500 RPD — rate limiter built in.
+- **server.js is ~11,000 lines** — monolith containing all backend logic. No immediate plans to split.
+- **Gemini free tier limits:** 15 RPM, 1500 RPD — rate limiter built in. Monitor as house count grows.
 - **Firecrawl credit management:** Monthly budget cap, auto-exhaustion detection, hash-based skip saves ~50-70%.
+- **New env vars added in v1.1:** `EPC_API_EMAIL`, `EPC_API_KEY`
+- **Manual Supabase tables needed:** `processed_webhook_events`, `pipeline_alerts`, `enrichment_cache`, `last_diff` column on `house_skills`
 
 ## Constraints
 
@@ -88,12 +95,19 @@ Every upcoming UK auction lot, with complete data (images, links, metadata), sco
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
 | Firecrawl as primary scraper | Managed service handles JS rendering, anti-bot, proxies | ✓ Good |
-| Gemini free tier | Sufficient for current volume, avoids cost | ✓ Good — monitor as houses expand |
-| Directory data always free | Drives traffic and trust, gates only AI features | — Pending |
+| Gemini free tier | Sufficient for current volume, avoids cost | ✓ Good — monitor as 36 houses expand |
+| Directory data always free | Drives traffic and trust, gates only AI features | ✓ Good — v1.1 confirmed |
 | Lender names always masked | Generates broker leads, not direct lender access | ✓ Good |
-| Enrichment free for all users | Lifts overall product quality, upgrade case via deal stacking instead | — Pending |
-| Deal stacking: SDLT + finance auto-calculated | Deterministic from purchase price and lender data | — Pending |
-| Deal stacking: GDV, works, legal, rental = user input | These are assumptions the investor must provide | — Pending |
+| Enrichment free for all users | Lifts overall product quality, upgrade case via deal stacking | ✓ Good — EPC + flood live v1.1 |
+| Deal stacking: SDLT + finance auto-calculated | Deterministic from purchase price and lender data | ✓ Good — lender-matched rates v1.1 |
+| Deal stacking: GDV, works, legal, rental = user input | These are assumptions the investor must provide | ✓ Good — v1.1 |
+| Firecrawl markdown+rawHtml format | Better Gemini extraction at zero cost | ✓ Good — v1.1 |
+| IMG_HELPERS shared module | Consistent image extraction across all DOM extractors | ✓ Good — v1.1 |
+| Webhook dedup with 7-day TTL | Prevents duplicate Stripe event processing | ✓ Good — v1.1 |
+| 3-day grace period on payment failure | Avoids premature downgrade for transient payment issues | ✓ Good — v1.1 |
+| Premium gating via details/summary+blur | Native HTML, reliable across browsers per CLAUDE.md | ✓ Good — v1.1 |
+| Net yield = grossYield × 0.867 | Accounts for 10% management + 4-week void | ✓ Good — v1.1 |
+| Cross-tab tier sync is UI-only | No API call prevents infinite loop | ✓ Good — v1.1 |
 
 ---
-*Last updated: 2026-03-15 after initialization*
+*Last updated: 2026-03-16 after v1.1 milestone*
