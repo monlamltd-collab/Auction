@@ -3862,36 +3862,40 @@ app.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
       lots.push(...filtered);
     }
 
-    // ── Phase 3: Cross-auction dedup by normalised address ──
+    // ── Phase 3: Cross-auction dedup by normalised address (same house only) ──
+    // Only dedup lots listed by the SAME house at different auction dates (e.g., timed vs live)
+    // Cross-house duplicates are kept — users want to see the same property from different houses
     const crossAddrMap = new Map();
     for (const lot of lots) {
       const normAddr = (lot.address || '').toLowerCase().replace(/[\s,]+/g, ' ').replace(/^(lot\s*\d+\s*[-:]?\s*)/i, '').trim();
       if (normAddr.length <= 5) continue;
-      const entry = crossAddrMap.get(normAddr);
+      const houseAddr = `${lot._house}|${normAddr}`;
+      const entry = crossAddrMap.get(houseAddr);
       if (entry) {
         entry.count++;
         const entryDate = entry.lot._auctionDate || '9999-12-31';
         const lotDate = lot._auctionDate || '9999-12-31';
         if (lotDate < entryDate) entry.lot = lot;
       } else {
-        crossAddrMap.set(normAddr, { lot, count: 1 });
+        crossAddrMap.set(houseAddr, { lot, count: 1 });
       }
     }
     const keptLots = new Set();
     const dupAddrs = new Set();
-    for (const [addr, entry] of crossAddrMap) {
+    for (const [key, entry] of crossAddrMap) {
       keptLots.add(entry.lot);
-      if (entry.count > 1) dupAddrs.add(addr);
+      if (entry.count > 1) dupAddrs.add(key);
     }
     const beforeCross = lots.length;
     const finalLots = lots.filter(l => {
       const normAddr = (l.address || '').toLowerCase().replace(/[\s,]+/g, ' ').replace(/^(lot\s*\d+\s*[-:]?\s*)/i, '').trim();
       if (normAddr.length <= 5) { l._alsoInFutureAuctions = false; return true; }
-      if (keptLots.has(l)) { l._alsoInFutureAuctions = dupAddrs.has(normAddr); return true; }
+      const houseAddr = `${l._house}|${normAddr}`;
+      if (keptLots.has(l)) { l._alsoInFutureAuctions = dupAddrs.has(houseAddr); return true; }
       return false;
     });
     const crossRemoved = beforeCross - finalLots.length;
-    if (crossRemoved > 0) console.log(`Cross-auction dedup: removed ${crossRemoved} duplicate lots across auction dates`);
+    if (crossRemoved > 0) console.log(`Cross-auction dedup: removed ${crossRemoved} duplicate lots (same house, different dates)`);
 
     // Sanitise junk lots — remove non-property entries (email addresses, field labels, etc.)
     const junkAddr = /^(enquiries|info|sales|contact|admin|hello)@|^£[\d,]+|^Properties?$/i;
