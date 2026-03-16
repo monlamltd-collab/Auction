@@ -3453,13 +3453,31 @@ Only return lots that genuinely match the query.`, { maxTokens: 4000 });
       return res.json({ results: [], report: 'No lot data in cache. Please analyse auction catalogues first.', sources: [], searchesUsed, searchLimit });
     }
 
+    // Pre-dedup: remove cross-house duplicates before sending to Gemini (saves tokens)
+    const preDedupMap = new Map();
+    for (const lot of allLots) {
+      const normAddr = (lot.address || '').toLowerCase().replace(/[\s,]+/g, ' ').replace(/^(lot\s*\d+\s*[-:]?\s*)/i, '').trim();
+      if (normAddr.length < 5) { preDedupMap.set(`__short_${preDedupMap.size}`, lot); continue; }
+      const existing = preDedupMap.get(normAddr);
+      if (existing) {
+        const richness = (l) => (l.score || 0) * 10 + (l.imageUrl ? 5 : 0) + (l.bullets?.length || 0) + (l.price ? 1 : 0);
+        if (richness(lot) > richness(existing)) preDedupMap.set(normAddr, lot);
+      } else {
+        preDedupMap.set(normAddr, lot);
+      }
+    }
+    const dedupedAllLots = [...preDedupMap.values()];
+    if (dedupedAllLots.length < allLots.length) {
+      log.info('smart-search pre-dedup', { before: allLots.length, after: dedupedAllLots.length });
+    }
+
     // Apply sold filter before sending to Gemini (prefer lot.status, fallback to bullets regex)
-    normaliseLotStatuses(allLots);
+    normaliseLotStatuses(dedupedAllLots);
     const filteredLots = soldFilter === 'available'
-      ? allLots.filter(l => l.status === 'available')
+      ? dedupedAllLots.filter(l => l.status === 'available')
       : soldFilter === 'sold'
-      ? allLots.filter(l => l.status === 'sold' || l.status === 'stc' || l.status === 'withdrawn')
-      : allLots;
+      ? dedupedAllLots.filter(l => l.status === 'sold' || l.status === 'stc' || l.status === 'withdrawn')
+      : dedupedAllLots;
 
     // Build a compact lot summary for Gemini, prioritising query-relevant lots
     const queryTerms = query.toLowerCase().split(/\s+/).filter(t => t.length > 2);
@@ -3526,9 +3544,27 @@ Only return lots that genuinely match the query. If nothing matches well, say so
       };
     }
 
-    const matchingLots = (parsed.indices || [])
+    const rawMatchingLots = (parsed.indices || [])
       .filter(i => i >= 0 && i < filteredLots.length)
       .map(i => filteredLots[i]);
+
+    // Deduplicate by normalised address (cross-house) — keep lot with higher score/richer data
+    const dedupMap = new Map();
+    for (const lot of rawMatchingLots) {
+      const normAddr = (lot.address || '').toLowerCase().replace(/[\s,]+/g, ' ').replace(/^(lot\s*\d+\s*[-:]?\s*)/i, '').trim();
+      if (normAddr.length < 5) { dedupMap.set(`__short_${dedupMap.size}`, lot); continue; }
+      const existing = dedupMap.get(normAddr);
+      if (existing) {
+        const richness = (l) => (l.score || 0) * 10 + (l.imageUrl ? 5 : 0) + (l.bullets?.length || 0) + (l.price ? 1 : 0);
+        if (richness(lot) > richness(existing)) dedupMap.set(normAddr, lot);
+      } else {
+        dedupMap.set(normAddr, lot);
+      }
+    }
+    const matchingLots = [...dedupMap.values()];
+    if (matchingLots.length < rawMatchingLots.length) {
+      log.info('smart-search dedup', { before: rawMatchingLots.length, after: matchingLots.length, removed: rawMatchingLots.length - matchingLots.length });
+    }
 
     // Gate data for free/anon users
     const isPremium = user && (user.tier === 'premium' || user.tier === 'trial');
@@ -3753,6 +3789,8 @@ app.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
     });
 
     // Directory data is free to serve — no gating, no blurring
+    // Safety: strip any stale blurred flags that may have leaked into cached lot data
+    for (const lot of cleanLots) { delete lot.blurred; }
     res.json({
       lots: cleanLots,
       sources,
@@ -6515,11 +6553,17 @@ const DOM_EXTRACTORS = {
         const link = card.querySelector('a[href*="/lot/details/"], a[href*="/lot/"]');
         if (link) url = link.getAttribute('href') || '';
         let imageUrl = '';
-        const img = card.querySelector('img.list-image, img.grid-img, img.img-responsive, img[src*="eigpropertyauctions"]');
-        if (img) {
-          const s = img.getAttribute('src') || img.getAttribute('data-src') || '';
-          if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) imageUrl = s;
+        const imgs = card.querySelectorAll('img');
+        for (const img of imgs) {
+          const s = img.getAttribute('data-src') || img.getAttribute('data-original') || img.getAttribute('data-lazy-src') || img.getAttribute('src') || '';
+          if (s && s.length > 10 && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && !s.includes('gavel') && !s.includes('backdrop') && !s.includes('placeholder')) {
+            imageUrl = s;
+            break;
+          }
         }
+        // Dedup: reject image if already used by a previous lot (prevents image bleed)
+        const usedImages = lots.map(l => l.imageUrl).filter(Boolean);
+        if (imageUrl && usedImages.includes(imageUrl)) imageUrl = '';
         const bullets = [];
         const headingEl = card.querySelector('h4.lot-data-heading strong, h4.lot-data-heading');
         if (headingEl) {
@@ -7305,6 +7349,18 @@ const DOM_EXTRACTORS = {
     (() => {
       const lots = [];
       const cards = document.querySelectorAll('article.ae-post-item, [data-source="ams-property"] article');
+      // Helper: extract per-card image, rejecting duplicates (prevents image bleed)
+      function extractCardImg(card, usedImages) {
+        const imgs = card.querySelectorAll('img');
+        for (const img of imgs) {
+          const s = img.getAttribute('data-src') || img.getAttribute('data-original') || img.getAttribute('data-lazy-src') || img.getAttribute('src') || '';
+          if (s && s.length > 10 && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && !s.includes('gavel') && !s.includes('backdrop') && !s.includes('placeholder')) {
+            if (!usedImages.has(s)) { usedImages.add(s); return s; }
+          }
+        }
+        return '';
+      }
+      const usedImages = new Set();
       if (cards.length === 0) {
         // Fallback: find lot blocks by guide-price class
         const priceBlocks = document.querySelectorAll('.guide-price');
@@ -7323,9 +7379,7 @@ const DOM_EXTRACTORS = {
           let lotNum = lots.length + 1;
           const lotEl = card.querySelector('.lot-block .ae-element-custom-field');
           if (lotEl) lotNum = parseInt(lotEl.textContent.trim()) || lotNum;
-          let imageUrl = '';
-          const img = card.querySelector('img[src*="eigpropertyauctions"], img[src*="cdn."]');
-          if (img) imageUrl = img.getAttribute('src') || img.dataset.src || '';
+          const imageUrl = extractCardImg(card, usedImages);
           const bullets = [];
           const desc = card.querySelector('.property-strapline');
           if (desc) bullets.push(desc.textContent.trim().substring(0, 200));
@@ -7349,9 +7403,7 @@ const DOM_EXTRACTORS = {
         let lotNum = lots.length + 1;
         const lotEl = card.querySelector('.lot-block .ae-element-custom-field');
         if (lotEl) lotNum = parseInt(lotEl.textContent.trim()) || lotNum;
-        let imageUrl = '';
-        const img = card.querySelector('img[src*="eigpropertyauctions"], img[src*="cdn."]');
-        if (img) imageUrl = img.getAttribute('src') || img.dataset.src || '';
+        const imageUrl = extractCardImg(card, usedImages);
         const bullets = [];
         const desc = card.querySelector('.property-strapline');
         if (desc) bullets.push(desc.textContent.trim().substring(0, 200));
