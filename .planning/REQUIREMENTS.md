@@ -12,7 +12,7 @@
 - [x] **HARD-03**: Stripe `trial_used` flag is checked on signup to prevent trial abuse via re-registration
 - [x] **HARD-04**: Stripe webhooks deduplicate events by `event.id` (idempotency)
 - [x] **HARD-05**: Subscription downgrade honours `current_period_end` instead of immediate cutoff
-- [ ] **HARD-06**: Broken `calcDealAnalysis()` replaced with correct deal stacking logic
+- [x] **HARD-06**: Broken `calcDealAnalysis()` replaced with correct deal stacking logic
 - [x] **HARD-07**: Firecrawl requests use `['markdown', 'rawHtml']` format for better Gemini extraction
 
 ### Data Freshness
@@ -45,12 +45,12 @@
 
 ### Deal Stacking
 
-- [ ] **DEAL-01**: User can input GDV, works cost, legal costs, and expected rental income per lot
-- [ ] **DEAL-02**: Tool auto-calculates SDLT from purchase price using correct 2025/26 rates
-- [ ] **DEAL-03**: Tool auto-calculates bridging finance costs from Bridgematch lender data
-- [ ] **DEAL-04**: Full investment stack displayed: total cost in, net profit, ROI, cash-on-cash return
+- [x] **DEAL-01**: User can input GDV, works cost, legal costs, and expected rental income per lot
+- [x] **DEAL-02**: Tool auto-calculates SDLT from purchase price using correct 2025/26 rates
+- [x] **DEAL-03**: Tool auto-calculates bridging finance costs from Bridgematch lender data
+- [x] **DEAL-04**: Full investment stack displayed: total cost in, net profit, ROI, cash-on-cash return
 - [ ] **DEAL-05**: Deal stacking available as premium-only feature (replaces "Coming Soon" chip)
-- [ ] **DEAL-06**: Flip (sell) and Hold (refinance + rent) scenarios both calculated
+- [x] **DEAL-06**: Flip (sell) and Hold (refinance + rent) scenarios both calculated
 
 ### Tier Verification
 
@@ -101,7 +101,7 @@
 | HARD-03 | Phase 1 | Complete |
 | HARD-04 | Phase 1 | Complete |
 | HARD-05 | Phase 1 | Complete |
-| HARD-06 | Phase 3 | Pending |
+| HARD-06 | Phase 3 | Complete |
 | HARD-07 | Phase 1 | Complete |
 | FRSH-01 | Phase 1 | Complete |
 | FRSH-02 | Phase 1 | Complete |
@@ -119,12 +119,12 @@
 | EXPN-02 | Phase 2 | Pending |
 | EXPN-03 | Phase 2 | Pending |
 | EXPN-04 | Phase 2 | Pending |
-| DEAL-01 | Phase 3 | Pending |
-| DEAL-02 | Phase 3 | Pending |
-| DEAL-03 | Phase 3 | Pending |
-| DEAL-04 | Phase 3 | Pending |
+| DEAL-01 | Phase 3 | Complete |
+| DEAL-02 | Phase 3 | Complete |
+| DEAL-03 | Phase 3 | Complete |
+| DEAL-04 | Phase 3 | Complete |
 | DEAL-05 | Phase 3 | Pending |
-| DEAL-06 | Phase 3 | Pending |
+| DEAL-06 | Phase 3 | Complete |
 | TIER-01 | Phase 3 | Pending |
 | TIER-02 | Phase 3 | Pending |
 | TIER-03 | Phase 3 | Pending |
