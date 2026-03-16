@@ -1326,8 +1326,9 @@ app.post('/api/stripe/checkout', rateLimit(60000, 5), async (req, res) => {
     const session = await stripe.checkout.sessions.create(sessionParams);
     res.json({ url: session.url });
   } catch (err) {
-    log.error('Stripe checkout error', { error: err.message, userId: user.id });
-    res.status(500).json({ error: 'Failed to create checkout session' });
+    log.error('Stripe checkout error', { error: err.message, type: err.type, code: err.code, userId: user.id });
+    const detail = err.type === 'StripeInvalidRequestError' ? `: ${err.message}` : '';
+    res.status(500).json({ error: `Failed to create checkout session${detail}` });
   }
 });
 
