@@ -270,6 +270,8 @@ let fcRequestCount = 0;
 let fcTemporarilyDown = false;
 let fcDownAt = 0;
 let fcConsecutive5xx = 0;
+let fcLastError = null;
+let fcLastErrorAt = null;
 
 async function scrapeWithFirecrawl(url, options = {}) {
   if (!FIRECRAWL_API_KEY) throw new Error('FIRECRAWL_API_KEY not set');
@@ -339,10 +341,14 @@ async function scrapeWithFirecrawl(url, options = {}) {
         return await firecrawlRateLimited(doFetch);
       } catch (retryErr) {
         fcErrorCount++;
+        fcLastError = retryErr.message;
+        fcLastErrorAt = new Date().toISOString();
         throw retryErr;
       }
     }
     fcErrorCount++;
+    fcLastError = err.message;
+    fcLastErrorAt = new Date().toISOString();
     throw err;
   }
 }
@@ -4086,6 +4092,8 @@ app.get('/api/diag', (req, res) => {
     fcFallbackCount,
     fcErrorCount,
     fcRequestCount,
+    fcLastError,
+    fcLastErrorAt,
     puppeteerAvailable: !!puppeteer,
     geminiKey: process.env.GEMINI_API_KEY ? 'set' : 'NOT SET',
     apiCallCount,
