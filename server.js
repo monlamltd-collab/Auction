@@ -4608,14 +4608,14 @@ function detectAuctionHouse(url) {
   if (u.includes('barnardmarcusauctions') || u.includes('barnardmarcus')) return 'barnardmarcus';
   if (u.includes('auctionhouselondon')) return 'auctionhouselondon';
   if (u.includes('auctionhouse.co.uk/scotland')) return 'auctionhousescotland';
-  if (u.includes('auctionhouse.co.uk/sussexandhampshire')) return 'austingray';
+  if (u.includes('auctionhouse.co.uk/sussexandhampshire') || u.includes('sussexandhampshire')) return 'austingray';
   if (u.includes('auctionhouse.co.uk/eastanglia')) return 'auctionhouseeastanglia';
   if (u.includes('auctionhouse.co.uk/northwest')) return 'auctionhousenorthwest';
   if (u.includes('auctionhouse.co.uk/northeast')) return 'auctionhousenortheast';
   if (u.includes('auctionhouse.co.uk/southwales') || u.includes('auctionhouse.co.uk/wales')) return 'auctionhousewales';
   if (u.includes('auctionhouse.co.uk/birmingham')) return 'auctionhousebirmingham';
   if (u.includes('auctionhouse.co.uk/kent')) return 'auctionhousekent';
-  if (u.includes('auctionhouse.co.uk')) return 'auctionhouse';
+  if (u.includes('auctionhouse.co.uk') || u.includes('auctionhouse.uk.net')) return 'auctionhouse';
   if (u.includes('cliveemson')) return 'cliveemson';
   if (u.includes('strettons')) return 'strettons';
   if (u.includes('acuitus')) return 'acuitus';
@@ -4639,7 +4639,6 @@ function detectAuctionHouse(url) {
   if (u.includes('hunters.com') || u.includes('bambooauctions.com')) return 'hunters';
   if (u.includes('probate.auction') || u.includes('timedauctions.probate.auction')) return 'probateauction';
   if (u.includes('auctionhouselondon')) return 'auctionhouselondon';
-  if (u.includes('auctionhouse.co.uk')) return 'auctionhouse';
   if (u.includes('pughauctions') || u.includes('pugh')) return 'sdl';
   // ── New houses ──
   if (u.includes('suttonkersh')) return 'suttonkersh';
