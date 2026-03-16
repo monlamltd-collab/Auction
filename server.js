@@ -1287,11 +1287,13 @@ app.get('/api/auth/me', async (req, res) => {
 
 // POST /api/stripe/checkout — create Stripe Checkout session
 app.post('/api/stripe/checkout', rateLimit(60000, 5), async (req, res) => {
-  if (!stripe) return res.status(503).json({ error: 'Payments not configured' });
+  log.info('Stripe checkout requested', { hasStripe: !!stripe, hasKey: !!process.env.STRIPE_SECRET_KEY, hasPriceId: !!process.env.STRIPE_MONTHLY_PRICE_ID });
+  if (!stripe) return res.status(503).json({ error: 'Payments not configured — STRIPE_SECRET_KEY missing' });
   const user = await validateUserFromReq(req);
   if (!user) return res.status(401).json({ error: 'Authentication required' });
 
   const { product } = req.body || {};
+  log.info('Stripe checkout', { product, userId: user.id, email: user.email, tier: user.tier });
   if (product !== 'monthly') {
     return res.status(400).json({ error: 'Invalid product. Use "monthly".' });
   }
@@ -1300,7 +1302,7 @@ app.post('/api/stripe/checkout', rateLimit(60000, 5), async (req, res) => {
   }
 
   const priceId = process.env.STRIPE_MONTHLY_PRICE_ID;
-  if (!priceId) return res.status(503).json({ error: 'Price not configured' });
+  if (!priceId) return res.status(503).json({ error: 'Price not configured — STRIPE_MONTHLY_PRICE_ID missing in Railway' });
 
   try {
     // Lazy-create Stripe customer
@@ -1830,7 +1832,7 @@ const FREE_PREVIEW_LOTS = 6; // Show full AI data on first N lots even for free 
 
 // ── AI Search tier limits ──
 const ANON_AI_SEARCH_LIMIT = 3;   // Anonymous users: 3 AI searches/day by IP
-const FREE_AI_SEARCH_LIMIT = 10;  // Free registered users: 10 AI searches/day
+const FREE_AI_SEARCH_LIMIT = 5;   // Free registered users: 5 AI searches/day
 
 function getAISearchLimit(user) {
   if (!user) return ANON_AI_SEARCH_LIMIT;
@@ -3161,14 +3163,12 @@ app.post('/api/smart-search', async (req, res) => {
   // Authenticate user
   const user = await validateUserFromReq(req);
 
-  // Premium-only gate: block free/anonymous users from AI search
-  const userTier = user?.tier || 'free';
-  const isTrial = user?.trial_expires_at && new Date(user.trial_expires_at) > new Date();
-  if (userTier !== 'premium' && !isTrial) {
-    return res.status(403).json({ error: 'premium_required', message: 'AI-powered search is a Pro feature. Upgrade to search with natural language.' });
+  // Anonymous users cannot use AI search at all — must sign up
+  if (!user) {
+    return res.status(403).json({ error: 'premium_required', message: 'Sign up for free to get 5 AI searches per day, or upgrade to Pro for unlimited.' });
   }
 
-  // ── Rate limiting for premium users (safety net) ──
+  // ── Rate limiting (free: 5/day, premium/trial: unlimited) ──
   const searchLimit = getAISearchLimit(user);
   const searchToday = new Date().toISOString().slice(0, 10);
   let searchesUsed = 0;

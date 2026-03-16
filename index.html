@@ -842,7 +842,7 @@ footer .logo-f span{color:var(--green)}
         <option value="london">London</option><option value="south east">South East</option><option value="south west">South West</option><option value="east">East of England</option><option value="west midlands">West Midlands</option><option value="east midlands">East Midlands</option><option value="north west">North West</option><option value="north east">North East</option><option value="yorkshire">Yorkshire</option><option value="wales">Wales</option><option value="scotland">Scotland</option>
       </select>
       <select class="tb-select" id="fDeal" onchange="renderLots()" aria-label="Deal type"><option value="">All deals</option></select>
-      <select class="tb-select" id="fCondition" onchange="renderLots()" aria-label="Property condition">
+      <select class="tb-select" id="fCondition" onchange="renderLots()" aria-label="Property condition" style="display:none">
         <option value="">Any condition</option><option value="needs work">Needs work</option><option value="good">Good</option><option value="vacant">Vacant</option><option value="tenanted">Tenanted</option>
       </select>
       <select class="tb-select" id="fTenure" onchange="renderLots()" aria-label="Tenure type">
@@ -1167,6 +1167,8 @@ async function loadAllLots(){
     ALL_LOTS=d.lots||[];
     ALL_SOURCES=d.sources||[];
     if(d._debug) console.log('[BM] all-lots pipeline:',d._debug);
+    // Show condition filter only for signed-in users (AI field)
+    if(!d.anonGated&&$('fCondition')) $('fCondition').style.display='';
 
     // Update dynamic stats
     const lsEl = document.querySelector('.ls-val[data-target="2000"]');
@@ -1304,8 +1306,7 @@ function handleSearch(){
 }
 
 function setQ(q){
-  const tier=window._userTier||'free';
-  if(tier!=='premium'&&tier!=='trial'){showPaywall('AI-powered search is a Pro feature. Upgrade to search with natural language.');return}
+  if(!window._userTier){showPaywall('Sign up for free to get 5 AI searches per day, or upgrade to Pro for unlimited.');return}
   $('smartQuery').value=q;
 }
 function applyPreset(name){
@@ -1723,6 +1724,7 @@ function showPaywall(reason) {
 }
 
 async function startCheckout(product) {
+  console.log('[BM] startCheckout called', { product, hasSession: !!currentSession });
   if (!currentSession) { requireSignup(); return; }
   try {
     const resp = await fetch('/api/stripe/checkout', {
@@ -1731,12 +1733,14 @@ async function startCheckout(product) {
       body: JSON.stringify({ product }),
     });
     const data = await resp.json();
+    console.log('[BM] Stripe checkout response', { status: resp.status, hasUrl: !!data.url, error: data.error });
     if (data.url) {
       window.location.href = data.url;
     } else {
       alert(data.error || 'Failed to start checkout');
     }
   } catch (err) {
+    console.error('[BM] Checkout error', err);
     alert('Checkout failed: ' + err.message);
   }
 }
@@ -2060,10 +2064,9 @@ async function runAnalysis(url){
 // SMART SEARCH
 // ═══════════════════════════════
 async function runSmartSearch(query) {
-  // Premium-only gate: block free/anonymous users from AI search
-  const tier = window._userTier || 'free';
-  if (tier !== 'premium' && tier !== 'trial') {
-    showPaywall('AI-powered search is a Pro feature. Upgrade to search across all auction lots with natural language.');
+  // Anonymous users must sign up; free users get 5/day (server enforces limit)
+  if (!window._userTier || window._userTier === 'anon') {
+    showPaywall('Sign up for free to get 5 AI searches per day, or upgrade to Pro for unlimited.');
     return;
   }
 
@@ -2119,7 +2122,7 @@ async function runSmartSearch(query) {
       if (data.error === 'premium_required') {
         const _pp=$('progressPanel'); if(_pp) _pp.style.display='none';
         const _sb=$('mainBtn'); if(_sb){_sb.disabled=false;_sb.textContent='Search';}
-        showPaywall(data.message || 'AI-powered search is a Pro feature. Upgrade to search with natural language.');
+        showPaywall(data.message || 'Sign up for free to get 5 AI searches per day, or upgrade to Pro for unlimited.');
         return;
       }
       if (data.error === 'rate_limited') {
