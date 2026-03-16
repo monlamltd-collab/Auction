@@ -2535,20 +2535,73 @@ function detectCountry(address){
   return 'england';
 }
 
-// Deal analysis calculator
-function calcDealAnalysis(guidePrice,streetAvg,grossYield,monthlyRent,country){
-  const uplift=streetAvg-guidePrice;
-  const upliftPct=guidePrice>0?Math.round((uplift/guidePrice)*100):0;
-  const sdlt=calcSDLT(guidePrice,country);
-  const loanAmt=guidePrice*0.75; // assume 75% LTV
-  const bridgingCost=Math.round(loanAmt*0.0075*12); // 0.75%/mo for 12 months
-  const otherCosts=Math.round(guidePrice*0.04); // legal, survey, arrangement ~4%
-  const totalCostIn=guidePrice+sdlt+bridgingCost+otherCosts;
-  const netProfit=streetAvg-totalCostIn;
-  const cashIn=guidePrice-loanAmt+sdlt+otherCosts; // deposit + costs
-  const roi=cashIn>0?Math.round((netProfit/cashIn)*100):0;
-  return{uplift,upliftPct,sdlt,bridgingCost,otherCosts,totalCostIn,netProfit,roi,
-    grossYield:grossYield||0,monthlyRent:monthlyRent||0};
+// ── DEAL STACKING CALCULATOR ──
+function calcDealStack(purchasePrice, gdv, worksCost, rentalIncome, ltvPct, address) {
+  if (!purchasePrice || purchasePrice <= 0 || isNaN(purchasePrice)) return null;
+
+  // Lender matching — find best rate from LENDER_DATA
+  let bestLender = null;
+  let usingFallback = true;
+  let monthlyRate = 0.0085; // fallback 0.85%/mo
+  let procFeePct = 0.02;    // fallback 2%
+
+  const lenders = window.LENDER_DATA || [];
+  if (lenders.length > 0) {
+    let bestRate = Infinity;
+    for (const l of lenders) {
+      const ltv = _parseLTV(l.l1);
+      if (ltv.pct >= ltvPct) {
+        const rate = _parseRate(l.r);
+        if (rate > 0 && rate < bestRate) {
+          bestRate = rate;
+          bestLender = l;
+        }
+      }
+    }
+    if (bestLender) {
+      usingFallback = false;
+      monthlyRate = _parseRate(bestLender.r);
+      procFeePct = _parseProcFee(bestLender.pf) / 100;
+    }
+  }
+
+  // Shared cost calculations
+  const country = detectCountry(address);
+  const sdlt = calcSDLT(purchasePrice, country);
+  const loanAmount = Math.round(purchasePrice * (ltvPct / 100));
+  const bridgingInterest = Math.round(loanAmount * monthlyRate * 12);
+  const arrangementFee = Math.round(loanAmount * procFeePct);
+  const solicitor = 1500;
+  const survey = 500;
+  const brokerFee = Math.round(loanAmount * 0.01);
+  const totalCostIn = purchasePrice + sdlt + worksCost + bridgingInterest + arrangementFee + solicitor + survey + brokerFee;
+  const cashIn = (purchasePrice - loanAmount) + sdlt + worksCost + solicitor + survey + brokerFee;
+
+  // Flip scenario
+  const netProfit = gdv - totalCostIn;
+  const roi = cashIn > 0 ? (netProfit / cashIn * 100) : 0;
+  const cashOnCash = roi;
+
+  // Hold scenario (only if rentalIncome > 0)
+  let hold = null;
+  if (rentalIncome > 0) {
+    const refiAmount = Math.round(gdv * 0.75);
+    const btlMortgage = Math.round(refiAmount * 0.055 / 12);
+    const management = Math.round(rentalIncome * 0.10);
+    const voidAllowance = Math.round(rentalIncome / 12);
+    const monthlyCashflow = rentalIncome - btlMortgage - management - voidAllowance;
+    const annualYield = purchasePrice > 0 ? ((rentalIncome * 12) / purchasePrice * 100) : 0;
+    const cashLeftIn = totalCostIn - refiAmount;
+    const cashOnCashHold = cashLeftIn > 0 ? ((monthlyCashflow * 12) / cashLeftIn * 100) : 0;
+    hold = { refiAmount, btlMortgage, management, voidAllowance, monthlyCashflow, annualYield, cashLeftIn, cashOnCashHold };
+  }
+
+  return {
+    sdlt, loanAmount, bridgingInterest, arrangementFee, solicitor, survey, brokerFee,
+    totalCostIn, cashIn, usingFallback, bestLenderName: bestLender?.name || null,
+    flip: { netProfit, roi, cashOnCash },
+    hold
+  };
 }
 
 // Downloads
