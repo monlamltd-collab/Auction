@@ -49,7 +49,7 @@
 - [x] **DEAL-02**: Tool auto-calculates SDLT from purchase price using correct 2025/26 rates
 - [x] **DEAL-03**: Tool auto-calculates bridging finance costs from Bridgematch lender data
 - [x] **DEAL-04**: Full investment stack displayed: total cost in, net profit, ROI, cash-on-cash return
-- [ ] **DEAL-05**: Deal stacking available as premium-only feature (replaces "Coming Soon" chip)
+- [x] **DEAL-05**: Deal stacking available as premium-only feature (replaces "Coming Soon" chip)
 - [x] **DEAL-06**: Flip (sell) and Hold (refinance + rent) scenarios both calculated
 
 ### Tier Verification
@@ -123,7 +123,7 @@
 | DEAL-02 | Phase 3 | Complete |
 | DEAL-03 | Phase 3 | Complete |
 | DEAL-04 | Phase 3 | Complete |
-| DEAL-05 | Phase 3 | Pending |
+| DEAL-05 | Phase 3 | Complete |
 | DEAL-06 | Phase 3 | Complete |
 | TIER-01 | Phase 3 | Pending |
 | TIER-02 | Phase 3 | Pending |
