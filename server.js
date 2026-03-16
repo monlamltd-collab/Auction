@@ -3158,10 +3158,17 @@ app.post('/api/smart-search', async (req, res) => {
   const { query, soldFilter } = req.body || {};
   if (!query) return res.status(400).json({ error: 'Missing search query' });
 
-  // Allow anonymous users (user = null)
+  // Authenticate user
   const user = await validateUserFromReq(req);
 
-  // ── Tier-aware AI search rate limiting (check only — increment on success) ──
+  // Premium-only gate: block free/anonymous users from AI search
+  const userTier = user?.tier || 'free';
+  const isTrial = user?.trial_expires_at && new Date(user.trial_expires_at) > new Date();
+  if (userTier !== 'premium' && !isTrial) {
+    return res.status(403).json({ error: 'premium_required', message: 'AI-powered search is a Pro feature. Upgrade to search with natural language.' });
+  }
+
+  // ── Rate limiting for premium users (safety net) ──
   const searchLimit = getAISearchLimit(user);
   const searchToday = new Date().toISOString().slice(0, 10);
   let searchesUsed = 0;
@@ -3223,8 +3230,8 @@ app.post('/api/smart-search', async (req, res) => {
 
     if (presetCache && (!presetCache.stale_urls || presetCache.stale_urls.length === 0)) {
       // Fully fresh cache — return instantly
-      const isPremiumCached = user && (user.tier === 'premium' || user.tier === 'trial');
-      const cachedResults = isPremiumCached ? (presetCache.results || []) : stripAIFields(presetCache.results || []);
+      // Premium-only endpoint — no gating needed
+      const cachedResults = presetCache.results || [];
       await incrementSearchCounter();
       return res.json({
         results: cachedResults,
@@ -3260,8 +3267,7 @@ app.post('/api/smart-search', async (req, res) => {
             results: cleanResults, sources: cleanSources,
             total_searched: cleanResults.length, stale_urls: [],
           }).eq('query_key', cacheKey);
-          const isPremiumClean1 = user && (user.tier === 'premium' || user.tier === 'trial');
-          const gatedClean1 = isPremiumClean1 ? cleanResults : stripAIFields(cleanResults);
+          const gatedClean1 = cleanResults;
           await incrementSearchCounter();
           return res.json({ results: gatedClean1, report: presetCache.report || '', sources: cleanSources, totalSearched: cleanResults.length, cached: true, searchesUsed, searchLimit });
         }
@@ -3301,8 +3307,7 @@ app.post('/api/smart-search', async (req, res) => {
             total_searched: (presetCache.total_searched || 0) - deltaLots.length + filteredDelta.length,
             stale_urls: [],
           }).eq('query_key', cacheKey);
-          const isPremiumClean2 = user && (user.tier === 'premium' || user.tier === 'trial');
-          const gatedClean2 = isPremiumClean2 ? cleanResults : stripAIFields(cleanResults);
+          const gatedClean2 = cleanResults;
           await incrementSearchCounter();
           return res.json({ results: gatedClean2, report: presetCache.report || '', sources: cleanSources, totalSearched: cleanResults.length, cached: true, searchesUsed, searchLimit });
         }
@@ -3393,8 +3398,7 @@ Only return lots that genuinely match the query.`, { maxTokens: 4000 });
 
         console.log(`Incremental preset refresh: ${presetSlug} — ${newMatches.length} new matches from ${deltaSources.map(s => s.house).join(', ')}`);
 
-        const isPremiumMerged = user && (user.tier === 'premium' || user.tier === 'trial');
-        const gatedMerged = isPremiumMerged ? mergedResults : stripAIFields(mergedResults);
+        const gatedMerged = mergedResults;
         await incrementSearchCounter();
         return res.json({
           results: gatedMerged,
@@ -3566,9 +3570,8 @@ Only return lots that genuinely match the query. If nothing matches well, say so
       log.info('smart-search dedup', { before: rawMatchingLots.length, after: matchingLots.length, removed: rawMatchingLots.length - matchingLots.length });
     }
 
-    // Gate data for free/anon users
-    const isPremium = user && (user.tier === 'premium' || user.tier === 'trial');
-    const gatedResults = isPremium ? matchingLots : stripAIFields(matchingLots);
+    // Smart search is premium-only (free/anon blocked at top of endpoint)
+    const gatedResults = matchingLots;
 
     const response = {
       results: gatedResults,

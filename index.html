@@ -1303,7 +1303,11 @@ function handleSearch(){
   }
 }
 
-function setQ(q){ $('smartQuery').value = q; }
+function setQ(q){
+  const tier=window._userTier||'free';
+  if(tier!=='premium'&&tier!=='trial'){showPaywall('AI-powered search is a Pro feature. Upgrade to search with natural language.');return}
+  $('smartQuery').value=q;
+}
 function applyPreset(name){
   // Reset all filters first
   const resets={fDeal:'',fType:'',fCondition:'',fTenure:'',fLocation:'',fSoldTop:'all',fSearch:'',fSort:'score',fBeds:'',fPostcode:'',fMinPrice:'',fMaxPrice:'',fExcludePOA:''};
@@ -2056,6 +2060,13 @@ async function runAnalysis(url){
 // SMART SEARCH
 // ═══════════════════════════════
 async function runSmartSearch(query) {
+  // Premium-only gate: block free/anonymous users from AI search
+  const tier = window._userTier || 'free';
+  if (tier !== 'premium' && tier !== 'trial') {
+    showPaywall('AI-powered search is a Pro feature. Upgrade to search across all auction lots with natural language.');
+    return;
+  }
+
   // Clean slate — abort previous, clear all state, reset filters
   resetSearchState();
   _searchAbort=new AbortController();
@@ -2105,6 +2116,12 @@ async function runSmartSearch(query) {
     });
     const data = await resp.json();
     if (!resp.ok) {
+      if (data.error === 'premium_required') {
+        const _pp=$('progressPanel'); if(_pp) _pp.style.display='none';
+        const _sb=$('mainBtn'); if(_sb){_sb.disabled=false;_sb.textContent='Search';}
+        showPaywall(data.message || 'AI-powered search is a Pro feature. Upgrade to search with natural language.');
+        return;
+      }
       if (data.error === 'rate_limited') {
         const _pp=$('progressPanel'); if(_pp) _pp.style.display='none';
         const _sb=$('mainBtn'); if(_sb){_sb.disabled=false;_sb.textContent='Search';}
