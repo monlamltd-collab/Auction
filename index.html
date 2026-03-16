@@ -476,6 +476,18 @@ footer .logo-f span{color:var(--green)}
 .exp-close-btn{position:absolute;top:10px;right:10px;width:32px;height:32px;border-radius:50%;border:1px solid var(--border);background:var(--white);color:var(--text2);font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:5;transition:all .15s;line-height:1;padding:0;font-family:inherit;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 .exp-close-btn:hover{background:var(--red-light);color:var(--red);border-color:var(--red)}
 .coming-soon-label{display:inline-block;font-size:.65rem;font-weight:700;padding:2px 7px;border-radius:10px;background:var(--amber-light);color:var(--amber);margin-left:6px;vertical-align:middle;letter-spacing:.3px;text-transform:uppercase}
+/* ── PREMIUM FEATURE SECTIONS ── */
+.premium-feature{margin-top:12px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;overflow:hidden}
+.premium-feature summary{padding:10px 14px;font-family:var(--font-main);font-size:14px;font-weight:600;color:var(--text);cursor:pointer;background:var(--bg-card);list-style:none;display:flex;align-items:center;gap:8px}
+.premium-feature summary::-webkit-details-marker{display:none}
+.premium-feature summary::after{content:'\25B6';font-size:10px;margin-left:auto;transition:transform 0.2s}
+.premium-feature[open] summary::after{transform:rotate(90deg)}
+.premium-feature .pf-content{padding:12px 14px;font-size:13px;color:var(--text);border-top:1px solid rgba(0,0,0,0.06)}
+.premium-feature .pf-blurred{position:relative;padding:12px 14px;border-top:1px solid rgba(0,0,0,0.06)}
+.premium-feature .pf-blurred .pf-blur-content{filter:blur(4px);pointer-events:none;user-select:none}
+.premium-feature .pf-blurred .pf-upgrade-cta{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;z-index:2;background:rgba(255,255,255,0.9);padding:16px 24px;border-radius:10px;box-shadow:0 2px 12px rgba(0,0,0,0.1)}
+.premium-feature .pf-upgrade-cta button{margin-top:8px;padding:8px 20px;background:var(--accent);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer}
+.premium-feature .pf-upgrade-cta button:hover{background:var(--accent-hover)}
 @keyframes slideDown{from{opacity:0;max-height:0}to{opacity:1;max-height:1000px}}
 .expanded-panel .exp-left{}
 .expanded-panel .exp-right{}
@@ -2819,6 +2831,45 @@ function expandCard(lot) {
         '<div id="fw-results-' + lot._idx + '" class="fw-empty">Adjust LTV and tap Check</div>' +
         (lot.price ? '<button class="fw-cta" onclick="triggerFinanceCheck(' + lot._idx + ')">Check finance →</button>' : '') +
       '</div>' +
+      (isPremium() ? (function() {
+        var dsSDLT = lot.price ? calcSDLT(lot.price, detectCountry(lot.address || '')) : 0;
+        return '<div class="deal-stack-widget" id="deal-stack-' + lot._idx + '" style="margin-top:16px; padding:16px; background:var(--bg-card); border-radius:12px; border:1px solid rgba(0,0,0,0.08);">' +
+          '<h4 style="margin:0 0 12px; font-family:var(--font-main); font-size:15px; font-weight:600; color:var(--text);">' +
+            '\ud83d\udcca Deal Stacking Calculator' +
+          '</h4>' +
+          '<div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px;">' +
+            '<div>' +
+              '<label style="font-size:12px; color:var(--text-muted); display:block; margin-bottom:2px;">Purchase Price</label>' +
+              '<input type="text" id="ds-price-' + lot._idx + '" value="' + (lot.price ? '\u00a3' + lot.price.toLocaleString() : '') + '" disabled ' +
+                'style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:6px; background:#f0f0f0; font-size:13px; box-sizing:border-box;">' +
+            '</div>' +
+            '<div>' +
+              '<label style="font-size:12px; color:var(--text-muted); display:block; margin-bottom:2px;">SDLT (auto)</label>' +
+              '<input type="text" id="ds-sdlt-' + lot._idx + '" value="' + (lot.price ? '\u00a3' + dsSDLT.toLocaleString() : '') + '" disabled ' +
+                'style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:6px; background:#f0f0f0; font-size:13px; box-sizing:border-box;">' +
+            '</div>' +
+            '<div>' +
+              '<label style="font-size:12px; color:var(--text-muted); display:block; margin-bottom:2px;">GDV (est. value after works)</label>' +
+              '<input type="number" id="ds-gdv-' + lot._idx + '" placeholder="e.g. 350000" ' +
+                'style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:6px; font-size:13px; box-sizing:border-box;" ' +
+                'oninput="debounceDealStack(' + lot._idx + ')">' +
+            '</div>' +
+            '<div>' +
+              '<label style="font-size:12px; color:var(--text-muted); display:block; margin-bottom:2px;">Works Cost</label>' +
+              '<input type="number" id="ds-works-' + lot._idx + '" placeholder="e.g. 30000" ' +
+                'style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:6px; font-size:13px; box-sizing:border-box;" ' +
+                'oninput="debounceDealStack(' + lot._idx + ')">' +
+            '</div>' +
+            '<div style="grid-column: span 2;">' +
+              '<label style="font-size:12px; color:var(--text-muted); display:block; margin-bottom:2px;">Monthly Rental Income (optional, for Hold scenario)</label>' +
+              '<input type="number" id="ds-rental-' + lot._idx + '" placeholder="e.g. 1200" ' +
+                'style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:6px; font-size:13px; box-sizing:border-box;" ' +
+                'oninput="debounceDealStack(' + lot._idx + ')">' +
+            '</div>' +
+          '</div>' +
+          '<div id="ds-results-' + lot._idx + '"></div>' +
+        '</div>';
+      })() : '') +
       (bulletsHtml ? '<ul class="exp-bullets">' + bulletsHtml + '</ul>' : '') +
     '</div>';
 
