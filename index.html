@@ -2915,8 +2915,112 @@ function expandCard(lot) {
   panel.className = 'expanded-panel';
   panel.id = 'expanded-' + lot._idx;
 
-  // "Coming Soon" labels for premium-only features when user is not premium
-  const comingSoonTag = !isPremium() ? '<span class="coming-soon-label">Coming Soon</span>' : '';
+  // ── Premium feature sections (Yield Analysis, Comparables, Deal Stacking) ──
+  const yieldSection = (function() {
+    const gy = lot.estGrossYield;
+    const mr = lot.estMonthlyRent;
+    if (isPremium()) {
+      const gyDisplay = gy ? gy.toFixed(1) + '%' : 'N/A';
+      const nyDisplay = gy ? (gy * 0.867).toFixed(1) + '%' : 'N/A';
+      const mrDisplay = mr ? '\u00a3' + mr.toLocaleString() : 'N/A';
+      let ratingLabel, ratingBg, ratingColor, verdict;
+      if (!gy) { ratingLabel = 'N/A'; ratingBg = '#e9ecef'; ratingColor = '#6b7c8d'; verdict = ''; }
+      else if (gy >= 7) { ratingLabel = 'Good'; ratingBg = '#e8f5ee'; ratingColor = 'var(--accent)'; verdict = 'Strong rental yield \u2014 above average for this area'; }
+      else if (gy >= 5) { ratingLabel = 'Fair'; ratingBg = '#fef3e2'; ratingColor = 'var(--accent-warn)'; verdict = 'Moderate yield \u2014 typical for the area'; }
+      else { ratingLabel = 'Poor'; ratingBg = '#fdf0ee'; ratingColor = 'var(--accent-danger)'; verdict = 'Below-average yield \u2014 consider capital growth potential instead'; }
+      return '<details class="premium-feature">' +
+        '<summary>Yield Analysis</summary>' +
+        '<div class="pf-content">' +
+          '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span>Gross Yield</span><span style="font-weight:600">' + gyDisplay + '</span></div>' +
+          '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span>Net Yield</span><span style="font-weight:600">' + nyDisplay + '</span></div>' +
+          '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span>Monthly Rent</span><span style="font-weight:600">' + mrDisplay + '</span></div>' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span>Rating</span><span style="background:' + ratingBg + ';color:' + ratingColor + ';padding:2px 10px;border-radius:4px;font-weight:600;font-size:12px">' + ratingLabel + '</span></div>' +
+          (verdict ? '<div style="font-size:12px;color:var(--text-muted);margin-top:4px;font-style:italic">' + verdict + '</div>' : '') +
+        '</div></details>';
+    } else {
+      return '<details class="premium-feature">' +
+        '<summary>Yield Analysis <span style="font-size:11px;color:var(--accent-warn)">PRO</span></summary>' +
+        '<div class="pf-blurred">' +
+          '<div class="pf-blur-content">' +
+            '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span>Gross Yield</span><span>X.X%</span></div>' +
+            '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span>Net Yield</span><span>X.X%</span></div>' +
+            '<div style="display:flex;justify-content:space-between"><span>Rating</span><span style="background:#e8f5e9;padding:2px 8px;border-radius:4px">Good</span></div>' +
+          '</div>' +
+          '<div class="pf-upgrade-cta">' +
+            '<div style="font-size:14px;font-weight:600;color:var(--text)">Unlock Yield Analysis with Pro</div>' +
+            '<div style="font-size:12px;color:var(--text-muted);margin-top:4px">From \u00a39.99/mo</div>' +
+            '<button onclick="showPaywall(\'yield_analysis\')">Upgrade Now</button>' +
+          '</div>' +
+        '</div></details>';
+    }
+  })();
+  const compSection = (function() {
+    if (isPremium()) {
+      const sa = lot.streetAvg;
+      const gp = lot.price;
+      const bm = lot.belowMarket;
+      const saDisplay = sa ? '\u00a3' + sa.toLocaleString() : 'No comparable data available';
+      const gpDisplay = gp ? '\u00a3' + gp.toLocaleString() : 'TBA';
+      let bmDisplay, bmColor, contextNote;
+      if (bm && bm > 0) { bmDisplay = bm + '% below market average'; bmColor = 'var(--accent)'; }
+      else if (bm && bm < 0) { bmDisplay = Math.abs(bm) + '% above market average'; bmColor = 'var(--accent-danger)'; }
+      else { bmDisplay = 'At market level'; bmColor = 'var(--text-muted)'; }
+      if (bm && bm > 20) contextNote = 'Significant discount \u2014 strong uplift potential on refurb';
+      else if (bm && bm >= 10) contextNote = 'Moderate discount \u2014 potential for value-add';
+      else if (bm && bm > 0) contextNote = 'Marginal discount \u2014 limited upside without development';
+      else contextNote = 'At or above market \u2014 ensure your exit strategy supports the numbers';
+      return '<details class="premium-feature">' +
+        '<summary>Comparables</summary>' +
+        '<div class="pf-content">' +
+          '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span>Street Average</span><span style="font-weight:600">' + saDisplay + '</span></div>' +
+          '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span>Guide Price</span><span style="font-weight:600">' + gpDisplay + '</span></div>' +
+          '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span>vs Market</span><span style="font-weight:600;color:' + bmColor + '">' + bmDisplay + '</span></div>' +
+          '<div style="font-size:12px;color:var(--text-muted);margin-top:4px;font-style:italic">' + contextNote + '</div>' +
+        '</div></details>';
+    } else {
+      return '<details class="premium-feature">' +
+        '<summary>Comparables <span style="font-size:11px;color:var(--accent-warn)">PRO</span></summary>' +
+        '<div class="pf-blurred">' +
+          '<div class="pf-blur-content">' +
+            '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span>Street Average</span><span>\u00a3XXX,XXX</span></div>' +
+            '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span>Guide Price</span><span>\u00a3XX,XXX</span></div>' +
+            '<div style="display:flex;justify-content:space-between"><span>vs Market</span><span style="color:var(--accent)">XX% below</span></div>' +
+          '</div>' +
+          '<div class="pf-upgrade-cta">' +
+            '<div style="font-size:14px;font-weight:600;color:var(--text)">Unlock Comparables with Pro</div>' +
+            '<div style="font-size:12px;color:var(--text-muted);margin-top:4px">From \u00a39.99/mo</div>' +
+            '<button onclick="showPaywall(\'comparables\')">Upgrade Now</button>' +
+          '</div>' +
+        '</div></details>';
+    }
+  })();
+  const dealStackTeaser = (function() {
+    if (isPremium()) {
+      return '<details class="premium-feature">' +
+        '<summary>Deal Stacking Calculator</summary>' +
+        '<div class="pf-content" style="text-align:center;padding:16px">' +
+          '<p style="color:var(--text-muted);font-size:13px;margin:0 0 8px">Full deal stacking calculator is in the Finance section to the right.</p>' +
+          '<p style="color:var(--text-muted);font-size:12px;margin:0">Enter GDV and works cost to see Flip vs Hold analysis.</p>' +
+        '</div></details>';
+    } else {
+      return '<details class="premium-feature">' +
+        '<summary>Deal Stacking Calculator <span style="font-size:11px;color:var(--accent-warn)">PRO</span></summary>' +
+        '<div class="pf-blurred">' +
+          '<div class="pf-blur-content">' +
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">' +
+              '<div><strong>Flip</strong></div><div><strong>Hold</strong></div>' +
+              '<div>Net Profit: \u00a3XX,XXX</div><div>Cashflow/mo: \u00a3XXX</div>' +
+              '<div>ROI: XX.X%</div><div>CoC: XX.X%</div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="pf-upgrade-cta">' +
+            '<div style="font-size:14px;font-weight:600;color:var(--text)">Unlock Deal Stacking with Pro</div>' +
+            '<div style="font-size:12px;color:var(--text-muted);margin-top:4px">From \u00a39.99/mo</div>' +
+            '<button onclick="showPaywall(\'deal_stacking\')">Upgrade Now</button>' +
+          '</div>' +
+        '</div></details>';
+    }
+  })();
 
   panel.innerHTML =
     '<button class="exp-close-btn" onclick="closeExpandedPanel()" aria-label="Close panel" title="Close">&times;</button>' +
@@ -2947,11 +3051,10 @@ function expandCard(lot) {
           '</div>'
           : '<div style="padding:6px 12px;border-radius:6px;font-size:.85rem;color:var(--text-muted,#6b7c8d);background:var(--surface2,#f0f2f5)">Flood Zone: \u2014</div>') +
       '</div>' +
-      '<div style="margin-top:14px;display:flex;flex-wrap:wrap;gap:8px">' +
-        '<div style="font-size:.82rem;color:var(--text3);padding:6px 10px;background:var(--surface2);border-radius:6px;border:1px solid var(--border)">Yield Analysis' + comingSoonTag + '</div>' +
-        '<div style="font-size:.82rem;color:var(--text3);padding:6px 10px;background:var(--surface2);border-radius:6px;border:1px solid var(--border)">Comparables' + comingSoonTag + '</div>' +
-        '<div style="font-size:.82rem;color:var(--text3);padding:6px 10px;background:var(--surface2);border-radius:6px;border:1px solid var(--border)">Deal Stacking' + comingSoonTag + '</div>' +
-      '</div>' +
+      // ── Premium feature sections ──
+      yieldSection +
+      compSection +
+      dealStackTeaser +
     '</div>' +
     '<div class="exp-right">' +
       '<div class="finance-widget" id="finance-widget-' + lot._idx + '">' +
@@ -3003,7 +3106,19 @@ function expandCard(lot) {
           '</div>' +
           '<div id="ds-results-' + lot._idx + '"></div>' +
         '</div>';
-      })() : '') +
+      })() :
+        '<div class="deal-stack-widget" style="margin-top:16px; padding:20px; background:var(--bg-card); border-radius:12px; border:1px solid rgba(0,0,0,0.08); text-align:center;">' +
+          '<h4 style="margin:0 0 8px; font-family:var(--font-main); font-size:15px; font-weight:600; color:var(--text);">' +
+            'Deal Stacking Calculator' +
+          '</h4>' +
+          '<p style="color:var(--text-muted); font-size:13px; margin:0 0 12px;">' +
+            'Analyse Flip vs Hold scenarios with live lender data' +
+          '</p>' +
+          '<button onclick="showPaywall(\'deal_stacking\')" ' +
+            'style="padding:10px 24px; background:var(--accent); color:#fff; border:none; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer;">' +
+            'Upgrade to Pro \u2014 \u00a39.99/mo' +
+          '</button>' +
+        '</div>') +
       (bulletsHtml ? '<ul class="exp-bullets">' + bulletsHtml + '</ul>' : '') +
     '</div>';
 
