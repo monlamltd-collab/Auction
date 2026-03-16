@@ -54,11 +54,11 @@
 
 ### Tier Verification
 
-- [ ] **TIER-01**: Trial expiry correctly downgrades user to free tier
-- [ ] **TIER-02**: Resubscription after cancellation restores premium access
-- [ ] **TIER-03**: Payment failure triggers grace period before downgrade (not immediate)
-- [ ] **TIER-04**: All gating points verified end-to-end (AI search limits, blurring, external links, deal stacking)
-- [ ] **TIER-05**: Edge case: user with expired trial subscribes via Stripe → premium activated correctly
+- [x] **TIER-01**: Trial expiry correctly downgrades user to free tier
+- [x] **TIER-02**: Resubscription after cancellation restores premium access
+- [x] **TIER-03**: Payment failure triggers grace period before downgrade (not immediate)
+- [x] **TIER-04**: All gating points verified end-to-end (AI search limits, blurring, external links, deal stacking)
+- [x] **TIER-05**: Edge case: user with expired trial subscribes via Stripe → premium activated correctly
 
 ## v2 Requirements (Deferred)
 
@@ -125,11 +125,11 @@
 | DEAL-04 | Phase 3 | Complete |
 | DEAL-05 | Phase 3 | Complete |
 | DEAL-06 | Phase 3 | Complete |
-| TIER-01 | Phase 3 | Pending |
-| TIER-02 | Phase 3 | Pending |
-| TIER-03 | Phase 3 | Pending |
-| TIER-04 | Phase 3 | Pending |
-| TIER-05 | Phase 3 | Pending |
+| TIER-01 | Phase 3 | Complete |
+| TIER-02 | Phase 3 | Complete |
+| TIER-03 | Phase 3 | Complete |
+| TIER-04 | Phase 3 | Complete |
+| TIER-05 | Phase 3 | Complete |
 
 **Coverage:**
 - v1.1 requirements: 35 total
