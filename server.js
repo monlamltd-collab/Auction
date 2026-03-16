@@ -3702,8 +3702,17 @@ app.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
       sources.push({ house: c.house, url: c.url, count: dedupedLots.length, updatedAt: c.created_at });
     }
 
-    // ── Attach _auctionDate from FALLBACK_CALENDAR URL→date map ──
+    // ── Attach _auctionDate from calendar (DB + fallback) ──
     const urlDateMap = {};
+    // Load from database calendar first
+    try {
+      const { data: calRows } = await supabase.from('auction_calendar').select('url, date').gte('date', new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10));
+      if (calRows) for (const a of calRows) {
+        const nu = (a.url || '').trim().replace(/\/+$/, '').toLowerCase();
+        if (nu && a.date && (!urlDateMap[nu] || a.date < urlDateMap[nu])) urlDateMap[nu] = a.date;
+      }
+    } catch { /* fallback below */ }
+    // Fallback calendar overlay
     for (const a of FALLBACK_CALENDAR) {
       const nu = a.url.trim().replace(/\/+$/, '').toLowerCase();
       if (!urlDateMap[nu] || a.date < urlDateMap[nu]) urlDateMap[nu] = a.date;
@@ -4475,7 +4484,7 @@ function detectAuctionHouse(url) {
   if (u.includes('auctionhouse.co.uk/eastanglia')) return 'auctionhouseeastanglia';
   if (u.includes('auctionhouse.co.uk/northwest')) return 'auctionhousenorthwest';
   if (u.includes('auctionhouse.co.uk/northeast')) return 'auctionhousenortheast';
-  if (u.includes('auctionhouse.co.uk/southwales')) return 'auctionhousewales';
+  if (u.includes('auctionhouse.co.uk/southwales') || u.includes('auctionhouse.co.uk/wales')) return 'auctionhousewales';
   if (u.includes('auctionhouse.co.uk/birmingham')) return 'auctionhousebirmingham';
   if (u.includes('auctionhouse.co.uk/kent')) return 'auctionhousekent';
   if (u.includes('auctionhouse.co.uk')) return 'auctionhouse';
