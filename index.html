@@ -2616,6 +2616,139 @@ function calcDealStack(purchasePrice, gdv, worksCost, rentalIncome, ltvPct, addr
   };
 }
 
+// ── DEAL STACKING LIVE RECALCULATION ──
+let _dsTimers = {};
+function debounceDealStack(idx) {
+  clearTimeout(_dsTimers[idx]);
+  _dsTimers[idx] = setTimeout(function() { runDealStack(idx); }, 300);
+}
+
+function runDealStack(idx) {
+  var lot = LOTS.find(function(l) { return l._idx === idx; });
+  if (!lot || !lot.price) {
+    var resEl = document.getElementById('ds-results-' + idx);
+    if (resEl) resEl.innerHTML = '<p style="color:var(--text-muted); font-size:13px; text-align:center; padding:12px 0;">Guide price not available \u2014 deal stacking requires a price</p>';
+    return;
+  }
+
+  var gdv = parseFloat(document.getElementById('ds-gdv-' + idx)?.value) || 0;
+  var works = parseFloat(document.getElementById('ds-works-' + idx)?.value) || 0;
+  var rental = parseFloat(document.getElementById('ds-rental-' + idx)?.value) || 0;
+  var ltvSlider = document.getElementById('ltv-slider-' + idx);
+  var ltv = ltvSlider ? parseInt(ltvSlider.value) : 70;
+
+  if (gdv <= 0) {
+    document.getElementById('ds-results-' + idx).innerHTML =
+      '<p style="color:var(--text-muted); font-size:13px; text-align:center; padding:12px 0;">Enter a GDV to see your deal stack</p>';
+    return;
+  }
+
+  var result = calcDealStack(lot.price, gdv, works, rental, ltv, lot.address || '');
+  if (!result) {
+    document.getElementById('ds-results-' + idx).innerHTML =
+      '<p style="color:var(--text-muted); font-size:13px; text-align:center; padding:12px 0;">Guide price not available \u2014 deal stacking requires a price</p>';
+    return;
+  }
+  renderDealStackResults(idx, result, rental > 0);
+}
+
+function renderDealStackResults(idx, r, showHold) {
+  var el = document.getElementById('ds-results-' + idx);
+  if (!el) return;
+
+  var fmtCurrency = function(v) {
+    var prefix = v < 0 ? '-\u00a3' : '\u00a3';
+    return prefix + Math.abs(Math.round(v)).toLocaleString();
+  };
+  var valColor = function(v) { return v >= 0 ? 'color:var(--accent)' : 'color:var(--accent-danger)'; };
+
+  // Lender note
+  var lenderNote = r.usingFallback
+    ? '<p style="font-size:11px; color:var(--text-muted); margin:0 0 8px; font-style:italic;">Based on market averages \u2014 lender data unavailable</p>'
+    : '<p style="font-size:11px; color:var(--text-muted); margin:0 0 8px; font-style:italic;">Based on ' + (r.bestLenderName || 'best match') + ' rates</p>';
+
+  // Cost breakdown (collapsible)
+  var costBreakdown =
+    '<details style="margin-bottom:12px; font-size:13px;">' +
+      '<summary style="cursor:pointer; font-weight:600; color:var(--text); padding:4px 0;">Cost Breakdown</summary>' +
+      '<div style="padding:8px 0; display:grid; grid-template-columns:1fr auto; gap:4px 12px;">' +
+        '<span style="color:var(--text-muted)">SDLT</span><span>' + fmtCurrency(r.sdlt) + '</span>' +
+        '<span style="color:var(--text-muted)">Bridging interest (12mo)</span><span>' + fmtCurrency(r.bridgingInterest) + '</span>' +
+        '<span style="color:var(--text-muted)">Arrangement fee</span><span>' + fmtCurrency(r.arrangementFee) + '</span>' +
+        '<span style="color:var(--text-muted)">Solicitor</span><span>' + fmtCurrency(r.solicitor) + '</span>' +
+        '<span style="color:var(--text-muted)">Survey</span><span>' + fmtCurrency(r.survey) + '</span>' +
+        '<span style="color:var(--text-muted)">Broker fee</span><span>' + fmtCurrency(r.brokerFee) + '</span>' +
+        '<span style="font-weight:700; color:var(--text); border-top:1px solid rgba(0,0,0,0.1); padding-top:6px; margin-top:4px;">Total cost in</span>' +
+        '<span style="font-weight:700; border-top:1px solid rgba(0,0,0,0.1); padding-top:6px; margin-top:4px;">' + fmtCurrency(r.totalCostIn) + '</span>' +
+      '</div>' +
+    '</details>';
+
+  // Flip column
+  var flipCol =
+    '<div style="flex:1; min-width:140px;">' +
+      '<div style="font-weight:600; font-size:13px; color:var(--text); margin-bottom:8px; text-align:center;">Flip (Sell)</div>' +
+      '<div style="text-align:center; margin-bottom:6px;">' +
+        '<div style="font-size:11px; color:var(--text-muted);">Net Profit</div>' +
+        '<div style="font-size:18px; font-weight:700; ' + valColor(r.flip.netProfit) + '">' + fmtCurrency(r.flip.netProfit) + '</div>' +
+      '</div>' +
+      '<div style="text-align:center; margin-bottom:6px;">' +
+        '<div style="font-size:11px; color:var(--text-muted);">ROI</div>' +
+        '<div style="font-size:15px; font-weight:600; ' + valColor(r.flip.roi) + '">' + r.flip.roi.toFixed(1) + '%</div>' +
+      '</div>' +
+      '<div style="text-align:center;">' +
+        '<div style="font-size:11px; color:var(--text-muted);">Cash-on-Cash</div>' +
+        '<div style="font-size:15px; font-weight:600; ' + valColor(r.flip.cashOnCash) + '">' + r.flip.cashOnCash.toFixed(1) + '%</div>' +
+      '</div>' +
+    '</div>';
+
+  // Hold column
+  var holdCol;
+  if (showHold && r.hold) {
+    var cashLeftInDisplay;
+    if (r.hold.cashLeftIn <= 0) {
+      cashLeftInDisplay = '<div style="font-size:14px; font-weight:600; color:var(--accent);">All capital recycled</div>';
+    } else {
+      cashLeftInDisplay = '<div style="font-size:14px; font-weight:600; ' + valColor(-r.hold.cashLeftIn) + '">' + fmtCurrency(r.hold.cashLeftIn) + '</div>';
+    }
+    var cocDisplay = r.hold.cashLeftIn <= 0
+      ? '<div style="font-size:14px; font-weight:600; color:var(--accent);">N/A</div>'
+      : '<div style="font-size:14px; font-weight:600; ' + valColor(r.hold.cashOnCashHold) + '">' + r.hold.cashOnCashHold.toFixed(1) + '%</div>';
+
+    holdCol =
+      '<div style="flex:1; min-width:140px; border-left:1px solid rgba(0,0,0,0.08); padding-left:12px;">' +
+        '<div style="font-weight:600; font-size:13px; color:var(--text); margin-bottom:8px; text-align:center;">Hold (Refinance)</div>' +
+        '<div style="text-align:center; margin-bottom:6px;">' +
+          '<div style="font-size:11px; color:var(--text-muted);">Cashflow/mo</div>' +
+          '<div style="font-size:18px; font-weight:700; ' + valColor(r.hold.monthlyCashflow) + '">' + fmtCurrency(r.hold.monthlyCashflow) + '</div>' +
+        '</div>' +
+        '<div style="text-align:center; margin-bottom:6px;">' +
+          '<div style="font-size:11px; color:var(--text-muted);">Annual Yield</div>' +
+          '<div style="font-size:15px; font-weight:600; ' + valColor(r.hold.annualYield) + '">' + r.hold.annualYield.toFixed(1) + '%</div>' +
+        '</div>' +
+        '<div style="text-align:center; margin-bottom:6px;">' +
+          '<div style="font-size:11px; color:var(--text-muted);">Cash Left In</div>' +
+          cashLeftInDisplay +
+        '</div>' +
+        '<div style="text-align:center;">' +
+          '<div style="font-size:11px; color:var(--text-muted);">CoC Return</div>' +
+          cocDisplay +
+        '</div>' +
+      '</div>';
+  } else {
+    holdCol =
+      '<div style="flex:1; min-width:140px; border-left:1px solid rgba(0,0,0,0.08); padding-left:12px; display:flex; align-items:center; justify-content:center;">' +
+        '<p style="color:var(--text-muted); font-size:12px; text-align:center; margin:0;">Enter rental income<br>to see Hold scenario</p>' +
+      '</div>';
+  }
+
+  var scenarios =
+    '<div style="display:flex; gap:12px; padding:12px; background:rgba(0,0,0,0.02); border-radius:8px;">' +
+      flipCol + holdCol +
+    '</div>';
+
+  el.innerHTML = lenderNote + costBreakdown + scenarios;
+}
+
 // Downloads
 function dlCSV(){if(window._userTier!=='premium'){showPaywall('CSV export is a Pro feature. Upgrade for full data exports.');return;}
   const exportLots = window._filteredLots || LOTS;
