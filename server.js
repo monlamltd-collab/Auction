@@ -1888,9 +1888,9 @@ const FALLBACK_CALENDAR = [
     // ── SAVILLS ──
     {
       house: 'Savills', houseSlug: 'savills', logo: '🏛️',
-      date: '2026-02-24', dateEnd: '2026-02-25',
-      title: '24 & 25 February 2026', lots: null,
-      url: 'https://auctions.savills.co.uk/auctions/24--25-february-2026-218',
+      date: '2026-03-17',
+      title: '17 March 2026', lots: null,
+      url: 'https://auctions.savills.co.uk/auctions/17-march-2026-219',
       location: 'Online', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: true,
     },
@@ -1925,9 +1925,9 @@ const FALLBACK_CALENDAR = [
     // ── ALLSOP ──
     {
       house: 'Allsop', houseSlug: 'allsop', logo: '🔨',
-      date: '2026-02-25', dateEnd: '2026-02-26',
-      title: '25 & 26 February 2026 — Residential', lots: 325,
-      url: 'https://www.allsop.co.uk/residential-auction-view',
+      date: '2026-03-25', dateEnd: '2026-03-26',
+      title: '25 & 26 March 2026 — Residential', lots: null,
+      url: 'https://www.allsop.co.uk/residential-auction-view-mar',
       location: 'Online (Live Stream)', type: 'Residential', status: 'upcoming',
       catalogueReady: true,
     },
@@ -1977,6 +1977,20 @@ const FALLBACK_CALENDAR = [
       location: 'Online (Timed)', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: true,
     },
+    {
+      house: 'SDL Auctions', houseSlug: 'sdl', logo: '⚡',
+      date: '2026-03-24', title: '24 March 2026 — Timed', lots: null,
+      url: 'https://www.sdlauctions.co.uk/auction/1311/multi-lot-timed-auction-2026-03-24/',
+      location: 'Online (Timed)', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
+    {
+      house: 'SDL Auctions', houseSlug: 'sdl', logo: '⚡',
+      date: '2026-03-26', title: '26 March 2026 — Live Streamed', lots: null,
+      url: 'https://www.sdlauctions.co.uk/auction/1297/live-streamed-auction-2026-03-26/',
+      location: 'Online (Live Stream)', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
     // ── BOND WOLFE ──
     {
       house: 'Bond Wolfe', houseSlug: 'bondwolfe', logo: '🔶',
@@ -2002,16 +2016,16 @@ const FALLBACK_CALENDAR = [
     // ── BARNARD MARCUS ──
     {
       house: 'Barnard Marcus', houseSlug: 'barnardmarcus', logo: '🏠',
-      date: '2026-03-10', title: '10 March 2026', lots: null,
-      url: 'https://www.barnardmarcusauctions.co.uk/auctions/current/',
+      date: '2026-05-19', title: '19 May 2026', lots: null,
+      url: 'https://www.barnardmarcusauctions.co.uk/auctions/19-may/',
       location: 'Grand Connaught Rooms, London WC2B', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: true,
     },
     // ── AUCTION HOUSE LONDON ──
     {
       house: 'Auction House London', houseSlug: 'auctionhouselondon', logo: '🔑',
-      date: '2026-03-04', title: '4 March 2026', lots: 45,
-      url: 'https://auctionhouselondon.co.uk/current-auction',
+      date: '2026-03-18', title: '18-19 March 2026', lots: null,
+      url: 'https://auctionhouselondon.co.uk/current-auction/catalogue/18th-19th-march-2026',
       location: 'Online (Live Stream)', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: true,
     },
@@ -2025,16 +2039,16 @@ const FALLBACK_CALENDAR = [
     // ── CLIVE EMSON ──
     {
       house: 'Clive Emson', houseSlug: 'cliveemson', logo: '🌿',
-      date: '2026-03-05', title: '5 March 2026 catalogue live', lots: null,
-      url: 'https://www.cliveemson.co.uk/search/',
+      date: '2026-03-26', title: '26 March 2026', lots: null,
+      url: 'https://www.cliveemson.co.uk/properties/',
       location: 'Online', type: 'Residential & Land', status: 'upcoming',
       catalogueReady: true,
     },
     // ── STRETTONS ──
     {
       house: 'Strettons', houseSlug: 'strettons', logo: '📋',
-      date: '2026-03-19', title: '19 March 2026', lots: null,
-      url: 'https://www.strettons.co.uk/auctions/current-catalogue/',
+      date: '2026-03-16', title: '16 March 2026', lots: null,
+      url: 'https://www.strettons.co.uk/auctions/',
       location: 'Online (Live Stream)', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: true,
     },
@@ -2063,16 +2077,16 @@ const FALLBACK_CALENDAR = [
     // ── PROBATE AUCTION ──
     {
       house: 'Probate Auction', houseSlug: 'probateauction', logo: '⚖️',
-      date: '2026-03-11', title: '11 March 2026', lots: null,
-      url: 'https://probate.auction/auctions/wednesday-11th-march-2026/',
+      date: '2026-03-25', title: '25 March 2026', lots: null,
+      url: 'https://probate.auction/auctions/wednesday-25th-march-2026/',
       location: 'Online', type: 'Residential (Probate)', status: 'upcoming',
       catalogueReady: true,
     },
     // ── HOLLIS MORGAN (Bristol) ──
     {
       house: 'Hollis Morgan', houseSlug: 'hollismorgan', logo: '🏘️',
-      date: '2026-03-11', title: '11 March 2026', lots: null,
-      url: 'https://www.hollismorgan.co.uk/search-auction/?bid=11&orderby=lot_no+asc',
+      date: '2026-04-22', title: '22 April 2026', lots: null,
+      url: 'https://www.hollismorgan.co.uk/search-auction/',
       location: 'Online (Live Stream from Clifton, Bristol)', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: true,
     },
@@ -2125,8 +2139,8 @@ const FALLBACK_CALENDAR = [
     // ── AUCTION HOUSE UK (National franchise) ──
     {
       house: 'Auction House UK', houseSlug: 'auctionhouse', logo: '🏛️',
-      date: '2026-03-10', title: '10 March 2026 (National Online)', lots: null,
-      url: 'https://www.auctionhouse.co.uk/online/auction/2026/3/10',
+      date: '2026-03-16', title: '16 March 2026 (National Online)', lots: null,
+      url: 'https://www.auctionhouse.co.uk/online',
       location: 'Online', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: true,
     },
@@ -2150,8 +2164,8 @@ const FALLBACK_CALENDAR = [
     // ── PATTINSON ──
     {
       house: 'Pattinson', houseSlug: 'pattinson', logo: '🔷',
-      date: '2026-03-05', title: '5 March 2026 (North East)', lots: null,
-      url: 'https://www.pattinson.co.uk/auction/property-search',
+      date: '2026-03-25', title: 'March 2026 (North East)', lots: null,
+      url: 'https://www.pattinson.co.uk/auction',
       location: 'Newcastle', type: 'Residential', status: 'upcoming',
       catalogueReady: true,
     },
@@ -2159,7 +2173,7 @@ const FALLBACK_CALENDAR = [
     // ── BIDX1 ──
     {
       house: 'BidX1', houseSlug: 'bidx1', logo: '💻',
-      date: '2026-03-01', title: 'March 2026 (Online)', lots: null,
+      date: '2026-03-19', title: 'March 2026 (Online)', lots: null,
       url: 'https://bidx1.com/en/united-kingdom',
       location: 'Online', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: true,
@@ -2177,8 +2191,8 @@ const FALLBACK_CALENDAR = [
     // ── EDWARD MELLOR ──
     {
       house: 'Edward Mellor', houseSlug: 'edwardmellor', logo: '🏘️',
-      date: '2026-03-04', title: '4-5 March 2026', lots: null,
-      url: 'https://www.edwardmellor.co.uk/auctions/04mar2026',
+      date: '2026-03-25', title: '25 March 2026', lots: null,
+      url: 'https://edwardmellor.co.uk/auctions/25mar2026',
       location: 'Manchester', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: true,
     },
@@ -2186,7 +2200,7 @@ const FALLBACK_CALENDAR = [
     // ── PAUL FOSH ──
     {
       house: 'Paul Fosh', houseSlug: 'paulfosh', logo: '🏴',
-      date: '2026-03-12', title: 'March 2026 Online Auction', lots: null,
+      date: '2026-12-03', title: 'December 2026 Online Auction', lots: null,
       url: 'https://paulfosh.eigonlineauctions.com/search',
       location: 'Newport / National', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: true,
@@ -2198,8 +2212,8 @@ const FALLBACK_CALENDAR = [
     // Next auction: April 22, 2026 — catalogue not yet published.
     {
       house: 'Cottons', houseSlug: 'cottons', logo: '🏭',
-      date: '2026-04-22', title: '22 April 2026', lots: null,
-      url: 'https://www.cottons.co.uk/current-auction.htm',
+      date: '2026-03-19', title: '19 March 2026', lots: null,
+      url: 'https://www.cottons.co.uk/current-auction/',
       location: 'Birmingham', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: true,
     },
@@ -2225,8 +2239,8 @@ const FALLBACK_CALENDAR = [
     // ── BRADLEY HALL ──
     {
       house: 'Bradley Hall', houseSlug: 'bradleyhall', logo: '🏠',
-      date: '2026-03-12', title: '12 March 2026', lots: null,
-      url: 'https://auction.bradleyhall.co.uk/search',
+      date: '2026-03-25', title: 'March 2026', lots: null,
+      url: 'https://auction.bradleyhall.co.uk/',
       location: 'Newcastle', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: true,
     },
@@ -2234,8 +2248,8 @@ const FALLBACK_CALENDAR = [
     // ── CONNECT UK ──
     {
       house: 'Connect UK', houseSlug: 'connectuk', logo: '🔗',
-      date: '2026-03-10', title: '10 March 2026', lots: null,
-      url: 'https://realtime.connectukauctions.co.uk/for-sale/',
+      date: '2026-03-25', title: 'March 2026', lots: null,
+      url: 'https://connectukgroup.co.uk/auctions/',
       location: 'Online', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: true,
     },
@@ -2243,7 +2257,7 @@ const FALLBACK_CALENDAR = [
     // ── AUCTION ESTATES ──
     {
       house: 'Auction Estates', houseSlug: 'auctionestates', logo: '🏢',
-      date: '2026-03-12', title: '12 March 2026', lots: null,
+      date: '2026-04-23', title: '23 April 2026', lots: null,
       url: 'https://www.auctionestates.co.uk/view-properties',
       location: 'Nottingham', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: true,
@@ -2252,8 +2266,8 @@ const FALLBACK_CALENDAR = [
     // ── LANDWOOD ──
     {
       house: 'Landwood', houseSlug: 'landwood', logo: '🌲',
-      date: '2026-03-10', title: '10 March 2026', lots: null,
-      url: 'https://www.landwoodpropertyauctions.com/current-auction',
+      date: '2026-03-25', title: 'March 2026', lots: null,
+      url: 'https://www.landwoodpropertyauctions.com/',
       location: 'Manchester', type: 'Commercial', status: 'upcoming',
       catalogueReady: true,
     },
@@ -2261,8 +2275,8 @@ const FALLBACK_CALENDAR = [
     // ── LOVEITTS ──
     {
       house: 'Loveitts', houseSlug: 'loveitts', logo: '❤️',
-      date: '2026-03-11', title: '11 March 2026', lots: null,
-      url: 'https://www.loveitts.co.uk/auctions',
+      date: '2026-03-25', title: 'March 2026', lots: null,
+      url: 'https://www.loveitts.co.uk/auction/',
       location: 'Coventry', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: true,
     },
@@ -2270,18 +2284,26 @@ const FALLBACK_CALENDAR = [
     // ── HUNTERS ──
     {
       house: 'Hunters', houseSlug: 'hunters', logo: '🏠',
-      date: '2026-03-15', title: 'Online Auction', lots: null,
+      date: '2026-03-16', title: 'Online Auction', lots: null,
       url: 'https://hunters.bambooauctions.com',
       location: 'National', type: 'Residential', status: 'upcoming',
       catalogueReady: true,
     },
 
     // ── NEW HOUSES ──
-    // Countrywide / Sutton Kersh
+    // Countrywide Property Auctions
     {
-      house: 'Countrywide / Sutton Kersh', houseSlug: 'countrywide', logo: '🌍',
-      date: '2026-04-02', title: '2 April 2026 — Liverpool & South West', lots: null,
-      url: 'https://www.countrywidepropertyauctions.co.uk/search.php?auction_location=SK&auction_date=current',
+      house: 'Countrywide Property Auctions', houseSlug: 'countrywide', logo: '🌍',
+      date: '2026-04-02', title: '2 April 2026 — South West', lots: null,
+      url: 'https://www.countrywidepropertyauctions.co.uk/search.php?auction_date=current',
+      location: 'Online (Live Stream)', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
+    // Sutton Kersh
+    {
+      house: 'Sutton Kersh', houseSlug: 'suttonkersh', logo: '🏛️',
+      date: '2026-04-02', title: '2 April 2026 — Liverpool', lots: null,
+      url: 'https://www.suttonkersh.co.uk/properties/gallery/?section=auction&auctionPeriod=current',
       location: 'Online (Live Stream)', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: true,
     },
@@ -2296,7 +2318,7 @@ const FALLBACK_CALENDAR = [
     // Town & Country Property Auctions
     {
       house: 'Town & Country Property Auctions', houseSlug: 'tcpa', logo: '🏡',
-      date: '2026-03-11', title: '11 March 2026 — National', lots: null,
+      date: '2026-03-25', title: '25 March 2026 — National', lots: null,
       url: 'https://www.townandcountrypropertyauctions.co.uk/search',
       location: 'Online (Timed)', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: true,
@@ -2304,7 +2326,7 @@ const FALLBACK_CALENDAR = [
     // Future Property Auctions
     {
       house: 'Future Property Auctions', houseSlug: 'futureauctions', logo: '🔮',
-      date: '2026-03-12', title: '12 March 2026 — Timed Online', lots: null,
+      date: '2026-03-19', title: '19 March 2026 — Timed Online', lots: null,
       url: 'https://www.futurepropertyauctions.co.uk/catalogue_viewall.asp',
       location: 'Online (Timed)', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: true,
@@ -2328,15 +2350,15 @@ const FALLBACK_CALENDAR = [
     // Harman Healy
     {
       house: 'Harman Healy', houseSlug: 'harmanhealy', logo: '🔨',
-      date: '2026-04-23', title: '23 April 2026', lots: null,
-      url: 'https://www.harman-healy.co.uk/search',
+      date: '2026-03-16', title: '16 March 2026', lots: null,
+      url: 'https://www.harman-healy.co.uk/search/auction',
       location: 'Online', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: true,
     },
     // Seel & Co
     {
       house: 'Seel & Co', houseSlug: 'seelauctions', logo: '🏴󠁧󠁢󠁷󠁬󠁳󠁿',
-      date: '2026-03-24', title: '24 March 2026', lots: null,
+      date: '2026-03-16', title: '16 March 2026', lots: null,
       url: 'https://online.seelauctions.co.uk/search?view=Grid&showall=true',
       location: 'Cardiff', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: true,
@@ -2344,8 +2366,8 @@ const FALLBACK_CALENDAR = [
     // Robinson & Hall
     {
       house: 'Robinson & Hall', houseSlug: 'robinsonhall', logo: '🏠',
-      date: '2026-04-08', title: '8 April 2026', lots: null,
-      url: 'https://robinsonandhallauctions.co.uk/auctions/available-lots/',
+      date: '2026-03-16', title: '16 March 2026', lots: null,
+      url: 'https://robinsonandhallauctions.co.uk/catalogues/',
       location: 'Bedford / Milton Keynes', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: true,
     },
@@ -2405,6 +2427,108 @@ const FALLBACK_CALENDAR = [
       date: '2026-03-26', title: '26 March 2026', lots: null,
       url: 'https://www.auctionhouse.co.uk/sussexandhampshire',
       location: 'Sussex & Hampshire', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
+
+    // ── NEW HOUSES (March 2026 batch 2 — missing from original calendar) ──
+    {
+      house: 'Agents Property Auction', houseSlug: 'agentsproperty', logo: '🏠',
+      date: '2026-03-25', title: 'March 2026', lots: null,
+      url: 'https://www.agentspropertyauction.com/next-auction/',
+      location: 'National', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
+    {
+      house: 'Andrew Craig', houseSlug: 'andrewcraig', logo: '🏠',
+      date: '2026-03-25', title: 'March 2026', lots: null,
+      url: 'https://www.andrewcraig.co.uk/auction-property-for-sale',
+      location: 'North East', type: 'Residential', status: 'upcoming',
+      catalogueReady: true,
+    },
+    {
+      house: 'Butters John Bee', houseSlug: 'buttersjohnbee', logo: '🐝',
+      date: '2026-03-16', title: '16 March 2026', lots: null,
+      url: 'https://www.buttersjohnbee.com/listings?auction=1&status=all',
+      location: 'Staffordshire', type: 'Residential', status: 'upcoming',
+      catalogueReady: true,
+    },
+    {
+      house: 'Brown & Co', houseSlug: 'brownco', logo: '🌾',
+      date: '2026-03-17', title: '17 March 2026', lots: null,
+      url: 'https://brownandco.eigonlineauctions.com/search',
+      location: 'East Anglia', type: 'Residential & Land', status: 'upcoming',
+      catalogueReady: true,
+    },
+    {
+      house: 'Cheffins', houseSlug: 'cheffins', logo: '🔨',
+      date: '2026-03-25', title: 'March 2026', lots: null,
+      url: 'https://www.cheffins.co.uk/property-auctions/catalogue-view',
+      location: 'Cambridge', type: 'Residential & Land', status: 'upcoming',
+      catalogueReady: true,
+    },
+    {
+      house: 'Cheffins Timed', houseSlug: 'cheffinstimed', logo: '⏱️',
+      date: '2026-03-25', title: 'March 2026 — Timed', lots: null,
+      url: 'https://timedpropertyauctions.cheffins.co.uk/search',
+      location: 'Cambridge', type: 'Residential & Land', status: 'upcoming',
+      catalogueReady: true,
+    },
+    {
+      house: 'Feather Smailes & Scales', houseSlug: 'fssproperty', logo: '⚖️',
+      date: '2026-03-16', title: '16 March 2026', lots: null,
+      url: 'https://www.fssproperty.co.uk/search-auction/',
+      location: 'Yorkshire', type: 'Residential', status: 'upcoming',
+      catalogueReady: true,
+    },
+    {
+      house: 'iamsold', houseSlug: 'iamsold', logo: '💻',
+      date: '2026-03-25', title: 'March 2026', lots: null,
+      url: 'https://www.iamsold.co.uk/available-properties/',
+      location: 'National', type: 'Residential', status: 'upcoming',
+      catalogueReady: true,
+    },
+
+    // ── Auction House UK regional branches ──
+    {
+      house: 'Auction House East Anglia', houseSlug: 'auctionhouseeastanglia', logo: '🏛️',
+      date: '2026-03-16', title: '16 March 2026', lots: null,
+      url: 'https://www.auctionhouse.co.uk/eastanglia/auction/search-results',
+      location: 'East Anglia', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
+    {
+      house: 'Auction House North West', houseSlug: 'auctionhousenorthwest', logo: '🏛️',
+      date: '2026-03-16', title: '16 March 2026', lots: null,
+      url: 'https://www.auctionhouse.co.uk/northwest/auction/search-results',
+      location: 'North West', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
+    {
+      house: 'Auction House North East', houseSlug: 'auctionhousenortheast', logo: '🏛️',
+      date: '2026-03-16', title: '16 March 2026', lots: null,
+      url: 'https://www.auctionhouse.co.uk/northeast/auction/search-results',
+      location: 'North East', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
+    {
+      house: 'Auction House Wales', houseSlug: 'auctionhousewales', logo: '🏴󠁧󠁢󠁷󠁬󠁳󠁿',
+      date: '2026-03-16', title: '16 March 2026', lots: null,
+      url: 'https://www.auctionhouse.co.uk/southwales/auction/search-results',
+      location: 'Wales', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
+    {
+      house: 'Auction House Birmingham', houseSlug: 'auctionhousebirmingham', logo: '🏛️',
+      date: '2026-03-16', title: '16 March 2026', lots: null,
+      url: 'https://www.auctionhouse.co.uk/birmingham/auction/search-results',
+      location: 'Birmingham', type: 'Residential & Commercial', status: 'upcoming',
+      catalogueReady: true,
+    },
+    {
+      house: 'Auction House Kent', houseSlug: 'auctionhousekent', logo: '🏛️',
+      date: '2026-03-16', title: '16 March 2026', lots: null,
+      url: 'https://www.auctionhouse.co.uk/kent/auction/search-results',
+      location: 'Kent', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: true,
     },
 ];
@@ -4514,7 +4638,9 @@ function detectAuctionHouse(url) {
   if (u.includes('auctionhouse.co.uk')) return 'auctionhouse';
   if (u.includes('pughauctions') || u.includes('pugh')) return 'sdl';
   // ── New houses ──
-  if (u.includes('countrywidepropertyauctions') || u.includes('suttonkersh')) return 'countrywide';
+  if (u.includes('suttonkersh')) return 'suttonkersh';
+  if (u.includes('countrywidepropertyauctions')) return 'countrywide';
+  if (u.includes('propertyauctionsouthwest')) return 'countrywide';
   if (u.includes('venmoreauctions')) return 'venmore';
   if (u.includes('townandcountrypropertyauctions') || u.includes('tcpa')) return 'tcpa';
   if (u.includes('futurepropertyauctions')) return 'futureauctions';
@@ -4554,7 +4680,7 @@ const HOUSE_DISPLAY_NAMES = {
   bradleyhall: 'Bradley Hall', connectuk: 'https://connectukgroup.co.uk/auctions/', auctionestates: 'Auction Estates',
   landwood: 'Landwood', loveitts: 'Loveitts', hunters: 'Hunters',
   probateauction: 'Probate Auction',
-  countrywide: 'Countrywide / Sutton Kersh', venmore: 'Venmore Auctions',
+  countrywide: 'Countrywide Property Auctions', venmore: 'Venmore Auctions',
   tcpa: 'Town & Country Property Auctions', futureauctions: 'Future Property Auctions',
   kivells: 'Kivells', firstforauctions: 'First For Auctions',
   suttonkersh: 'Sutton Kersh', harmanhealy: 'Harman Healy',
@@ -4601,7 +4727,7 @@ function rewriteUrl(url, house) {
 
   if (house === 'allsop') {
     // Allsop: rewrite catalogue pages to their JSON API
-    if (u.includes('residential-auction') || u.includes('lot_type=residential')) {
+    if (u.includes('residential-auction') || u.includes('lot_type=residential') || u.includes('/insights/') || u.includes('auction-catalogue')) {
       return { 
         baseUrl: 'https://www.allsop.co.uk/api/property-search?available_only=true&lot_type=residential&page=1&react',
         isApi: true,
@@ -4623,7 +4749,8 @@ function rewriteUrl(url, house) {
 
   if (house === 'sdl') {
     // SDL / BTG Eddisons: JS-rendered with pagination (?page=2, ?page=3 etc)
-    if (u.includes('btgeddisonspropertyauctions.com/properties')) {
+    // Handles both btgeddisonspropertyauctions.com and sdlauctions.co.uk
+    if (u.includes('btgeddisonspropertyauctions.com/properties') || u.includes('sdlauctions.co.uk')) {
       return { baseUrl: url, isApi: false, paginateAs: 'sdl_pages', preferPuppeteer: true };
     }
     if (u.includes('/auction/')) {
@@ -4710,9 +4837,13 @@ function rewriteUrl(url, house) {
   // buttersjohnbee removed — PDF-only catalogues
 
   // ── New houses ──
-  // Countrywide/Sutton Kersh: static HTML, pagination via ?page=N
+  // Countrywide: static HTML
   if (house === 'countrywide') {
     return { baseUrl: url, isApi: false, paginateAs: null };
+  }
+  // Sutton Kersh: static HTML gallery with start=N pagination
+  if (house === 'suttonkersh') {
+    return { baseUrl: url, isApi: false, paginateAs: 'suttonkersh_pages', preferPuppeteer: false };
   }
   // Venmore: static HTML, pagination via ?pageNum=N
   if (house === 'venmore') {
