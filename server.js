@@ -682,7 +682,7 @@ async function scrapeRenderedPage(url, house, options = {}) {
         const result = await scrapeWithFirecrawl(url, {
           waitFor: options.waitFor || 3000,
           actions: options.actions || fcActions,
-          formats: ['markdown', 'rawHtml', 'images'],
+          formats: ['markdown', 'rawHtml'],
         });
         if (result.html && result.html.length > 500) {
           console.log(`Firecrawl: got ${result.html.length} chars for ${house}`);
