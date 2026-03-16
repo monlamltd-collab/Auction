@@ -3024,6 +3024,7 @@ function closeExpandedPanel() {
 function updateLTV(idx, val) {
   const el = document.getElementById('ltv-val-' + idx);
   if (el) el.textContent = val + '%';
+  debounceDealStack(idx);
 }
 
 let _financeDebounce = null;
