@@ -1812,8 +1812,49 @@ async function updateProStatus() {
     window._scanLimit = data.scanLimit;
     window._aiSearchesUsed = data.aiSearchesUsed || 0;
     window._aiSearchLimit = data.aiSearchLimit;
+    // Cross-tab tier sync: broadcast tier change to other tabs
+    try {
+      localStorage.setItem('bridgematch_tier', window._userTier);
+      localStorage.setItem('bridgematch_tier_ts', Date.now().toString());
+    } catch(e) { /* localStorage unavailable (private browsing, quota) */ }
   } catch {}
 }
+
+// ── Cross-tab tier synchronisation ──
+// When another tab changes tier via Stripe checkout or status refresh,
+// this tab picks up the change instantly without polling.
+function refreshTierUI() {
+  // Update account dropdown tier label
+  const tier = window._userTier;
+  if ($('acctTier')) {
+    if (tier === 'premium') {
+      $('acctTier').textContent = 'Pro';
+      $('acctTier').classList.add('pro');
+      if ($('acctManage')) $('acctManage').style.display = '';
+      if ($('acctUpgrade')) $('acctUpgrade').style.display = 'none';
+    } else {
+      $('acctTier').textContent = 'Free';
+      $('acctTier').classList.remove('pro');
+      if ($('acctManage')) $('acctManage').style.display = 'none';
+      if ($('acctUpgrade')) $('acctUpgrade').style.display = '';
+    }
+  }
+  // Update pro badge
+  const oldBadge = document.querySelector('.pro-badge');
+  if (oldBadge) oldBadge.remove();
+  const emailEl = $('userEmail');
+  if (emailEl && tier === 'premium') {
+    emailEl.insertAdjacentHTML('afterend', '<span class="pro-badge">PRO</span>');
+  }
+}
+
+window.addEventListener('storage', function(e) {
+  if (e.key === 'bridgematch_tier' && e.newValue && e.newValue !== window._userTier) {
+    window._userTier = e.newValue;
+    // UI-only refresh — no /api/stripe/status call to avoid infinite loop
+    refreshTierUI();
+  }
+});
 
 // ═══════════════════════════════
 // CATALOGUE ANALYSIS
