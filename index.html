@@ -2625,7 +2625,8 @@ function debounceDealStack(idx) {
 
 function runDealStack(idx) {
   var lot = LOTS.find(function(l) { return l._idx === idx; });
-  if (!lot || !lot.price) {
+  // Edge case: £0, missing, NaN, or "TBA" lots
+  if (!lot || !lot.price || lot.price <= 0 || isNaN(lot.price)) {
     var resEl = document.getElementById('ds-results-' + idx);
     if (resEl) resEl.innerHTML = '<p style="color:var(--text-muted); font-size:13px; text-align:center; padding:12px 0;">Guide price not available \u2014 deal stacking requires a price</p>';
     return;
