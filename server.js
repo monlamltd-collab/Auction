@@ -9800,8 +9800,7 @@ const serverStartTime = new Date().toISOString();
 
 async function autoAnalyseAll() {
   if (creditExhausted) {
-    console.log('AUTO: Skipping — Gemini API rate limited');
-    return { skipped: true, reason: 'credits_exhausted' };
+    console.log('AUTO: Gemini API rate limited — DOM-only houses will still be processed');
   }
   if (_autoAnalysisRunning) {
     console.log('AUTO: Analysis already running, skipping this invocation');
@@ -9869,9 +9868,14 @@ async function _doAutoAnalyseAll() {
 
   // ── Step 1: Discover new catalogues from house root pages ──
   // Runs once per cycle to find new auction URLs that aren't in the calendar yet.
-  await discoverAndUpdateCalendar().catch(e =>
-    console.error('AUTO-DISCOVER: failed —', e.message)
-  );
+  // Discovery uses Gemini to extract catalogue links, so skip when credits exhausted.
+  if (creditExhausted) {
+    console.log('AUTO-DISCOVER: Skipping — Gemini API rate limited (discovery requires AI)');
+  } else {
+    await discoverAndUpdateCalendar().catch(e =>
+      console.error('AUTO-DISCOVER: failed —', e.message)
+    );
+  }
 
   // ── Step 2: Analyse all catalogue-ready auctions ──
   const allReady = await getCalendarAuctions();
@@ -10202,9 +10206,11 @@ async function autoAnalyseOne(url) {
 
   if (rewritten.paginateAs === 'allsop_api') {
     const pages = await scrapeAllsopApi(rewritten.baseUrl);
-    if (pages.length > 0) {
+    if (pages.length > 0 && !creditExhausted) {
       rawLots = await extractLotsWithAI(pages, house, null, scrapeUrl);
       enrichAllsopLots(rawLots, pages);
+    } else if (pages.length > 0) {
+      console.log(`AUTO: ${house}: Gemini exhausted — skipping Allsop AI extraction`);
     }
 
   } else if (rewritten.preferPuppeteer) {
@@ -10301,7 +10307,7 @@ async function autoAnalyseOne(url) {
           rawLots = rawLots.slice(0, MAX_LOTS_PER_SCRAPE);
         }
         console.log(`AUTO: ${house} total: ${rawLots.length} lots`);
-      } else {
+      } else if (!creditExhausted) {
         // Fall back to Claude extraction
         const renderedPages = [{ page: 1, html: firstResult.html, markdown: firstResult.markdown }];
         rawLots = await extractLotsWithAI(renderedPages, house, null, scrapeUrl);
@@ -10337,12 +10343,19 @@ async function autoAnalyseOne(url) {
             }
           }
         }
+      } else {
+        console.log(`AUTO: ${house}: DOM extractor found <3 lots and Gemini exhausted — skipping AI fallback`);
       }
     }
 
   } else {
-    const pages = await scrapeAllPages(scrapeUrl, house);
-    if (pages && pages.length > 0) rawLots = await extractLotsWithAI(pages, house, null, scrapeUrl);
+    // Non-preferPuppeteer path: static HTTP + Gemini (skip Gemini when exhausted)
+    if (!creditExhausted) {
+      const pages = await scrapeAllPages(scrapeUrl, house);
+      if (pages && pages.length > 0) rawLots = await extractLotsWithAI(pages, house, null, scrapeUrl);
+    } else {
+      console.log(`AUTO: ${house}: Gemini exhausted — skipping static+AI path, trying DOM fallback`);
+    }
     // Rendered page fallback if static scraping found nothing
     const SKIP_PUPPETEER = ['philliparnold','knightfrank'];
     if (rawLots.length === 0 && !SKIP_PUPPETEER.includes(house)) {
@@ -10352,7 +10365,7 @@ async function autoAnalyseOne(url) {
           const renderedLots = extractWithJSDOM(rendered.html, house, url, rendered.images);
           if (renderedLots && renderedLots.length > 0) {
             rawLots = renderedLots;
-          } else {
+          } else if (!creditExhausted) {
             const renderedPages = [{ page: 1, html: rendered.html, markdown: rendered.markdown }];
             rawLots = await extractLotsWithAI(renderedPages, house, null, scrapeUrl);
             // DOM→Gemini merge for this fallback path too
@@ -10375,6 +10388,8 @@ async function autoAnalyseOne(url) {
                 if (um > 0 || im > 0) console.log(`AUTO: ${house}: DOM→Gemini merge (fallback): ${um} URLs, ${im} images`);
               }
             }
+          } else {
+            console.log(`AUTO: ${house}: DOM extractor found 0 lots and Gemini exhausted — no extraction possible`);
           }
         }
       } catch (err) {
