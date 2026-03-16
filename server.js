@@ -204,7 +204,7 @@ const RATE_LIMIT = 5;
 const CACHE_DAYS = 7; // fallback default
 const CACHE_TIERS = {
   high:   { houses: ['allsop','savills','sdl','network','bidx1'], ttlHours: 12 },
-  medium: { houses: ['cliveemson','edwardmellor','bondwolfe','strettons','countrywide','tcpa','futureauctions','firstforauctions','harmanhealy','astleys','henrysykes','clarkesimpson','durrants','dawsons','goldings','auctionhousescotland','austingray'], ttlHours: 18 },
+  medium: { houses: ['cliveemson','edwardmellor','bondwolfe','strettons','countrywide','suttonkersh','tcpa','futureauctions','firstforauctions','harmanhealy','astleys','henrysykes','clarkesimpson','durrants','dawsons','goldings','auctionhousescotland','austingray','auctionhouseeastanglia','auctionhousenorthwest','auctionhousenortheast','auctionhousewales','auctionhousebirmingham','auctionhousekent','iamsold','buttersjohnbee','brownco','fssproperty'], ttlHours: 18 },
   low:    { houses: [], ttlHours: 24 }  // everything else
 };
 function getCacheTTL(houseKey) {
