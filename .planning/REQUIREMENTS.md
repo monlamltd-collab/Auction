@@ -1,13 +1,13 @@
 # Requirements: Bridgematch Auction Tool v1.2
 
 **Defined:** 2026-03-20
-**Core Value:** Every upcoming UK auction lot, with complete data, scored for investment potential and matched to bridging lenders — so investors can find and fund deals in one place.
+**Core Value:** Every upcoming UK auction lot, with complete data, scored for investment potential and matched to bridging lenders -- so investors can find and fund deals in one place.
 
 ## v1.2 Requirements
 
 ### Gating & Monetization
 
-- [ ] **GATE-01**: System hibernates Stripe behind `STRIPE_ENABLED` env var — all payment code preserved but unreachable when disabled
+- [ ] **GATE-01**: System hibernates Stripe behind `STRIPE_ENABLED` env var -- all payment code preserved but unreachable when disabled
 - [ ] **GATE-02**: `resolveEffectiveTier()` returns premium for all signed-in users when Stripe disabled
 - [ ] **GATE-03**: Paywall modals and upgrade CTAs hidden when Stripe disabled
 - [ ] **GATE-04**: AI features (smart search, analyser, scores, deal stacking, CSV export) require sign-in but are free
@@ -33,7 +33,7 @@
 
 - [ ] **ANAL-01**: Supabase `activity_events` wired to key API endpoints (search, analyse, deal stacking, BridgeMatch, sign-up)
 - [ ] **ANAL-02**: Umami Cloud integrated for page-level metrics (MAU, bounce rate, page views)
-- [ ] **ANAL-03**: BridgeMatch funnel tracked: lot view → finance click → form start → submission
+- [ ] **ANAL-03**: BridgeMatch funnel tracked: lot view -> finance click -> form start -> submission
 - [ ] **ANAL-04**: Admin can view analytics summary (MAU, funnel, engagement)
 
 ### Scraping & Coverage
@@ -41,7 +41,7 @@
 - [ ] **SCRP-01**: All existing DOM extractors audited and broken ones fixed
 - [ ] **SCRP-02**: Image coverage verified across all houses (target >90%)
 - [ ] **SCRP-03**: New auction houses recruited to increase coverage
-- [ ] **SCRP-04**: Admin dashboard cleaned up — surface actionable data, hide noise
+- [ ] **SCRP-04**: Admin dashboard cleaned up -- surface actionable data, hide noise
 
 ### AI Abstraction
 
@@ -73,7 +73,7 @@
 
 | Feature | Reason |
 |---------|--------|
-| Full landing page rebuild with animation tooling | Deferred — needs research into UI framework, build as separate milestone |
+| Full landing page rebuild with animation tooling | Deferred -- needs research into UI framework, build as separate milestone |
 | Branding split (AuctionBrain vs Bridgematch) | Future consideration |
 | Mobile app | Web-first, mobile later |
 | Zoopla/Rightmove scraping | ToS violation |
@@ -83,41 +83,41 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| GATE-01 | — | Pending |
-| GATE-02 | — | Pending |
-| GATE-03 | — | Pending |
-| GATE-04 | — | Pending |
-| GATE-05 | — | Pending |
-| FIX-01 | — | Pending |
-| FIX-02 | — | Pending |
-| FIX-03 | — | Pending |
-| FIX-04 | — | Pending |
-| FIX-05 | — | Pending |
-| FIX-06 | — | Pending |
-| FIX-07 | — | Pending |
-| FIX-08 | — | Pending |
-| LAND-01 | — | Pending |
-| LAND-02 | — | Pending |
-| ANAL-01 | — | Pending |
-| ANAL-02 | — | Pending |
-| ANAL-03 | — | Pending |
-| ANAL-04 | — | Pending |
-| SCRP-01 | — | Pending |
-| SCRP-02 | — | Pending |
-| SCRP-03 | — | Pending |
-| SCRP-04 | — | Pending |
-| AI-01 | — | Pending |
-| AI-02 | — | Pending |
-| AI-03 | — | Pending |
-| INFR-01 | — | Pending |
-| INFR-02 | — | Pending |
-| INFR-03 | — | Pending |
+| GATE-01 | Phase 4 | Pending |
+| GATE-02 | Phase 4 | Pending |
+| GATE-03 | Phase 4 | Pending |
+| GATE-04 | Phase 4 | Pending |
+| GATE-05 | Phase 4 | Pending |
+| FIX-01 | Phase 4 | Pending |
+| FIX-02 | Phase 4 | Pending |
+| FIX-03 | Phase 4 | Pending |
+| FIX-04 | Phase 4 | Pending |
+| FIX-05 | Phase 4 | Pending |
+| FIX-06 | Phase 4 | Pending |
+| FIX-07 | Phase 4 | Pending |
+| FIX-08 | Phase 4 | Pending |
+| LAND-01 | Phase 7 | Pending |
+| LAND-02 | Phase 7 | Pending |
+| ANAL-01 | Phase 5 | Pending |
+| ANAL-02 | Phase 5 | Pending |
+| ANAL-03 | Phase 5 | Pending |
+| ANAL-04 | Phase 5 | Pending |
+| SCRP-01 | Phase 6 | Pending |
+| SCRP-02 | Phase 6 | Pending |
+| SCRP-03 | Phase 6 | Pending |
+| SCRP-04 | Phase 6 | Pending |
+| AI-01 | Phase 6 | Pending |
+| AI-02 | Phase 6 | Pending |
+| AI-03 | Phase 6 | Pending |
+| INFR-01 | Phase 4 | Pending |
+| INFR-02 | Phase 4 | Pending |
+| INFR-03 | Phase 4 | Pending |
 
 **Coverage:**
 - v1.2 requirements: 29 total
-- Mapped to phases: 0
-- Unmapped: 29 ⚠️
+- Mapped to phases: 29
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-20*
-*Last updated: 2026-03-20 after initial definition*
+*Last updated: 2026-03-20 after roadmap creation*
