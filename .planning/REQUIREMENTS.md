@@ -1,0 +1,123 @@
+# Requirements: Bridgematch Auction Tool v1.2
+
+**Defined:** 2026-03-20
+**Core Value:** Every upcoming UK auction lot, with complete data, scored for investment potential and matched to bridging lenders — so investors can find and fund deals in one place.
+
+## v1.2 Requirements
+
+### Gating & Monetization
+
+- [ ] **GATE-01**: System hibernates Stripe behind `STRIPE_ENABLED` env var — all payment code preserved but unreachable when disabled
+- [ ] **GATE-02**: `resolveEffectiveTier()` returns premium for all signed-in users when Stripe disabled
+- [ ] **GATE-03**: Paywall modals and upgrade CTAs hidden when Stripe disabled
+- [ ] **GATE-04**: AI features (smart search, analyser, scores, deal stacking, CSV export) require sign-in but are free
+- [ ] **GATE-05**: Signed-in users have daily AI rate limit (e.g. 50 searches/day) as cost safety valve
+
+### Bug Fixes
+
+- [ ] **FIX-01**: Heavy refurb button triggers search execution, not just input population
+- [ ] **FIX-02**: Score sort orders lots within tiers (not just groups into tiers)
+- [ ] **FIX-03**: Empty state messaging when filters or AI search return 0 results
+- [ ] **FIX-04**: Search input trimmed and debounced
+- [ ] **FIX-05**: Negative page numbers guarded
+- [ ] **FIX-06**: Deal stacking widget reflows to single column on mobile
+- [ ] **FIX-07**: Sign-in page text no longer overflows container
+- [ ] **FIX-08**: CSV export has server-side tier check
+
+### Landing Page
+
+- [ ] **LAND-01**: Welcome page updated with "50% aren't on Rightmove" USP hero message
+- [ ] **LAND-02**: Features/benefits section and free sign-up CTA on welcome page
+
+### Analytics
+
+- [ ] **ANAL-01**: Supabase `activity_events` wired to key API endpoints (search, analyse, deal stacking, BridgeMatch, sign-up)
+- [ ] **ANAL-02**: Umami Cloud integrated for page-level metrics (MAU, bounce rate, page views)
+- [ ] **ANAL-03**: BridgeMatch funnel tracked: lot view → finance click → form start → submission
+- [ ] **ANAL-04**: Admin can view analytics summary (MAU, funnel, engagement)
+
+### Scraping & Coverage
+
+- [ ] **SCRP-01**: All existing DOM extractors audited and broken ones fixed
+- [ ] **SCRP-02**: Image coverage verified across all houses (target >90%)
+- [ ] **SCRP-03**: New auction houses recruited to increase coverage
+- [ ] **SCRP-04**: Admin dashboard cleaned up — surface actionable data, hide noise
+
+### AI Abstraction
+
+- [ ] **AI-01**: `callGemini()` extracted to `lib/ai-provider.js` with provider abstraction
+- [ ] **AI-02**: Token usage and cost logging per API call
+- [ ] **AI-03**: Model selection via env var (ready for future provider swap)
+
+### Infrastructure
+
+- [ ] **INFR-01**: Confirm Supabase is on paid plan (not free tier) before scaling
+- [ ] **INFR-02**: Cancel any active Stripe subscriptions before hibernating
+- [ ] **INFR-03**: Verify Railway memory/CPU baseline can handle free-tier traffic volume
+
+## Future Requirements (v1.3+)
+
+### Growth & SEO
+- **SEO-01**: Individual lot pages with SEO-friendly URLs
+- **SEO-02**: Blog/content section for organic SEO traffic
+- **SEO-03**: Full marketing landing page with UI animations and modern tooling
+
+### Engagement
+- **ENG-01**: Email alerts when new catalogues drop for followed auction houses
+- **ENG-02**: Portfolio tracking for saved lots
+
+### Integration
+- **INT-01**: Full Bridgematch integration (auto-finance per lot)
+
+## Out of Scope
+
+| Feature | Reason |
+|---------|--------|
+| Full landing page rebuild with animation tooling | Deferred — needs research into UI framework, build as separate milestone |
+| Branding split (AuctionBrain vs Bridgematch) | Future consideration |
+| Mobile app | Web-first, mobile later |
+| Zoopla/Rightmove scraping | ToS violation |
+| Full Bridgematch auto-finance per lot | Future milestone |
+
+## Traceability
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| GATE-01 | — | Pending |
+| GATE-02 | — | Pending |
+| GATE-03 | — | Pending |
+| GATE-04 | — | Pending |
+| GATE-05 | — | Pending |
+| FIX-01 | — | Pending |
+| FIX-02 | — | Pending |
+| FIX-03 | — | Pending |
+| FIX-04 | — | Pending |
+| FIX-05 | — | Pending |
+| FIX-06 | — | Pending |
+| FIX-07 | — | Pending |
+| FIX-08 | — | Pending |
+| LAND-01 | — | Pending |
+| LAND-02 | — | Pending |
+| ANAL-01 | — | Pending |
+| ANAL-02 | — | Pending |
+| ANAL-03 | — | Pending |
+| ANAL-04 | — | Pending |
+| SCRP-01 | — | Pending |
+| SCRP-02 | — | Pending |
+| SCRP-03 | — | Pending |
+| SCRP-04 | — | Pending |
+| AI-01 | — | Pending |
+| AI-02 | — | Pending |
+| AI-03 | — | Pending |
+| INFR-01 | — | Pending |
+| INFR-02 | — | Pending |
+| INFR-03 | — | Pending |
+
+**Coverage:**
+- v1.2 requirements: 29 total
+- Mapped to phases: 0
+- Unmapped: 29 ⚠️
+
+---
+*Requirements defined: 2026-03-20*
+*Last updated: 2026-03-20 after initial definition*
