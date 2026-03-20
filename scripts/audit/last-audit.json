@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-03-19T05:55:12.908Z",
+  "timestamp": "2026-03-20T05:47:08.972Z",
   "results": [
     {
       "house": "savills",
@@ -68,14 +68,9 @@
       "house": "barnardmarcus",
       "extractorLots": 20,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": 0,
       "issues": [
-        {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
-        },
         {
           "type": "LOW_IMAGES",
           "severity": "WARNING",
@@ -90,15 +85,15 @@
     },
     {
       "house": "auctionhouselondon",
-      "extractorLots": 241,
+      "extractorLots": 0,
       "universalLots": 0,
       "httpStatus": 200,
-      "imgCoverage": 100,
+      "imgCoverage": null,
       "issues": [
         {
-          "type": "MISSING_FROM_CACHE",
-          "severity": "WARNING",
-          "detail": "241 live lots but missing from production cache"
+          "type": "EXTRACTOR_BROKEN",
+          "severity": "BROKEN",
+          "detail": "DOM extractor returns 0, but 21 prices on page"
         }
       ]
     },
@@ -112,13 +107,13 @@
         {
           "type": "EXTRACTOR_BROKEN",
           "severity": "BROKEN",
-          "detail": "DOM extractor returns 0, but 679 prices on page"
+          "detail": "DOM extractor returns 0, but 711 prices on page"
         }
       ]
     },
     {
       "house": "cliveemson",
-      "extractorLots": 191,
+      "extractorLots": 190,
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": 100,
@@ -126,7 +121,7 @@
         {
           "type": "MISSING_FROM_CACHE",
           "severity": "WARNING",
-          "detail": "191 live lots but missing from production cache"
+          "detail": "190 live lots but missing from production cache"
         }
       ]
     },
@@ -154,7 +149,7 @@
         {
           "type": "EXTRACTOR_BROKEN",
           "severity": "BROKEN",
-          "detail": "DOM extractor returns 0, but 52 prices on page"
+          "detail": "DOM extractor returns 0, but 50 prices on page"
         }
       ]
     },
@@ -169,21 +164,22 @@
           "type": "LOW_IMAGES",
           "severity": "WARNING",
           "detail": "Image coverage 0% (0/94)"
-        },
-        {
-          "type": "MISSING_FROM_CACHE",
-          "severity": "WARNING",
-          "detail": "94 live lots but missing from production cache"
         }
       ]
     },
     {
       "house": "maggsandallen",
-      "extractorLots": 14,
+      "extractorLots": 10,
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": 100,
-      "issues": []
+      "issues": [
+        {
+          "type": "MISSING_FROM_CACHE",
+          "severity": "WARNING",
+          "detail": "10 live lots but missing from production cache"
+        }
+      ]
     },
     {
       "house": "mchughandco",
@@ -290,7 +286,7 @@
     },
     {
       "house": "bradleyhall",
-      "extractorLots": 30,
+      "extractorLots": 25,
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": 100,
@@ -298,7 +294,7 @@
         {
           "type": "MISSING_FROM_CACHE",
           "severity": "WARNING",
-          "detail": "30 live lots but missing from production cache"
+          "detail": "25 live lots but missing from production cache"
         }
       ]
     },
@@ -352,7 +348,13 @@
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": 100,
-      "issues": []
+      "issues": [
+        {
+          "type": "MISSING_FROM_CACHE",
+          "severity": "WARNING",
+          "detail": "20 live lots but missing from production cache"
+        }
+      ]
     },
     {
       "house": "probateauction",
@@ -381,6 +383,11 @@
           "type": "PAGINATION_MISSED",
           "severity": "WARNING",
           "detail": "Page says \"19 properties found\" but no pagination config"
+        },
+        {
+          "type": "MISSING_FROM_CACHE",
+          "severity": "WARNING",
+          "detail": "19 live lots but missing from production cache"
         }
       ]
     },
@@ -408,7 +415,7 @@
         {
           "type": "EXTRACTOR_BROKEN",
           "severity": "BROKEN",
-          "detail": "DOM extractor returns 0, but 19 prices on page"
+          "detail": "DOM extractor returns 0, but 21 prices on page"
         }
       ]
     },
@@ -418,7 +425,13 @@
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": 100,
-      "issues": []
+      "issues": [
+        {
+          "type": "MISSING_FROM_CACHE",
+          "severity": "WARNING",
+          "detail": "10 live lots but missing from production cache"
+        }
+      ]
     },
     {
       "house": "firstforauctions",
@@ -454,11 +467,17 @@
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": 100,
-      "issues": []
+      "issues": [
+        {
+          "type": "MISSING_FROM_CACHE",
+          "severity": "WARNING",
+          "detail": "31 live lots but missing from production cache"
+        }
+      ]
     },
     {
       "house": "robinsonhall",
-      "extractorLots": 22,
+      "extractorLots": 24,
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": 100,
@@ -466,7 +485,7 @@
         {
           "type": "MISSING_FROM_CACHE",
           "severity": "WARNING",
-          "detail": "22 live lots but missing from production cache"
+          "detail": "24 live lots but missing from production cache"
         }
       ]
     },
@@ -563,7 +582,7 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 70 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 71 prices on page"
         }
       ]
     },
@@ -577,13 +596,13 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 33 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 32 prices on page"
         }
       ]
     },
     {
       "house": "agentsproperty",
-      "extractorLots": 91,
+      "extractorLots": 101,
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": 100,
@@ -591,7 +610,7 @@
         {
           "type": "MISSING_FROM_CACHE",
           "severity": "WARNING",
-          "detail": "91 live lots but missing from production cache"
+          "detail": "101 live lots but missing from production cache"
         }
       ]
     },
@@ -605,7 +624,7 @@
         {
           "type": "PAGINATION_MISSED",
           "severity": "WARNING",
-          "detail": "Page says \"Showing 1-24 of 43\" but no pagination config"
+          "detail": "Page says \"Showing 1-24 of 42\" but no pagination config"
         },
         {
           "type": "MISSING_FROM_CACHE",
@@ -722,7 +741,7 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 317 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 311 prices on page"
         }
       ]
     },
@@ -736,7 +755,7 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 370 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 371 prices on page"
         }
       ]
     },
@@ -750,7 +769,7 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 309 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 311 prices on page"
         }
       ]
     },
@@ -764,7 +783,7 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 213 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 214 prices on page"
         }
       ]
     },
@@ -778,7 +797,7 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 82 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 85 prices on page"
         }
       ]
     },
