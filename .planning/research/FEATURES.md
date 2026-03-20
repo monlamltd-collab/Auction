@@ -1,216 +1,321 @@
-# Features Research
+# Feature Landscape: v1.2 Free-First Growth Pivot
 
-*Research date: 2026-03-15 | Focus: UK property auction directory & investor tooling*
-
----
-
-## Table Stakes (users expect these)
-
-### 1. Complete, Current Listings with Outcome Data
-Every serious auction aggregator shows upcoming lots AND past results with sold/unsold status and hammer prices. EIG (Essential Information Group) has tracked every UK auction result since 1991 (600,000+ lots). SDL, Auction House UK, Savills, and most houses publish results within days. **Bridgematch currently lacks sold/unsold tracking** -- this is table stakes for any auction directory investors will trust.
-
-- Upcoming lots with guide price, address, property type, tenure, images
-- Past auction results: sold price, unsold status, withdrawn status
-- Unsold lot sections (SDL, Auction House, Clive Emson all have dedicated unsold lot pages -- these are high-value for investors seeking post-auction negotiation)
-- Auction calendar with dates, venues, lot counts
-
-### 2. Basic Property Data Per Lot
-Investors expect at minimum:
-- **Guide price** and price range
-- **Property type** (house, flat, commercial, land, mixed-use)
-- **Tenure** (freehold / leasehold / share of freehold)
-- **Address** with postcode
-- **Images** (multiple per lot -- single image or no image looks amateur)
-- **Legal pack availability** (link or note)
-- **EPC rating** -- increasingly important given 2025/26 MEES regulations; rental properties must meet minimum EPC standards. Most auction houses include this in listings
-- **Council tax band** -- commonly shown on portals, easy to look up via VOA
-
-### 3. Basic Filtering & Search
-- Filter by location, price range, property type, auction house, auction date
-- Keyword search
-- PropertyAuctions.io offers this free with no subscription. EIG offers it behind a paywall. This is baseline.
-
-### 4. Alerts / Notifications
-- PropertyAuctions.io: free email alerts for new lots matching criteria
-- EIG: "Auction Alerts" for properties matching saved criteria
-- This is expected by active investors. Bridgematch doesn't have this yet (out of scope per PROJECT.md, but it's table stakes for engagement).
-
-### 5. SDLT Calculator
-- Widely available as a free tool (HomePortfolio, PropertyEngine, DealSheet AI all include it)
-- Bridgematch already has this. Table stakes -- keep it free.
-
-### 6. Mobile Access
-- DealSheet AI is mobile-first (iOS app)
-- Lendlord has iOS and Android apps
-- PropMarker has a Chrome extension
-- At minimum, the web app must be fully responsive. Bridgematch already is.
+**Domain:** UK property auction directory + AI analysis tool, pivoting from paid subscription to free-first lead generation
+**Researched:** 2026-03-20
+**Mode:** Ecosystem research for feature prioritisation
 
 ---
 
-## Differentiators (competitive advantage)
+## Table Stakes
 
-### 1. AI-Powered Catalogue Screening (EXISTING -- PROTECT THIS)
-Bridgematch's core moat: AI extraction + investment scoring of entire auction catalogues. No direct competitor does this at the same depth across 21+ houses:
-- **EIG**: Aggregates lots but no AI analysis or scoring
-- **PropertyAuctions.io**: Free directory, no analysis
-- **Auction Radar**: Data in spreadsheets (£49/mo), no analysis -- just raw data delivery via email/Excel
-- **DealSheet AI**: Analyses individual properties (paste URL or screenshot), but doesn't bulk-screen catalogues
-- **PropMarker**: AI analysis of individual listings on Rightmove/Zoopla, but not auction catalogues
+Features users expect from a free property auction aggregator. Missing any of these and the product feels broken or incomplete. Validated against PropertyAuctions.io (free, 100% open), EIG (paywalled aggregator), and Under The Hammer.
 
-**Gap Bridgematch fills**: No one else bulk-screens an entire auction catalogue and surfaces the best investment deals with scored rankings. This is the key differentiator.
+| Feature | Why Expected | Complexity | Dependencies | Notes |
+|---------|-------------|------------|--------------|-------|
+| Filterable lot directory (no paywall) | Every competitor shows listings free. PropertyAuctions.io is 100% free, no subscriptions. Gating directory data kills growth. | DONE | Already built | Core directory is already free and unblurred per tier strategy |
+| Working search and filters | Users expect to filter by location, price, property type at minimum. PropertyAuctions.io has advanced location + type filters. | DONE | Already built | Existing filters work; smart AI search is the differentiator |
+| Lot images and links to auction house | Users expect to see photos and click through to the original listing. No images = no trust. | DONE | Already built | 99.6% image coverage on new houses (v1.1 IMG_HELPERS) |
+| Mobile-responsive design | 60%+ of UK property searches happen on mobile. Broken mobile = majority of visitors lost. | LOW | 8 known bugs include mobile issues | Deal stacking mobile bug and sign-in page overflow must be fixed |
+| Clear sign-in flow | If requiring sign-in for AI features, it must work flawlessly. Broken auth = lost signups forever. | LOW | Supabase magic links exist | Sign-in page overflow bug is a blocker -- fix before launch |
+| Fast page load | Property investors browse quickly. If directory takes >3s to render, bounce rate hits 50%+. | LOW | Existing architecture | Monitor Railway performance under free-tier traffic volume |
+| Landing page explaining what this is | First-time visitors need to understand value in <5 seconds. Without a landing page, they land on raw directory and bounce. | MED | New build, `welcome.html` exists as skeleton | Highest-impact new feature for v1.2 |
 
-### 2. Deal Stacking Calculator with Live Lender Data (PLANNED -- HIGH VALUE)
-This is the killer feature no competitor combines with auction data:
+## Differentiators
 
-**What competitors offer (finance calculators):**
-- **Brickflow**: Best-in-class bridging comparison. 80+ lenders, shows gross/net loan, LTV, monthly interest, arrangement fees, exit fees, True Monthly Cost (TMC). Inputs: property type, purchase price, location, condition, refurb costs, loan term, exit strategy. But Brickflow has NO auction integration -- user must manually enter deal details.
-- **Broka**: Broker-focused ecosystem with real-time lender criteria matching (LTV, LTGDV, LTPP, LTC). No auction integration.
-- **Commercial Trust / MFS / ABC Finance**: Simple auction finance calculators -- enter loan amount, term, rate, get monthly payments. No deal stacking.
+Features that set Bridgematch apart from PropertyAuctions.io, DealSheet AI, and Brickflow. These are the reasons an investor would choose this tool over alternatives.
 
-**What competitors offer (investment calculators):**
-- **DealSheet AI** (£4.99/week or £79.99/year): ROI, gross yield, SDLT, Section 24 tax. Supports 7 strategies including "Auction". No finance cost integration.
-- **PropertyEngine** (free basic, paid advanced): BRR, BTL, SDLT, mortgage repayment calculators. No bridging finance integration.
-- **HomePortfolio** (free): Rental yield, BRRRR, flip, SDLT calculators. No finance integration.
-- **Lendlord** (free basic, £12-36/mo premium): Deal analyser with rental yields, ROI, cashflow. Has in-house financing but not bridging-specific.
-- **PropMarker** (£99.99/mo): AI deal scoring with ROI, yield, but no bridging finance cost integration.
-- **Landlords Portal HMO calculator**: Purchase price, refurb, rental income, expenses -> yields and cashflow. No finance integration.
+| Feature | Value Proposition | Complexity | Dependencies | Notes |
+|---------|-------------------|------------|--------------|-------|
+| "50% aren't on Rightmove" USP | Validated claim (EIG Property Auctions confirms: "over 50% of properties never make it to Rightmove"). No competitor leads with this message. Investors using Rightmove alone miss half the market. | LOW (copy) | Landing page | Hero message. Must be prominent, not buried. |
+| AI investment scoring (20+ signals) | No free competitor scores lots for investment potential. PropertyAuctions.io shows listings but no analysis. DealSheet AI charges GBP 4.99/week. Giving this free is a genuine differentiator. | DONE | Already built | Currently blurred for non-premium. v1.2 makes it free with sign-in gate. |
+| BridgeMatch Lite lender matching | "How many lenders would fund this deal?" is uniquely valuable. Brickflow offers similar but requires broker involvement. No other free tool combines auction data + bridging finance matching. | DONE | Already built | Lender names stay masked (generates lead value). Funnel tracking needed. |
+| Deal stacking calculator | Full deal economics: SDLT + bridging costs + refurb + flip/hold scenarios with lender-matched rates. DealSheet AI charges for this. Free behind sign-in is compelling. | DONE | Needs mobile bug fix | Premium in v1.1, becomes free-with-signin in v1.2 |
+| 36+ auction houses in one view | More houses than most aggregators index. AI extraction means structured, enriched data. | DONE | Already built | Scraping reliability pass should verify all extractors |
+| EPC + flood risk enrichment | Free enrichment data investors would otherwise look up manually. No other auction aggregator shows this inline. | DONE | Already built | EPC via MHCLG, flood via EA. Both free APIs, 30-day cache. |
+| Natural language search | "3-bed houses under 100k in the North West needing refurb" -- no other free auction tool does this. | DONE | Already built | Currently tiered (anon: 3, free: 10/day). v1.2: free-with-signin. |
 
-**The gap**: Nobody combines auction lot data + bridging finance costs (from real lender criteria) + investment returns in a single "does this deal stack?" output. Bridgematch's deal stacking calculator, pulling from the Bridgematch lender database (~50+ lenders), would be unique.
+## Anti-Features
 
-**Recommended inputs:**
-- Auto-populated from lot data: purchase price, property type, location, condition
-- User inputs: GDV (after works value), refurbishment costs, legal fees, expected monthly rental
-- Auto-calculated: SDLT (investor rates), bridging finance costs (from Bridgematch lender data -- best rate, arrangement fee, exit fee for the specific deal), total acquisition cost
+Features to explicitly NOT build in v1.2. Each has a clear reason.
 
-**Recommended outputs:**
-- Total cost in (purchase + SDLT + legal + refurb + finance costs)
-- Equity required (deposit + costs not covered by lender)
-- Gross and net yield on purchase price
-- ROI on cash invested
-- Cash-on-cash return (annual cashflow / cash invested)
-- Profit on flip (GDV - total cost in)
-- Number of lenders who would fund this deal
-- Best indicative rate and LTV
-
-### 3. Enrichment Data Layered onto Auction Lots (PLANNED)
-Most auction aggregators show only what the auction house publishes. Bridgematch can differentiate by enriching each lot with:
-
-**Available via free/cheap APIs:**
-- **EPC data**: MHCLG open data, free API. Shows energy rating, potential rating, floor area, heating type. Critical for rental strategy (MEES compliance)
-- **Flood risk**: Environment Agency open data, free API. River, sea, surface water risk categories
-- **Council tax band**: VOA lookup, free
-- **Land Registry sold prices**: Already partially integrated. Street-level comps and price history
-- **Planning applications**: Free via local authority APIs or Searchland
-
-**Available via Firecrawl enrichment (credit cost):**
-- **Zoopla/Rightmove rental estimates**: What similar properties rent for in the area
-- **Recent sold prices**: Supplement Land Registry with portal data
-- **Market context**: Average asking prices, time on market
-
-**What investors say they want per lot** (synthesised from competitor feature sets):
-1. Purchase price and guide price range
-2. Comparable sold prices (within 0.5mi, last 2 years)
-3. Estimated rental income (per month)
-4. Gross yield calculation
-5. EPC rating and floor area
-6. Flood risk category
-7. Council tax band
-8. Planning history (any applications nearby)
-9. Condition assessment / refurb estimate
-10. Local area demographics and amenities
-
-### 4. Unsold Lot Tracking & Post-Auction Opportunities
-~25-29% of auction lots go unsold. These become negotiation opportunities. SDL, Auction House UK, and Clive Emson all maintain dedicated unsold lot pages. EIG tracks all unsold lots historically.
-
-**Differentiator opportunity**: Bridgematch could flag unsold lots with "post-auction opportunity" tagging, show the failed guide price, and let investors see which lots didn't sell -- enabling below-guide-price approaches to auction houses. No aggregator currently combines unsold lot tracking with investment scoring.
-
-### 5. Natural Language / AI Search (EXISTING)
-Smart search with AI natural language queries across all lots. PropMarker has LENAH (AI assistant), DealSheet AI has AI summaries, but none apply NLP search across a multi-house auction catalogue. Keep and improve this.
+| Anti-Feature | Why Avoid | What to Do Instead |
+|--------------|-----------|-------------------|
+| Email alerts / notifications | Increases complexity and ongoing cost. Deferred to v1.3 per PROJECT.md. Focus v1.2 on sign-up funnel, not retention. | Capture email at sign-in (already done via Supabase). Build alerts later when you have users to retain. |
+| Blog / SEO content | Content marketing is a long game. v1.2 needs quick wins. Deferred to v1.3. | Landing page with strong USP copy is the v1.2 SEO play. Individual lot pages (v1.3) drive organic traffic. |
+| Individual lot pages with SEO URLs | High SEO value but significant engineering (new routes, OG tags, structured data per lot). Deferred to v1.3. | Directory view sufficient for v1.2. These pages become the biggest SEO lever in v1.3. |
+| Payment / premium tier | The entire v1.2 strategy is free-first. Do not build new payment features. | Feature flag STRIPE_ENABLED=false. All Stripe code preserved, dormant. Reactivate when needed. |
+| User dashboard / saved searches | Adds complexity. v1.2 goal is raw signup numbers, not engagement features. | Track what users search (analytics) to understand demand. Build in v1.3+ if data supports it. |
+| Automated calendar scraping | Partially exists but full automation deferred. Manual management fine for 36 houses. | Keep existing admin calendar + discovery flow. Automate when house count justifies it. |
+| Social login (Google, Facebook) | OAuth complexity. Magic links are simpler and guarantee email capture. | Stick with Supabase magic links. Good conversion rates, direct email capture. |
+| Naming Rightmove/Zoopla as competitors | Legally risky (trademark), antagonistic tone. | Frame as "50% of auction houses aren't on major property portals" -- positive framing about completeness, not attack. |
+| Third-party feature flag service | PostHog flags, LaunchDarkly, etc. are overkill for one flag. Adds dependency and complexity. | Single env var: STRIPE_ENABLED. That is the feature flag system. |
+| A/B testing framework | Overkill for <1,000 MAU, adds complexity for negligible statistical significance. | Ship one landing page, iterate manually based on analytics. |
+| Session replay tools | Privacy-invasive, unnecessary at this scale, GDPR complexity. | Page-level analytics are sufficient for v1.2. |
 
 ---
 
-## Anti-Features (things to deliberately NOT build)
+## New Features for v1.2 (Ordered by Impact)
 
-### 1. Do NOT build a general property portal
-Bridgematch is an auction tool, not a Rightmove competitor. Don't add non-auction listings, estate agent properties, or try to become a general property search engine. The value is in auction-specific data and the investor workflow.
+### 1. Landing Page with USP Hero
 
-### 2. Do NOT build an estate agent CRM / listing tool
-Under the Hammer and iamsold serve the agent/seller side. Bridgematch serves the investor/buyer side. Don't build seller tools, agent dashboards, or listing management.
+**Impact:** HIGH -- every visitor sees this first. Without it, first-time visitors bounce from the raw directory.
+**Complexity:** MEDIUM
+**Dependencies:** None (new page, `welcome.html` skeleton exists)
 
-### 3. Do NOT build a full portfolio management system
-Lendlord (£0-36/mo) already does portfolio management, tenant management, expense tracking, bank linking, tax reports. This is a different product category. Bridgematch's value ends at "find and fund the deal" -- not "manage the property."
+**What good looks like:**
+- Hero section: "50% of auction houses aren't on Rightmove. We show them all." (validated claim per EIG)
+- 3-4 benefit bullets: AI scoring, lender matching, deal stacking -- all free
+- Single primary CTA: "Browse Auctions Free" (not "Sign Up" -- reduce friction, show value first)
+- Social proof: lot count, house count, "updated daily" (e.g., "2,364 lots from 36 auction houses")
+- How it works: 3 steps (Browse -> Analyse -> Fund)
+- Secondary CTA lower down: "Sign in for AI features" (after they see value)
+- NO video, NO animation -- fast load, clear copy, single purpose
 
-### 4. Do NOT gate the directory data behind a paywall
-EIG charges for access to basic auction listings -- this is widely criticised. PropertyAuctions.io is free and growing. Auction Radar charges £49/mo for spreadsheet data. Bridgematch's strategy of free directory data is correct -- it builds traffic and trust. Gate only AI analysis and deal stacking features (per project_tier_strategy.md).
+**Conversion benchmarks (research-validated):**
+- Real estate landing pages: 2.6% median, 7.4% mean (First Page Sage 2026)
+- Free tool with no payment barrier should target 8-12% visitor-to-signup
+- Interactive tools significantly boost conversion -- the directory itself IS the interactive element
+- SaaS median is 3.8%; free tools outperform this because no payment friction
 
-### 5. Do NOT build a bidding platform
-BidX1 and auction houses handle actual bidding. Don't try to intermediate the transaction. Bridgematch is research and analysis, not a marketplace.
+**What property investors respond to (research-validated):**
+- ROI metrics front and centre (yield, scores, opportunities)
+- Immediate utility, not promises -- show real lot data on the landing page
+- Low friction sign-up (magic link = no password)
+- Social proof via data volume ("36 auction houses, 2000+ lots") more compelling than testimonials at this stage
 
-### 6. Do NOT build a mortgage/BTL finance comparison tool
-Brickflow owns the bridging comparison space (80+ lenders, £21bn in searches). Don't try to replicate their lender comparison breadth. Instead, use Bridgematch's proprietary lender database for "will this deal get funded?" signals, with masked lender names driving broker leads.
+### 2. Feature Flag System (Stripe Hibernation)
 
-### 7. Do NOT show raw data dumps or spreadsheet exports as a core feature
-Auction Radar's model (£49/mo for Excel spreadsheets) is a race to the bottom. Bridgematch should present insights, not data. The AI scoring and deal stacking are the value -- not CSV downloads.
+**Impact:** HIGH -- prerequisite for free-first model
+**Complexity:** LOW
+**Dependencies:** None
+
+**Implementation:**
+- Single env var: `STRIPE_ENABLED=false`
+- Wrap all Stripe-related UI, routes, and webhook handlers in conditional checks
+- When false: hide pricing, trial banners, upgrade CTAs, payment pages, Stripe webhook processing
+- When true: everything works exactly as before (no code deleted)
+- Do NOT use a feature flag service. One env var is sufficient.
+- Best practice per research: wrap third-party integrations in kill switches. This is exactly that pattern.
+
+### 3. Free-First Gating Restructure
+
+**Impact:** HIGH -- the core model change
+**Complexity:** MEDIUM
+**Dependencies:** Feature flag system (must hibernate Stripe first to avoid conflicting tier logic)
+
+**New tier model:**
+- **Anonymous:** Full directory access + limited AI search (3 queries, existing behaviour)
+- **Signed-in (free):** Unlimited AI search, investment scores visible, deal stacking, BridgeMatch Lite
+- **Premium:** Does not exist while STRIPE_ENABLED=false
+
+**UX pattern:**
+- Sign-in prompt appears when user attempts an AI feature, not as a blocking wall
+- "Sign in to unlock" messaging (not "Subscribe" or "Upgrade")
+- After sign-in, user returns to exactly where they were (no redirect to dashboard)
+- Magic link flow: enter email -> check inbox -> click link -> back in tool
+
+**Key insight:** Freemium conversion is dramatically higher when the free tier is genuinely useful. The directory being fully free with NO sign-in requirement is critical -- it builds trust. Gate only the AI features that have compute cost.
+
+### 4. Bug Fixes (8 Known Issues)
+
+**Impact:** MEDIUM-HIGH -- bugs in sign-in and mobile directly hurt conversion
+**Complexity:** LOW-MEDIUM (8 discrete fixes)
+**Dependencies:** None (can parallel with everything)
+
+**Priority order (by impact on conversion):**
+1. **Sign-in page overflow** -- BLOCKER: breaks the signup flow, the single most important funnel step
+2. **Deal stacking mobile layout** -- breaks the key differentiator feature on majority device type
+3. **Heavy refurb blank page** -- breaks user flow for a common lot type
+4. **Score sort within tiers** -- confusing UX, investors expect score-sorted results
+5. **Empty state messaging** -- confusing for new users who see no results
+6. **Search trim/debounce** -- minor UX friction
+7. **Negative page guard** -- edge case
+8. **CSV client-only gate** -- minor, low priority
+
+### 5. Analytics Tracking
+
+**Impact:** MEDIUM-HIGH -- cannot pitch lenders without MAU and funnel data
+**Complexity:** MEDIUM
+**Dependencies:** Sign-in flow working (need to track authenticated users)
+
+**What to track (for lender pitch):**
+- **MAU** (monthly active users) -- the headline metric for lender sponsorship conversations
+- **Sign-in conversion rate** (visitor -> signed-in user)
+- **BridgeMatch Lite funnel** (lot viewed -> BridgeMatch clicked -> result seen -> "speak to broker" clicked)
+- **Feature engagement** (AI search usage, deal stacking usage, score views per session)
+- **Lot click-through rate** (users clicking through to auction house website)
+- **Retention** (users returning within 7 days, 30 days)
+
+**Tool recommendation: Custom Supabase tracking.**
+
+Rationale: You already have Supabase. A `user_events` table with (timestamp, user_id, event_type, metadata_jsonb) is:
+- Zero additional cost (within Supabase free tier)
+- No cookie consent required (first-party, no third-party tracking)
+- No additional dependency to manage
+- Queryable with SQL for the lender pitch deck
+- Simpler than integrating any third-party analytics SDK
+
+PostHog (1M free events/month) is the fallback if you need pre-built dashboards or funnels. But for 500-1000 MAU, a Supabase table + a few SQL queries is sufficient and cheaper.
+
+**Alternative considered: Umami.** Lightweight, privacy-friendly, self-hostable. Good for page-level analytics (MAU, page views). But lacks product analytics (funnel tracking, feature engagement). Supabase custom events cover both web analytics and product analytics in one place.
+
+**If using Supabase tracking, add a simple admin view** showing:
+- MAU count (distinct user_ids in last 30 days)
+- Sign-in conversion (events where type = 'page_view' vs 'sign_in')
+- BridgeMatch funnel counts
+- Top searched terms (from AI search events)
+
+### 6. AI Cost Optimisation
+
+**Impact:** MEDIUM -- runway preservation, not user-facing
+**Complexity:** LOW-MEDIUM
+**Dependencies:** None
+
+**Actions:**
+1. Audit actual Gemini spend since Tier 1 upgrade -- what is monthly cost?
+2. Model cost at 500 MAU and 1000 MAU with free AI search
+3. Gemini 2.0 Flash is already primary for extraction -- this is the right choice
+4. For AI search queries (user-facing), evaluate if Gemini 1.5 Flash is sufficient (cheaper, faster)
+5. Cache AI search results aggressively (same query = same results within cache window)
+6. If Gemini costs are <GBP 10/month at 1000 MAU, further optimisation is unnecessary
+7. If >GBP 30/month, consider rate-limiting free users (e.g., 20 AI searches/day instead of unlimited)
+
+**Cost modelling assumptions:**
+- AI search: ~0.001-0.003 per query (Gemini Flash pricing)
+- At 1000 MAU with 5 searches/user/month = 5000 queries = GBP 5-15/month
+- Extraction pipeline costs are fixed regardless of user count (scraping runs on schedule)
+- The real cost risk is not AI queries but Firecrawl credits if scraping frequency increases
+
+### 7. Scraping Reliability
+
+**Impact:** MEDIUM -- data quality underpins everything, stale/broken data destroys trust
+**Complexity:** MEDIUM (ongoing maintenance, not one-time)
+**Dependencies:** None
+
+**Actions:**
+- Verify all 36 DOM extractors against live auction catalogues
+- Fix any broken extractors (auction houses redesign without warning)
+- Monitor image coverage (target >90% across all houses)
+- Ensure auto-analyse pipeline is running reliably on 6-hour cycle
+- This is maintenance work, not a feature -- but essential for credibility
+
+### 8. Admin Dashboard Usability
+
+**Impact:** LOW (internal only, not user-facing)
+**Complexity:** LOW-MEDIUM
+**Dependencies:** None
+
+**Focus areas:**
+- Calendar management workflow (adding/updating auction URLs)
+- Extractor health at a glance (which houses are broken right now?)
+- Pipeline freshness visibility (when did each house last successfully update?)
+- Analytics summary view (if building Supabase tracking, add MAU/funnel counts here)
 
 ---
 
-## Competitor Analysis
+## Feature Dependencies
 
-### Direct Competitors (Auction Aggregators)
+```
+Landing Page (standalone, no deps)
+    |
+Feature Flag System (env var, no deps)
+    |
+    v
+Free-First Gating (requires feature flags to hide Stripe UI)
+    |
+    v
+Analytics Tracking (requires sign-in flow to track authenticated users)
+    |
+    v
+Lender Pitch Deck (requires analytics data -- out of v1.2 scope but the end goal)
 
-| Competitor | Model | Lots | AI? | Finance? | Price | Strengths | Weaknesses |
-|---|---|---|---|---|---|---|---|
-| **EIG** | Subscription | 850K+ historical, 38K/year | No | No | Undisclosed (paywall) | Definitive UK auction database since 1991; comps; auction alerts; 400+ houses | Paywalled; no analysis; dated UX; no investment scoring |
-| **PropertyAuctions.io** | Free | Unknown (aggregator) | "AI-powered insights" (limited) | No | Free | Free; clean UX; alerts; daily updates | No investment analysis; no scoring; no enrichment data |
-| **Auction Radar** | Subscription | 3,500+/month | No | No | £49/mo | Raw data in Excel; 10+ houses; sold price tracking | No analysis; spreadsheet-only; no web UI; limited house coverage |
-| **Under the Hammer** | Agent network | Varies | No | No | Free to search | Transparent pricing; two sale methods | Seller-focused; not investor-oriented |
+Bug Fixes -----------> independent, can parallel with anything
+AI Cost Optimisation -> independent, can run anytime
+Admin Dashboard -----> independent, lowest priority
+Scraping Reliability -> independent, ongoing
+```
 
-### Adjacent Competitors (AI Property Analysis)
+## MVP Recommendation
 
-| Competitor | Focus | AI Features | Auction? | Price | Strengths | Weaknesses |
-|---|---|---|---|---|---|---|
-| **DealSheet AI** | Deal analysis | URL/screenshot parsing; 7 strategies; risk assessment; SDLT | "Auction" strategy | £4.99/wk or £79.99/yr | Fast (12s); mobile-first; UK tax; PDF export | Single-property only; no catalogue screening; no finance integration |
-| **PropMarker** | Deal sourcing | LENAH AI; floorplan reading; deal scoring; price prediction | No | £99.99/mo | Deep data (millions of points); Rightmove/Zoopla integration; Chrome extension | Expensive; no auction-specific features; no finance integration |
-| **Lendlord** | Portfolio mgmt | AI assistant (5-unlimited msgs); deal analyser | No | Free / £12 / £36/mo | Free Chrome extension on Zoopla/Rightmove; portfolio tracking; bank linking | Not auction-focused; basic AI; no catalogue analysis |
+**Phase 1 (Week 1-2): Foundation**
+1. Feature flag system (Stripe hibernation) -- prerequisite for free-first, unblocks everything
+2. Bug fixes -- prioritise sign-in overflow and mobile issues (quality before growth)
+3. Free-first gating restructure -- the core model change
 
-### Adjacent Competitors (Finance Comparison)
+**Phase 2 (Week 2-3): Growth Lever**
+4. Landing page with USP hero -- the acquisition driver
+5. Analytics tracking via Supabase -- start measuring immediately after landing page ships
 
-| Competitor | Focus | Lenders | Auction? | Price | Strengths | Weaknesses |
-|---|---|---|---|---|---|---|
-| **Brickflow** | Bridging/dev finance comparison | 80+ (200K+ data points) | No | Free to search (broker monetisation) | Best-in-class lender comparison; TMC calculation; DIP application | No auction integration; user must manually enter deal; no investment analysis |
-| **Broka** | Broker ecosystem | Unknown | No | Unknown | Real-time lender matching; workflow tools; broker/lender/introducer connectivity | Broker-focused; no investor tools; no auction data |
+**Phase 3 (Ongoing): Optimisation**
+6. AI cost optimisation -- audit and model costs at scale
+7. Scraping reliability -- verify all extractors
+8. Admin dashboard usability -- internal efficiency
 
-### Data Enrichment Providers (potential integrations)
-
-| Provider | Data | Price | API? | Notes |
-|---|---|---|---|---|
-| **PropertyData** | Comps, yields, EPC, council tax, planning, demographics | £14-60/mo | Yes | Credit-based; comprehensive UK property analytics |
-| **PropEco** | EPC, flood risk, air quality, climate | Paid API | Yes | Per-property lookup; UK property-level risk data |
-| **Land Registry** | Sold prices, title, ownership | Free (bulk) / per-query | Yes | Already integrated in Bridgematch |
-| **MHCLG (EPC register)** | Energy Performance Certificates | Free | Yes | Open data; should integrate |
-| **Environment Agency** | Flood risk (river, sea, surface water) | Free | Yes | Open Government Licence; should integrate |
-| **VOA** | Council tax bands | Free | Lookup | Already partially integrated |
-| **Searchland** | Planning, ownership, EPC, HMO | Paid API | Yes | Aggregator of multiple data sources |
-
----
-
-## Key Findings Summary
-
-### What's missing in the market (Bridgematch's opportunity)
-1. **No one bulk-screens auction catalogues with AI** -- individual property analysis exists (DealSheet AI, PropMarker) but catalogue-level screening is unique to Bridgematch
-2. **No one combines auction data with bridging finance feasibility** -- Brickflow has the lenders but no auction data; auction sites have lots but no finance data. Bridgematch can bridge this gap (literally)
-3. **Enrichment data on auction lots is rare** -- most aggregators show only what the auction house publishes. Adding EPC, flood risk, comps, and rental estimates to each lot is a clear differentiator
-4. **Post-auction unsold lot analysis doesn't exist** -- unsold lots are listed on individual house websites but no aggregator scores them for investment potential or flags the negotiation opportunity
-5. **Deal stacking calculators don't pull live lender criteria** -- existing calculators use generic rates or manual input; none auto-populate finance costs from a real lender database
-
-### Pricing benchmarks for subscription tiers
-- Free: Directory + basic filters (PropertyAuctions.io model)
-- £5-10/mo: AI analysis + basic enrichment (DealSheet AI is £4.99/wk)
-- £10-15/mo: Full deal stacking + enrichment (current Bridgematch is £9.99/mo)
-- £50-100/mo: Professional/portfolio tools (Auction Radar £49/mo, PropMarker £99.99/mo)
-
-Bridgematch's current £9.99/mo premium tier is well-positioned -- cheaper than PropMarker and Auction Radar, more feature-rich than DealSheet AI for auction investors. The free tier (directory data, limited AI searches) follows the PropertyAuctions.io model of driving traffic through free access.
+**Defer to v1.3:**
+- Email alerts (retention mechanism)
+- Blog/SEO content (organic growth channel)
+- Individual lot pages with SEO URLs (biggest organic lever)
+- Saved searches / user dashboard (engagement features)
+- Unsold lot tracking (high-value differentiator but needs new scraping logic)
 
 ---
 
-*Sources: EIG (eigpropertyauctions.co.uk), PropertyAuctions.io, Auction Radar (auctionradar.co.uk), DealSheet AI (dealsheetai.com), PropMarker (propmarker.co.uk), Brickflow (brickflow.com), Broka (broka.uk), PropertyData (propertydata.co.uk), Lendlord (lendlord.io), PropertyEngine (propertyengine.co.uk), HomePortfolio (homeportfolio.com), Under the Hammer (underthehammer.com), SDL Auctions (sdlauctions.co.uk), Landlords Portal (landlordsportal.co.uk), Environment Agency flood API, MHCLG EPC register, PropEco (propeco.io), Searchland (searchland.co.uk)*
+## Competitive Landscape (v1.2 Context)
+
+| Competitor | Free? | Auction Data | AI Analysis | Finance Matching | Key Weakness |
+|-----------|-------|-------------|-------------|-----------------|-------------|
+| PropertyAuctions.io | Yes, 100% free | All UK auctioneers | No | No | No analysis, just listings |
+| DealSheet AI | No (GBP 4.99/week) | Accepts URLs for analysis | Yes (7 strategies) | No | Paid. No directory. One deal at a time. |
+| Brickflow | Free to model | No auction directory | No scoring | Yes (80+ lenders, broker-gated) | No auction aggregation. Expanding into auction house integrations (Oct 2024 announcement). |
+| EIG | Paywalled | 850K+ historical lots | No | No | Expensive, dated UX |
+| Rightmove/Zoopla | Yes | ~50% of auction houses | No | No | Missing half the market |
+| **Bridgematch v1.2** | **Yes (sign-in for AI)** | **36+ houses, AI-extracted** | **Yes (20+ signals, free)** | **Yes (BridgeMatch Lite, free)** | **New, unproven, needs traffic** |
+
+**The competitive gap:** Nobody else combines free auction aggregation + AI investment scoring + bridging finance matching. The "50% not on Rightmove" message is externally validated and unique to aggregators who cover independent auction houses.
+
+**Competitive threat to watch:** Brickflow announced auction house integration partnerships in October 2024. They have funding (Crunchbase), 80+ lenders, and are moving into the auction space. Bridgematch's window of advantage is NOW -- get users before Brickflow closes the gap.
+
+---
+
+## Conversion Strategy for Property Investors
+
+**What makes property investors sign up (research-validated):**
+
+1. **ROI metrics visible before sign-in** -- show yield estimates, opportunity flags, and score badges in the free directory. Investors prioritise returns; seeing "8.2% yield, score 7.5, development potential" on a lot card is more compelling than any marketing copy.
+
+2. **The directory IS the lead magnet** -- no need for a separate PDF download, "free guide", or email course. The product itself demonstrates value. Landing page should funnel visitors INTO the directory, not away from it.
+
+3. **Low-friction authentication** -- magic link (no password) is ideal for property investors who are busy professionals. "Sign in with email" is the lowest barrier. Research confirms: every additional form field reduces conversion by ~10%.
+
+4. **Social proof through data volume** -- "2,364 lots from 36 auction houses, updated daily" is more credible than "trusted by thousands of investors" (which you cannot yet claim). Use data you actually have.
+
+5. **Interactive tool as conversion driver** -- research shows interactive tools significantly boost landing page conversion. The directory IS the interactive tool. The landing page's job is to get people into it.
+
+**Target conversion benchmarks:**
+
+| Funnel Step | Target Rate | Basis |
+|-------------|------------|-------|
+| Landing page -> directory browser | 40-60% | Strong USP, single CTA, free access |
+| Directory browser -> sign-in | 8-12% | Free tool, low friction, clear AI value |
+| Signed-in -> BridgeMatch Lite user | 15-25% | Natural next step after seeing scores |
+| Overall visitor -> signed-in user | 5-8% | Above 3.8% SaaS median (no payment) |
+| BridgeMatch user -> "speak to broker" | 3-5% | This is the monetisable lead |
+
+At 500 MAU with 5% BridgeMatch-to-broker conversion = ~25 qualified bridging finance leads/month. At GBP 200-300 per lead (industry rate per LeadCrowd, The Lead Engine), that is GBP 5,000-7,500/month in lead value -- far exceeding the GBP 150/month running cost.
+
+---
+
+## Sources
+
+- [EIG Property Auctions - Why Rightmove isn't the best way to search auctions](https://www.eigpropertyauctions.co.uk/news/blog/why-zoopla-and-rightmove-best-way-search-property) -- validates "50% not on Rightmove" claim (MEDIUM confidence)
+- [PropertyAuctions.io](https://propertyauctions.io/) -- primary free competitor, feature baseline
+- [DealSheet AI](https://dealsheetai.com/) -- AI analysis competitor, GBP 4.99/week pricing confirmed
+- [Brickflow - Auction Finance](https://brickflow.com/bridging-finance/auction-finance) -- finance matching competitor, expanding auction house integrations
+- [Brickflow expands with auction house integration (Mortgage Solutions, Oct 2024)](https://www.mortgagesolutions.co.uk/specialist-lending/bridging/2024/10/03/brickflow-expands-footprint-with-auction-house-integration/) -- Brickflow entering auction space
+- [First Page Sage - Landing Page Conversion Rates by Industry 2026](https://firstpagesage.com/seo-blog/landing-page-conversion-rates-by-industry/) -- real estate: 2.6% median, 7.4% mean
+- [First Page Sage - Average SaaS Conversion Rates 2026](https://firstpagesage.com/seo-blog/average-saas-conversion-rates/) -- SaaS median 3.8%
+- [F3 Fund It - Solopreneur Analytics Stack 2026](https://f3fundit.com/the-solopreneur-analytics-stack-2026-posthog-vs-plausible-vs-fathom-analytics-and-why-you-should-ditch-google-analytics/) -- PostHog 1M free events, Plausible 500 MAU free
+- [Flagsmith - Feature Flags Best Practices](https://www.flagsmith.com/blog/feature-flags-best-practices) -- kill switch pattern for third-party integrations
+- [Stripe - Freemium Pricing Explained](https://stripe.com/resources/more/freemium-pricing-explained) -- freemium conversion best practices
+- [LeadCrowd - Bridging Finance Leads](https://www.leadcrowd.com/lead-types/financial-services/auction-bridging-development-loan/) -- lead pricing benchmarks
+- [The Lead Engine - Bridging Loan Leads](https://theleadengine.co.uk/bridging-loan-leads/) -- UK bridging lead generation market

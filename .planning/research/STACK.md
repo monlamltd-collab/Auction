@@ -1,458 +1,352 @@
-# Stack Research
+# Stack Research: v1.2 New Capabilities
 
-Research conducted 2026-03-15 for Milestone 2 capabilities. Focuses on what needs to be ADDED to the existing Node.js/Express + Firecrawl + Supabase + Stripe stack.
+**Domain:** AI cost optimisation, analytics tracking, feature flags, landing page
+**Researched:** 2026-03-20
+**Confidence:** HIGH (official pricing pages verified, existing codebase inspected)
 
----
-
-## Firecrawl Capabilities (Current API)
-
-### Current Usage (Underutilised)
-
-The codebase currently calls Firecrawl v1 at `https://api.firecrawl.dev/v1/scrape` with `formats: ['rawHtml']` as the default (line 279 of server.js). This means:
-- Every scrape returns raw HTML that must be parsed locally with JSDOM
-- The `markdown` format (Firecrawl's primary value proposition — 67% fewer tokens than HTML) is never used
-- The `json` structured extraction mode is never used
-- The `metadata` object in responses (title, description, statusCode) is available but not leveraged
-
-### Available Formats (v1/v2 API)
-
-| Format | What It Returns | Credit Cost | Relevance |
-|--------|----------------|-------------|-----------|
-| `markdown` | Clean LLM-ready markdown, main content only | 1 credit | HIGH — feed directly to Gemini instead of stripped HTML |
-| `rawHtml` | Full unmodified HTML | 1 credit | Already used |
-| `html` | Cleaned HTML (scripts/styles removed) | 1 credit | Useful fallback |
-| `json` | LLM-extracted structured data via schema or prompt | +4 credits/page | HIGH for enrichment |
-| `images` | All image URLs from rendered page | 1 credit | Already used for backfill |
-| `links` | All links from page | 1 credit | Useful for pagination detection |
-| `screenshot` | Full-page screenshot URL (24hr expiry) | 1 credit | Low priority |
-
-### Structured JSON Extraction
-
-Firecrawl's `json` format accepts either a JSON Schema or a natural language prompt to extract structured data. This is the key capability for property enrichment:
-
-```js
-// Schema-based extraction (most reliable)
-const result = await scrapeWithFirecrawl(url, {
-  formats: ['json'],
-  jsonOptions: {
-    schema: {
-      type: 'object',
-      properties: {
-        sold_prices: { type: 'array', items: { type: 'object', properties: {
-          address: { type: 'string' },
-          price: { type: 'number' },
-          date: { type: 'string' },
-          property_type: { type: 'string' }
-        }}},
-        rental_estimate: { type: 'number' },
-        average_asking_price: { type: 'number' }
-      }
-    }
-  }
-});
-
-// Prompt-based extraction (more flexible, less predictable)
-const result = await scrapeWithFirecrawl(url, {
-  formats: ['json'],
-  jsonOptions: {
-    prompt: 'Extract all sold prices, rental estimates, and average asking prices from this property listing page'
-  }
-});
-```
-
-**Credit cost:** 5 credits per page (1 base + 4 for JSON mode). At 15,000 monthly budget, that's 3,000 enrichment lookups/month — roughly 140 per lot if enriching all ~21 houses' catalogues.
-
-### `/extract` Endpoint (Separate from `/scrape`)
-
-Firecrawl also has a dedicated `/extract` endpoint that:
-- Accepts wildcard URL patterns (e.g., `zoopla.co.uk/house-prices/*`)
-- Can process entire websites, not just single pages
-- Returns structured data via schema or prompt
-- Supports `enableWebSearch` for enriched context
-- Returns a Job ID for async polling
-
-This could be useful for batch enrichment but is a different billing model.
-
-### Actions Parameter
-
-Already partially used (executeJavascript for lazy images). Full action support includes:
-- `write` — input text into search fields
-- `press` — keyboard keys (Enter, Tab)
-- `click` — click DOM elements by CSS selector
-- `wait` — pause for rendering
-- `screenshot` — capture state
-
-This enables **interactive scraping** — e.g., searching for an address on Zoopla/Rightmove and extracting the results page.
-
-### Recommendations for Firecrawl
-
-1. **Switch catalogue scraping to `formats: ['markdown', 'rawHtml']`** — feed markdown to Gemini (fewer tokens = better extraction + lower Gemini token usage), keep rawHtml for DOM extractors. Cost: 0 additional credits (markdown is included in base credit).
-2. **Use `json` format for enrichment** — define schemas for Zoopla/Rightmove data extraction. Cost: +4 credits per enrichment call.
-3. **Use `actions` for portal search** — type address, press Enter, wait, then extract results.
-4. **Upgrade to v2 API** — the codebase uses v1 (`/v1/scrape`). v2 has the same endpoint structure but better extraction quality. Migration: change URL path from `/v1/` to `/v2/`.
-
-**Confidence: HIGH** — all capabilities confirmed in current Firecrawl docs.
+This document covers ONLY what needs to change or be added for v1.2. The existing stack (Express, Firecrawl, Supabase, Stripe, vanilla JS) is validated and not re-researched.
 
 ---
 
-## Property Portal Data Access (Zoopla/Rightmove)
-
-### Zoopla
-
-**Official API:** Zoopla historically offered a public developer API with endpoints for property listings, sold prices, rental estimates, and area stats. As of 2025, the API is in a grey zone — it exists but is no longer actively maintained, API keys can stop working without warning, and there is no new developer signup process visible. **Do not rely on the official Zoopla API.**
-
-**Scraping feasibility:** Zoopla employs anti-bot measures (CAPTCHAs, rate limiting, IP bans) but Firecrawl's managed proxy rotation and JS rendering can handle this. Key pages:
-
-| Data Needed | Zoopla URL Pattern | Scrapeable? |
-|-------------|-------------------|-------------|
-| Sold prices | `zoopla.co.uk/house-prices/{postcode}/` | YES via Firecrawl |
-| Rental estimates | `zoopla.co.uk/house-prices/{address}` (Zed-Index) | YES via Firecrawl |
-| Current listings | `zoopla.co.uk/for-sale/details/{id}` | YES via Firecrawl |
-| Area stats | `zoopla.co.uk/house-prices/{area}/` | YES via Firecrawl |
-
-**Approach:** Use Firecrawl `actions` to navigate to sold prices page for a postcode, then extract with `json` format + schema. Estimated 2-3 credits per lookup (1 base + potential enhanced proxy).
-
-### Rightmove
-
-**Official API:** Rightmove has NO public API. Their APIs (Real Time Data Feed, Commercial Listings API) are restricted to registered estate agents for listing management only. Rightmove explicitly prohibits scraping in their ToS.
-
-**Scraping feasibility:** Rightmove is more aggressive with anti-bot than Zoopla. However, Firecrawl's proxy rotation can typically handle it. Key pages:
-
-| Data Needed | Rightmove URL Pattern | Scrapeable? |
-|-------------|----------------------|-------------|
-| Sold prices | `rightmove.co.uk/house-prices/{postcode}.html` | YES via Firecrawl (public page) |
-| Rental estimates | Not directly available as a page | NO — derived data only |
-| Current listings | `rightmove.co.uk/properties/{id}` | YES via Firecrawl |
-| House price history | `rightmove.co.uk/house-prices/detail.html?propertyId={id}` | YES via Firecrawl |
-
-**Legal note from PROJECT.md:** "No scraping of data behind login walls; respect robots.txt on property portals." Sold prices pages on both portals are public (no login required) and are not blocked by robots.txt. This is publicly available information derived from Land Registry data that the portals present with added context.
-
-### PropertyData API (Legitimate Alternative)
-
-**PropertyData.co.uk** aggregates data from Rightmove, Zoopla, OnTheMarket, Land Registry, and other sources into a single REST API with 66+ endpoints. Key endpoints:
-
-| Endpoint | What It Returns | Credits |
-|----------|----------------|---------|
-| Sold prices / comps | Historical transactions near an address | 1 |
-| Rental estimates | Live local asking rents by property type | 1 |
-| Yields | Local rental yields | 1 |
-| Growth forecasts | Price growth predictions | 1 |
-| Demand signals | Market demand metrics | 1 |
-| Flood risk | Flood zone data | 1 |
-
-**Pricing:** Starts at £28/month for 2,000 credits (rate limit: 4 per 10 seconds). The API 5k plan at £48/month would cover ~5,000 lookups — sufficient for enriching all lots.
-
-**Authentication:** API key based, straightforward REST.
-
-### Recommended Approach (Tiered)
-
-1. **Primary: Firecrawl scraping of Zoopla/Rightmove sold prices pages** — uses existing Firecrawl budget, no new vendor. Build address-to-URL mapping, scrape public sold prices pages, extract with JSON schema. Cost: ~5 Firecrawl credits per lot enrichment.
-
-2. **Fallback/Supplement: PropertyData API** — for rental estimates and yield data that aren't easily scraped. £28-48/month for structured, reliable data. Much more reliable than scraping for ongoing use.
-
-3. **Existing: Land Registry enrichment** — already implemented, provides street averages and yield estimates. The new enrichment supplements this, not replaces it.
-
-**Confidence: MEDIUM-HIGH** — Firecrawl can scrape Zoopla/Rightmove public pages today, but portals may tighten anti-bot over time. PropertyData is the reliable fallback.
-
----
-
-## Deal Stacking / Investment Analysis Patterns
-
-### What Exists Today
-
-The codebase has a `calcDealAnalysis()` function (referenced in bugs as dead code at ~line 2452 of index.html/script.js). Known bugs from `bugs-forms-data.md`:
-- Bridging cost formula error (incorrect calculation)
-- Bridging cost missing from total cost
-- Assumes street average = post-works GDV (should be separate user input)
-- SDLT shows £0 for some price ranges
-- Hardcodes 12-month hold period (most auction deals are 6-9 months)
-- No `worksCost` parameter
-
-The existing `bridgematch-lite.html` has a working SDLT calculation but uses investor surcharge rates that appear to be the old 3% rates (pre-October 2024), not the current 5% surcharge.
-
-### SDLT Calculation Rules (2025/26, England & Northern Ireland)
-
-**Standard residential rates (from April 2025):**
-
-| Band | Rate |
-|------|------|
-| £0 - £125,000 | 0% |
-| £125,001 - £250,000 | 2% |
-| £250,001 - £925,000 | 5% |
-| £925,001 - £1,500,000 | 10% |
-| Over £1,500,000 | 12% |
-
-**Additional property surcharge (investors/BTL/second homes): +5% on ALL bands**
-
-Effective investor rates:
-
-| Band | Rate (with 5% surcharge) |
-|------|--------------------------|
-| £0 - £125,000 | 5% |
-| £125,001 - £250,000 | 7% |
-| £250,001 - £925,000 | 10% |
-| £925,001 - £1,500,000 | 15% |
-| Over £1,500,000 | 17% |
-
-**Non-UK resident surcharge:** Additional 2% on top of everything (so investor + non-resident = +7% total surcharge). Implementation should include a toggle for this.
-
-**Threshold:** No surcharge applies to properties under £40,000.
-
-**Implementation (deterministic, no API needed):**
-
-```js
-function calculateSDLT(price, isAdditional = true, isNonResident = false) {
-  if (price < 40000) return 0;
-  const surcharge = (isAdditional ? 0.05 : 0) + (isNonResident ? 0.02 : 0);
-  const bands = [
-    { threshold: 125000, rate: 0 },
-    { threshold: 250000, rate: 0.02 },
-    { threshold: 925000, rate: 0.05 },
-    { threshold: 1500000, rate: 0.10 },
-    { threshold: Infinity, rate: 0.12 }
-  ];
-  let tax = 0, prev = 0;
-  for (const band of bands) {
-    const taxable = Math.min(price, band.threshold) - prev;
-    if (taxable <= 0) break;
-    tax += taxable * (band.rate + surcharge);
-    prev = band.threshold;
-  }
-  return Math.round(tax);
-}
-```
-
-**Confidence: HIGH** — rates confirmed on GOV.UK, effective from April 2025.
-
-### Deal Stacking Calculator — Full Formula
-
-The deal stack is the complete cost breakdown for an auction property investment. Based on research of UK property investment calculators (PropMarker, PropertyEngine, ThePropertyCalculator, WTF Property BRRR calculator):
-
-**Inputs (auto-calculated from lot data + lender data):**
-- Purchase price (from lot `guidePrice`)
-- SDLT (calculated from purchase price, investor rates)
-- Bridging finance cost (from Bridgematch lender data: rate, term, arrangement fee)
-- Auction buyer's premium (typically 2% + VAT, varies by house)
-
-**Inputs (user-provided):**
-- GDV (Gross Development Value — post-works value)
-- Works cost (refurbishment budget)
-- Legal fees (solicitor, conveyancing)
-- Survey/valuation costs
-- Expected monthly rental income
-- Hold period in months (default 9 for auction refurbs)
-- Exit strategy: Flip (sell) or Hold (refinance to BTL mortgage)
-
-**Outputs — the "stack":**
-
-```
-TOTAL COST IN:
-  Purchase price .................. £X
-  SDLT (investor rate) ........... £X  [auto]
-  Buyer's premium ................ £X  [auto if known]
-  Legal fees ..................... £X  [user input]
-  Survey / valuation ............. £X  [user input]
-  Works cost ..................... £X  [user input]
-  Bridging interest .............. £X  [auto: loan * monthly rate * months]
-  Bridging arrangement fee ....... £X  [auto: loan * 1-2%]
-  ─────────────────────────────────────
-  TOTAL COST IN .................. £X
-
-FLIP ANALYSIS (if selling):
-  GDV (sale price) ............... £X  [user input]
-  Agent fees (1.5% + VAT) ........ £X  [auto]
-  ─────────────────────────────────────
-  Net proceeds ................... £X
-  Gross profit ................... £X  (GDV - agent fees - total cost in)
-  ROI ............................ X%  (profit / total cost in * 100)
-  Cash-on-cash return ............ X%  (profit / cash actually deployed)
-
-HOLD ANALYSIS (if refinancing to BTL):
-  Monthly rental income .......... £X  [user input]
-  Annual rental income ........... £X
-  Gross yield .................... X%  (annual rent / purchase price)
-  Net yield (est) ................ X%  (annual rent - costs / purchase price)
-  Refinance value (GDV) .......... £X  [user input]
-  75% LTV mortgage ............... £X  [auto]
-  Cash left in deal .............. £X  (total cost in - mortgage)
-  Cash-on-cash return ............ X%  (annual net rent / cash left in)
-```
-
-**Bridging cost auto-calculation** requires data from Bridgematch lender matching:
-- Day-1 advance rate (typically 70-80% of purchase price or value)
-- Monthly interest rate (0.55-1.0% typical)
-- Arrangement fee (1-2% of loan)
-- The system already has lender data in Bridgematch Lite
-
-**Confidence: HIGH** — standard property investment formulas, well-established in UK property education.
-
----
-
-## Subscription Management Patterns
+## 1. AI Cost Optimisation
 
 ### Current State
 
-The system uses Supabase auth (magic links) and Stripe for £9.99/month premium subscriptions with a 14-day Pro trial on signup. Known issues from `bugs-auth-stripe.md` include edge cases around trial expiry, downgrade flows, and resubscription.
+The codebase already uses `gemini-2.5-flash-lite` (MODEL_FLASH) for known houses and `gemini-2.5-pro` (MODEL_PRO) for unknown/PDF extraction. The `@google/generative-ai` SDK is at v0.24.1. The Gemini 2.0 Flash model referenced in CLAUDE.md has already been migrated away from in the actual code.
 
-### Stripe Webhook Events to Handle
+**Critical deprecation:** Gemini 2.0 Flash shuts down June 1, 2026. The codebase is already on 2.5 models, so no migration is needed.
 
-**Minimum required events for robust subscription management:**
+### AI Model Cost Comparison (March 2026)
 
-| Event | Action |
-|-------|--------|
-| `customer.subscription.created` | Set user tier to premium in Supabase |
-| `customer.subscription.updated` | Check status transitions (active/past_due/canceled) |
-| `customer.subscription.deleted` | Revoke premium access, set to free tier |
-| `customer.subscription.trial_will_end` | Send email warning (3 days before trial ends) |
-| `invoice.paid` | Confirm/renew premium access |
-| `invoice.payment_failed` | Notify user, grace period before downgrade |
-| `invoice.finalization_failed` | Handle tax/location validation errors |
+All prices are per 1 million tokens. The use case is structured JSON extraction from HTML/markdown property catalogue pages.
 
-### Subscription State Machine
+| Model | Input $/1M | Output $/1M | Free Tier | JSON Output | Confidence |
+|-------|-----------|------------|-----------|-------------|------------|
+| **Gemini 2.5 Flash-Lite** | $0.10 | $0.40 | Yes (15 RPM, 1000 RPD) | Yes (native) | HIGH |
+| Gemini 2.5 Flash | $0.30 | $2.50 | Yes (10 RPM, 250 RPD) | Yes (native) | HIGH |
+| Gemini 2.5 Pro | $1.25 | $10.00 | Yes (5 RPM, 100 RPD) | Yes (native) | HIGH |
+| Groq Llama 3.1 8B | $0.05 | $0.08 | No free tier | JSON mode | HIGH |
+| Groq Llama 3.1 70B | $0.59 | $0.79 | No free tier | JSON mode | HIGH |
+| DeepSeek V3.2 | $0.28 | $0.42 | 5M tokens signup bonus | JSON mode | MEDIUM |
+| DeepSeek V3.2 (cache hit) | $0.028 | $0.42 | 5M tokens signup bonus | JSON mode | MEDIUM |
+| Mistral Nemo | $0.02 | $0.02 | No free tier | JSON mode | MEDIUM |
+| Mistral Medium 3 | $0.40 | $2.00 | No free tier | JSON mode | MEDIUM |
+| Grok 4.1 Fast | $0.20 | $0.50 | $25 signup + $150/mo data sharing | JSON mode | MEDIUM |
 
-```
-TRIALING (14 days)
-  ├─→ ACTIVE (payment succeeds at trial end)
-  ├─→ PAST_DUE (payment fails at trial end)
-  │     ├─→ ACTIVE (user updates payment, retry succeeds)
-  │     ├─→ CANCELED (all retries exhausted)
-  │     └─→ UNPAID (terminal, no more retries)
-  └─→ CANCELED (user cancels during trial)
-       └─→ ACTIVE (user resubscribes)
-```
+### Recommendation: Stay on Gemini 2.5 Flash-Lite (No Change)
 
-### Edge Cases to Harden
+**Why:** Gemini 2.5 Flash-Lite on the free tier is unbeatable for this use case.
 
-1. **Trial expiry without payment method:** Stripe fires `customer.subscription.updated` with status change from `trialing` to `past_due` or `paused`. The webhook must downgrade the user's Supabase tier immediately.
+**The math:**
+- ~36 auction houses, each averaging ~3 catalogue pages = ~108 Gemini calls per analysis cycle
+- 6-hour cycle = 4 cycles/day = ~432 calls/day
+- Free tier allows 1,000 RPD for Flash-Lite
+- Hash-based skip saves 50-70%, so actual daily calls are ~130-215
+- **Cost: GBP 0.00/month** on free tier
 
-2. **Payment failure on renewal:** Stripe retries failed payments on a configurable schedule (default: 3 retries over ~3 weeks). During this period, status is `past_due`. Decision needed: keep premium access during grace period or revoke immediately?
+**Why NOT switch to alternatives:**
 
-3. **Resubscription after cancellation:** When a canceled user resubscribes, Stripe creates a NEW subscription (not reactivating the old one). The webhook must handle `customer.subscription.created` even if the user already exists in Supabase.
+| Alternative | Why Not |
+|-------------|---------|
+| Groq Llama 3.1 8B | Cheapest per-token, but no free tier. Even at $0.05/1M input, paying anything beats free. Also: 8B models struggle with complex HTML extraction -- accuracy risk. |
+| DeepSeek V3.2 | Good pricing, but China-hosted API raises data residency questions for UK property data. 5M free tokens is a one-time bonus, not ongoing free tier. Reliability concerns (outages reported). |
+| Grok 4.1 Fast | The $150/mo data sharing credits are attractive but require opting in to xAI training on your API data. The $25 signup credit burns fast. No sustained free tier. |
+| Mistral Nemo | Cheapest per-token at $0.02/$0.02, but no free tier and 8B-class model -- accuracy risk for structured extraction from messy auction HTML. |
+| Gemini 2.5 Flash | 3x more expensive than Flash-Lite with lower free tier limits (250 RPD vs 1000 RPD). Only use if Flash-Lite extraction quality proves insufficient. |
 
-4. **Webhook delivery failure:** Stripe retries webhooks for up to 3 days with exponential backoff. Implement idempotency keys or check Stripe subscription status on each API request as a fallback.
+**When to reconsider:**
+- If free tier limits drop again (Google reduced them in Dec 2025)
+- If volume exceeds 1,000 RPD (would need ~70+ auction houses with no hash-skip)
+- If extraction quality from Flash-Lite degrades on new auction house formats
 
-5. **Race condition: webhook vs. frontend redirect:** After Stripe Checkout, the user is redirected back to the app before the webhook fires. The frontend should poll or optimistically show premium access, then the webhook confirms it server-side.
+**Fallback plan:** If Google kills the free tier entirely, Groq Llama 3.1 70B at $0.59/$0.79 per 1M tokens is the best paid alternative. At ~432 calls/day with ~2K tokens avg input and ~1K output per call, that would be roughly $0.40/day = ~GBP 10/month. Acceptable within budget.
 
-6. **Subscription status on every API request (belt-and-suspenders):** Don't rely solely on webhooks. On each premium-gated API request, check the user's subscription status in Supabase AND optionally verify with Stripe API if the cached status is stale (>1 hour old).
+### Action Items for AI Cost Optimisation
 
-### Implementation Pattern for Express + Supabase
-
-```js
-// Webhook endpoint (raw body required for signature verification)
-app.post('/api/stripe-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
-  const sig = req.headers['stripe-signature'];
-  let event;
-  try {
-    event = stripe.webhooks.constructEvent(req.body, sig, STRIPE_WEBHOOK_SECRET);
-  } catch (err) {
-    return res.status(400).send(`Webhook Error: ${err.message}`);
-  }
-
-  switch (event.type) {
-    case 'customer.subscription.updated':
-    case 'customer.subscription.deleted': {
-      const subscription = event.data.object;
-      const customerId = subscription.customer;
-      const status = subscription.status; // active, past_due, canceled, unpaid
-      // Update Supabase user tier based on status
-      await supabase.from('users')
-        .update({ tier: status === 'active' ? 'premium' : 'free', stripe_status: status })
-        .eq('stripe_customer_id', customerId);
-      break;
-    }
-    case 'customer.subscription.trial_will_end': {
-      // Send warning email via Supabase or external service
-      break;
-    }
-    case 'invoice.payment_failed': {
-      // Notify user to update payment method
-      break;
-    }
-  }
-  res.json({ received: true });
-});
-```
-
-### Supabase-Specific Considerations
-
-- **Row Level Security (RLS):** Ensure the webhook can update user tiers. Use a service role key for webhook operations, not the anon key.
-- **Stripe Sync Engine:** Supabase offers an open-source `stripe-sync-engine` that syncs Stripe data to Postgres via webhooks. Consider using it instead of rolling custom sync logic.
-- **Real-time subscriptions:** Supabase Realtime can push tier changes to the frontend instantly after webhook processing.
-
-**Confidence: HIGH** — Stripe webhook patterns are well-documented and widely implemented.
+1. **Audit actual Gemini usage** -- add logging to track daily RPD consumption and confirm free tier is sufficient
+2. **No model change needed** -- already on the cheapest viable option
+3. **Optimise prompt size** -- ensure markdown format is being sent to Gemini (not raw HTML) to reduce input tokens. The codebase already uses Firecrawl markdown, verify this is the default path.
+4. **Monitor Gemini 3.x models** -- Gemini 3.1 Flash-Lite Preview is available at $0.25/$1.50 (no free tier yet) but may get one
 
 ---
 
-## Recommendations
+## 2. Analytics Tracking
 
-### Priority 1: Firecrawl Markdown Mode (Low effort, high value)
+### Requirements
+- MAU tracking (target: prove 500-1,000 MAU to lenders)
+- Funnel tracking (landing page -> signup -> first search -> BridgeMatch use)
+- Engagement events (lot views, searches, deal stacking usage)
+- Privacy-friendly (GDPR, no cookie banners needed)
+- Cheap or free
+- Works with vanilla JS frontend (no React/Vue)
 
-**What:** Change `scrapeWithFirecrawl` default formats from `['rawHtml']` to `['markdown', 'rawHtml']`. Feed markdown to Gemini instead of stripped HTML.
+### Options Compared
 
-**Why:** Markdown uses 67% fewer tokens than HTML. This means Gemini extraction will be faster, more accurate (less noise), and cheaper (fewer tokens per request). Zero additional Firecrawl credit cost.
+| Tool | Cost | Self-Host? | Cookie-Free | Custom Events | Funnel | Setup Complexity |
+|------|------|-----------|-------------|---------------|--------|-----------------|
+| **Umami Cloud** | Free (100K events/mo) | Optional | Yes | Yes | Yes | Very Low |
+| Plausible Cloud | $9/mo (10K pageviews) | Optional | Yes | Yes | Yes | Very Low |
+| Plausible Self-Host | Free (your infra) | Yes | Yes | Yes | Yes | Medium |
+| PostHog Cloud | Free (1M events/mo) | Optional | No (uses cookies) | Yes | Yes | Low |
+| Google Analytics | Free | No | No (cookies) | Yes | Yes | Low |
+| Simple Analytics | $9/mo | No | Yes | Yes | No funnels | Very Low |
 
-**How:** Modify line 279 of server.js. Update Gemini prompt templates to expect markdown instead of stripped HTML. Keep rawHtml for DOM extractors.
+### Recommendation: Umami Cloud (Free Tier)
 
-**Risk:** Low. Markdown format is stable and well-tested in Firecrawl.
+**Why Umami Cloud wins:**
 
-### Priority 2: Deal Stacking Calculator (Medium effort, high user value)
+1. **Free for your scale** -- 100,000 events/month covers well beyond 1,000 MAU. At ~10 events per session and 5,000 sessions/month, that is 50K events. Plenty of headroom.
+2. **No cookies, no consent banner** -- GDPR compliant out of the box. No cookie banner means no friction on the landing page.
+3. **Custom events** -- Track `lot_view`, `search`, `bridgematch_open`, `deal_stack_calculate`, `signup` with one line of JS each.
+4. **Funnel analysis** -- Built-in funnel visualisation to show lenders the conversion path.
+5. **Vanilla JS compatible** -- Just a `<script>` tag, then `umami.track('event_name', { props })`.
+6. **MIT licensed** -- Can self-host on Railway later if you outgrow the free tier or want full control.
+7. **Lightweight** -- <2KB tracking script, no performance impact.
 
-**What:** Build the full deal stack calculator as described above. Replace the broken `calcDealAnalysis()` with a proper implementation.
+**Why NOT the alternatives:**
 
-**Why:** This is the primary premium feature upgrade path. Users get free directory data; the deal stacker makes premium worth paying for.
+| Alternative | Why Not |
+|-------------|---------|
+| Plausible Cloud | $9/month for 10K pageviews -- burns budget unnecessarily when Umami is free. Self-hosted Plausible needs its own Postgres + ClickHouse, heavy for Railway. |
+| PostHog | Overkill. 1M free events is generous but PostHog uses cookies (needs consent banner), the JS bundle is heavier (~70KB), and the dashboard is complex. Feature flags are nice but env-var flags are simpler for this use case. |
+| Google Analytics | Uses cookies, requires consent banner, Google can change the product at will, privacy-hostile reputation puts off UK investors. |
+| Simple Analytics | $9/month, no funnel tracking. |
 
-**How:**
-1. Implement correct SDLT calculation (investor rates 2025/26 as documented above)
-2. Build deal stack formula with auto-calculated fields (SDLT, bridging costs from lender data) and user inputs (GDV, works, legal, rental)
-3. Wire into lot detail view as a premium-gated feature
-4. Include both Flip and Hold analysis outputs
+### Integration Pattern
 
-**Dependencies:** Bridgematch lender data for bridging cost auto-calculation. If not available per-lot, use sensible defaults (0.75% monthly rate, 2% arrangement fee, 75% LTV).
+```html
+<!-- In index.html <head> -->
+<script defer src="https://cloud.umami.is/script.js"
+        data-website-id="YOUR_WEBSITE_ID"></script>
+```
 
-### Priority 3: Property Portal Enrichment (Medium effort, medium-high value)
+```javascript
+// Custom event tracking in script.js
+umami.track('lot_view', { house: slug, lotNumber: lot.number });
+umami.track('search', { query: searchTerm, resultCount: results.length });
+umami.track('bridgematch_open', { lotId: lot.id });
+umami.track('deal_stack_calculate', { purchasePrice: price });
+umami.track('signup', { method: 'magic_link' });
+```
 
-**What:** Enrich lots with Zoopla/Rightmove sold prices and rental estimates using Firecrawl's JSON extraction.
+### Key Events to Track
 
-**How:**
-1. Build address-to-URL mapper for Zoopla sold prices pages (`zoopla.co.uk/house-prices/{postcode}/`)
-2. Use Firecrawl `json` format with a schema to extract comparable sold prices
-3. Cache enrichment data in Supabase (don't re-scrape if data <30 days old)
-4. Supplement with PropertyData API for rental estimates (£28-48/month)
-5. Display enrichment data on lot detail cards (free for all users per tier strategy)
+| Event | Trigger | Properties | Why |
+|-------|---------|-----------|-----|
+| `page_view` | Automatic | path, referrer | MAU count |
+| `signup` | After Supabase auth | method | Conversion tracking |
+| `search` | Search submitted | query, resultCount | Engagement |
+| `lot_view` | Lot card expanded | house, lotNumber | Engagement depth |
+| `bridgematch_open` | BridgeMatch Lite opened | lotId, price | Funnel metric for lenders |
+| `deal_stack_calculate` | Deal stacking used | purchasePrice | Power user signal |
+| `filter_applied` | Filter changed | filterType, value | UX insight |
 
-**Budget impact:** ~5 Firecrawl credits per lot enrichment. For ~2,400 lots, that's ~12,000 credits — close to the 15,000 monthly budget. Either:
-  - Enrich only lots with guide price >£50k (eliminates garage/parking lots)
-  - Enrich on-demand when user views lot detail (lazy enrichment)
-  - Increase Firecrawl budget
-  - Use PropertyData API as primary source instead (£28-48/month, more reliable)
+### Cost: GBP 0.00/month
 
-**Recommended approach:** Lazy enrichment (on lot detail view) + 30-day cache. This spreads credit usage across the month and only enriches lots users actually care about.
+---
 
-### Priority 4: Subscription Tier Hardening (Medium effort, critical for revenue)
+## 3. Feature Flags
 
-**What:** Implement all webhook handlers, edge case handling, and belt-and-suspenders status checking as documented above.
+### Requirements
+- Toggle Stripe on/off without code changes
+- Simple, no external service
+- Works in Express (server-side) and vanilla JS (client-side)
 
-**How:**
-1. Implement Stripe webhook endpoint with signature verification
-2. Handle all 7 recommended events
-3. Add subscription status cache in Supabase with TTL
-4. Add server-side status check on every premium-gated API request
-5. Handle trial_will_end with email notification
-6. Test all edge cases with Stripe Test Clocks
+### Recommendation: Plain Environment Variables (No Library)
 
-**Key decision needed:** Grace period policy — when payment fails, how long before revoking premium access? Recommendation: 7-day grace period (Stripe default retry schedule is ~3 weeks, but user should be warned on day 1).
+**Why no library is needed:**
 
-### Technology Additions Required
+The only feature flag needed for v1.2 is `STRIPE_ENABLED`. This is a single boolean toggle. Adding a feature flag library (LaunchDarkly, Unleash, Flagsmith, even PostHog flags) is massive overkill.
 
-| Addition | Purpose | Cost |
-|----------|---------|------|
-| `stripe` npm package | Webhook signature verification, API calls | Free (already partially integrated) |
-| PropertyData API key | Reliable rental estimates and yield data | £28-48/month |
-| Firecrawl v2 migration | Better extraction quality | Free (same API key) |
+### Implementation Pattern
+
+```javascript
+// server.js -- near top with other env vars
+const STRIPE_ENABLED = process.env.STRIPE_ENABLED !== 'false'; // default: enabled
+
+// Guard Stripe initialisation
+let stripe = null;
+if (STRIPE_ENABLED) {
+  stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+}
+
+// Guard Stripe routes
+app.post('/api/create-checkout', (req, res) => {
+  if (!STRIPE_ENABLED) return res.status(503).json({ error: 'Payments temporarily unavailable' });
+  // ... existing Stripe logic
+});
+
+// Expose to frontend via config endpoint
+app.get('/api/config', (req, res) => {
+  res.json({
+    stripeEnabled: STRIPE_ENABLED,
+    // other client-safe config
+  });
+});
+```
+
+```javascript
+// script.js -- hide payment UI when disabled
+fetch('/api/config').then(r => r.json()).then(config => {
+  if (!config.stripeEnabled) {
+    document.querySelectorAll('.stripe-only').forEach(el => el.style.display = 'none');
+  }
+});
+```
+
+### Why NOT a Feature Flag Service
+
+| Service | Why Not |
+|---------|---------|
+| LaunchDarkly | $8.33/month minimum, requires SDK, overkill for one flag |
+| PostHog flags | Would need PostHog integration just for flags, heavy |
+| Unleash | Self-hosted, needs its own database, overkill |
+| Flagsmith | Free tier exists but adds external dependency for one boolean |
+| growthbook | Good but still overkill -- adds a dependency and dashboard for one toggle |
+
+**When to reconsider:** If v1.3+ needs per-user feature flags (A/B testing, gradual rollouts), consider PostHog or GrowthBook at that point. For v1.2, env vars are correct.
+
+### New Environment Variables
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `STRIPE_ENABLED` | `true` | Set to `false` to hibernate all Stripe functionality |
+
+### Cost: GBP 0.00/month
+
+---
+
+## 4. Landing Page
+
+### Requirements
+- High-converting property tool landing page
+- Hero: "50% of auction houses aren't on Rightmove"
+- Works with existing vanilla JS + CSS custom properties stack
+- No framework, no build step
+
+### Recommendation: Pure HTML/CSS (No New Dependencies)
+
+**Why:** The existing stack uses vanilla HTML/CSS with custom properties and Google Fonts (Outfit, Sora). A landing page is static content with a CTA. Adding a framework, static site generator, or landing page builder would be absurd.
+
+### What IS Needed
+
+| Item | Approach | Cost |
+|------|----------|------|
+| Landing page HTML | New `landing.html` or repurpose `welcome.html` | GBP 0 |
+| Social proof / stats | Pull from Supabase (lot count, house count) at build/serve time | GBP 0 |
+| OG meta tags | Hand-code `<meta property="og:...">` tags | GBP 0 |
+| Favicon / branding | Already exists | GBP 0 |
+| Analytics | Umami script tag (see section 2) | GBP 0 |
 
 ### What NOT to Add
 
-- **No new scraping libraries** — Firecrawl handles everything needed
-- **No separate property data database** — cache in existing Supabase
-- **No frontend framework** — keep vanilla JS per existing architecture
-- **No separate microservice** — keep in server.js monolith per constraints
+| Avoid | Why |
+|-------|-----|
+| Next.js / Astro / Gatsby | The app is a vanilla Express monolith serving HTML. A framework for one landing page is nonsensical. |
+| Tailwind CSS | The app uses CSS custom properties consistently. Introducing Tailwind would create two styling systems. |
+| Landing page SaaS (Carrd, Framer) | Adds cost, creates a separate domain/subdomain, breaks analytics continuity. |
+| Animation libraries (GSAP, Framer Motion) | Unnecessary weight. CSS animations and `IntersectionObserver` for scroll reveals are sufficient. |
+| Hero image stock photos | Generic stock photos reduce trust. Use real screenshot of the tool showing actual auction data. |
+
+### Landing Page Performance Checklist
+
+- Inline critical CSS (above-fold styles in `<style>` tag)
+- Defer non-critical JS
+- Lazy-load below-fold images
+- Preload Google Fonts (Outfit, Sora) already in use
+- Target: Lighthouse Performance > 90
+
+### Cost: GBP 0.00/month
+
+---
+
+## Total v1.2 Stack Cost Impact
+
+| Capability | Monthly Cost | One-Time Cost | Technology |
+|------------|-------------|---------------|------------|
+| AI (Gemini 2.5 Flash-Lite free tier) | GBP 0.00 | GBP 0.00 | No change (already using it) |
+| Analytics (Umami Cloud free tier) | GBP 0.00 | GBP 0.00 | Add `<script>` tag + event calls |
+| Feature flags (env vars) | GBP 0.00 | GBP 0.00 | Code pattern, no library |
+| Landing page (HTML/CSS) | GBP 0.00 | GBP 0.00 | No new dependencies |
+| **Total** | **GBP 0.00** | **GBP 0.00** | |
+
+**v1.2 adds zero cost to the monthly burn rate.** The existing ~GBP 150/month (Claude Max GBP 80 + Firecrawl GBP 70) is unchanged.
+
+---
+
+## Installation
+
+```bash
+# No new npm packages needed for v1.2
+
+# Umami is a <script> tag, not an npm package
+# Feature flags are env vars, not a library
+# Landing page is HTML/CSS
+# AI model is already Gemini 2.5 Flash-Lite via existing @google/generative-ai SDK
+```
+
+### New Environment Variables to Add
+
+```bash
+# Railway environment
+STRIPE_ENABLED=false          # Hibernate Stripe for free-first pivot
+UMAMI_WEBSITE_ID=xxxxxxxx    # From Umami Cloud dashboard (after signup)
+```
+
+---
+
+## Alternatives Considered (Full Summary)
+
+| Category | Recommended | Alternative | When to Use Alternative |
+|----------|-------------|-------------|-------------------------|
+| AI extraction | Gemini 2.5 Flash-Lite (free) | Groq Llama 3.1 70B ($0.59/$0.79 per 1M) | If Google kills free tier |
+| AI extraction | Gemini 2.5 Flash-Lite (free) | DeepSeek V3.2 ($0.28/$0.42 per 1M) | If you need cache-hit pricing and accept China-hosted API |
+| AI fallback (PDF/unknown) | Gemini 2.5 Pro (free, 100 RPD) | Gemini 2.5 Flash ($0.30/$2.50 per 1M) | If Pro free tier RPD is too low |
+| Analytics | Umami Cloud (free 100K events) | Plausible self-hosted (free, your infra) | If you want full data ownership on Railway |
+| Analytics | Umami Cloud (free 100K events) | PostHog (free 1M events) | If you need session replay or A/B testing |
+| Feature flags | Env vars | PostHog / GrowthBook | If you need per-user flags or A/B testing in v1.3+ |
+| Landing page | Vanilla HTML/CSS | Astro | If you ever need a multi-page marketing site with blog (v1.3 SEO) |
+
+---
+
+## What NOT to Add in v1.2
+
+| Technology | Why Not | Temptation |
+|-----------|---------|-----------|
+| OpenRouter | Adds a middleman proxy with markup. Call Gemini directly via existing SDK. | "Single API for all models" |
+| LangChain | Massive dependency for what is a single `callGemini()` function. | "AI framework" |
+| Vercel Analytics | Would require migrating back to Vercel or adding their edge function. Wrong platform. | "Easy analytics" |
+| Sentry | Good tool, wrong milestone. Error tracking is a v1.3 concern. Budget matters. | "We should have error tracking" |
+| Redis | No need. In-memory caching + Supabase is working. Railway Redis adds ~$5/month. | "Proper caching" |
+| TypeScript | Migration of an 11K-line server.js is a multi-week project. Not in scope for v1.2. | "We should type things" |
+| Any CSS framework | Existing custom properties work. Adding Tailwind/Bootstrap creates dual systems. | "Landing page would be faster with Tailwind" |
+| Docker compose changes | Railway handles container orchestration. Don't add self-hosted analytics infra. | "Self-host Umami on Railway" |
+
+---
+
+## Version Compatibility
+
+| Package | Compatible With | Notes |
+|---------|----------------|-------|
+| `@google/generative-ai` ^0.24.1 | Gemini 2.5 Flash-Lite, 2.5 Pro | Already installed, supports all current models |
+| Umami Cloud script | Any browser | External `<script>`, no npm dependency |
+| Node.js (Railway) | All above | No version change needed |
+
+---
+
+## Sources
+
+- [Gemini API Pricing (official)](https://ai.google.dev/gemini-api/docs/pricing) -- verified model pricing and deprecation dates (HIGH confidence)
+- [Gemini Rate Limits (official)](https://ai.google.dev/gemini-api/docs/rate-limits) -- free tier RPM/RPD limits (HIGH confidence)
+- [Groq Pricing](https://groq.com/pricing) -- Llama 3.1 token costs (HIGH confidence)
+- [DeepSeek Pricing](https://api-docs.deepseek.com/quick_start/pricing) -- V3.2 token costs (MEDIUM confidence, prices may change)
+- [xAI Grok API](https://x.ai/api) -- Grok pricing and free credits program (MEDIUM confidence)
+- [Mistral Pricing](https://mistral.ai/pricing) -- Nemo and Medium 3 costs (MEDIUM confidence)
+- [Umami](https://umami.is/) -- analytics platform features and pricing (HIGH confidence)
+- [Plausible](https://plausible.io/) -- analytics alternative comparison (HIGH confidence)
+- [PostHog Pricing](https://posthog.com/pricing) -- free tier limits (HIGH confidence)
+- Codebase inspection: `server.js` lines 234-235, 904-935 -- current Gemini model constants and SDK usage (HIGH confidence)
+
+---
+*Stack research for: Bridgematch Auction Tool v1.2*
+*Researched: 2026-03-20*

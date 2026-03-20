@@ -1,341 +1,505 @@
-# Architecture Research
+# Architecture Patterns
 
-Research into how to integrate four new capabilities into the existing monolith (`server.js` ~9,750 lines).
-
----
-
-## Enrichment Pipeline Design
-
-### Goal
-Add a Zoopla/Rightmove enrichment step that attaches comps, rental estimates, and sold prices to lots after extraction — supplementing the existing Land Registry data.
-
-### Current Enrichment Flow
-After lots are extracted and scored, `enrichLots()` (line 8857) runs:
-1. Groups lots by postcode
-2. Queries Land Registry in batches of 5 concurrent requests
-3. Calculates street averages, below-market scores, rental yield estimates (via `estimateMonthlyRent()` lookup table)
-4. Adjusts scores based on findings
-
-This runs **synchronously** within both `autoAnalyseOne()` (line 9612) and the user-triggered `POST /api/analyse` flow (line 2888).
-
-### Recommended Approach: Async Background Enrichment
-
-**Do not run Zoopla/Rightmove scraping synchronously during lot extraction.** Reasons:
-
-1. **Firecrawl credit budget.** Each portal lookup costs 1 Firecrawl credit. A 100-lot catalogue would burn 100-200 credits just for enrichment, against a 15,000/month budget that already covers ~21 houses' catalogue scraping. Synchronous enrichment would blow the budget within a few cycles.
-2. **Latency.** Portal scraping adds 2-5s per lot (Firecrawl rate limits, portal rendering). A 100-lot catalogue would add 3-8 minutes to analysis time. Unacceptable for user-initiated `POST /api/analyse` which streams SSE progress.
-3. **Failure isolation.** Portal pages change frequently. A broken Zoopla scraper should not fail the entire lot extraction pipeline.
-
-### Design
-
-Add a new function `enrichFromPortals(lots, house)` that:
-1. Runs **after** the lot is cached in `cached_analyses` (post-upsert at line 9682)
-2. For each lot with an address/postcode, scrapes Zoopla/Rightmove via Firecrawl for:
-   - Recent sold prices (complements Land Registry with asking prices and time-on-market)
-   - Current rental listings (replaces the hardcoded `VOA_RENTS` lookup table at line 8540)
-   - Property details (EPC, council tax band, floor area)
-3. Updates the cached lot data in-place via `supabase.from('cached_analyses').update()`
-4. Tracks enrichment status per-lot to avoid re-enriching on next cycle
-
-### Credit Budget Strategy
-
-- **Batch by postcode** — same as `enrichLots()` does now. One Zoopla search per postcode covers all lots in that area.
-- **Priority enrichment** — only enrich lots scoring >= 3 (top picks) or under a price threshold. A 100-lot catalogue might have 15-20 top picks = 15-20 Firecrawl credits, not 100.
-- **Daily credit ceiling** — add an `FC_ENRICHMENT_DAILY_CAP` (e.g., 200 credits/day) separate from scraping budget. Check `fcCreditsUsed` before each enrichment call.
-- **Cache enrichment results** — store portal data in the lot object (`lot.portalData = { zoopla: {...}, rightmove: {...} }`). Skip lots that already have `portalData` on subsequent cycles.
-
-### Integration Point
-
-In `autoAnalyseOne()`, after the upsert at line 9682:
-```
-await enrichFromPortals(lots, house);  // non-blocking, updates DB directly
-```
-
-For user-initiated analysis, do **not** run portal enrichment. Return cached lots immediately; portal data appears when the background cycle processes it. This keeps the user flow fast.
-
-### Firecrawl Format
-
-Use Firecrawl's `markdown` format (not `rawHtml`) for portal pages. Zoopla/Rightmove have heavy JS rendering; markdown output is cheaper to parse with Gemini or regex than raw HTML. Example:
-```js
-const result = await scrapeWithFirecrawl(zooplaUrl, { formats: ['markdown'] });
-```
-
-### Legal Note
-Zoopla and Rightmove may block scraping. Firecrawl's proxy rotation helps, but monitor for 403s and implement per-portal circuit breakers mirroring the existing `fcTemporarilyDown` pattern.
+**Domain:** v1.2 feature integration -- feature flags, analytics, landing page, AI abstraction into existing Express monolith
+**Researched:** 2026-03-20
+**Confidence:** HIGH (all findings from direct codebase inspection)
 
 ---
 
-## Data Freshness Architecture
+## Current Architecture Summary
 
-### Goal
-Reliably detect and remove stale/sold lots so the directory only shows actionable inventory.
-
-### Current Staleness Handling
-
-1. **Auction date expiry** (line 9072-9118): `_doAutoAnalyseAll()` purges `cached_analyses` rows whose auction calendar date is in the past — but only if the URL does not also appear in an upcoming auction entry. This is the primary staleness mechanism.
-2. **Content hash** (line 9392-9419): `autoAnalyseOne()` probes the catalogue URL with plain HTTP, hashes the HTML, and skips re-analysis if the hash matches and the cache is < 24 hours old.
-3. **Cache TTLs** (tiered by house traffic): high-traffic 12h, medium 18h, low 24h. Expired cache triggers re-analysis on the next 6-hour cycle.
-4. **Sold status in DOM extractors**: Many extractors detect `SOLD`, `STC`, `SALE AGREED`, `WITHDRAWN` via regex on bullet text (lines 5085-5363). These are surfaced as bullet tags, and the smart search layer can filter on them (line 3135-3141).
-
-### Gaps
-
-- **No diff detection.** If a lot disappears from the catalogue (removed, not marked sold), the system does not notice — it re-scrapes the whole catalogue and overwrites, so removed lots naturally vanish. But lots marked "SOLD" that remain on the page persist in the directory.
-- **Calendar date is the only hard expiry.** If a house reuses URLs across dates (BidX1, BTG Eddisons), lots from a past auction linger until someone manually cleans the calendar.
-- **Sold lots pollute the feed.** Users see "SOLD/STC" lots mixed with available ones. The frontend has no default filter for this.
-
-### Recommended Approach: Three-Layer Freshness
-
-**Layer 1: Auction date auto-expiry (exists, enhance)**
-- Already works. Enhance by adding a 48-hour grace period after auction date (some results are posted the day after). After grace period, mark all lots from that catalogue as `status: 'past'` rather than deleting — keeps historical data for analytics.
-
-**Layer 2: Re-scrape diff detection (new)**
-Add to `autoAnalyseOne()`, after extracting `rawLots`:
 ```
-// Compare new lot list against cached lot list
-const { data: cached } = await supabase.from('cached_analyses').select('lots').eq('url', normalisedUrl).single();
-if (cached?.lots) {
-  const oldLotNums = new Set(cached.lots.map(l => l.lot));
-  const newLotNums = new Set(rawLots.map(l => l.lot));
-  const removed = [...oldLotNums].filter(n => !newLotNums.has(n));
-  if (removed.length > 0) {
-    console.log(`AUTO: ${house} — ${removed.length} lots removed from catalogue`);
-    // These lots were likely sold/withdrawn. Don't carry them forward.
-  }
-}
+server.js (~11K lines, Express monolith)
+  |-- Supabase (auth + DB: users, cached_analyses, auction_calendar, leads, analytics_snapshots, activity_events, ...)
+  |-- Gemini AI (extraction + smart search, direct @google/generative-ai SDK calls)
+  |-- Firecrawl / Puppeteer / HTTP (three-tier scraping)
+  |-- Stripe (checkout, webhooks, portal -- to be hibernated)
+
+index.html (~79K, SPA with embedded <script>)
+  |-- Vanilla JS, no framework
+  |-- isPremium() reads window._userTier
+  |-- Client-side gating: blur CSS, showPaywall(), CSV/JSON export blocks
+  |-- Cross-tab tier sync via localStorage
+
+welcome.html (existing marketing page, "Auction Brain" branding, full SEO markup)
+admin.html (admin dashboard)
+bridgematch-lite.html (investor finance tool)
 ```
-The existing regression guard (line 9654) already protects against false drops (< 50% lot count = keep old data). This diff layer handles the case where a few lots disappear — they should not be carried forward.
 
-**Layer 3: Sold status extraction (exists, standardise)**
-- Standardise a `lot.status` field across all DOM extractors: `'available'`, `'sold'`, `'stc'`, `'withdrawn'`, `'prior'` (post-auction but no result yet).
-- Parse from the existing bullet patterns (`SOLD/STC`, `WITHDRAWN`, `SALE AGREED`).
-- Default frontend filter to `status !== 'sold' && status !== 'withdrawn'` — show available and STC by default, let users toggle to see sold.
-- This is a data normalisation task, not an architecture change. Each DOM extractor needs a 2-line addition.
+### Key Architectural Facts from Code Inspection
 
-### No New Infrastructure Needed
-All three layers work within the existing 6-hour `autoAnalyseAll()` cycle and Supabase storage. No queues, no workers, no new tables.
+- **Tier logic is split across server and client.** Server: `getAISearchLimit()` (line 1849), `stripAIFields()` (line 1869), inline `isPremiumOrTrial` checks in `/api/all-lots` (line ~2850) and `/api/analyse` (line ~3244). Client: `isPremium()` function (line 1072), `showPaywall()` (line 1721), `dlCSV()`/`dlJSON()` guards (line 2815).
+- **`callGemini()` (line 904)** is a single function called from ~12 locations. Uses `@google/generative-ai` SDK. Model selection via constants `MODEL_FLASH` (gemini-2.5-flash-lite) and `MODEL_PRO` (gemini-2.5-pro). Rate limiter built in (100ms gap, paid Tier 1).
+- **Stripe code spans ~400 lines** (lines 1285-1560): 5 endpoints (`/api/stripe/checkout`, `/api/stripe/webhook`, `/api/stripe/portal`, `/api/stripe/status`, `/api/stripe/diag`) plus tier expiry checks scattered in auth flow (`/api/auth/me` lines 1754, 1772).
+- **Analytics infrastructure partially exists:** `analytics_snapshots` table (daily pipeline health), `saveDailySnapshot()` (midnight + post-analyse), `logActivityEvent(action, detail, email, ip)` helper (line 11139, writes to `activity_events` table but barely wired up), `/api/admin/analytics` endpoint.
+- **`welcome.html` already exists** at `/welcome` route with full SEO markup (title, meta description, OG tags, canonical URL), but branded "Auction Brain" and oriented toward paid product.
+- **Tier constants:** `ANON_AI_SEARCH_LIMIT = 3`, `FREE_AI_SEARCH_LIMIT = 5`, `FREE_PREVIEW_LOTS = 6`, `FREE_SCAN_LIMIT = 3`.
 
 ---
 
-## Deal Stacking Module Design
+## Recommended Architecture for v1.2
 
-### Goal
-A calculator that takes a lot's data + user inputs (GDV, works cost, legal, expected rental) and outputs: SDLT, finance costs (from real Bridgematch lender data), total cost in, profit, ROI, cash-on-cash return.
+No structural split of the monolith. All changes are modifications to existing files or small new modules. The monolith constraint is acknowledged and respected.
 
-### Current State
+### Component Map: New vs Modified
 
-1. **`calcSDLT(price)`** (index.html line 2461) — investor SDLT rates 2025/26, frontend-only. Correct and tested.
-2. **`calcDealAnalysis(guidePrice, streetAvg, grossYield, monthlyRent)`** (index.html line 2471) — basic calculator using hardcoded assumptions (75% LTV, 0.75%/mo rate, 4% other costs). No real lender data.
-3. **Bridgematch Lite** (`bridgematch-lite.html`) — full lender matching engine with ~60 embedded lenders, plus live data feed from `https://www.bridgematch.co.uk/api/lenders-lite`. Contains `matchLenders()` function that does per-lender LTGDV calculation, LTV matching, geographic exclusions, property type filtering.
-
-### Recommended Approach: Frontend-First with API Fallback
-
-**Primary: All calculation runs client-side.** Rationale:
-- SDLT is deterministic from price — already works client-side.
-- Finance cost calculation needs lender data, but `bridgematch-lite.html` already loads it client-side from the `/api/lenders-lite` endpoint. The same data can be fetched in `index.html`.
-- No server round-trip needed for calculation. Keeps the deal stacker instant and interactive (user adjusts GDV slider, sees ROI update immediately).
-- No additional server load or rate limiting concerns.
-
-**Architecture:**
-
-1. **Lender data source:** Fetch from `https://www.bridgematch.co.uk/api/lenders-lite` at page load (same as `bridgematch-lite.html` does at line 382). Cache in a global `window._lenderData` variable. Fall back to a minimal embedded snapshot if fetch fails.
-
-2. **New function `calcDealStack(params)`** replaces `calcDealAnalysis()`:
-   ```
-   Input:
-     purchasePrice     — from lot.price (prefilled)
-     gdv               — user input (default: streetAvg or purchasePrice * 1.2)
-     worksCost         — user input (default: 0)
-     legalCosts        — user input (default: purchasePrice * 0.015)
-     expectedRent      — user input (default: lot.estMonthlyRent)
-     loanTermMonths    — user input (default: 12)
-     propertyType      — from lot.propType
-     isRefurb          — derived from worksCost > 0
-
-   Calculation:
-     1. SDLT = calcSDLT(purchasePrice)
-     2. Run matchLenders() from bridgematch-lite logic against lender data
-        → pick the best-fit lender (highest LTV that matches property type + price range)
-        → extract: day1Advance, interestRate, procFee, LTGDV
-     3. loanAmount = purchasePrice * bestLender.ltv
-     4. interestCost = loanAmount * bestLender.rate * loanTermMonths
-     5. totalCostIn = purchasePrice + SDLT + worksCost + legalCosts + interestCost + procFee
-     6. deposit = purchasePrice - loanAmount + SDLT + worksCost + legalCosts
-     7. netProfit = gdv - totalCostIn
-     8. roi = netProfit / deposit * 100
-     9. cashOnCash = (expectedRent * 12 - interestCost) / deposit * 100  (if BTL hold)
-     10. lenderCount = number of lenders that match (for the "X lenders would fund this" badge)
-
-   Output:
-     { sdlt, loanAmount, lenderName: '[masked]', lenderCount, interestCost,
-       totalCostIn, deposit, netProfit, roi, cashOnCash, monthlyProfit }
-   ```
-
-3. **UI location:** Expand the existing lot detail panel. When a user clicks a lot, show a "Deal Stacker" section below the lot details. Prefill known values, let user edit GDV/works/legal/rent. Show real-time results as they type.
-
-4. **Gating:** Deal stacking is a premium feature. Free users see the UI but results are blurred (consistent with existing AI field blurring pattern). Lender names are always masked (per existing policy, line 94 of PROJECT.md).
-
-### Why Not a Server Endpoint?
-
-- The `matchLenders()` logic is already proven client-side in `bridgematch-lite.html`.
-- Server endpoint would add latency, require auth, rate limiting, and an additional API contract to maintain.
-- The only scenario requiring a server endpoint: if lender data becomes too large to embed or if calculation logic needs to be proprietary. Neither applies today (~60 lenders, ~50KB).
-- **Exception:** If a future "bulk deal stack all lots" feature is added (e.g., auto-score fundability for every lot in a catalogue), that should run server-side during enrichment. But for the MVP, per-lot client-side is correct.
-
-### Bridgematch Lender Data Integration
-
-The `bridgematch-lite.html` live feed pattern (line 382) is the template:
-```js
-const r = await fetch('https://www.bridgematch.co.uk/api/lenders-lite');
-const lenders = await r.json();
-```
-Port the `matchLenders()` function and its helpers (`parseLTV`, `parseMoney`, `parseRate`, `parseProcFee`, `estimateNetFromGross`) from `bridgematch-lite.html` into `index.html`. These are ~250 lines of pure functions with no dependencies.
+| Component | Status | What Changes |
+|-----------|--------|-------------|
+| `server.js` | MODIFIED | Feature flag logic, tier resolution centralised, analytics event hooks, AI call sites updated |
+| `index.html` | MODIFIED | Paywall text changes ("sign in" not "upgrade"), gating logic simplified via server-driven tier |
+| `welcome.html` | REWRITTEN | New landing page content with free-first "50% aren't on Rightmove" USP |
+| New: `lib/feature-flags.js` | NEW | Centralised feature flag module (~20 lines) |
+| New: `lib/ai-provider.js` | NEW | AI provider abstraction layer (~80 lines) |
+| Supabase: `analytics_snapshots` | MODIFIED | Add user metric columns (dau, signups, searches, leads) |
+| Supabase: `activity_events` | EXISTING | Already exists with `logActivityEvent()` -- wire up at key endpoints |
 
 ---
 
-## Alerting & Monitoring Approach
+## Integration Pattern 1: Stripe Feature Flag + Free-First Tier
 
-### Goal
-Get notified when auto-analyse fails, discovery misses catalogues, or scraping breaks — without adding a dedicated monitoring service.
+### Problem
+Stripe code is scattered across ~15 code paths. Must be hibernated (preserved) not deleted. All signed-in users need full access when Stripe is off.
 
-### Current Monitoring
+### Recommended Approach
 
-1. **Sentry** (line 1-10, 8987-8989) — already initialised with `@sentry/node`. Error handler attached after all routes. Captures unhandled exceptions and Express errors. `tracesSampleRate: 0.1`.
-2. **Resend** (line 1386, 1511, 1557) — already integrated for transactional emails (welcome emails, lead notifications, payment failure notices).
-3. **Quality report** (`GET /api/quality-report`) — returns house health, image coverage, cache stats. Machine-readable but not actively monitored.
-4. **Cost monitor** (`GET /api/cost-monitor`) — Firecrawl credit usage stats.
-5. **Console logging** — extensive structured logging throughout `autoAnalyseAll()` but only visible in Railway logs.
+**Single env var `STRIPE_ENABLED` (default: `false`) with centralised tier resolution.**
 
-### Recommended Approach: Layered Alerting via Existing Services
+```javascript
+// lib/feature-flags.js (NEW FILE, ~20 lines)
+const FLAGS = {
+  STRIPE_ENABLED: process.env.STRIPE_ENABLED === 'true',
+};
+module.exports = { FLAGS };
+```
 
-**Layer 1: Sentry Alerts (errors, already exists — configure)**
-Sentry is already capturing errors but likely not configured with alert rules. Add:
-- Alert on `autoAnalyseAll` failure rate (> 3 house failures per cycle)
-- Alert on Firecrawl credit exhaustion (`fcCreditExhausted = true`)
-- Alert on Gemini rate limit hits (`creditExhausted = true`)
-- Use `Sentry.captureMessage()` with level `warning` for non-exception alerts — no new dependencies needed.
+**The critical change -- centralised tier resolution:**
 
-Implementation — add to existing code:
-```js
-// In autoAnalyseAll(), after the analysis loop:
-if (failed > ready.length * 0.3) {
-  Sentry.captureMessage(`Auto-analysis: ${failed}/${ready.length} houses failed`, 'warning');
+```javascript
+// In server.js near existing tier logic (line ~1840)
+function resolveEffectiveTier(user) {
+  if (!FLAGS.STRIPE_ENABLED && user) return 'premium';  // Free-first: all signed-in = full access
+  if (!user) return 'anon';
+  if (user.tier === 'premium') return 'premium';
+  if (user.trial_expires_at && new Date(user.trial_expires_at) > new Date()) return 'premium';
+  return 'free';
 }
 ```
 
-**Layer 2: Email Digest via Resend (daily summary)**
-After the midnight `saveDailySnapshot()`, send a digest email using the existing Resend integration:
-- Houses with 0 lots (extractor likely broken)
-- Houses where lot count dropped > 50% from previous snapshot
-- Firecrawl credit usage vs budget
-- Image coverage rate
-- Any houses that haven't been successfully scraped in > 48 hours
+### All Tier Check Locations (exhaustive from code inspection)
 
-Cost: ~0. Resend free tier = 100 emails/day. One daily digest = 1 email.
+| Location | File | Line | Current Check | Change Needed |
+|----------|------|------|---------------|---------------|
+| `getAISearchLimit()` | server.js | 1849-1855 | `tier === 'premium'` or active trial | Call `resolveEffectiveTier(user)` |
+| `stripAIFields()` | server.js | 1869 | Called when non-premium | Only called when `resolveEffectiveTier` != premium |
+| `/api/all-lots` | server.js | ~2850 | Inline `isPremiumOrTrial` | Replace with `resolveEffectiveTier(user) === 'premium'` |
+| `/api/analyse` | server.js | ~3244 | Inline `isPremiumOrTrial` | Same |
+| `/api/smart-search` | server.js | 3304 | Returns `premium_required` error | Change to `signin_required` when no user |
+| `/api/auth/me` | server.js | 1754, 1772 | Checks tier expiry, downgrades to free | When `!STRIPE_ENABLED`, skip tier expiry checks |
+| `dlCSV()` / `dlJSON()` | index.html | 2815-2822 | `window._userTier !== 'premium'` | No change needed (server sends tier=premium for signed-in) |
+| `showPaywall()` | index.html | 1721 | "Upgrade" messaging | Change text to "Sign in for free" |
+| Deal stacking | index.html | 1426+ | `isPremium()` | No change needed (tier=premium from server) |
+| Lot card `.blurred` | index.html | 2536 | Based on `lot.blurred` from server | No change needed (server won't set blurred) |
 
-Implementation location: at the end of `saveDailySnapshot()` (line ~9004 area), after snapshot data is computed.
+**Key insight:** 4 of the 10 locations need NO client-side changes because `resolveEffectiveTier()` on the server returns `'premium'` for signed-in users, and the existing `/api/auth/me` -> `window._userTier` flow propagates this to the client automatically.
 
-**Layer 3: Discord/Slack Webhook (real-time critical alerts)**
-For time-sensitive alerts (Firecrawl down, Gemini quota exceeded, zero lots from a major house), add a simple webhook function:
+### Stripe Endpoint Guards
 
-```js
-async function alertWebhook(message, severity = 'warning') {
-  const url = process.env.ALERT_WEBHOOK_URL;  // Discord or Slack webhook
-  if (!url) return;
-  try {
-    await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        content: `[${severity.toUpperCase()}] ${message}`,  // Discord format
-        // For Slack: { text: `[${severity}] ${message}` }
-      }),
-    });
-  } catch (e) { /* non-fatal */ }
-}
+Each of the 5 Stripe endpoints gets an early-return guard (code preserved, not deleted):
+
+```javascript
+if (!FLAGS.STRIPE_ENABLED) return res.status(503).json({ error: 'payments_hibernated' });
 ```
 
-This is ~15 lines. No SDK, no dependency. Fire-and-forget. Add calls at:
-- `fcCreditExhausted = true` (line 299)
-- `creditExhausted = true` (Gemini rate limit)
-- `autoAnalyseAll` completion with failure count > 0
-- Regression guard trigger (line 9656)
+### Stripe Initialisation Guard
 
-**Do not add:** Dedicated monitoring services (Datadog, New Relic), PagerDuty, or custom dashboards. The three layers above cover all current needs using services already in the stack.
+```javascript
+// Line ~44: guard the SDK init
+const stripe = FLAGS.STRIPE_ENABLED && process.env.STRIPE_SECRET_KEY
+  ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
+```
 
-### Priority Order
-1. Sentry alert rules (configuration only, no code changes)
-2. Discord/Slack webhook helper (15 lines of code, covers critical real-time alerts)
-3. Daily email digest via Resend (moderate effort, highest ongoing value)
+### Data Flow After Change
+
+```
+Anonymous   -> /api/auth/me -> 401 -> prompt "Sign in for free"
+Signed-in   -> /api/auth/me -> { tier: 'premium' } -> no blur, unlimited searches
+Stripe route -> /api/stripe/* -> 503 "payments_hibernated"
+```
+
+### Reactivation Path
+Set `STRIPE_ENABLED=true` in Railway, restart. All Stripe code, env vars, and DB columns are preserved.
 
 ---
 
-## Integration Points
+## Integration Pattern 2: Analytics Tracking
 
-### Shared State / Cross-Cutting Concerns
+### Problem
+Need MAU, BridgeMatch funnel, and engagement metrics to pitch lenders at 500-1,000 MAU. No user engagement tracking exists today.
 
-| New Feature | Touches | Depends On |
-|---|---|---|
-| Portal enrichment | `autoAnalyseOne()`, `cached_analyses` table, Firecrawl credit tracking | Firecrawl API, credit budget, lot postcode data |
-| Data freshness | `autoAnalyseAll()`, `cached_analyses` table, DOM extractors | Auction calendar dates, lot extraction pipeline |
-| Deal stacking | `index.html` frontend, `bridgematch.co.uk/api/lenders-lite` | Lender data API, lot price/type fields |
-| Alerting | `autoAnalyseAll()`, `saveDailySnapshot()`, credit exhaustion handlers | Sentry DSN, Resend API key, webhook URL (new env var) |
+### Existing Infrastructure (already built, barely used)
 
-### New Environment Variables
+| Component | Status | Location |
+|-----------|--------|----------|
+| `logActivityEvent(action, detail, email, ip)` | EXISTS | server.js line 11139 |
+| `activity_events` table | EXISTS | Supabase (insert via logActivityEvent) |
+| `analytics_snapshots` table | EXISTS | Supabase (pipeline health only) |
+| `saveDailySnapshot()` | EXISTS | server.js line 10985 |
+| `/api/admin/analytics` | EXISTS | server.js line 11100 |
 
-| Variable | Purpose | Required |
-|---|---|---|
-| `ALERT_WEBHOOK_URL` | Discord/Slack webhook for critical alerts | Optional |
-| `FC_ENRICHMENT_DAILY_CAP` | Max Firecrawl credits/day for portal enrichment | Optional (default 200) |
-| `ALERT_EMAIL` | Recipient for daily digest emails | Optional (default: admin) |
+### Recommended Approach: Wire Up Existing `logActivityEvent()`
 
-### Database Changes
+The infrastructure is already there. The function exists, the table exists, but it is barely called anywhere. Wire it into key API endpoints.
 
-No new tables needed. Extend existing:
-- `cached_analyses.lots[].portalData` — enrichment data stored in lot JSON (no schema change, JSONB column)
-- `cached_analyses.lots[].status` — normalised lot status (`available`, `sold`, `stc`, `withdrawn`)
-- `cached_analyses.enriched_at` — timestamp of last portal enrichment (new column, nullable)
+**Do NOT add Umami, GA, Mixpanel, or any client-side analytics:**
+1. Ad blockers strip client-side trackers for 30-40% of tech-savvy users
+2. No budget for paid tools
+3. Server already sees every API request -- measure there
+4. `logActivityEvent()` already exists and works
 
-### Supabase Migration
+**Event emission points (add to server.js):**
 
+| Event | Trigger Endpoint | Properties |
+|-------|-----------------|------------|
+| `signup` | `/api/signup` success | `{ method: 'magic_link' }` |
+| `search` | `/api/smart-search` success | `{ query, results_count }` |
+| `analyse` | `/api/analyse` success | `{ house, lots_count }` |
+| `lead_submit` | `/api/leads` success | `{ source, lender_count }` |
+| `page_view` | GET `/`, `/auctions`, `/analyse` | `{ path }` |
+| `export` | CSV/JSON export if server-gated | `{ format }` |
+
+Each is a single line addition at the endpoint's success path:
+```javascript
+logActivityEvent('search', { query: q, results: filteredLots.length }, user?.email, req.ip);
+```
+
+**Enhance `saveDailySnapshot()` for user metrics:**
+
+Add columns to `analytics_snapshots`:
 ```sql
-ALTER TABLE cached_analyses ADD COLUMN IF NOT EXISTS enriched_at timestamptz;
+ALTER TABLE analytics_snapshots
+  ADD COLUMN IF NOT EXISTS dau integer DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS signups integer DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS searches integer DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS leads integer DEFAULT 0;
 ```
 
-One column. The rest is JSONB field additions inside the existing `lots` column.
+In `saveDailySnapshot()`, query `activity_events` for the day's counts and include in the snapshot.
+
+**MAU query for lender pitch:**
+```sql
+SELECT COUNT(DISTINCT COALESCE(user_email, ip))
+FROM activity_events
+WHERE created_at > now() - interval '30 days';
+```
+
+### What NOT to Build
+- No client-side analytics library
+- No real-time dashboard (daily snapshots suffice)
+- No session tracking or user journey mapping
+- No A/B testing framework
+
+---
+
+## Integration Pattern 3: AI Provider Abstraction
+
+### Problem
+`callGemini()` is called from ~12 locations with hardcoded Gemini SDK. Need to audit spend and test cheaper models without rewriting call sites.
+
+### Current Call Sites (exhaustive)
+
+| Caller | Location | Purpose | Model |
+|--------|----------|---------|-------|
+| `extractLotsWithAI()` | line 5257 | Lot extraction from HTML | FLASH / PRO |
+| `/api/smart-search` (delta) | line 3475 | Smart search with delta | FLASH |
+| `/api/smart-search` (full) | line 3648 | Smart search full | FLASH |
+| PDF extraction | line 5408 | Lots from PDF | PRO |
+| Discovery | line 2743 | Find catalogue links | FLASH |
+| Discovery (admin) | line 10362 | Admin catalogue discovery | FLASH |
+| Auto-analyse | lines 10517, 10620, 10662 | Background extraction | FLASH / PRO |
+
+`callGemini()` signature: `(prompt, { model, maxTokens, systemPrompt, pdfBase64 })` -> `string`
+
+### Recommended Approach
+
+```javascript
+// lib/ai-provider.js (NEW FILE, ~80 lines)
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+
+const MODELS = {
+  flash: process.env.AI_MODEL_FLASH || 'gemini-2.5-flash-lite',
+  pro:   process.env.AI_MODEL_PRO   || 'gemini-2.5-pro',
+};
+
+// Drop-in replacement for callGemini()
+// Key change: 'model' becomes 'role' ('flash' or 'pro')
+async function callAI(prompt, { role = 'flash', maxTokens = 8000, systemPrompt = null, pdfBase64 = null } = {}) {
+  const model = MODELS[role];
+  // ... Gemini implementation (moved from server.js callGemini)
+  // Future: switch on process.env.AI_PROVIDER for different backends
+}
+
+module.exports = { callAI, MODELS };
+```
+
+### Migration (incremental, no behaviour change)
+
+1. Create `lib/ai-provider.js` -- move `callGemini()` logic, rate limiter, and Gemini client init
+2. Export `callAI(prompt, { role, maxTokens, systemPrompt, pdfBase64 })`
+3. In server.js: `const { callAI } = require('./lib/ai-provider');`
+4. Replace ~12 `callGemini(prompt, { model: MODEL_FLASH })` with `callAI(prompt, { role: 'flash' })`
+5. Add token usage logging per call (Gemini response includes usage metadata)
+
+### Cost Tracking (the "audit spend" deliverable)
+
+After each `callAI()` call, log token usage via `logActivityEvent()`:
+```javascript
+logActivityEvent('ai_call', {
+  role, model, inputTokens, outputTokens,
+  caller: 'smart_search', // or 'extraction', 'discovery'
+});
+```
+
+Daily cost query:
+```sql
+SELECT
+  detail->>'role' as role,
+  SUM((detail->>'inputTokens')::int) as total_input,
+  SUM((detail->>'outputTokens')::int) as total_output
+FROM activity_events
+WHERE action = 'ai_call' AND created_at > now() - interval '1 day'
+GROUP BY role;
+```
+
+### What NOT to Abstract
+- DOM extractors (pure HTML parsing, not AI)
+- Prompts (keep near business logic in server.js)
+- Rate limiting (stays inside provider module, provider-specific)
+
+---
+
+## Integration Pattern 4: Landing Page
+
+### Problem
+Need marketing landing page with "50% aren't on Rightmove" hero. `welcome.html` exists with correct SEO structure but wrong messaging.
+
+### Recommended Approach: Rewrite `welcome.html` Content
+
+Same file, same `/welcome` route, new content. Also change root route to serve landing page.
+
+### Route Change
+
+```javascript
+// Explicit root route BEFORE the catch-all (line ~4582)
+app.get('/', (req, res) => {
+  res.sendFile(join(__dirname, 'welcome.html'));
+});
+
+// Existing routes unchanged
+// GET /auctions -> index.html
+// GET /analyse  -> index.html
+// GET /welcome  -> welcome.html (explicit route, line 4282)
+
+// Catch-all changes: redirect to / instead of serving index.html
+app.get('*', (req, res) => { res.redirect(301, '/'); });
+```
+
+**Rationale:** New visitors at `auctions.bridgematch.co.uk` should see the value proposition before the tool. Landing page has "Browse Auctions" CTA -> `/auctions`.
+
+### SEO Checklist
+- `welcome.html` already has: title, meta description, OG tags, canonical URL, viewport
+- Update title to include "UK Auction Property Search"
+- Update meta description with "50% aren't on Rightmove" USP
+- Add JSON-LD WebApplication schema
+- Pure HTML+CSS above fold (fast LCP, no JS dependency)
+- Add `robots.txt` to block `/admin`, `/api/*`
+
+### Not a Separate App
+Stays as static HTML file served by Express. No SSR, no build step. Consistent with existing pattern (welcome.html, admin.html, bridgematch-lite.html).
+
+---
+
+## Component Boundaries
+
+| Component | Responsibility | Communicates With |
+|-----------|---------------|-------------------|
+| `lib/feature-flags.js` | Centralised flag state from env vars | Imported by server.js at startup |
+| `lib/ai-provider.js` | AI API calls, model routing, cost tracking | Imported by server.js, logs to activity_events |
+| `resolveEffectiveTier()` | Single source of truth for user access level | Called by all content-gating endpoints |
+| `logActivityEvent()` | Analytics event recording (exists, wire up) | Called from endpoints, writes to activity_events |
+| `saveDailySnapshot()` | Daily metric aggregation (exists, enhance) | Reads activity_events + cached_analyses, writes analytics_snapshots |
+| `welcome.html` | Marketing landing page | Standalone HTML, links to /auctions |
+
+---
+
+## Data Flow: Before and After
+
+### Before (v1.1)
+```
+Anonymous   -> /api/smart-search -> 3/day -> "Upgrade to Pro"
+Free user   -> /api/all-lots     -> blurred after 6 lots -> "Upgrade"
+Premium     -> /api/all-lots     -> full access
+```
+
+### After (v1.2)
+```
+Anonymous   -> / (landing page)  -> "Browse Auctions" -> /auctions (full directory, no blur)
+            -> /api/smart-search -> 3/day -> "Sign in for free unlimited access"
+Signed-in   -> /api/all-lots     -> full access (no blur, no limits)
+            -> /api/smart-search -> unlimited
+            -> server logs event to activity_events (fire-and-forget)
+            -> BridgeMatch -> lead -> leads table
+```
 
 ---
 
 ## Suggested Build Order
 
-Based on dependencies, effort, and user value:
+Each phase is independently shippable. Order reflects dependencies and risk.
 
-### Phase 1: Alerting (1-2 days)
-**Why first:** Zero risk, immediate operational value. You need visibility before changing the pipeline.
-1. Configure Sentry alert rules (no code)
-2. Add `alertWebhook()` helper + calls at credit exhaustion and autoAnalyse failure points
-3. Add `ALERT_WEBHOOK_URL` env var to Railway
+### Phase 1: Feature Flag + Free-First Tier (FOUNDATION -- unblocks everything)
 
-### Phase 2: Data Freshness (2-3 days)
-**Why second:** Improves data quality for existing users before adding new features.
-1. Standardise `lot.status` field across DOM extractors (bulk find-and-replace in `DOM_EXTRACTORS`)
-2. Add diff detection in `autoAnalyseOne()` (removed lot handling)
-3. Default frontend to hide sold/withdrawn lots
-4. Add 48-hour grace period to auction date expiry
+**Scope:**
+- New: `lib/feature-flags.js` (~20 lines)
+- server.js: `resolveEffectiveTier()` function + replace ~6 inline tier checks + guards on 5 Stripe endpoints + Stripe init guard
+- index.html: Change `showPaywall()` messages, hide upgrade button
+- Railway: Set `STRIPE_ENABLED=false`
 
-### Phase 3: Deal Stacking MVP (3-5 days)
-**Why third:** High-value premium feature, drives subscription upgrades.
-1. Port `matchLenders()` + helpers from `bridgematch-lite.html` into `index.html`
-2. Add lender data fetch on page load
-3. Build `calcDealStack()` function
-4. Build deal stacker UI in lot detail panel
-5. Gate behind premium tier
+**Why first:** Every other feature assumes free-first gating. Landing page CTAs say "sign in free" not "upgrade." Analytics measure free-first engagement. AI cost decisions assume free access volume.
 
-### Phase 4: Portal Enrichment (5-7 days)
-**Why last:** Highest risk (portal scraping fragility), highest credit cost, depends on stable pipeline.
-1. Build `enrichFromPortals()` function with Zoopla scraping via Firecrawl markdown format
-2. Add credit ceiling and per-lot enrichment caching
-3. Wire into `autoAnalyseOne()` post-upsert
-4. Display portal data in lot detail panel (comps, rental estimates)
-5. Monitor credit burn rate for 1 week before expanding to Rightmove
+**Risk:** Medium -- touches many code paths. Mitigated by `resolveEffectiveTier()` centralising all tier logic. Test: signed-in user sees no blur + unlimited searches; anonymous gets 3 searches + sign-in prompt; Stripe endpoints return 503.
 
-**Total estimated effort: 11-17 days**, with each phase independently shippable and valuable.
+**Cross-cutting:** Yes (server + client), but server change drives client automatically via `/api/auth/me` -> `window._userTier`.
+
+### Phase 2: Analytics Event Infrastructure
+
+**Scope:**
+- server.js: Add ~7 `logActivityEvent()` calls at endpoints (signup, search, analyse, lead_submit, page_view)
+- server.js: Enhance `saveDailySnapshot()` to count DAU/signups/searches/leads from activity_events
+- Supabase: Add dau/signups/searches/leads columns to analytics_snapshots
+- Supabase: Verify activity_events table indexes
+
+**Why second:** Must be measuring before landing page ships. Provides cost data foundation for AI work.
+
+**Risk:** Low -- purely additive. `logActivityEvent()` is fire-and-forget. No existing behaviour changes.
+
+**Isolation:** Server-only, additive.
+
+### Phase 3: AI Provider Abstraction + Cost Tracking
+
+**Scope:**
+- New: `lib/ai-provider.js` (~80 lines)
+- server.js: Replace ~12 `callGemini()` calls with `callAI()` calls
+- Cost logging: Token usage per call via `logActivityEvent('ai_call', ...)`
+
+**Why third:** Prerequisite for model evaluation. Benefits from analytics infrastructure (Phase 2) for cost data. No user-facing changes.
+
+**Risk:** Medium -- changes AI call path globally. Mitigated by zero behaviour change on initial migration (same Gemini models, same rate limits, just wrapped).
+
+**Isolation:** Backend only. New module + mechanical call site migration.
+
+### Phase 4: Landing Page
+
+**Scope:**
+- welcome.html: Full content rewrite with free-first USP
+- server.js: Add explicit `GET /` route, change catch-all to redirect
+- Optional: new assets in public/
+
+**Why last:** Depends on feature flags (correct CTAs) and analytics (measure from day one). Can be designed in parallel, deploy after Phases 1-2.
+
+**Risk:** Low -- static HTML, minimal routing change.
+
+**Isolation:** Fully isolated.
+
+### Dependency Graph
+
+```
+Phase 1: Feature Flags + Free-First Tier
+  |
+  +-- Phase 2: Analytics (needs tier model settled)
+  |     |
+  |     +-- Phase 3: AI Abstraction (uses analytics for cost data)
+  |
+  +-- Phase 4: Landing Page (needs correct CTAs, analytics in place)
+```
+
+Phases 2 and 4 can run in parallel after Phase 1.
+Phase 3 follows Phase 2.
+
+---
+
+## Anti-Patterns to Avoid
+
+### Anti-Pattern 1: Scattered Feature Flag Checks
+**What:** Adding `if (process.env.STRIPE_ENABLED !== 'true')` in 15 different locations.
+**Why bad:** Inconsistent checks, typos, forgotten paths, impossible to audit.
+**Instead:** `resolveEffectiveTier()` centralises ALL tier logic. Stripe endpoints get ONE guard each. Flag module reads env once at startup.
+
+### Anti-Pattern 2: Client-Side Tier Enforcement as Security
+**What:** Relying on `isPremium()` in index.html to protect data.
+**Why bad:** `window._userTier = 'premium'` in console bypasses everything.
+**Instead:** Server always gates actual data via `stripAIFields()`. Client checks are UX only. This is already the pattern -- maintain it.
+
+### Anti-Pattern 3: Client-Side Analytics
+**What:** Adding Umami, GA, or Mixpanel via `<script>` tags.
+**Why bad:** Ad blockers strip ~35% of client-side tracking. Adds external dependency. Budget concern with paid tools.
+**Instead:** `logActivityEvent()` already exists server-side. Server sees every API request. Wire it up, not add a new tool.
+
+### Anti-Pattern 4: Building a Full Analytics Platform
+**What:** Session tracking, cohort analysis, real-time dashboards, funnels.
+**Why bad:** Over-engineering for <100 users. Goal is "MAU number for lender pitch."
+**Instead:** `COUNT(DISTINCT user_email) WHERE created_at > '30 days ago'` is the MVP.
+
+### Anti-Pattern 5: Splitting the Monolith
+**What:** Extracting server.js into route files, services, etc.
+**Why bad:** ~6 months runway, one developer. Shipping features > refactoring.
+**Instead:** Extract only `lib/feature-flags.js` and `lib/ai-provider.js`. Everything else stays in server.js.
+
+### Anti-Pattern 6: AI Provider Overengineering
+**What:** Plugin registry, capability matrices, automatic fallback chains, streaming.
+**Why bad:** 2 model roles, 1 provider. Abstraction enables swapping, not an ecosystem.
+**Instead:** Simple `callAI(prompt, { role })`. Adding a provider = one if branch.
+
+### Anti-Pattern 7: Deleting Stripe Code
+**What:** Removing Stripe routes, handlers, SDK init during hibernation.
+**Why bad:** Reactivation becomes multi-day re-implementation of tested code.
+**Instead:** Guard with `FLAGS.STRIPE_ENABLED`. All code stays. All env vars stay. All DB columns stay.
+
+---
+
+## New Environment Variables
+
+| Variable | Purpose | Default | Required |
+|----------|---------|---------|----------|
+| `STRIPE_ENABLED` | Master switch for Stripe payment flow | `false` | Yes (set in Railway) |
+| `AI_MODEL_FLASH` | Override flash model without code change | `gemini-2.5-flash-lite` | No |
+| `AI_MODEL_PRO` | Override pro model without code change | `gemini-2.5-pro` | No |
+
+### Database Changes
+
+| Change | Type | Migration |
+|--------|------|-----------|
+| `analytics_snapshots`: add `dau`, `signups`, `searches`, `leads` columns | ALTER TABLE | 1 SQL statement in Supabase |
+| Ensure `activity_events` has indexes on `action` and `created_at` | INDEX | Verify, add if missing |
+| No new tables needed | -- | `activity_events` + `logActivityEvent()` already exist |
+
+---
+
+## Scalability Considerations
+
+| Concern | At 100 users (now) | At 1K MAU (target) | At 10K MAU |
+|---------|--------------------|--------------------|------------|
+| server.js monolith | Fine | Fine | Consider route extraction |
+| activity_events volume | ~100 rows/day | ~5K rows/day (Supabase free OK) | Add 90-day retention |
+| AI API costs (paid Tier 1) | ~$5-10/mo | ~$20-50/mo | Model swap critical |
+| Railway memory (512MB) | Fine | Monitor | May need 1GB |
+| Landing page LCP | Static HTML, fast | Fast | Consider CDN |
+
+---
+
+## Sources
+
+- Direct code inspection: server.js (all line numbers referenced), index.html, welcome.html, analytics_snapshots_schema.sql, leads_schema.sql
+- PROJECT.md (v1.2 requirements, constraints, budget)
+- CLAUDE.md (architecture overview, agent skills, known issues)
+- project_tier_strategy.md (free-first pivot strategy)
+- Confidence: HIGH -- all findings from production codebase analysis, no external research needed
