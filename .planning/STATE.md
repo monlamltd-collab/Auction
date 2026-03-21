@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 ## Current Position
 
 Phase: 4 of 7 (Foundation)
-Plan: 0 of 3 in current phase
-Status: Ready to plan
-Last activity: 2026-03-20 -- Roadmap created for v1.2 milestone
+Plan: 1 of 4 in current phase
+Status: Executing
+Last activity: 2026-03-21 -- Completed 04-02-PLAN.md (server-side Stripe hibernation)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█░░░░░░░░░] 10%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 0 (v1.2)
-- Average duration: -
-- Total execution time: -
+- Total plans completed: 1 (v1.2)
+- Average duration: 4min
+- Total execution time: 4min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 04-foundation | 1 | 4min | 4min |
 
 **Recent Trend:**
-- Last 5 plans: -
-- Trend: -
+- Last 5 plans: 04-02 (4min)
+- Trend: starting
 
 *Updated after each plan completion*
 
@@ -45,6 +45,9 @@ Recent decisions affecting current work:
 - v1.2 pivot: Free-first model, Stripe hibernated not deleted
 - Dual analytics: Supabase server-side + Umami client-side (both free)
 - AI rate limits preserved even for free users (cost safety valve)
+- STRIPE_ENABLED defaults true (backwards compatible), set to 'false' to hibernate
+- resolveEffectiveTier promotes all signed-in users to premium when Stripe disabled
+- New users created as 'free' when Stripe disabled (preserving trial for re-enablement)
 
 ### Pending Todos
 
@@ -58,9 +61,9 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-20
-Stopped at: Roadmap created, ready to plan Phase 4
+Last session: 2026-03-21
+Stopped at: Completed 04-02-PLAN.md (server-side Stripe hibernation)
 Resume file: None
 
 ---
-*Last updated: 2026-03-20 after v1.2 roadmap creation*
+*Last updated: 2026-03-21 after 04-02 plan completion*

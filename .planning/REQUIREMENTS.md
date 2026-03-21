@@ -7,11 +7,11 @@
 
 ### Gating & Monetization
 
-- [ ] **GATE-01**: System hibernates Stripe behind `STRIPE_ENABLED` env var -- all payment code preserved but unreachable when disabled
-- [ ] **GATE-02**: `resolveEffectiveTier()` returns premium for all signed-in users when Stripe disabled
+- [x] **GATE-01**: System hibernates Stripe behind `STRIPE_ENABLED` env var -- all payment code preserved but unreachable when disabled
+- [x] **GATE-02**: `resolveEffectiveTier()` returns premium for all signed-in users when Stripe disabled
 - [ ] **GATE-03**: Paywall modals and upgrade CTAs hidden when Stripe disabled
 - [ ] **GATE-04**: AI features (smart search, analyser, scores, deal stacking, CSV export) require sign-in but are free
-- [ ] **GATE-05**: Signed-in users have daily AI rate limit (e.g. 50 searches/day) as cost safety valve
+- [x] **GATE-05**: Signed-in users have daily AI rate limit (e.g. 50 searches/day) as cost safety valve
 
 ### Bug Fixes
 
@@ -83,11 +83,11 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| GATE-01 | Phase 4 | Pending |
-| GATE-02 | Phase 4 | Pending |
+| GATE-01 | Phase 4 | Complete |
+| GATE-02 | Phase 4 | Complete |
 | GATE-03 | Phase 4 | Pending |
 | GATE-04 | Phase 4 | Pending |
-| GATE-05 | Phase 4 | Pending |
+| GATE-05 | Phase 4 | Complete |
 | FIX-01 | Phase 4 | Pending |
 | FIX-02 | Phase 4 | Pending |
 | FIX-03 | Phase 4 | Pending |
