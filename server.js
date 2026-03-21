@@ -85,14 +85,15 @@ function safeCompare(a, b) {
 // SECURITY HEADERS
 // ═══════════════════════════════════════════════════════════════
 app.use((req, res, next) => {
+  const stripeSrc = STRIPE_ENABLED ? ' https://checkout.stripe.com' : '';
   res.setHeader('Content-Security-Policy',
     "default-src 'self'; " +
     "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; " +
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
     "font-src 'self' https://fonts.gstatic.com; " +
     "img-src 'self' data: https:; " +
-    "connect-src 'self' https://*.supabase.co https://www.bridgematch.co.uk https://checkout.stripe.com; " +
-    "frame-src https://checkout.stripe.com; " +
+    `connect-src 'self' https://*.supabase.co https://www.bridgematch.co.uk${stripeSrc}; ` +
+    (STRIPE_ENABLED ? "frame-src https://checkout.stripe.com; " : "frame-src 'none'; ") +
     "frame-ancestors 'none'; " +
     "form-action 'self'; " +
     "upgrade-insecure-requests"
@@ -203,7 +204,7 @@ app.use((req, res, next) => {
 // ═══════════════════════════════════════════════════════════════
 // CONFIG
 // ═══════════════════════════════════════════════════════════════
-const RATE_LIMIT = 5;
+const RATE_LIMIT = STRIPE_ENABLED ? 5 : 50; // 50/day for signed-in users when Stripe disabled
 const CACHE_DAYS = 7; // fallback default
 const CACHE_TIERS = {
   high:   { houses: ['allsop','savills','sdl','network','bidx1'], ttlHours: 12 },
@@ -1277,10 +1278,10 @@ app.get('/api/auth/me', async (req, res) => {
     const safe = data || user;
     // Don't expose internal Stripe IDs to the client
     const { stripe_subscription_id, stripe_customer_id, ...publicFields } = safe;
-    res.json({ ...publicFields, hasSubscription: !!stripe_subscription_id });
+    res.json({ ...publicFields, hasSubscription: !!stripe_subscription_id, stripeEnabled: STRIPE_ENABLED });
   } catch (err) {
     const { stripe_subscription_id, stripe_customer_id, ...publicFields } = user;
-    res.json({ ...publicFields, hasSubscription: !!stripe_subscription_id });
+    res.json({ ...publicFields, hasSubscription: !!stripe_subscription_id, stripeEnabled: STRIPE_ENABLED });
   }
 });
 
@@ -1290,6 +1291,7 @@ app.get('/api/auth/me', async (req, res) => {
 
 // GET /api/stripe/diag — check Stripe config (temporary diagnostic)
 app.get('/api/stripe/diag', (req, res) => {
+  if (!STRIPE_ENABLED) return res.status(503).json({ error: 'payments_hibernated' });
   const key = process.env.STRIPE_SECRET_KEY || '';
   const priceId = process.env.STRIPE_MONTHLY_PRICE_ID || '';
   res.json({
@@ -1302,6 +1304,7 @@ app.get('/api/stripe/diag', (req, res) => {
 
 // POST /api/stripe/checkout — create Stripe Checkout session
 app.post('/api/stripe/checkout', rateLimit(60000, 5), async (req, res) => {
+  if (!STRIPE_ENABLED) return res.status(503).json({ error: 'payments_hibernated' });
   log.info('Stripe checkout requested', { hasStripe: !!stripe, hasKey: !!process.env.STRIPE_SECRET_KEY, hasPriceId: !!process.env.STRIPE_MONTHLY_PRICE_ID });
   if (!stripe) return res.status(503).json({ error: 'Payments not configured — STRIPE_SECRET_KEY missing' });
   const user = await validateUserFromReq(req);
@@ -1374,6 +1377,12 @@ app.post('/api/stripe/webhook', async (req, res) => {
   if (existingEvent) {
     log.info(`Webhook event ${event.id} already processed, skipping`);
     return res.json({ received: true, duplicate: true });
+  }
+
+  // When Stripe is hibernated, only process subscription deletions (for cancellation confirmations)
+  if (!STRIPE_ENABLED && event.type !== 'customer.subscription.deleted') {
+    log.info(`Stripe hibernated — ignoring ${event.type}`);
+    return res.json({ received: true, hibernated: true });
   }
 
   try {
@@ -1541,6 +1550,7 @@ app.post('/api/stripe/webhook', async (req, res) => {
 
 // POST /api/stripe/portal — billing portal for subscription management
 app.post('/api/stripe/portal', async (req, res) => {
+  if (!STRIPE_ENABLED) return res.status(503).json({ error: 'payments_hibernated' });
   if (!stripe) return res.status(503).json({ error: 'Payments not configured' });
   const user = await validateUserFromReq(req);
   if (!user) return res.status(401).json({ error: 'Authentication required' });
@@ -1560,6 +1570,7 @@ app.post('/api/stripe/portal', async (req, res) => {
 
 // GET /api/stripe/status — return user's subscription status
 app.get('/api/stripe/status', async (req, res) => {
+  if (!STRIPE_ENABLED) return res.json({ active: false, stripeEnabled: false });
   const user = await validateUserFromReq(req);
   if (!user) return res.status(401).json({ error: 'Authentication required' });
 
