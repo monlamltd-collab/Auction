@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-03-20T05:47:08.972Z",
+  "timestamp": "2026-03-21T05:37:42.673Z",
   "results": [
     {
       "house": "savills",
@@ -23,13 +23,7 @@
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": 33,
-      "issues": [
-        {
-          "type": "MISSING_FROM_CACHE",
-          "severity": "WARNING",
-          "detail": "6 live lots but missing from production cache"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "network",
@@ -68,9 +62,14 @@
       "house": "barnardmarcus",
       "extractorLots": 20,
       "universalLots": 0,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": 0,
       "issues": [
+        {
+          "type": "TIMEOUT",
+          "severity": "BROKEN",
+          "detail": "HTTP request timed out (10s)"
+        },
         {
           "type": "LOW_IMAGES",
           "severity": "WARNING",
@@ -93,7 +92,7 @@
         {
           "type": "EXTRACTOR_BROKEN",
           "severity": "BROKEN",
-          "detail": "DOM extractor returns 0, but 21 prices on page"
+          "detail": "DOM extractor returns 0, but 48 prices on page"
         }
       ]
     },
@@ -107,7 +106,7 @@
         {
           "type": "EXTRACTOR_BROKEN",
           "severity": "BROKEN",
-          "detail": "DOM extractor returns 0, but 711 prices on page"
+          "detail": "DOM extractor returns 0, but 740 prices on page"
         }
       ]
     },
@@ -348,13 +347,7 @@
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": 100,
-      "issues": [
-        {
-          "type": "MISSING_FROM_CACHE",
-          "severity": "WARNING",
-          "detail": "20 live lots but missing from production cache"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "probateauction",
@@ -425,13 +418,7 @@
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": 100,
-      "issues": [
-        {
-          "type": "MISSING_FROM_CACHE",
-          "severity": "WARNING",
-          "detail": "10 live lots but missing from production cache"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "firstforauctions",
@@ -467,27 +454,15 @@
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": 100,
-      "issues": [
-        {
-          "type": "MISSING_FROM_CACHE",
-          "severity": "WARNING",
-          "detail": "31 live lots but missing from production cache"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "robinsonhall",
-      "extractorLots": 24,
+      "extractorLots": 26,
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": 100,
-      "issues": [
-        {
-          "type": "MISSING_FROM_CACHE",
-          "severity": "WARNING",
-          "detail": "24 live lots but missing from production cache"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "astleys",
@@ -499,7 +474,7 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 90 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 88 prices on page"
         }
       ]
     },
@@ -513,7 +488,7 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 60 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 64 prices on page"
         }
       ]
     },
@@ -582,7 +557,7 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 71 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 75 prices on page"
         }
       ]
     },
@@ -596,13 +571,13 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 32 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 31 prices on page"
         }
       ]
     },
     {
       "house": "agentsproperty",
-      "extractorLots": 101,
+      "extractorLots": 103,
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": 100,
@@ -610,7 +585,7 @@
         {
           "type": "MISSING_FROM_CACHE",
           "severity": "WARNING",
-          "detail": "101 live lots but missing from production cache"
+          "detail": "103 live lots but missing from production cache"
         }
       ]
     },
@@ -624,7 +599,7 @@
         {
           "type": "PAGINATION_MISSED",
           "severity": "WARNING",
-          "detail": "Page says \"Showing 1-24 of 42\" but no pagination config"
+          "detail": "Page says \"Showing 1-24 of 40\" but no pagination config"
         },
         {
           "type": "MISSING_FROM_CACHE",
@@ -657,7 +632,7 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 87 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 89 prices on page"
         }
       ]
     },
@@ -741,7 +716,7 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 311 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 309 prices on page"
         }
       ]
     },
@@ -755,7 +730,7 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 371 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 368 prices on page"
         }
       ]
     },
@@ -769,7 +744,7 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 311 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 313 prices on page"
         }
       ]
     },
@@ -783,7 +758,7 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 214 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 216 prices on page"
         }
       ]
     },
