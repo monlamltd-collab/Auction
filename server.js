@@ -41,7 +41,10 @@ for (const key of RECOMMENDED_ENV) {
 }
 
 function escHtml(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
-const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
+
+// ── Stripe feature flag: defaults to true (backwards compatible), set STRIPE_ENABLED=false to hibernate ──
+const STRIPE_ENABLED = process.env.STRIPE_ENABLED !== 'false';
+const stripe = STRIPE_ENABLED && process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -1798,6 +1801,17 @@ async function validateUserFromReq(req) {
           trial_expires_at: null,
           trial_used: true,
         };
+      } else if (!STRIPE_ENABLED) {
+        // Stripe hibernated — all users start as free (resolveEffectiveTier promotes to premium)
+        insertData = {
+          email: normalEmail,
+          supabase_auth_id: authId,
+          tier: 'free',
+          tier_expires_at: null,
+          trial_started_at: null,
+          trial_expires_at: null,
+          trial_used: false,
+        };
       } else {
         // New user or trial not yet used — grant 14-day Pro trial
         const trialStart = new Date();
@@ -1842,12 +1856,25 @@ const FREE_SCAN_LIMIT = 3;
 
 const FREE_PREVIEW_LOTS = 6; // Show full AI data on first N lots even for free users over limit
 
+// ── Centralised tier resolution ──
+const SIGNED_IN_DAILY_LIMIT = 50;  // Daily AI search limit for signed-in users when Stripe disabled
+
+function resolveEffectiveTier(user) {
+  if (!user) return 'anon';
+  if (!STRIPE_ENABLED) return 'premium'; // All signed-in users are premium when Stripe hibernated
+  const tier = user.tier || 'free';
+  if (tier === 'premium') return 'premium';
+  if (user.trial_expires_at && new Date(user.trial_expires_at) > new Date()) return 'premium';
+  return tier;
+}
+
 // ── AI Search tier limits ──
 const ANON_AI_SEARCH_LIMIT = 3;   // Anonymous users: 3 AI searches/day by IP
 const FREE_AI_SEARCH_LIMIT = 5;   // Free registered users: 5 AI searches/day
 
 function getAISearchLimit(user) {
   if (!user) return ANON_AI_SEARCH_LIMIT;
+  if (!STRIPE_ENABLED) return SIGNED_IN_DAILY_LIMIT; // 50/day for all signed-in users when Stripe disabled
   const tier = user.tier || 'free';
   if (tier === 'premium') return Infinity;
   if (user.trial_expires_at && new Date(user.trial_expires_at) > new Date()) return Infinity;
@@ -2799,8 +2826,8 @@ app.post('/api/analyse', async (req, res) => {
   const user = await validateUserFromReq(req);
   if (!user) return res.status(401).json({ error: 'signup_required', message: 'Please sign up to use the analyser' });
 
-  // ── Tier info (blurring removed — all data visible) ──
-  const userTier = user.tier || 'free';
+  // ── Tier info (centralised via resolveEffectiveTier) ──
+  const userTier = resolveEffectiveTier(user);
   const scanCount = user.analyses_count || 0;
 
   // ── Rate limiting (admin bypass with ADMIN_SECRET header) ──
@@ -2847,8 +2874,8 @@ app.post('/api/analyse', async (req, res) => {
       ? cached.house  // cached.house is already a slug
       : Object.entries(HOUSE_DISPLAY_NAMES).find(([k, v]) => v === cached.house)?.[0] || 'unknown';
     const cachedDisplayName = HOUSE_DISPLAY_NAMES[cachedSlug] || cached.house;
-    const isPremiumOrTrial = userTier === 'premium' || userTier === 'trial';
-    const gatedLots = isPremiumOrTrial ? cached.lots : stripAIFields(cached.lots || []);
+    const isPremium = userTier === 'premium';
+    const gatedLots = isPremium ? cached.lots : stripAIFields(cached.lots || []);
     return res.json({
       house: cachedDisplayName,
       houseSlug: cachedSlug,
@@ -2862,7 +2889,7 @@ app.post('/api/analyse', async (req, res) => {
       vacantCount: cached.vacant_count || 0,
       lots: gatedLots,
       cached: true,
-      blurred: !isPremiumOrTrial,
+      blurred: !isPremium,
       scansUsed: scanCount,
       scanLimit: FREE_SCAN_LIMIT,
     });
@@ -3241,8 +3268,8 @@ app.post('/api/analyse', async (req, res) => {
 
     const updatedScanCount = (user.analyses_count || 0) + 1;
 
-    const isPremiumOrTrial = userTier === 'premium' || userTier === 'trial';
-    const gatedAnalysed = isPremiumOrTrial ? analysed : stripAIFields(analysed);
+    const isPremium = userTier === 'premium';
+    const gatedAnalysed = isPremium ? analysed : stripAIFields(analysed);
     sseWrite(res, 'done', {
       house: displayName,
       houseSlug: house,
@@ -3256,7 +3283,7 @@ app.post('/api/analyse', async (req, res) => {
       vacantCount: analysed.filter(l => l.vacant === true).length,
       lots: gatedAnalysed,
       cached: false,
-      blurred: !isPremiumOrTrial,
+      blurred: !isPremium,
       scansUsed: updatedScanCount,
       scanLimit: FREE_SCAN_LIMIT,
     });
