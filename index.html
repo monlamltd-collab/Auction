@@ -423,7 +423,7 @@ footer .logo-f span{color:var(--green)}
 .lot-card.blurred .card-body{filter:blur(6px);pointer-events:none;user-select:none}
 .lot-card.blurred .card-footer .card-view-link{display:none}
 .lot-card.blurred{position:relative}
-.lot-card.blurred::after{content:'Upgrade for full address, AI scores & listing link';position:absolute;bottom:44px;left:0;right:0;background:linear-gradient(transparent,rgba(255,255,255,.95) 40%);padding:32px 16px 4px;text-align:center;font-weight:600;font-size:.8rem;color:var(--accent);pointer-events:none;z-index:1}
+.lot-card.blurred::after{content:attr(data-blur-text);position:absolute;bottom:44px;left:0;right:0;background:linear-gradient(transparent,rgba(255,255,255,.95) 40%);padding:32px 16px 4px;text-align:center;font-weight:600;font-size:.8rem;color:var(--accent);pointer-events:none;z-index:1}
 .card-image-wrapper{position:relative;height:200px;width:100%;overflow:hidden;background:#eef2f7}
 .card-image{width:100%;height:100%;object-fit:cover;object-position:center;display:block}
 .lot-status-overlay{position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;z-index:2;pointer-events:none}
@@ -1069,7 +1069,7 @@ let LENDER_DATA=[];
 const BATCH_SIZE=60;
 let _pendingCards=[];
 let _batchObserver=null;
-function isPremium(){return window._userTier==='premium';} // Gated behind auth
+function isPremium(){if(window._stripeEnabled===false)return !!window._userTier;return window._userTier==='premium';} // Gated behind auth; all signed-in users are premium when Stripe disabled
 let _searchAbort=null; // AbortController for in-flight searches
 let _searchTimers=[]; // setTimeout IDs for step animations
 let _searchReader=null; // SSE ReadableStreamDefaultReader (for cleanup on abort)
@@ -1164,6 +1164,8 @@ async function loadAllLots(){
     const r=await fetch(apiUrl,{headers:getAuthHeaders()});
     if(!r.ok) throw new Error('Server error: '+r.status);
     const d=await r.json();
+    // Store Stripe enabled flag from server (available to all users, including anonymous)
+    if(d.stripeEnabled!==undefined) window._stripeEnabled=d.stripeEnabled;
     ALL_LOTS=d.lots||[];
     ALL_SOURCES=d.sources||[];
     if(d._debug) console.log('[BM] all-lots pipeline:',d._debug);
@@ -1306,7 +1308,7 @@ function handleSearch(){
 }
 
 function setQ(q){
-  if(!window._userTier){showPaywall('Sign up for free to get 5 AI searches per day, or upgrade to Pro for unlimited.');return}
+  if(!window._userTier){if(window._stripeEnabled===false){$('signupModal').classList.add('show');}else{showPaywall('Sign up for free to get 5 AI searches per day, or upgrade to Pro for unlimited.');}return}
   $('smartQuery').value=q;
 }
 function applyPreset(name){
@@ -1719,6 +1721,11 @@ $('paywallModal').addEventListener('click', e => { if (e.target === $('paywallMo
 // STRIPE / PAYWALL
 // ═══════════════════════════════
 function showPaywall(reason) {
+  // When Stripe is disabled, redirect to sign-up modal instead of paywall
+  if (window._stripeEnabled === false) {
+    $('signupModal').classList.add('show');
+    return;
+  }
   if (reason) $('paywallReason').textContent = reason;
   $('paywallModal').classList.add('show');
 }
@@ -1769,7 +1776,7 @@ async function openBillingPortal() {
       const toast = document.createElement('div');
       const isSuccess = paymentStatus === 'success';
       toast.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:' + (isSuccess ? '#2e7d32' : '#6b7c8d') + ';color:white;padding:12px 24px;border-radius:8px;font-weight:600;z-index:999;font-size:.9rem;box-shadow:0 4px 20px rgba(0,0,0,.15)';
-      toast.textContent = isSuccess ? 'Payment successful! You now have Pro access.' : 'Checkout cancelled. You can upgrade any time from your account menu.';
+      toast.textContent = isSuccess ? 'Payment successful! You now have Pro access.' : (window._stripeEnabled===false ? 'Checkout cancelled.' : 'Checkout cancelled. You can upgrade any time from your account menu.');
       document.body.appendChild(toast);
       setTimeout(() => toast.remove(), 5000);
     }, 500);
@@ -1783,11 +1790,24 @@ async function updateProStatus() {
     const resp = await fetch('/api/stripe/status', { headers: getAuthHeaders() });
     if (!resp.ok) return;
     const data = await resp.json();
+    // Store Stripe enabled flag from server
+    if (data.stripeEnabled !== undefined) window._stripeEnabled = data.stripeEnabled;
     const emailEl = $('userEmail');
     // Remove old badge if present
     const oldBadge = document.querySelector('.pro-badge');
     if (oldBadge) oldBadge.remove();
-    if (data.trial) {
+
+    // When Stripe is disabled, hide all payment UI and treat signed-in users as premium
+    if (window._stripeEnabled === false) {
+      emailEl.insertAdjacentHTML('afterend', '<span class="pro-badge">FREE</span>');
+      $('acctTier').textContent = 'Member';
+      $('acctTier').classList.add('pro');
+      if ($('acctManage')) $('acctManage').style.display = 'none';
+      if ($('acctUpgrade')) $('acctUpgrade').style.display = 'none';
+      // Remove any trial banners
+      const existingBanner = document.querySelector('.trial-banner');
+      if (existingBanner) existingBanner.remove();
+    } else if (data.trial) {
       // Trial state — show orange TRIAL badge with days remaining
       emailEl.insertAdjacentHTML('afterend', '<span class="pro-badge trial-badge">TRIAL · ' + data.trialDaysLeft + 'd</span>');
       $('acctTier').textContent = 'Pro Trial';
@@ -1835,7 +1855,13 @@ function refreshTierUI() {
   // Update account dropdown tier label
   const tier = window._userTier;
   if ($('acctTier')) {
-    if (tier === 'premium') {
+    if (window._stripeEnabled === false) {
+      // Stripe disabled — hide all payment UI
+      $('acctTier').textContent = 'Member';
+      $('acctTier').classList.add('pro');
+      if ($('acctManage')) $('acctManage').style.display = 'none';
+      if ($('acctUpgrade')) $('acctUpgrade').style.display = 'none';
+    } else if (tier === 'premium') {
       $('acctTier').textContent = 'Pro';
       $('acctTier').classList.add('pro');
       if ($('acctManage')) $('acctManage').style.display = '';
@@ -1954,7 +1980,7 @@ async function runAnalysis(url){
 
       // Show scan counter for free users
       if (data.blurred) {
-        showPaywall('You\'ve used your ' + data.scanLimit + ' free AI scans. Upgrade to see full analysis.');
+        showPaywall(window._stripeEnabled===false ? 'Sign in free for full AI analysis.' : 'You\'ve used your ' + data.scanLimit + ' free AI scans. Upgrade to see full analysis.');
       } else if (data.scansUsed !== undefined && data.scanLimit && (window._userTier || 'free') === 'free') {
         const remaining = Math.max(0, data.scanLimit - data.scansUsed);
         const counter = document.querySelector('.scan-counter') || document.createElement('div');
@@ -2066,7 +2092,11 @@ async function runAnalysis(url){
 async function runSmartSearch(query) {
   // Anonymous users must sign up; free users get 5/day (server enforces limit)
   if (!window._userTier || window._userTier === 'anon') {
-    showPaywall('Sign up for free to get 5 AI searches per day, or upgrade to Pro for unlimited.');
+    if (window._stripeEnabled === false) {
+      $('signupModal').classList.add('show');
+    } else {
+      showPaywall('Sign up for free to get 5 AI searches per day, or upgrade to Pro for unlimited.');
+    }
     return;
   }
 
@@ -2122,7 +2152,7 @@ async function runSmartSearch(query) {
       if (data.error === 'premium_required') {
         const _pp=$('progressPanel'); if(_pp) _pp.style.display='none';
         const _sb=$('mainBtn'); if(_sb){_sb.disabled=false;_sb.textContent='Search';}
-        showPaywall(data.message || 'Sign up for free to get 5 AI searches per day, or upgrade to Pro for unlimited.');
+        showPaywall(data.message || (window._stripeEnabled===false ? 'Sign in free for AI searches.' : 'Sign up for free to get 5 AI searches per day, or upgrade to Pro for unlimited.'));
         return;
       }
       if (data.error === 'rate_limited') {
@@ -2139,11 +2169,11 @@ async function runSmartSearch(query) {
           $('signupEmail').focus();
           // Show a helpful message above the form
           const errEl = $('signupError');
-          errEl.textContent = 'Sign up for 10 free AI searches per day + a 14-day Pro trial!';
+          errEl.textContent = window._stripeEnabled===false ? 'Sign in free for unlimited AI searches!' : 'Sign up for 10 free AI searches per day + a 14-day Pro trial!';
           errEl.style.display = '';
           errEl.style.color = 'var(--accent)';
         } else {
-          showPaywall(data.message || 'Daily AI search limit reached. Upgrade to Pro for unlimited.');
+          showPaywall(data.message || (window._stripeEnabled===false ? 'Sign in free for AI searches.' : 'Daily AI search limit reached. Upgrade to Pro for unlimited.'));
         }
         return;
       }
@@ -2533,7 +2563,8 @@ function card(l){
 
   const endedClass = (l._auctionDate && l._auctionDate < new Date().toISOString().slice(0,10)) ? ' card-ended' : '';
   const blurredClass = l.blurred ? ' blurred' : '';
-  return '<div class="lot-card' + endedClass + blurredClass + '" id="lot-' + l._idx + '" tabindex="0" role="article" aria-label="Lot ' + esc(l.lot || '') + ' — ' + esc(l.address || 'Address not available') + '" onclick="expandCard(LOTS[' + l._idx + '])" onkeydown="if(event.key===\'Enter\'){this.click()}">' +
+  const blurTextAttr = l.blurred ? ' data-blur-text="' + (window._stripeEnabled === false ? 'Sign in free for full details' : 'Upgrade for full address, AI scores & listing link') + '"' : '';
+  return '<div class="lot-card' + endedClass + blurredClass + '"' + blurTextAttr + ' id="lot-' + l._idx + '" tabindex="0" role="article" aria-label="Lot ' + esc(l.lot || '') + ' — ' + esc(l.address || 'Address not available') + '" onclick="expandCard(LOTS[' + l._idx + '])" onkeydown="if(event.key===\'Enter\'){this.click()}">' +
     getCardImageHtml(l) +
     '<div class="card-body">' +
       '<div class="card-row1"><span class="card-lot-info">' + catLabel + '</span><span class="card-price">' + esc(priceText) + '</span></div>' +
@@ -2948,7 +2979,7 @@ function getSignalChips(lot) {
 
 function expandCard(lot) {
   if (lot.anonGated) { $('signupModal').classList.add('show'); return; }
-  if (lot.blurred) { showPaywall('Upgrade to Pro for full lot details, AI analysis, and finance checks.'); return; }
+  if (lot.blurred) { if(window._stripeEnabled===false){$('signupModal').classList.add('show');}else{showPaywall('Upgrade to Pro for full lot details, AI analysis, and finance checks.');}return; }
   // Close any existing expanded panel
   const existing = document.querySelector('.expanded-panel');
   if (existing) existing.remove();
@@ -3007,7 +3038,7 @@ function expandCard(lot) {
         '</div></details>';
     } else {
       return '<details class="premium-feature">' +
-        '<summary>Yield Analysis <span style="font-size:11px;color:var(--accent-warn)">PRO</span></summary>' +
+        '<summary>Yield Analysis' + (window._stripeEnabled===false ? '' : ' <span style="font-size:11px;color:var(--accent-warn)">PRO</span>') + '</summary>' +
         '<div class="pf-blurred">' +
           '<div class="pf-blur-content">' +
             '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span>Gross Yield</span><span>X.X%</span></div>' +
@@ -3015,9 +3046,9 @@ function expandCard(lot) {
             '<div style="display:flex;justify-content:space-between"><span>Rating</span><span style="background:#e8f5e9;padding:2px 8px;border-radius:4px">Good</span></div>' +
           '</div>' +
           '<div class="pf-upgrade-cta">' +
-            '<div style="font-size:14px;font-weight:600;color:var(--text)">Unlock Yield Analysis with Pro</div>' +
-            '<div style="font-size:12px;color:var(--text-muted);margin-top:4px">From \u00a39.99/mo</div>' +
-            '<button onclick="showPaywall(\'yield_analysis\')">Upgrade Now</button>' +
+            '<div style="font-size:14px;font-weight:600;color:var(--text)">' + (window._stripeEnabled===false ? 'Sign in free for Yield Analysis' : 'Unlock Yield Analysis with Pro') + '</div>' +
+            (window._stripeEnabled===false ? '' : '<div style="font-size:12px;color:var(--text-muted);margin-top:4px">From \u00a39.99/mo</div>') +
+            '<button onclick="showPaywall(\'yield_analysis\')">' + (window._stripeEnabled===false ? 'Sign in free' : 'Upgrade Now') + '</button>' +
           '</div>' +
         '</div></details>';
     }
@@ -3047,7 +3078,7 @@ function expandCard(lot) {
         '</div></details>';
     } else {
       return '<details class="premium-feature">' +
-        '<summary>Comparables <span style="font-size:11px;color:var(--accent-warn)">PRO</span></summary>' +
+        '<summary>Comparables' + (window._stripeEnabled===false ? '' : ' <span style="font-size:11px;color:var(--accent-warn)">PRO</span>') + '</summary>' +
         '<div class="pf-blurred">' +
           '<div class="pf-blur-content">' +
             '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span>Street Average</span><span>\u00a3XXX,XXX</span></div>' +
@@ -3055,9 +3086,9 @@ function expandCard(lot) {
             '<div style="display:flex;justify-content:space-between"><span>vs Market</span><span style="color:var(--accent)">XX% below</span></div>' +
           '</div>' +
           '<div class="pf-upgrade-cta">' +
-            '<div style="font-size:14px;font-weight:600;color:var(--text)">Unlock Comparables with Pro</div>' +
-            '<div style="font-size:12px;color:var(--text-muted);margin-top:4px">From \u00a39.99/mo</div>' +
-            '<button onclick="showPaywall(\'comparables\')">Upgrade Now</button>' +
+            '<div style="font-size:14px;font-weight:600;color:var(--text)">' + (window._stripeEnabled===false ? 'Sign in free for Comparables' : 'Unlock Comparables with Pro') + '</div>' +
+            (window._stripeEnabled===false ? '' : '<div style="font-size:12px;color:var(--text-muted);margin-top:4px">From \u00a39.99/mo</div>') +
+            '<button onclick="showPaywall(\'comparables\')">' + (window._stripeEnabled===false ? 'Sign in free' : 'Upgrade Now') + '</button>' +
           '</div>' +
         '</div></details>';
     }
@@ -3072,7 +3103,7 @@ function expandCard(lot) {
         '</div></details>';
     } else {
       return '<details class="premium-feature">' +
-        '<summary>Deal Stacking Calculator <span style="font-size:11px;color:var(--accent-warn)">PRO</span></summary>' +
+        '<summary>Deal Stacking Calculator' + (window._stripeEnabled===false ? '' : ' <span style="font-size:11px;color:var(--accent-warn)">PRO</span>') + '</summary>' +
         '<div class="pf-blurred">' +
           '<div class="pf-blur-content">' +
             '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">' +
@@ -3082,9 +3113,9 @@ function expandCard(lot) {
             '</div>' +
           '</div>' +
           '<div class="pf-upgrade-cta">' +
-            '<div style="font-size:14px;font-weight:600;color:var(--text)">Unlock Deal Stacking with Pro</div>' +
-            '<div style="font-size:12px;color:var(--text-muted);margin-top:4px">From \u00a39.99/mo</div>' +
-            '<button onclick="showPaywall(\'deal_stacking\')">Upgrade Now</button>' +
+            '<div style="font-size:14px;font-weight:600;color:var(--text)">' + (window._stripeEnabled===false ? 'Sign in free for Deal Stacking' : 'Unlock Deal Stacking with Pro') + '</div>' +
+            (window._stripeEnabled===false ? '' : '<div style="font-size:12px;color:var(--text-muted);margin-top:4px">From \u00a39.99/mo</div>') +
+            '<button onclick="showPaywall(\'deal_stacking\')">' + (window._stripeEnabled===false ? 'Sign in free' : 'Upgrade Now') + '</button>' +
           '</div>' +
         '</div></details>';
     }
@@ -3184,7 +3215,7 @@ function expandCard(lot) {
           '</p>' +
           '<button onclick="showPaywall(\'deal_stacking\')" ' +
             'style="padding:10px 24px; background:var(--accent); color:#fff; border:none; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer;">' +
-            'Upgrade to Pro \u2014 \u00a39.99/mo' +
+            (window._stripeEnabled===false ? 'Sign in free' : 'Upgrade to Pro \u2014 \u00a39.99/mo') +
           '</button>' +
         '</div>') +
       (bulletsHtml ? '<ul class="exp-bullets">' + bulletsHtml + '</ul>' : '') +

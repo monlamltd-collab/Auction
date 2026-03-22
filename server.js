@@ -3798,7 +3798,7 @@ Only return lots that genuinely match the query. If nothing matches well, say so
 // ═══════════════════════════════════════════════════════════════
 app.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
   try {
-    if (!supabase) return res.json({ lots: [], sources: [] });
+    if (!supabase) return res.json({ lots: [], sources: [], stripeEnabled: STRIPE_ENABLED });
 
     const includePast = req.query.includePast === 'true';
     const user = await validateUserFromReq(req);
@@ -3808,7 +3808,7 @@ app.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
       .select('house, url, lots, created_at')
       .gt('expires_at', new Date().toISOString());
 
-    if (!cached || cached.length === 0) return res.json({ lots: [], sources: [] });
+    if (!cached || cached.length === 0) return res.json({ lots: [], sources: [], stripeEnabled: STRIPE_ENABLED });
 
     // ── Diagnostic: raw lot count before any filtering/dedup ──
     const rawTotal = (cached || []).reduce((s, c) => s + (Array.isArray(c.lots) ? c.lots.length : 0), 0);
@@ -4003,6 +4003,7 @@ app.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
       sources,
       blurred: false,
       anonGated: !isSignedIn,
+      stripeEnabled: STRIPE_ENABLED,
       _debug: {
         cachedRows: cached.length,
         rawLotCount: rawTotal,
