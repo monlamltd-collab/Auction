@@ -25,7 +25,7 @@
 - Decimal phases (4.1, 5.1): Urgent insertions (marked with INSERTED)
 
 - [ ] **Phase 4: Foundation** - Infra checks, Stripe hibernation, free-first gating, and all bug fixes
-- [x] **Phase 5: Measurement** - Analytics infrastructure for MAU tracking and funnel data (completed 2026-03-22)
+- [ ] **Phase 5: Measurement** - Analytics infrastructure for MAU tracking and funnel data
 - [ ] **Phase 6: AI & Scraping Hardening** - AI provider abstraction, cost monitoring, scraping audit and expansion
 - [ ] **Phase 7: Landing Page** - Acquisition page with USP hero and sign-up funnel
 
@@ -58,11 +58,12 @@ Plans:
   2. Umami Cloud reports page views, unique visitors (MAU), referral sources, and bounce rate
   3. BridgeMatch funnel is tracked end-to-end: lot view to finance click to form start to submission
   4. Admin can view an analytics summary showing MAU count, top funnels, and engagement metrics
-**Plans**: 2 plans
+**Plans**: 3 plans
 
 Plans:
 - [x] 05-01-PLAN.md — Analytics instrumentation (server-side events, Umami script, client-side funnel tracking)
-- [ ] 05-02-PLAN.md — Admin analytics dashboard (MAU hero, funnel visualization, engagement metrics)
+- [x] 05-02-PLAN.md — Admin analytics dashboard (MAU hero, funnel visualization, engagement metrics)
+- [ ] 05-03-PLAN.md — UAT gap closure (CSP fix, auth race condition, route ordering)
 
 ### Phase 6: AI & Scraping Hardening
 **Goal**: AI costs are visible and controllable via provider abstraction, and scraping coverage is audited and expanded
@@ -102,8 +103,8 @@ Phases execute in numeric order: 4 -> 4.1 -> 5 -> 5.1 -> 6 -> 7
 | 1. Hardening & Data Freshness | v1.1 | 4/4 | Complete | 2026-03-15 |
 | 2. Enrichment & House Expansion | v1.1 | 3/3 | Complete | 2026-03-15 |
 | 3. Deal Stacking & Tier Verification | v1.1 | 3/3 | Complete | 2026-03-16 |
-| 4. Foundation | 3/4 | In Progress|  | - |
-| 5. Measurement | 2/2 | Complete   | 2026-03-22 | - |
+| 4. Foundation | v1.2 | 3/4 | In Progress | - |
+| 5. Measurement | v1.2 | 2/3 | In Progress | - |
 | 6. AI & Scraping Hardening | v1.2 | 0/2 | Not started | - |
 | 7. Landing Page | v1.2 | 0/1 | Not started | - |
 
