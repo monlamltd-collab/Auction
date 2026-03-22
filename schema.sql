@@ -133,3 +133,22 @@ CREATE POLICY "Service role full access" ON analytics_snapshots FOR ALL USING (t
 CREATE POLICY "Service role full access" ON house_skills FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Service role full access" ON processed_webhook_events FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Service role full access" ON pipeline_alerts FOR ALL USING (true) WITH CHECK (true);
+
+-- 10. AI USAGE TRACKING
+-- Per-call token usage and cost estimates for AI provider monitoring
+CREATE TABLE IF NOT EXISTS ai_usage (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  provider TEXT NOT NULL,
+  model TEXT NOT NULL,
+  tokens_in INTEGER DEFAULT 0,
+  tokens_out INTEGER DEFAULT 0,
+  est_cost NUMERIC(10,6) DEFAULT 0,
+  task_type TEXT,
+  duration_ms INTEGER,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ai_usage_created ON ai_usage(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ai_usage_provider ON ai_usage(provider, created_at DESC);
+ALTER TABLE ai_usage ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Service role full access" ON ai_usage FOR ALL USING (true) WITH CHECK (true);
