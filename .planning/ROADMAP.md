@@ -61,7 +61,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 05-01-PLAN.md — Analytics instrumentation (server-side events, Umami script, client-side funnel tracking)
+- [x] 05-01-PLAN.md — Analytics instrumentation (server-side events, Umami script, client-side funnel tracking)
 - [ ] 05-02-PLAN.md — Admin analytics dashboard (MAU hero, funnel visualization, engagement metrics)
 
 ### Phase 6: AI & Scraping Hardening
@@ -103,7 +103,7 @@ Phases execute in numeric order: 4 -> 4.1 -> 5 -> 5.1 -> 6 -> 7
 | 2. Enrichment & House Expansion | v1.1 | 3/3 | Complete | 2026-03-15 |
 | 3. Deal Stacking & Tier Verification | v1.1 | 3/3 | Complete | 2026-03-16 |
 | 4. Foundation | 3/4 | In Progress|  | - |
-| 5. Measurement | v1.2 | 0/2 | Not started | - |
+| 5. Measurement | v1.2 | 1/2 | In Progress | - |
 | 6. AI & Scraping Hardening | v1.2 | 0/2 | Not started | - |
 | 7. Landing Page | v1.2 | 0/1 | Not started | - |
 

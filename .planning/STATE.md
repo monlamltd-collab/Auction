@@ -3,31 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Free-First Growth
 status: executing
-stopped_at: Phase 5 context gathered
-last_updated: "2026-03-22T17:00:36.215Z"
-last_activity: 2026-03-22 -- Completed 04-03-PLAN.md (client-side gating pivot)
+stopped_at: Completed 05-01-PLAN.md (analytics instrumentation)
+last_updated: "2026-03-22T17:20:10Z"
+last_activity: 2026-03-22 -- Completed 05-01-PLAN.md (analytics instrumentation)
 progress:
-  total_phases: 4
+  total_phases: 5
   completed_phases: 1
-  total_plans: 4
+  total_plans: 5
   completed_plans: 4
-  percent: 100
----
-
----
-gsd_state_version: 1.0
-milestone: v1.2
-milestone_name: Free-First Growth
-status: executing
-stopped_at: Completed 04-03-PLAN.md (client-side gating pivot)
-last_updated: "2026-03-22T16:15:00Z"
-last_activity: 2026-03-22 -- Completed 04-03-PLAN.md (client-side gating pivot)
-progress:
-  [██████████] 100%
-  completed_phases: 0
-  total_plans: 4
-  completed_plans: 3
-  percent: 75
+  percent: 80
 ---
 
 # Project State
@@ -37,36 +21,36 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-20)
 
 **Core value:** Every upcoming UK auction lot, with complete data, scored for investment potential and matched to bridging lenders -- so investors can find and fund deals in one place.
-**Current focus:** Phase 4: Foundation (free-first gating + bug fixes)
+**Current focus:** Phase 5: Measurement (analytics instrumentation + dashboard)
 
 ## Current Position
 
-Phase: 4 of 7 (Foundation)
-Plan: 4 of 4 in current phase
+Phase: 5 of 7 (Measurement)
+Plan: 1 of 2 in current phase
 Status: Executing
-Last activity: 2026-03-22 -- Completed 04-03-PLAN.md (client-side gating pivot)
+Last activity: 2026-03-22 -- Completed 05-01-PLAN.md (analytics instrumentation)
 
-Progress: [████████░░] 75%
+Progress: [████████░░] 80%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3 (v1.2)
-- Average duration: 3.7min
-- Total execution time: 11min
+- Total plans completed: 4 (v1.2)
+- Average duration: 3.5min
+- Total execution time: 14min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 04-foundation | 3 | 11min | 3.7min |
+| 05-measurement | 1 | 3min | 3min |
 
 **Recent Trend:**
-- Last 5 plans: 04-03 (4min), 04-02 (4min), 04-01 (3min)
+- Last 5 plans: 05-01 (3min), 04-03 (4min), 04-02 (4min), 04-01 (3min)
 - Trend: stable
 
 *Updated after each plan completion*
-| Phase 04 P04 | 8min | 3 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -88,6 +72,9 @@ Recent decisions affecting current work:
 - isPremium() treats signed-in users as premium when Stripe disabled
 - Client-side CSV guard sufficient (server strips data for anon users)
 - [Phase 04]: FIX-02 score sort already correct -- no change needed
+- [Phase 05]: Umami script uses empty data-website-id placeholder (user sets via Umami Cloud dashboard)
+- [Phase 05]: form_start fires once per session via _bmFormStarted flag
+- [Phase 05]: Tracking endpoint allows anonymous access (no auth required)
 
 ### Pending Todos
 
@@ -101,9 +88,9 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-22T17:00:36.212Z
-Stopped at: Phase 5 context gathered
-Resume file: .planning/phases/05-measurement/05-CONTEXT.md
+Last session: 2026-03-22T17:20:10Z
+Stopped at: Completed 05-01-PLAN.md (analytics instrumentation)
+Resume file: .planning/phases/05-measurement/05-02-PLAN.md
 
 ---
 *Last updated: 2026-03-22 after 04-03 plan completion*
