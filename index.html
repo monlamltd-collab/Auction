@@ -674,6 +674,18 @@ footer .logo-f span{color:var(--green)}
 .cal-btn.cached{background:var(--green-light);color:var(--green);border:1px solid var(--green)}
 .cal-btn.cached:hover{background:var(--green);color:var(--white)}
 .cal-lots-badge{font-family:'JetBrains Mono',monospace;font-size:.72rem;background:var(--green-light);color:var(--green);padding:2px 8px;border-radius:10px;font-weight:700}
+
+/* FIX-06: Deal stacking widget mobile reflow */
+@media(max-width:600px){
+  .deal-stack-widget>div[style*="grid-template-columns"]{grid-template-columns:1fr !important}
+  .deal-stack-widget>div[style*="grid-template-columns"]>div[style*="grid-column"]{grid-column:auto !important}
+}
+
+/* FIX-07: Sign-in modal text overflow on small screens */
+#signupModal .modal{box-sizing:border-box;overflow-wrap:break-word;word-wrap:break-word}
+@media(max-width:440px){
+  #signupModal .modal{max-width:calc(100vw - 32px) !important;margin:16px;padding:20px 16px}
+}
 </style>
 </head>
 <body>
