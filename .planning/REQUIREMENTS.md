@@ -34,7 +34,7 @@
 - [x] **ANAL-01**: Supabase `activity_events` wired to key API endpoints (search, analyse, deal stacking, BridgeMatch, sign-up)
 - [x] **ANAL-02**: Umami Cloud integrated for page-level metrics (MAU, bounce rate, page views)
 - [x] **ANAL-03**: BridgeMatch funnel tracked: lot view -> finance click -> form start -> submission
-- [ ] **ANAL-04**: Admin can view analytics summary (MAU, funnel, engagement)
+- [x] **ANAL-04**: Admin can view analytics summary (MAU, funnel, engagement)
 
 ### Scraping & Coverage
 
@@ -101,7 +101,7 @@
 | ANAL-01 | Phase 5 | Complete |
 | ANAL-02 | Phase 5 | Complete |
 | ANAL-03 | Phase 5 | Complete |
-| ANAL-04 | Phase 5 | Pending |
+| ANAL-04 | Phase 5 | Complete |
 | SCRP-01 | Phase 6 | Pending |
 | SCRP-02 | Phase 6 | Pending |
 | SCRP-03 | Phase 6 | Pending |

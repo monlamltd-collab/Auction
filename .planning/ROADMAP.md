@@ -25,7 +25,7 @@
 - Decimal phases (4.1, 5.1): Urgent insertions (marked with INSERTED)
 
 - [ ] **Phase 4: Foundation** - Infra checks, Stripe hibernation, free-first gating, and all bug fixes
-- [ ] **Phase 5: Measurement** - Analytics infrastructure for MAU tracking and funnel data
+- [x] **Phase 5: Measurement** - Analytics infrastructure for MAU tracking and funnel data (completed 2026-03-22)
 - [ ] **Phase 6: AI & Scraping Hardening** - AI provider abstraction, cost monitoring, scraping audit and expansion
 - [ ] **Phase 7: Landing Page** - Acquisition page with USP hero and sign-up funnel
 
@@ -103,7 +103,7 @@ Phases execute in numeric order: 4 -> 4.1 -> 5 -> 5.1 -> 6 -> 7
 | 2. Enrichment & House Expansion | v1.1 | 3/3 | Complete | 2026-03-15 |
 | 3. Deal Stacking & Tier Verification | v1.1 | 3/3 | Complete | 2026-03-16 |
 | 4. Foundation | 3/4 | In Progress|  | - |
-| 5. Measurement | v1.2 | 1/2 | In Progress | - |
+| 5. Measurement | 2/2 | Complete   | 2026-03-22 | - |
 | 6. AI & Scraping Hardening | v1.2 | 0/2 | Not started | - |
 | 7. Landing Page | v1.2 | 0/1 | Not started | - |
 
