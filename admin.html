@@ -481,6 +481,59 @@ tr:hover td { background: rgba(255,255,255,.02); }
 
     <!-- Analytics Tab -->
     <div class="tab-pane" id="tab-analytics">
+      <!-- MAU Hero -->
+      <div id="analytics-mau-hero" style="text-align:center;padding:24px 0 16px;">
+        <div style="font-size:3rem;font-weight:700;color:#2e7d32;" id="al-mau">--</div>
+        <div style="font-size:1rem;color:#6b7c8d;margin-top:4px;">Monthly Active Users</div>
+        <div style="font-size:0.8rem;color:#9ca3af;margin-top:2px;" id="al-mau-sub">via Umami Cloud</div>
+      </div>
+
+      <!-- BridgeMatch Funnel -->
+      <div class="section" style="margin-bottom:16px;">
+        <h3>BridgeMatch Funnel</h3>
+        <div id="funnel-container" style="display:flex;gap:8px;align-items:flex-end;justify-content:center;min-height:120px;flex-wrap:wrap;">
+          <div class="funnel-step" id="fn-lot-expand" style="text-align:center;flex:1;min-width:100px;">
+            <div class="stat-value" style="font-size:1.5rem;">--</div>
+            <div class="stat-label">Lot Views</div>
+          </div>
+          <div style="color:#9ca3af;font-size:1.2rem;padding-bottom:20px;">&#8594;</div>
+          <div class="funnel-step" id="fn-finance-click" style="text-align:center;flex:1;min-width:100px;">
+            <div class="stat-value" style="font-size:1.5rem;">--</div>
+            <div class="stat-label">Finance Clicks</div>
+          </div>
+          <div style="color:#9ca3af;font-size:1.2rem;padding-bottom:20px;">&#8594;</div>
+          <div class="funnel-step" id="fn-form-start" style="text-align:center;flex:1;min-width:100px;">
+            <div class="stat-value" style="font-size:1.5rem;">--</div>
+            <div class="stat-label">Form Starts</div>
+          </div>
+          <div style="color:#9ca3af;font-size:1.2rem;padding-bottom:20px;">&#8594;</div>
+          <div class="funnel-step" id="fn-lead-submit" style="text-align:center;flex:1;min-width:100px;">
+            <div class="stat-value" style="font-size:1.5rem;">--</div>
+            <div class="stat-label">Submissions</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Engagement Metrics -->
+      <div class="stats-grid" id="analytics-engagement" style="margin-bottom:16px;">
+        <div class="stat-card"><div class="stat-label">Bounce Rate</div><div class="stat-value" id="al-bounce">--</div></div>
+        <div class="stat-card"><div class="stat-label">Page Views</div><div class="stat-value" id="al-pageviews">--</div></div>
+        <div class="stat-card"><div class="stat-label">Total Visits</div><div class="stat-value" id="al-visits">--</div></div>
+        <div class="stat-card"><div class="stat-label">Signups</div><div class="stat-value green" id="al-signups">--</div></div>
+      </div>
+
+      <!-- Top Search Queries + Referral Sources -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+        <div class="section">
+          <h3>Top Search Queries</h3>
+          <div id="top-searches" style="max-height:200px;overflow-y:auto;"><em>Loading...</em></div>
+        </div>
+        <div class="section">
+          <h3>Referral Sources</h3>
+          <div id="top-referrers" style="max-height:200px;overflow-y:auto;"><em>Loading...</em></div>
+        </div>
+      </div>
+
       <!-- Live summary cards -->
       <div class="stats-grid" id="analytics-live-stats" style="margin-top:4px;">
         <div class="stat-card"><div class="stat-label">Total Lots (Live)</div><div class="stat-value green" id="al-lots">-</div></div>
@@ -1293,6 +1346,72 @@ async function loadAnalytics() {
   document.getElementById('al-houses').textContent = cached.length;
   document.getElementById('al-fc').textContent = fcCount;
   document.getElementById('al-pupp').textContent = puppCount;
+
+  // ── MAU HERO (from Umami) ──
+  const umami = analytics.umami;
+  if (umami && umami.visitors != null) {
+    document.getElementById('al-mau').textContent = (umami.visitors.value || umami.visitors).toLocaleString();
+    document.getElementById('al-mau-sub').textContent = `${queryDays}-day unique visitors via Umami`;
+  } else {
+    document.getElementById('al-mau').textContent = '--';
+    document.getElementById('al-mau-sub').textContent = 'Umami not configured';
+  }
+
+  // ── ENGAGEMENT CARDS (from Umami) ──
+  if (umami) {
+    const visitsVal = umami.visits?.value ?? umami.visits ?? 0;
+    const bouncesVal = umami.bounces?.value ?? umami.bounces ?? 0;
+    const bounceRate = visitsVal > 0 ? Math.round(bouncesVal / visitsVal * 100) : 0;
+    document.getElementById('al-bounce').textContent = bounceRate + '%';
+    document.getElementById('al-pageviews').textContent = (umami.pageviews?.value ?? umami.pageviews ?? 0).toLocaleString();
+    document.getElementById('al-visits').textContent = visitsVal.toLocaleString();
+  }
+
+  // ── ACTIVITY EVENTS PROCESSING ──
+  const events = analytics.events || [];
+  const signupCount = events.filter(e => e.action === 'signup').length;
+  document.getElementById('al-signups').textContent = signupCount.toLocaleString();
+
+  // Funnel counts from activity_events (server-side events)
+  const formStarts = events.filter(e => e.action === 'lead_submit' || e.action === 'bridgematch_open').length;
+  const leadSubmits = events.filter(e => e.action === 'lead_submit').length;
+  document.getElementById('fn-form-start').querySelector('.stat-value').textContent = formStarts;
+  document.getElementById('fn-lead-submit').querySelector('.stat-value').textContent = leadSubmits;
+
+  // Lot views and finance clicks are client-side Umami events
+  document.getElementById('fn-lot-expand').querySelector('.stat-value').textContent = 'Umami';
+  document.getElementById('fn-lot-expand').querySelector('.stat-label').innerHTML = 'Lot Views<br><small style="color:#9ca3af">See Umami dashboard</small>';
+  document.getElementById('fn-finance-click').querySelector('.stat-value').textContent = 'Umami';
+  document.getElementById('fn-finance-click').querySelector('.stat-label').innerHTML = 'Finance Clicks<br><small style="color:#9ca3af">See Umami dashboard</small>';
+
+  // ── TOP SEARCH QUERIES (from smart_search events) ──
+  const searchEvents = events.filter(e => e.action === 'smart_search');
+  const queryCounts = {};
+  searchEvents.forEach(e => {
+    const d = typeof e.detail === 'string' ? (() => { try { return JSON.parse(e.detail); } catch(_) { return {}; } })() : (e.detail || {});
+    const q = d.query || 'unknown';
+    queryCounts[q] = (queryCounts[q] || 0) + 1;
+  });
+  const topQueries = Object.entries(queryCounts).sort((a, b) => b[1] - a[1]).slice(0, 10);
+  const searchEl = document.getElementById('top-searches');
+  if (topQueries.length > 0) {
+    searchEl.innerHTML = '<table style="width:100%;font-size:0.85rem;"><tbody>' +
+      topQueries.map(([q, c]) => `<tr><td>${esc(q)}</td><td style="text-align:right;font-weight:600;">${c}</td></tr>`).join('') +
+      '</tbody></table>';
+  } else {
+    searchEl.innerHTML = '<em style="color:#9ca3af;">No search data yet</em>';
+  }
+
+  // ── REFERRAL SOURCES (from Umami API) ──
+  const referrers = analytics.referrers || [];
+  const refEl = document.getElementById('top-referrers');
+  if (referrers.length > 0) {
+    refEl.innerHTML = '<table style="width:100%;font-size:0.85rem;"><tbody>' +
+      referrers.slice(0, 10).map(r => `<tr><td>${esc(r.x || 'Direct')}</td><td style="text-align:right;font-weight:600;">${r.y}</td></tr>`).join('') +
+      '</tbody></table>';
+  } else {
+    refEl.innerHTML = '<em style="color:#9ca3af;">No referral data yet</em>';
+  }
 
   // ── LIVE BAR CHART: lots + image coverage per house ──
   const barLabels = liveByHouse.map(h => h.house);
