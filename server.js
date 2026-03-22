@@ -22,6 +22,7 @@ import { JSDOM } from 'jsdom';
 let puppeteer = null;
 try { puppeteer = (await import('puppeteer')).default; } catch {}
 import Stripe from 'stripe';
+import { callAI, initAI, getAICostSummary } from './lib/ai-provider.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -80,6 +81,34 @@ function safeCompare(a, b) {
   if (bufA.length !== bufB.length) return timingSafeEqual(Buffer.from(a.padEnd(64)), Buffer.from(b.padEnd(64))) && false;
   return timingSafeEqual(bufA, bufB);
 }
+
+// ═══════════════════════════════════════════════════════════════
+// BROKEN EXTRACTOR TRACKING (auto-populated by audit, persisted to Supabase)
+// ═══════════════════════════════════════════════════════════════
+const BROKEN_EXTRACTORS = new Set();
+
+// Load broken extractors from Supabase on startup
+async function loadBrokenExtractors() {
+  try {
+    const { data, error } = await supabase
+      .from('house_skills')
+      .select('slug')
+      .eq('status', 'broken');
+    if (error) { console.warn('BROKEN: Failed to load broken extractors:', error.message); return; }
+    if (data) {
+      for (const row of data) {
+        BROKEN_EXTRACTORS.add(row.slug);
+      }
+      if (BROKEN_EXTRACTORS.size > 0) {
+        console.log(`BROKEN: Loaded ${BROKEN_EXTRACTORS.size} broken extractors from Supabase: ${[...BROKEN_EXTRACTORS].join(', ')}`);
+      }
+    }
+  } catch (err) {
+    console.warn('BROKEN: Failed to load broken extractors:', err.message);
+  }
+}
+// Fire-and-forget on startup (don't block server startup)
+loadBrokenExtractors();
 
 // ═══════════════════════════════════════════════════════════════
 // SECURITY HEADERS
@@ -233,23 +262,10 @@ const TIMEOUT = 25000;
 let PUPPETEER_IMAGE_HOUSES = null;
 
 // ═══════════════════════════════════════════════════════════════
-// GEMINI MODEL SELECTION — Flash-Lite for known houses, Pro for unknown/PDF
+// AI PROVIDER — Model selection & rate limiting in lib/ai-provider.js
 // ═══════════════════════════════════════════════════════════════
-const MODEL_PRO   = 'gemini-2.5-pro';
-const MODEL_FLASH = 'gemini-2.5-flash-lite';
-
-// ── Gemini client & rate limiter (paid Tier 1: ~2000 RPM for flash-lite) ──
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const GEMINI_MIN_GAP = parseInt(process.env.GEMINI_MIN_GAP_MS || '100');
-let geminiLastCall = 0;
-async function geminiRateLimited(fn) {
-  const now = Date.now();
-  const earliest = geminiLastCall + GEMINI_MIN_GAP;
-  const wait = Math.max(0, earliest - now);
-  geminiLastCall = now + wait; // claim this slot immediately to prevent concurrent overlap
-  if (wait > 0) await new Promise(r => setTimeout(r, wait));
-  return fn();
-}
+initAI(genAI, supabase);
 
 // ── Firecrawl rate limiter & credit tracking ──
 const FIRECRAWL_API_KEY = process.env.FIRECRAWL_API_KEY || '';
@@ -375,6 +391,13 @@ function extractWithJSDOM(html, house, baseUrl, firecrawlImages) {
   const { document } = dom.window;
 
   let lots = null;
+
+  // Skip DOM extraction if house is in BROKEN_EXTRACTORS set (triggers Gemini AI fallback)
+  if (BROKEN_EXTRACTORS.has(house)) {
+    console.log(`JSDOM extractor for ${house}: SKIPPED (broken extractor -- Gemini fallback)`);
+    dom.window.close();
+    return null;
+  }
 
   // Try house-specific extractor first
   const extractor = DOM_EXTRACTORS[house];
@@ -905,38 +928,7 @@ async function backfillImagesWithFirecrawl(catalogueUrl, lots, house) {
   }
 }
 
-async function callGemini(prompt, { model = MODEL_FLASH, maxTokens = 8000, systemPrompt = null, pdfBase64 = null } = {}) {
-  const config = { maxOutputTokens: maxTokens };
-  const modelOpts = { model };
-  if (systemPrompt) modelOpts.systemInstruction = systemPrompt;
-  const m = genAI.getGenerativeModel(modelOpts);
-  const parts = [];
-  if (pdfBase64) {
-    parts.push({ inlineData: { mimeType: 'application/pdf', data: pdfBase64 } });
-  }
-  parts.push({ text: prompt });
-
-  let result;
-  try {
-    result = await geminiRateLimited(() =>
-      m.generateContent({
-        contents: [{ role: 'user', parts }],
-        generationConfig: config,
-      })
-    );
-  } catch (err) {
-    const msg = err?.message || String(err);
-    if (/429|quota|rate/i.test(msg)) {
-      creditExhausted = true; creditExhaustedAt = Date.now();
-      log.warn('Gemini quota exhausted', { model, error: msg });
-    }
-    throw new Error(`Gemini API error (${model}): ${msg}`);
-  }
-  if (!result || !result.response) {
-    throw new Error(`Gemini returned empty response (${model})`);
-  }
-  return result.response.text();
-}
+// callGemini() removed — all AI calls now route through callAI() from lib/ai-provider.js
 
 // One-line structural hints for known houses — injected into Haiku prompts
 // to compensate for smaller model capacity. Each describes the HTML/JSON shape.
@@ -990,11 +982,17 @@ const HOUSE_EXTRACTION_HINTS = {
   goldings:           'Goldings Ipswich. EIG platform (goldingsauctions.co.uk). Standard EIG lot-panel cards with h3.list-address, guide price in list-guideprice, and EIG CDN images.',
   auctionhousescotland: 'Auction House Scotland. Auction House UK network (auctionhouse.co.uk/scotland). Cards in div.lot-search-result with p.grid-address, guide price in div.grid-view-guide, img.lot-image.',
   austingray:         'Austin Gray / Auction House Sussex & Hampshire. Auction House UK network (auctionhouse.co.uk/sussexandhampshire). Cards in div.lot-search-result with p.grid-address, guide price in div.grid-view-guide, img.lot-image.',
+  // ── Batch 4 (March 2026) ──
+  auctionhousedevon:       'Auction House Devon & Cornwall. Auction House UK network (auctionhouse.co.uk/devonandcornwall). Cards in div.lot-search-result with p.grid-address, guide price in div.grid-view-guide, img.lot-image.',
+  auctionhouseeastmidlands:'Auction House East Midlands. Auction House UK network (auctionhouse.co.uk/eastmidlands). Cards in div.lot-search-result with p.grid-address, guide price in div.grid-view-guide, img.lot-image.',
+  auctionhousewestmidlands:'Auction House West Midlands. Auction House UK network (auctionhouse.co.uk/westmidlands). Cards in div.lot-search-result with p.grid-address, guide price in div.grid-view-guide, img.lot-image.',
+  auctionhouseessex:       'Auction House Essex. Auction House UK network (auctionhouse.co.uk/essex). Cards in div.lot-search-result with p.grid-address, guide price in div.grid-view-guide, img.lot-image.',
+  auctionhousemanchester:  'Auction House Manchester. Auction House UK network (auctionhouse.co.uk/manchester). Cards in div.lot-search-result with p.grid-address, guide price in div.grid-view-guide, img.lot-image.',
+  romanway:                'Roman Way Auctions. EIG platform (romanway.eigonlineauctions.com). Standard EIG lot-panel cards with h3.list-address, guide price in list-guideprice, and EIG CDN images.',
+  hammerprice:             'Hammer Price Auctions. EIG platform (hammerprice.eigonlineauctions.com). Standard EIG lot-panel cards with h3.list-address, guide price in list-guideprice, and EIG CDN images.',
 };
 
-function getExtractionModel(house) {
-  return house === 'unknown' ? MODEL_PRO : MODEL_FLASH;
-}
+// getExtractionModel() removed — tier selection now in callAI() callsites
 
 // ═══════════════════════════════════════════════════════════════
 // HOUSE ROOTS — catalogue discovery URLs
@@ -1068,6 +1066,15 @@ const HOUSE_ROOTS = {
   auctionhousewales:      'https://www.auctionhouse.co.uk/southwales/auction/search-results',
   auctionhousebirmingham: 'https://www.auctionhouse.co.uk/birmingham/auction/search-results',
   auctionhousekent:       'https://www.auctionhouse.co.uk/kent/auction/search-results',
+  // ── Auction House UK regional branches (batch 4, March 2026) ──
+  auctionhousedevon:      'https://www.auctionhouse.co.uk/devonandcornwall/auction/search-results',
+  auctionhouseeastmidlands: 'https://www.auctionhouse.co.uk/eastmidlands/auction/search-results',
+  auctionhousewestmidlands: 'https://www.auctionhouse.co.uk/westmidlands/auction/search-results',
+  auctionhouseessex:      'https://www.auctionhouse.co.uk/essex/auction/search-results',
+  auctionhousemanchester: 'https://www.auctionhouse.co.uk/manchester/auction/search-results',
+  // ── EIG platform houses (batch 4, March 2026) ──
+  romanway:               'https://romanway.eigonlineauctions.com/search',
+  hammerprice:            'https://hammerprice.eigonlineauctions.com/search',
 };
 
 /*
@@ -2780,7 +2787,7 @@ app.post('/api/admin/discover-catalogues', async (req, res) => {
       const hrefMatches = [...html.matchAll(/href="([^"]*(?:auction|lot|catalogue|sale|property)[^"]*)"/gi)];
       const hrefs = [...new Set(hrefMatches.map(m => m[1]))].slice(0, 50);
 
-      const aiText = await callGemini(`You are analysing an auction house's listing page to find links to upcoming/current auction catalogues.
+      const aiText = await callAI(`You are analysing an auction house's listing page to find links to upcoming/current auction catalogues.
 
 House: ${HOUSE_DISPLAY_NAMES[slug] || slug}
 Root URL: ${rootUrl}
@@ -2798,7 +2805,7 @@ Extract ALL auction catalogue links you can find. For each, provide:
 - catalogueReady: true if the catalogue appears to have lots listed, false if "coming soon"
 
 Return ONLY valid JSON: {"catalogues": [{"url": "...", "title": "...", "date": "...", "catalogueReady": true}]}
-If no catalogues found, return {"catalogues": []}`, { maxTokens: 2000 });
+If no catalogues found, return {"catalogues": []}`, { tier: 'capable', maxTokens: 2000, taskType: 'discovery' });
 
       let catalogues = [];
       try {
@@ -3563,7 +3570,7 @@ app.post('/api/smart-search', async (req, res) => {
   }
   // Pre-flight: log which key/model will be used
   const keyPrefix = (process.env.GEMINI_API_KEY || '').substring(0, 10);
-  log.info('smart-search pre-flight', { model: MODEL_FLASH, keyPrefix: keyPrefix + '...', query: query.substring(0, 60) });
+  log.info('smart-search pre-flight', { tier: 'fast', keyPrefix: keyPrefix + '...', query: query.substring(0, 60) });
 
   try {
     // Get all cached analyses
@@ -3646,7 +3653,7 @@ app.post('/api/smart-search', async (req, res) => {
     const soldInstruction = soldFilter === 'available' ? '\nIMPORTANT: The user has filtered to show only available (unsold) lots. All sold/STC/withdrawn lots have already been excluded.' :
       soldFilter === 'sold' ? '\nIMPORTANT: The user is specifically looking at sold/STC/withdrawn lots only.' : '';
 
-    const responseText = await callGemini(`You are a UK property investment analyst. A user has searched across ${filteredLots.length} auction lots from ${sources.length} auction house catalogues.${soldInstruction}
+    const responseText = await callAI(`You are a UK property investment analyst. A user has searched across ${filteredLots.length} auction lots from ${sources.length} auction house catalogues.${soldInstruction}
 
 Their search query: "${query}"
 
@@ -3661,8 +3668,8 @@ TASK:
 Respond in this exact JSON format:
 {"indices":[0,5,12],"report":"Your report here..."}
 
-Only return lots that genuinely match the query. If nothing matches well, say so in the report and return an empty indices array.`, { maxTokens: 4000 });
-    log.info('smart_search_full', { model: MODEL_FLASH });
+Only return lots that genuinely match the query. If nothing matches well, say so in the report and return an empty indices array.`, { tier: 'fast', maxTokens: 4000, taskType: 'search' });
+    log.info('smart_search_full', { tier: 'fast' });
     let parsed;
     try {
       // Strip markdown code fences if present
@@ -3744,12 +3751,12 @@ Only return lots that genuinely match the query. If nothing matches well, say so
     log.error('Smart search error', { error: msg, status: err.status, stack: err.stack?.split('\n').slice(0, 3).join(' | ') });
     if (err.status === 429 || /quota|rate.limit|resource.exhausted/i.test(msg)) {
       creditExhausted = true; creditExhaustedAt = Date.now();
-      return res.status(503).json({ error: 'ai_quota_exhausted', message: 'Gemini API rate limit hit. Auto-resets after 1 hour.', provider: 'gemini', model: MODEL_FLASH });
+      return res.status(503).json({ error: 'ai_quota_exhausted', message: 'AI rate limit hit. Auto-resets after 1 hour.', provider: process.env.AI_PROVIDER || 'gemini', tier: 'fast' });
     }
     if (err.status === 401 || err.status === 403 || /invalid.api.key|unauthorized|forbidden/i.test(msg)) {
-      return res.status(500).json({ error: 'key_invalid', message: 'Gemini API key is invalid or expired. Check GEMINI_API_KEY in Railway.', provider: 'gemini' });
+      return res.status(500).json({ error: 'key_invalid', message: 'AI API key is invalid or expired. Check environment variables in Railway.', provider: process.env.AI_PROVIDER || 'gemini' });
     }
-    return res.status(500).json({ error: 'api_error', message: 'Smart search failed — Gemini API error.', detail: msg, provider: 'gemini', model: MODEL_FLASH });
+    return res.status(500).json({ error: 'api_error', message: 'Smart search failed — AI API error.', detail: msg, provider: process.env.AI_PROVIDER || 'gemini', tier: 'fast' });
   }
 });
 
@@ -4199,6 +4206,81 @@ app.post('/api/admin/rescrape', async (req, res) => {
   }
 });
 
+// Admin-only: GET broken extractors list
+app.get('/api/admin/broken-extractors', async (req, res) => {
+  const adminToken = req.headers['x-admin-secret'] || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(adminToken, process.env.ADMIN_SECRET)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  res.json({
+    broken: [...BROKEN_EXTRACTORS],
+    count: BROKEN_EXTRACTORS.size,
+  });
+});
+
+// Admin-only: POST enable/disable broken extractors
+app.post('/api/admin/broken-extractors', async (req, res) => {
+  const adminToken = req.headers['x-admin-secret'] || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(adminToken, process.env.ADMIN_SECRET)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const { house, action, reason } = req.body || {};
+  if (!house || !action) {
+    return res.status(400).json({ error: 'house and action (disable|enable) are required' });
+  }
+
+  if (action === 'disable') {
+    BROKEN_EXTRACTORS.add(house);
+    console.log(`BROKEN: Disabled extractor for ${house}${reason ? ': ' + reason : ''}`);
+
+    // Persist to Supabase house_skills
+    try {
+      await supabase.from('house_skills')
+        .update({ status: 'broken', notes: reason || 'Auto-disabled by audit' })
+        .eq('slug', house);
+    } catch (err) { console.warn('BROKEN: Failed to persist disable:', err.message); }
+
+    // Pipeline alert
+    try {
+      await supabase.from('pipeline_alerts').insert({
+        event_type: 'extractor_broken',
+        severity: 'error',
+        house,
+        message: `Extractor disabled for ${HOUSE_DISPLAY_NAMES[house] || house}: ${reason || 'manual disable'}`,
+      });
+    } catch (err) { console.warn('BROKEN: Failed to send alert:', err.message); }
+
+    res.json({ message: `Extractor for ${house} disabled`, broken: [...BROKEN_EXTRACTORS] });
+
+  } else if (action === 'enable') {
+    BROKEN_EXTRACTORS.delete(house);
+    console.log(`BROKEN: Re-enabled extractor for ${house}`);
+
+    // Persist to Supabase house_skills
+    try {
+      await supabase.from('house_skills')
+        .update({ status: 'healthy', notes: 'Re-enabled after fix' })
+        .eq('slug', house);
+    } catch (err) { console.warn('BROKEN: Failed to persist enable:', err.message); }
+
+    // Pipeline alert
+    try {
+      await supabase.from('pipeline_alerts').insert({
+        event_type: 'extractor_fixed',
+        severity: 'info',
+        house,
+        message: `Extractor re-enabled for ${HOUSE_DISPLAY_NAMES[house] || house}`,
+      });
+    } catch (err) { console.warn('BROKEN: Failed to send alert:', err.message); }
+
+    res.json({ message: `Extractor for ${house} re-enabled`, broken: [...BROKEN_EXTRACTORS] });
+
+  } else {
+    res.status(400).json({ error: 'action must be "disable" or "enable"' });
+  }
+});
+
 // Admin-only: test DOM extractor on a URL (diagnostics)
 app.post('/api/admin/test-extractor', rateLimit(60000, 5), async (req, res) => {
   const adminToken = req.headers['x-admin-secret'] || '';
@@ -4410,6 +4492,47 @@ app.get('/api/skills', async (req, res) => {
   }
 });
 
+// ── AI cost monitoring endpoint ──
+app.get('/api/admin/ai-costs', async (req, res) => {
+  const token = req.headers['x-admin-secret'] || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
+    return res.status(403).json({ error: 'Invalid admin token' });
+  }
+  try {
+    const summary = getAICostSummary();
+    const todayStart = new Date();
+    todayStart.setUTCHours(0, 0, 0, 0);
+    let byModel = [];
+    const { data, error } = await supabase
+      .from('ai_usage')
+      .select('provider, model, tokens_in, tokens_out, est_cost')
+      .gte('created_at', todayStart.toISOString());
+    if (!error && data) {
+      const groups = {};
+      for (const row of data) {
+        const key = `${row.provider}/${row.model}`;
+        if (!groups[key]) groups[key] = { provider: row.provider, model: row.model, calls: 0, tokens_in: 0, tokens_out: 0, cost: 0 };
+        groups[key].calls++;
+        groups[key].tokens_in += row.tokens_in || 0;
+        groups[key].tokens_out += row.tokens_out || 0;
+        groups[key].cost += parseFloat(row.est_cost) || 0;
+      }
+      byModel = Object.values(groups);
+    }
+    res.json({
+      dailyTotal: summary.dailyCostTotal,
+      budget: summary.budget,
+      budgetExceeded: summary.budgetExceeded,
+      callCount: summary.callCount,
+      provider: summary.provider,
+      byModel,
+    });
+  } catch (err) {
+    console.error('AI costs endpoint error:', err.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ── Missing images admin endpoint ──
 app.get('/api/admin/missing-images', async (req, res) => {
   const token = req.headers['x-admin-secret'] || '';
@@ -4603,6 +4726,11 @@ function detectAuctionHouse(url) {
   if (u.includes('auctionhouse.co.uk/southwales') || u.includes('auctionhouse.co.uk/wales')) return 'auctionhousewales';
   if (u.includes('auctionhouse.co.uk/birmingham')) return 'auctionhousebirmingham';
   if (u.includes('auctionhouse.co.uk/kent')) return 'auctionhousekent';
+  if (u.includes('auctionhouse.co.uk/devonandcornwall')) return 'auctionhousedevon';
+  if (u.includes('auctionhouse.co.uk/eastmidlands')) return 'auctionhouseeastmidlands';
+  if (u.includes('auctionhouse.co.uk/westmidlands')) return 'auctionhousewestmidlands';
+  if (u.includes('auctionhouse.co.uk/essex')) return 'auctionhouseessex';
+  if (u.includes('auctionhouse.co.uk/manchester')) return 'auctionhousemanchester';
   if (u.includes('auctionhouse.co.uk') || u.includes('auctionhouse.uk.net')) return 'auctionhouse';
   if (u.includes('cliveemson')) return 'cliveemson';
   if (u.includes('strettons')) return 'strettons';
@@ -4656,6 +4784,8 @@ function detectAuctionHouse(url) {
   if (u.includes('cheffins.co.uk')) return 'cheffins';
   if (u.includes('fssproperty.co.uk')) return 'fssproperty';
   if (u.includes('iamsold.co.uk')) return 'iamsold';
+  if (u.includes('romanway.eigonlineauctions')) return 'romanway';
+  if (u.includes('hammerprice.eigonlineauctions')) return 'hammerprice';
   return 'unknown';
 }
 
@@ -4686,6 +4816,14 @@ const HOUSE_DISPLAY_NAMES = {
   buttersjohnbee: 'Butters John Bee', brownco: 'Brown & Co',
   cheffins: 'Cheffins', cheffinstimed: 'Cheffins Timed', fssproperty: 'Feather Smailes & Scales',
   iamsold: 'iamsold',
+  // ── Batch 4 (March 2026) ──
+  auctionhousedevon: 'Auction House Devon & Cornwall',
+  auctionhouseeastmidlands: 'Auction House East Midlands',
+  auctionhousewestmidlands: 'Auction House West Midlands',
+  auctionhouseessex: 'Auction House Essex',
+  auctionhousemanchester: 'Auction House Manchester',
+  romanway: 'Roman Way Auctions',
+  hammerprice: 'Hammer Price Auctions',
 };
 
 function getHouseDisplayName(slug, url) {
@@ -5259,9 +5397,9 @@ async function extractLotsWithAI(pages, house, onProgress, catalogueUrl) {
     }));
     const totalStrippedLen = strippedBatch.reduce((sum, p) => sum + p.content.length, 0);
     const mdCount = strippedBatch.filter(p => p.usedMarkdown).length;
-    const model = getExtractionModel(house);
+    const extractionTier = house === 'unknown' ? 'capable' : 'fast';
     const hint = HOUSE_EXTRACTION_HINTS[house];
-    console.log(`Batch ${Math.floor(i/batchSize)+1}: ${strippedBatch.length} page(s), ${totalStrippedLen} chars${mdCount > 0 ? ` (${mdCount} from markdown)` : ' after stripping'}, model: ${model}`);
+    console.log(`Batch ${Math.floor(i/batchSize)+1}: ${strippedBatch.length} page(s), ${totalStrippedLen} chars${mdCount > 0 ? ` (${mdCount} from markdown)` : ' after stripping'}, tier: ${extractionTier}`);
     const prompt = `You are extracting property auction lot data from a UK auction house catalogue (${house}).
 ${hint ? `\nStructure hint: ${hint}\n` : ''}
 Below are ${strippedBatch.length} page(s) of catalogue content. Extract EVERY auction lot you find.
@@ -5290,8 +5428,8 @@ ${strippedBatch.map(p => `=== PAGE ${p.page} ===\n${p.content}`).join('\n\n')}
 Return ONLY the JSON array:`;
     try {
       apiCallCount++;
-      const text = await callGemini(prompt, { model, maxTokens: 16000 });
-      log.info('gemini_extraction', { house, model, batch: Math.floor(i/batchSize)+1 });
+      const text = await callAI(prompt, { tier: extractionTier, maxTokens: 16000, taskType: 'extraction' });
+      log.info('ai_extraction', { house, tier: extractionTier, batch: Math.floor(i/batchSize)+1 });
       const jsonMatch = text.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
         const lots = JSON.parse(jsonMatch[0]);
@@ -5392,9 +5530,9 @@ Important:
 Return ONLY the JSON array:`;
 
   try {
-    // PDFs use Pro model — complex layout extraction needs the stronger model
-    const text = await callGemini(prompt, { model: MODEL_PRO, maxTokens: 32000, pdfBase64 });
-    log.info('gemini_pdf_extraction', { model: MODEL_PRO });
+    // PDFs always use Gemini capable tier (callAI forces Gemini when pdfBase64 is provided)
+    const text = await callAI(prompt, { tier: 'capable', maxTokens: 32000, pdfBase64, taskType: 'extraction' });
+    log.info('ai_pdf_extraction', { tier: 'capable' });
     const jsonMatch = text.match(/\[[\s\S]*\]/);
     if (jsonMatch) {
       const lots = JSON.parse(jsonMatch[0]);
@@ -8139,11 +8277,11 @@ const DOM_EXTRACTORS = {
 };
 
 // Wire up EIG house aliases to the shared eigplatform extractor
-for (const slug of ['astleys', 'henrysykes', 'clarkesimpson', 'brownco', 'cheffinstimed']) {
+for (const slug of ['astleys', 'henrysykes', 'clarkesimpson', 'brownco', 'cheffinstimed', 'romanway', 'hammerprice']) {
   DOM_EXTRACTORS[slug] = DOM_EXTRACTORS.eigplatform;
 }
 // Wire up Auction House UK branches to the shared auctionhouseuk extractor
-for (const slug of ['auctionhousescotland', 'austingray', 'auctionhouseeastanglia', 'auctionhousenorthwest', 'auctionhousenortheast', 'auctionhousewales', 'auctionhousebirmingham', 'auctionhousekent']) {
+for (const slug of ['auctionhousescotland', 'austingray', 'auctionhouseeastanglia', 'auctionhousenorthwest', 'auctionhousenortheast', 'auctionhousewales', 'auctionhousebirmingham', 'auctionhousekent', 'auctionhousedevon', 'auctionhouseeastmidlands', 'auctionhousewestmidlands', 'auctionhouseessex', 'auctionhousemanchester']) {
   DOM_EXTRACTORS[slug] = DOM_EXTRACTORS.auctionhouseuk;
 }
 
@@ -10347,7 +10485,7 @@ async function discoverAndUpdateCalendar() {
 
       if (hrefs.length === 0 && stripped.length < 200) continue;
 
-      const aiText = await callGemini(`Extract auction catalogue links from this auction house page.
+      const aiText = await callAI(`Extract auction catalogue links from this auction house page.
 
 House: ${HOUSE_DISPLAY_NAMES[slug] || slug}
 Root URL: ${rootUrl}
@@ -10365,7 +10503,7 @@ For each UPCOMING or CURRENT auction with lots to view, provide:
 - catalogueReady: true if lots appear listed
 
 Return ONLY: {"catalogues": [{"url":"...","title":"...","date":"...","catalogueReady":true}]}
-No catalogues? Return {"catalogues": []}`, { maxTokens: 1500 });
+No catalogues? Return {"catalogues": []}`, { tier: 'capable', maxTokens: 1500, taskType: 'discovery' });
 
       let catalogues = [];
       try {
