@@ -58,11 +58,11 @@ Plans:
   2. Umami Cloud reports page views, unique visitors (MAU), referral sources, and bounce rate
   3. BridgeMatch funnel is tracked end-to-end: lot view to finance click to form start to submission
   4. Admin can view an analytics summary showing MAU count, top funnels, and engagement metrics
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 05-01: TBD
-- [ ] 05-02: TBD
+- [ ] 05-01-PLAN.md — Analytics instrumentation (server-side events, Umami script, client-side funnel tracking)
+- [ ] 05-02-PLAN.md — Admin analytics dashboard (MAU hero, funnel visualization, engagement metrics)
 
 ### Phase 6: AI & Scraping Hardening
 **Goal**: AI costs are visible and controllable via provider abstraction, and scraping coverage is audited and expanded
