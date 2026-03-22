@@ -38,9 +38,9 @@
 
 ### Scraping & Coverage
 
-- [ ] **SCRP-01**: All existing DOM extractors audited and broken ones fixed
-- [ ] **SCRP-02**: Image coverage verified across all houses (target >90%)
-- [ ] **SCRP-03**: New auction houses recruited to increase coverage
+- [x] **SCRP-01**: All existing DOM extractors audited and broken ones fixed
+- [x] **SCRP-02**: Image coverage verified across all houses (target >90%)
+- [x] **SCRP-03**: New auction houses recruited to increase coverage
 - [ ] **SCRP-04**: Admin dashboard cleaned up -- surface actionable data, hide noise
 
 ### AI Abstraction
@@ -102,9 +102,9 @@
 | ANAL-02 | Phase 5 | Complete |
 | ANAL-03 | Phase 5 | Complete |
 | ANAL-04 | Phase 5 | Complete |
-| SCRP-01 | Phase 6 | Pending |
-| SCRP-02 | Phase 6 | Pending |
-| SCRP-03 | Phase 6 | Pending |
+| SCRP-01 | Phase 6 | Complete |
+| SCRP-02 | Phase 6 | Complete |
+| SCRP-03 | Phase 6 | Complete |
 | SCRP-04 | Phase 6 | Pending |
 | AI-01 | Phase 6 | Complete |
 | AI-02 | Phase 6 | Complete |

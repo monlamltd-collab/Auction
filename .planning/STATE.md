@@ -3,30 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Free-First Growth
 status: executing
-stopped_at: Completed 05-03-PLAN.md
-last_updated: "2026-03-22T23:06:23.507Z"
-last_activity: 2026-03-22 -- Completed 05-03-PLAN.md (UAT gap closure fixes)
+stopped_at: Completed 06-02-PLAN.md
+last_updated: "2026-03-22T23:57:24Z"
+last_activity: 2026-03-22 -- Completed 06-02-PLAN.md (scraping hardening + new houses)
 progress:
   total_phases: 4
   completed_phases: 2
-  total_plans: 7
-  completed_plans: 7
----
-
----
-gsd_state_version: 1.0
-milestone: v1.2
-milestone_name: Free-First Growth
-status: executing
-stopped_at: Completed 05-03-PLAN.md (UAT gap closure)
-last_updated: "2026-03-22T23:02:17Z"
-last_activity: 2026-03-22 -- Completed 05-03-PLAN.md (UAT gap closure fixes)
-progress:
-  total_phases: 4
-  completed_phases: 2
-  total_plans: 7
-  completed_plans: 7
-  percent: 100
+  total_plans: 9
+  completed_plans: 9
   percent: 100
 ---
 
@@ -42,18 +26,18 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 ## Current Position
 
 Phase: 6 of 7 (AI & Scraping Hardening)
-Plan: 1 of 3 in current phase (complete)
+Plan: 2 of 3 in current phase (complete)
 Status: Executing
-Last activity: 2026-03-22 -- Completed 06-01-PLAN.md (AI provider abstraction)
+Last activity: 2026-03-22 -- Completed 06-02-PLAN.md (scraping hardening + new houses)
 
-Progress: [████████░░] 80%
+Progress: [█████████░] 90%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 8 (v1.2)
-- Average duration: 3.1min
-- Total execution time: 27min
+- Total plans completed: 9 (v1.2)
+- Average duration: 3.9min
+- Total execution time: 40min
 
 **By Phase:**
 
@@ -61,14 +45,14 @@ Progress: [████████░░] 80%
 |-------|-------|-------|----------|
 | 04-foundation | 3 | 11min | 3.7min |
 | 05-measurement | 3 | 6min | 2.0min |
-| 06-ai-scraping-hardening | 1 | 10min | 10min |
+| 06-ai-scraping-hardening | 2 | 23min | 11.5min |
 
 **Recent Trend:**
-- Last 5 plans: 06-01 (10min), 05-03 (1min), 05-02 (2min), 05-01 (3min), 04-03 (4min)
-- Trend: 06-01 longer due to large refactor scope (5 callsites + new module)
+- Last 5 plans: 06-02 (13min), 06-01 (10min), 05-03 (1min), 05-02 (2min), 05-01 (3min)
+- Trend: Phase 06 plans larger scope (cross-cutting changes to server.js + audit.mjs)
 
 *Updated after each plan completion*
-| Phase 06 P01 | 10min | 2 tasks | 4 files |
+| Phase 06 P02 | 13min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -100,6 +84,10 @@ Recent decisions affecting current work:
 - [Phase 06]: callAI() uses dependency injection (initAI) to share genAI/supabase instances
 - [Phase 06]: Daily AI budget is soft cap (warns but proceeds) to avoid breaking production
 - [Phase 06]: PDF extraction always forces Gemini regardless of AI_PROVIDER setting
+- [Phase 06]: Used house_skills.status='broken' for broken extractor persistence
+- [Phase 06]: 30% tolerance for lot-count WARNING, 100% for BROKEN severity
+- [Phase 06]: Only added houses using existing shared extractors (EIG/AH UK)
+- [Phase 06]: BROKEN_EXTRACTORS returns null from extractWithJSDOM to trigger Gemini fallback
 
 ### Pending Todos
 
@@ -113,9 +101,9 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-22T23:55:00Z
-Stopped at: Completed 06-01-PLAN.md
+Last session: 2026-03-22T23:57:24Z
+Stopped at: Completed 06-02-PLAN.md
 Resume file: None
 
 ---
-*Last updated: 2026-03-22 after 06-01 plan completion*
+*Last updated: 2026-03-22 after 06-02 plan completion*
