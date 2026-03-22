@@ -51,9 +51,9 @@
 
 ### Infrastructure
 
-- [ ] **INFR-01**: Confirm Supabase is on paid plan (not free tier) before scaling
-- [ ] **INFR-02**: Cancel any active Stripe subscriptions before hibernating
-- [ ] **INFR-03**: Verify Railway memory/CPU baseline can handle free-tier traffic volume
+- [x] **INFR-01**: Confirm Supabase is on paid plan (not free tier) before scaling
+- [x] **INFR-02**: Cancel any active Stripe subscriptions before hibernating
+- [x] **INFR-03**: Verify Railway memory/CPU baseline can handle free-tier traffic volume
 
 ## Future Requirements (v1.3+)
 
@@ -109,9 +109,9 @@
 | AI-01 | Phase 6 | Pending |
 | AI-02 | Phase 6 | Pending |
 | AI-03 | Phase 6 | Pending |
-| INFR-01 | Phase 4 | Pending |
-| INFR-02 | Phase 4 | Pending |
-| INFR-03 | Phase 4 | Pending |
+| INFR-01 | Phase 4 | Complete |
+| INFR-02 | Phase 4 | Complete |
+| INFR-03 | Phase 4 | Complete |
 
 **Coverage:**
 - v1.2 requirements: 29 total
