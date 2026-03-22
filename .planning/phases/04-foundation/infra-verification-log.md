@@ -30,3 +30,4 @@ Phase 04-foundation, Plan 01: Infrastructure readiness checks.
 - **OOM kills:** None observed in 30-day window
 - **Tier:** Hobby tier (free/starter level, "Scale and grow - Upgrade to Pro" banner visible)
 - **Assessment:** PASS -- no OOM kills, memory headroom exists. Scraping spikes are expected and transient. Monitor if free-first traffic significantly increases baseline load.
+- **Unblocks:** Railway capacity concern in STATE.md resolved -- no upgrade needed at current scale
