@@ -14,6 +14,8 @@
  *   node scripts/audit.mjs --save                    # Save fingerprints + history
  *   node scripts/audit.mjs --json                    # Output machine-readable JSON
  *   node scripts/audit.mjs --concurrency 3           # Puppeteer page limit (default 5)
+ *   node scripts/audit.mjs --validate                # Lot-count validation + image coverage only (fast)
+ *   node scripts/audit.mjs --auto-disable            # Auto-disable broken extractors via admin API
  */
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
@@ -38,8 +40,11 @@ const FAST_MODE = flag('fast');
 const DISCOVER_MODE = flag('discover');
 const SAVE_MODE = flag('save');
 const JSON_MODE = flag('json');
+const VALIDATE_MODE = flag('validate');
+const AUTO_DISABLE = flag('auto-disable');
 const CONCURRENCY = parseInt(param('concurrency') || '5', 10);
 const HOUSE_FILTER = param('house')?.split(',').map(h => h.trim().toLowerCase()) || null;
+const ADMIN_API_BASE = param('api-base') || 'https://auctions.bridgematch.co.uk';
 
 // ═══════════════════════════════════════════════════════════════
 // PHASE 1: CONFIG EXTRACTION
@@ -476,6 +481,129 @@ async function discoverNewHouses(browser, knownDomains) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// LOT-COUNT CROSS-VALIDATION
+// ═══════════════════════════════════════════════════════════════
+
+function extractStatedLotCount(httpResult) {
+  if (!httpResult || httpResult.error || !httpResult.bodySize) return null;
+  // We need the body text — re-fetch is expensive, so we parse from probe data
+  // The httpProbe stores bodySize but not body text. We'll use puppeteer reality data if available.
+  return null; // Placeholder — actual stated count comes from puppeteer reality check below
+}
+
+function extractStatedCountFromReality(reality) {
+  if (!reality || !reality.paginationText) return null;
+  // Extract numeric count from pagination text like "Showing 1-20 of 45" or "45 results found"
+  const nums = reality.paginationText.match(/(\d+)/g);
+  if (!nums || nums.length === 0) return null;
+  // The largest number is typically the total count
+  return Math.max(...nums.map(Number));
+}
+
+function lotCountValidation(results, prodData) {
+  const validations = [];
+
+  for (const r of results) {
+    const entry = { house: r.house, statedCount: null, extractedCount: null, status: 'SKIP', ratio: null };
+
+    // Try to get stated count from puppeteer reality check (pagination text)
+    if (r.puppeteer?.reality) {
+      entry.statedCount = extractStatedCountFromReality(r.puppeteer.reality);
+    }
+
+    // Also try additional patterns from the page text if puppeteer ran
+    if (entry.statedCount === null && r.puppeteer?.reality?.priceCount >= 3) {
+      // Use price count as a proxy for stated count when no pagination text
+      entry.statedCount = r.puppeteer.reality.priceCount;
+    }
+
+    // Get extracted count from production data
+    if (prodData?.byHouse?.[r.house]) {
+      entry.extractedCount = prodData.byHouse[r.house].count;
+    } else if (r.puppeteer?.extractorLots > 0) {
+      entry.extractedCount = r.puppeteer.extractorLots;
+    }
+
+    if (entry.statedCount === null) {
+      entry.status = 'SKIP';
+      entry.detail = 'stated count unavailable';
+    } else if (entry.extractedCount === null || entry.extractedCount === 0) {
+      entry.status = 'SKIP';
+      entry.detail = 'extracted count unavailable';
+    } else {
+      entry.ratio = entry.statedCount / entry.extractedCount;
+      if (entry.ratio > 2.0) {
+        entry.status = 'BROKEN';
+        entry.detail = `${Math.round((entry.extractedCount / entry.statedCount) * 100)}% coverage`;
+      } else if (entry.ratio > 1.3) {
+        entry.status = 'MISMATCH';
+        entry.detail = `${Math.round((entry.extractedCount / entry.statedCount) * 100)}% coverage`;
+      } else {
+        entry.status = 'OK';
+      }
+    }
+
+    validations.push(entry);
+  }
+
+  return validations;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// IMAGE COVERAGE ANALYSIS
+// ═══════════════════════════════════════════════════════════════
+
+function imageCoverageAnalysis(prodData) {
+  const coverage = [];
+  if (!prodData?.byHouse) return coverage;
+
+  for (const [house, data] of Object.entries(prodData.byHouse)) {
+    const total = data.count;
+    const withImages = data.withImages || 0;
+    const pct = total > 0 ? Math.round((withImages / total) * 100) : 0;
+    const status = pct >= 90 ? 'OK' : 'BELOW TARGET';
+
+    coverage.push({
+      house,
+      lotsWithImages: withImages,
+      totalLots: total,
+      coverage: pct,
+      status,
+    });
+  }
+
+  // Sort by coverage ascending (worst first)
+  coverage.sort((a, b) => a.coverage - b.coverage);
+  return coverage;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// AUTO-DISABLE BROKEN EXTRACTORS
+// ═══════════════════════════════════════════════════════════════
+
+async function autoDisableBrokenHouses(brokenHouses, apiBase) {
+  const results = [];
+  for (const { house, reason } of brokenHouses) {
+    try {
+      const adminSecret = process.env.ADMIN_SECRET || '';
+      const res = await fetch(`${apiBase}/api/admin/broken-extractors`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-secret': adminSecret,
+        },
+        body: JSON.stringify({ house, action: 'disable', reason }),
+      });
+      const data = await res.json();
+      results.push({ house, success: res.ok, message: data.message || data.error });
+    } catch (err) {
+      results.push({ house, success: false, message: err.message });
+    }
+  }
+  return results;
+}
+
+// ═══════════════════════════════════════════════════════════════
 // PROBLEM DETECTION — Cross-Probe Intelligence
 // ═══════════════════════════════════════════════════════════════
 
@@ -645,7 +773,7 @@ function saveAuditResults(data) {
 // REPORT OUTPUT
 // ═══════════════════════════════════════════════════════════════
 
-function printReport(results, prodData, startTime) {
+function printReport(results, prodData, startTime, lotValidations, imgCoverage) {
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(0);
   const totalLive = results.reduce((sum, r) => sum + (r.puppeteer?.extractorLots || 0), 0);
   const houseCount = results.length;
@@ -723,6 +851,32 @@ function printReport(results, prodData, startTime) {
     }
   }
 
+  // Lot Count Validation section
+  if (lotValidations && lotValidations.length > 0) {
+    console.log(`\n  LOT COUNT VALIDATION`);
+    console.log('  ' + '\u2500'.repeat(55));
+    for (const v of lotValidations) {
+      const stated = v.statedCount !== null ? String(v.statedCount) : '?';
+      const extracted = v.extractedCount !== null ? String(v.extractedCount) : '?';
+      let tag = '';
+      if (v.status === 'OK') tag = '[OK]';
+      else if (v.status === 'MISMATCH') tag = `[MISMATCH - ${v.detail}]`;
+      else if (v.status === 'BROKEN') tag = `[BROKEN - ${v.detail}]`;
+      else tag = `[SKIP]`;
+      console.log(`  ${v.house.padEnd(20)} stated ${stated.padStart(4)}, extracted ${extracted.padStart(4)}  ${tag}`);
+    }
+  }
+
+  // Image Coverage section
+  if (imgCoverage && imgCoverage.length > 0) {
+    console.log(`\n  IMAGE COVERAGE`);
+    console.log('  ' + '\u2500'.repeat(55));
+    for (const ic of imgCoverage) {
+      const tag = ic.status === 'OK' ? '[OK]' : '[BELOW TARGET]';
+      console.log(`  ${ic.house.padEnd(20)} ${String(ic.lotsWithImages).padStart(4)}/${String(ic.totalLots).padStart(4)} (${String(ic.coverage).padStart(3)}%)  ${tag}`);
+    }
+  }
+
   // Recommendations
   const recs = [];
   for (const r of broken) {
@@ -794,7 +948,7 @@ async function main() {
 
   // ── Phase 3: Puppeteer probes ──
   let puppeteerResults = {};
-  if (!FAST_MODE) {
+  if (!FAST_MODE && !VALIDATE_MODE) {
     if (!JSON_MODE) console.log(`\n  Phase 3: Puppeteer probes (concurrency ${CONCURRENCY})...`);
     const puppeteer = await import('puppeteer');
     const browser = await puppeteer.default.launch({
@@ -833,7 +987,7 @@ async function main() {
 
   // ── Phase 5: Discovery (optional) ──
   let discoveries = [];
-  if (DISCOVER_MODE && !FAST_MODE) {
+  if (DISCOVER_MODE && !FAST_MODE && !VALIDATE_MODE) {
     if (!JSON_MODE) console.log('\n  Phase 5: Discovering new auction houses...');
     const knownDomains = new Set(
       Object.values(config.HOUSE_ROOTS).map(url => {
@@ -858,6 +1012,62 @@ async function main() {
     return { house, http: httpResult, puppeteer: puppeteerResult, issues };
   });
 
+  // ── Lot-Count Cross-Validation ──
+  if (!JSON_MODE) console.log('\n  Phase 6: Lot-count cross-validation...');
+  const lotValidations = lotCountValidation(results, prodData);
+  const mismatches = lotValidations.filter(v => v.status === 'MISMATCH' || v.status === 'BROKEN');
+  if (!JSON_MODE) {
+    const okCount = lotValidations.filter(v => v.status === 'OK').length;
+    const skipCount = lotValidations.filter(v => v.status === 'SKIP').length;
+    console.log(`  ${okCount} OK, ${mismatches.length} mismatches, ${skipCount} skipped`);
+  }
+
+  // ── Image Coverage Analysis ──
+  if (!JSON_MODE) console.log('\n  Phase 7: Image coverage analysis...');
+  const imgCoverage = imageCoverageAnalysis(prodData);
+  const belowTarget = imgCoverage.filter(ic => ic.status === 'BELOW TARGET');
+  if (!JSON_MODE) {
+    console.log(`  ${imgCoverage.length} houses analysed, ${belowTarget.length} below 90% target`);
+  }
+
+  // ── Auto-disable broken extractors (if --auto-disable flag) ──
+  let autoDisableResults = [];
+  if (AUTO_DISABLE) {
+    const brokenForDisable = [
+      // From lot count validation with BROKEN status
+      ...lotValidations.filter(v => v.status === 'BROKEN').map(v => ({
+        house: v.house,
+        reason: `Lot count mismatch: stated ${v.statedCount}, extracted ${v.extractedCount} (${v.detail})`,
+      })),
+      // From problem detection with EXTRACTOR_BROKEN type
+      ...results.filter(r => r.issues.some(i => i.type === 'EXTRACTOR_BROKEN'))
+        .map(r => ({
+          house: r.house,
+          reason: r.issues.find(i => i.type === 'EXTRACTOR_BROKEN').detail,
+        })),
+    ];
+
+    // Deduplicate by house
+    const seen = new Set();
+    const uniqueBroken = brokenForDisable.filter(b => {
+      if (seen.has(b.house)) return false;
+      seen.add(b.house);
+      return true;
+    });
+
+    if (uniqueBroken.length > 0) {
+      if (!JSON_MODE) console.log(`\n  Auto-disabling ${uniqueBroken.length} broken extractors...`);
+      autoDisableResults = await autoDisableBrokenHouses(uniqueBroken, ADMIN_API_BASE);
+      if (!JSON_MODE) {
+        for (const r of autoDisableResults) {
+          console.log(`    ${r.house}: ${r.success ? 'DISABLED' : 'FAILED'} - ${r.message}`);
+        }
+      }
+    } else {
+      if (!JSON_MODE) console.log('\n  No broken extractors to auto-disable');
+    }
+  }
+
   // ── Output ──
   if (JSON_MODE) {
     console.log(JSON.stringify({
@@ -873,11 +1083,14 @@ async function main() {
           ? Math.round((r.puppeteer.extractorImgCount / r.puppeteer.extractorLots) * 100) : null,
         issues: r.issues,
       })),
+      lotCountValidation: lotValidations,
+      imageCoverage: imgCoverage,
+      autoDisableResults: autoDisableResults.length > 0 ? autoDisableResults : undefined,
       production: prodData ? { total: prodData.total, houses: Object.keys(prodData.byHouse).length } : null,
       discoveries,
     }, null, 2));
   } else {
-    printReport(results, prodData, startTime);
+    printReport(results, prodData, startTime, lotValidations, imgCoverage);
 
     if (discoveries.length > 0) {
       console.log('  DISCOVERED AUCTION HOUSES');
