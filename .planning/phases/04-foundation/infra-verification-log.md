@@ -17,6 +17,7 @@ Phase 04-foundation, Plan 01: Infrastructure readiness checks.
 - **Cancellations needed:** None
 - **DB update needed:** No -- no rows match `tier = 'premium' AND stripe_subscription_id IS NOT NULL`
 - **Assessment:** PASS -- safe to set STRIPE_ENABLED=false without orphaning any billing
+- **Unblocks:** CRIT-1 blocker in STATE.md resolved
 
 ## INFR-03: Railway Capacity Baseline (30-day metrics)
 
