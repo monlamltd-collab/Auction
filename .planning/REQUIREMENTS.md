@@ -9,8 +9,8 @@
 
 - [x] **GATE-01**: System hibernates Stripe behind `STRIPE_ENABLED` env var -- all payment code preserved but unreachable when disabled
 - [x] **GATE-02**: `resolveEffectiveTier()` returns premium for all signed-in users when Stripe disabled
-- [ ] **GATE-03**: Paywall modals and upgrade CTAs hidden when Stripe disabled
-- [ ] **GATE-04**: AI features (smart search, analyser, scores, deal stacking, CSV export) require sign-in but are free
+- [x] **GATE-03**: Paywall modals and upgrade CTAs hidden when Stripe disabled
+- [x] **GATE-04**: AI features (smart search, analyser, scores, deal stacking, CSV export) require sign-in but are free
 - [x] **GATE-05**: Signed-in users have daily AI rate limit (e.g. 50 searches/day) as cost safety valve
 
 ### Bug Fixes
@@ -22,7 +22,7 @@
 - [ ] **FIX-05**: Negative page numbers guarded
 - [ ] **FIX-06**: Deal stacking widget reflows to single column on mobile
 - [ ] **FIX-07**: Sign-in page text no longer overflows container
-- [ ] **FIX-08**: CSV export has server-side tier check
+- [x] **FIX-08**: CSV export has server-side tier check
 
 ### Landing Page
 
@@ -85,8 +85,8 @@
 |-------------|-------|--------|
 | GATE-01 | Phase 4 | Complete |
 | GATE-02 | Phase 4 | Complete |
-| GATE-03 | Phase 4 | Pending |
-| GATE-04 | Phase 4 | Pending |
+| GATE-03 | Phase 4 | Complete |
+| GATE-04 | Phase 4 | Complete |
 | GATE-05 | Phase 4 | Complete |
 | FIX-01 | Phase 4 | Pending |
 | FIX-02 | Phase 4 | Pending |
@@ -95,7 +95,7 @@
 | FIX-05 | Phase 4 | Pending |
 | FIX-06 | Phase 4 | Pending |
 | FIX-07 | Phase 4 | Pending |
-| FIX-08 | Phase 4 | Pending |
+| FIX-08 | Phase 4 | Complete |
 | LAND-01 | Phase 7 | Pending |
 | LAND-02 | Phase 7 | Pending |
 | ANAL-01 | Phase 5 | Pending |

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Free-First Growth
 status: executing
-stopped_at: Completed 04-01-PLAN.md (infrastructure verification)
-last_updated: "2026-03-22T13:11:00.000Z"
-last_activity: 2026-03-22 -- Completed 04-01-PLAN.md (infrastructure verification)
+stopped_at: Completed 04-03-PLAN.md (client-side gating pivot)
+last_updated: "2026-03-22T16:15:00Z"
+last_activity: 2026-03-22 -- Completed 04-03-PLAN.md (client-side gating pivot)
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 4
-  completed_plans: 2
-  percent: 50
+  completed_plans: 3
+  percent: 75
 ---
 
 # Project State
@@ -26,28 +26,28 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 ## Current Position
 
 Phase: 4 of 7 (Foundation)
-Plan: 3 of 4 in current phase
+Plan: 4 of 4 in current phase
 Status: Executing
-Last activity: 2026-03-22 -- Completed 04-01-PLAN.md (infrastructure verification)
+Last activity: 2026-03-22 -- Completed 04-03-PLAN.md (client-side gating pivot)
 
-Progress: [█████░░░░░] 50%
+Progress: [████████░░] 75%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 2 (v1.2)
-- Average duration: 3.5min
-- Total execution time: 7min
+- Total plans completed: 3 (v1.2)
+- Average duration: 3.7min
+- Total execution time: 11min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 04-foundation | 2 | 7min | 3.5min |
+| 04-foundation | 3 | 11min | 3.7min |
 
 **Recent Trend:**
-- Last 5 plans: 04-02 (4min), 04-01 (3min)
-- Trend: starting
+- Last 5 plans: 04-03 (4min), 04-02 (4min), 04-01 (3min)
+- Trend: stable
 
 *Updated after each plan completion*
 
@@ -67,6 +67,9 @@ Recent decisions affecting current work:
 - Supabase free tier sufficient for launch (500MB DB, 50K MAU)
 - Zero Stripe subscribers -- no cancellations needed, CRIT-1 resolved
 - Railway hobby tier adequate -- no upgrade needed at current scale
+- showPaywall() redirects to signupModal when Stripe disabled (preserves paywall for reactivation)
+- isPremium() treats signed-in users as premium when Stripe disabled
+- Client-side CSV guard sufficient (server strips data for anon users)
 
 ### Pending Todos
 
@@ -81,8 +84,8 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-22
-Stopped at: Completed 04-01-PLAN.md (infrastructure verification)
+Stopped at: Completed 04-03-PLAN.md (client-side gating pivot)
 Resume file: None
 
 ---
-*Last updated: 2026-03-22 after 04-01 plan completion*
+*Last updated: 2026-03-22 after 04-03 plan completion*

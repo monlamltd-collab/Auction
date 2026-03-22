@@ -46,7 +46,7 @@
 Plans:
 - [x] 04-01-PLAN.md — Infrastructure verification checkpoint (Supabase, Stripe, Railway)
 - [x] 04-02-PLAN.md — Server-side Stripe hibernation, tier resolution, and rate limits
-- [ ] 04-03-PLAN.md — Client-side gating pivot (payment UI to sign-in prompts) and CSV guard
+- [x] 04-03-PLAN.md — Client-side gating pivot (payment UI to sign-in prompts) and CSV guard
 - [ ] 04-04-PLAN.md — All 7 frontend bug fixes (search, sort, empty states, debounce, pagination, mobile, overflow)
 
 ### Phase 5: Measurement
@@ -102,7 +102,7 @@ Phases execute in numeric order: 4 -> 4.1 -> 5 -> 5.1 -> 6 -> 7
 | 1. Hardening & Data Freshness | v1.1 | 4/4 | Complete | 2026-03-15 |
 | 2. Enrichment & House Expansion | v1.1 | 3/3 | Complete | 2026-03-15 |
 | 3. Deal Stacking & Tier Verification | v1.1 | 3/3 | Complete | 2026-03-16 |
-| 4. Foundation | v1.2 | 2/4 | In progress | - |
+| 4. Foundation | 3/4 | In Progress|  | - |
 | 5. Measurement | v1.2 | 0/2 | Not started | - |
 | 6. AI & Scraping Hardening | v1.2 | 0/2 | Not started | - |
 | 7. Landing Page | v1.2 | 0/1 | Not started | - |
