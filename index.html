@@ -1133,7 +1133,7 @@ function savePerPage(){try{localStorage.setItem('bm_per_page',$('fPerPage').valu
 function restorePerPage(){try{const v=localStorage.getItem('bm_per_page');if(v&&$('fPerPage'))$('fPerPage').value=v}catch(e){}}
 restorePerPage();
 let _pageFromGoPage=false;
-function goPage(p){_pageFromGoPage=true;_currentPage=p;renderLots();window.scrollTo({top:$('filterBar')?.offsetTop||0,behavior:'smooth'})}
+function goPage(p){_pageFromGoPage=true;_currentPage=Math.max(1,p);renderLots();window.scrollTo({top:$('filterBar')?.offsetTop||0,behavior:'smooth'})}
 
 // ═══════════════════════════════
 // LOAD ALL LOTS FOR FILTERING
@@ -1310,6 +1310,7 @@ function handleSearch(){
 function setQ(q){
   if(!window._userTier){if(window._stripeEnabled===false){$('signupModal').classList.add('show');}else{showPaywall('Sign up for free to get 5 AI searches per day, or upgrade to Pro for unlimited.');}return}
   $('smartQuery').value=q;
+  runSmartSearch(q);
 }
 function applyPreset(name){
   // Reset all filters first
@@ -2464,6 +2465,16 @@ function renderLots(){
   expandedLotId = null;
   const out=$('lotsOut');out.innerHTML='';
 
+  // Empty state when no lots match filters
+  if(lots.length===0){
+    const searchQ=$('smartQuery')?.value.trim()||'';
+    out.innerHTML='<div style="text-align:center;padding:40px 20px;color:var(--text-muted)">'+
+      '<div style="font-size:1.5rem;margin-bottom:12px">No lots found</div>'+
+      (searchQ?'<p>No results for \''+searchQ.replace(/'/g,'&#39;')+'\'. Try different search terms.</p>':'<p>Try adjusting your filters or search terms.</p>')+
+      '</div>';
+    return;
+  }
+
   // Disconnect any existing batch observer
   if(_batchObserver){_batchObserver.disconnect();_batchObserver=null}
   _pendingCards=[];
@@ -3334,8 +3345,16 @@ restoreFiltersFromURL();
 // Init
 loadCalendar();
 loadAllLots();
+let _searchDebounce;
+function debouncedSearch(){
+  clearTimeout(_searchDebounce);
+  _searchDebounce=setTimeout(()=>{ handleSearch(); },300);
+}
 $('smartQuery').addEventListener('input',()=>{
   $('mainBtn').textContent=$('smartQuery').value.trim()?'AI Search':'Browse';
+});
+$('smartQuery').addEventListener('keydown',(e)=>{
+  if(e.key==='Enter'){e.preventDefault();debouncedSearch();}
 });
 // ═══════════════════════════════
 // EMAIL CAPTURE FORM
