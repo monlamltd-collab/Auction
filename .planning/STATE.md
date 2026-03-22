@@ -3,29 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Free-First Growth
 status: executing
-stopped_at: Phase 6 context gathered
-last_updated: "2026-03-22T22:55:57.151Z"
-last_activity: 2026-03-22 -- Completed 05-02-PLAN.md (admin analytics dashboard)
+stopped_at: Completed 05-03-PLAN.md (UAT gap closure)
+last_updated: "2026-03-22T23:02:17Z"
+last_activity: 2026-03-22 -- Completed 05-03-PLAN.md (UAT gap closure fixes)
 progress:
   total_phases: 4
-  completed_phases: 1
-  total_plans: 7
-  completed_plans: 6
----
-
----
-gsd_state_version: 1.0
-milestone: v1.2
-milestone_name: Free-First Growth
-status: executing
-stopped_at: Completed 05-02-PLAN.md (admin analytics dashboard)
-last_updated: "2026-03-22T17:26:02Z"
-last_activity: 2026-03-22 -- Completed 05-02-PLAN.md (admin analytics dashboard)
-progress:
-  total_phases: 5
   completed_phases: 2
-  total_plans: 6
-  completed_plans: 6
+  total_plans: 7
+  completed_plans: 7
+  percent: 100
   percent: 100
 ---
 
@@ -36,36 +22,37 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-20)
 
 **Core value:** Every upcoming UK auction lot, with complete data, scored for investment potential and matched to bridging lenders -- so investors can find and fund deals in one place.
-**Current focus:** Phase 5: Measurement (analytics instrumentation + dashboard) -- COMPLETE
+**Current focus:** Phase 5: Measurement (analytics instrumentation + dashboard + UAT gap closure) -- COMPLETE
 
 ## Current Position
 
 Phase: 5 of 7 (Measurement) -- COMPLETE
-Plan: 2 of 2 in current phase (complete)
+Plan: 3 of 3 in current phase (complete)
 Status: Executing
-Last activity: 2026-03-22 -- Completed 05-02-PLAN.md (admin analytics dashboard)
+Last activity: 2026-03-22 -- Completed 05-03-PLAN.md (UAT gap closure fixes)
 
 Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 6 (v1.2)
-- Average duration: 2.7min
-- Total execution time: 16min
+- Total plans completed: 7 (v1.2)
+- Average duration: 2.4min
+- Total execution time: 17min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 04-foundation | 3 | 11min | 3.7min |
-| 05-measurement | 2 | 5min | 2.5min |
+| 05-measurement | 3 | 6min | 2.0min |
 
 **Recent Trend:**
-- Last 5 plans: 05-02 (2min), 05-01 (3min), 04-03 (4min), 04-02 (4min), 04-01 (3min)
+- Last 5 plans: 05-03 (1min), 05-02 (2min), 05-01 (3min), 04-03 (4min), 04-02 (4min)
 - Trend: stable
 
 *Updated after each plan completion*
+| Phase 05 P03 | 1min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -92,6 +79,8 @@ Recent decisions affecting current work:
 - [Phase 05]: Tracking endpoint allows anonymous access (no auth required)
 - [Phase 05]: Umami API proxied server-side to keep API key secret
 - [Phase 05]: Client-side funnel steps reference Umami dashboard rather than duplicating API calls
+- [Phase 05]: All three UAT fixes applied in single surgical commit -- no scope expansion
+- [Phase 05]: Catch-all route must always be last registered Express route
 
 ### Pending Todos
 
@@ -105,9 +94,9 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-22T22:37:21.117Z
-Stopped at: Phase 6 context gathered
-Resume file: .planning/phases/06-ai-scraping-hardening/06-CONTEXT.md
+Last session: 2026-03-22T23:02:17.673Z
+Stopped at: Completed 05-03-PLAN.md
+Resume file: None
 
 ---
-*Last updated: 2026-03-22 after 05-02 plan completion*
+*Last updated: 2026-03-22 after 05-03 plan completion*
