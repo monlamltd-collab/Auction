@@ -11137,6 +11137,41 @@ app.get('/api/admin/freshness', async (req, res) => {
   }
 });
 
+// ── Umami Cloud API helpers ──
+async function fetchUmamiStats(startAt, endAt) {
+  const websiteId = process.env.UMAMI_WEBSITE_ID;
+  const apiKey = process.env.UMAMI_API_KEY;
+  if (!websiteId || !apiKey) return null;
+  try {
+    const res = await fetch(
+      `https://api.umami.is/v1/websites/${websiteId}/stats?startAt=${startAt}&endAt=${endAt}`,
+      { headers: { 'x-umami-api-key': apiKey, 'Accept': 'application/json' } }
+    );
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (e) {
+    log.warn('Umami stats API error', { error: e.message });
+    return null;
+  }
+}
+
+async function fetchUmamiMetrics(startAt, endAt, type) {
+  const websiteId = process.env.UMAMI_WEBSITE_ID;
+  const apiKey = process.env.UMAMI_API_KEY;
+  if (!websiteId || !apiKey) return [];
+  try {
+    const res = await fetch(
+      `https://api.umami.is/v1/websites/${websiteId}/metrics?startAt=${startAt}&endAt=${endAt}&type=${type}`,
+      { headers: { 'x-umami-api-key': apiKey, 'Accept': 'application/json' } }
+    );
+    if (!res.ok) return [];
+    return await res.json();
+  } catch (e) {
+    log.warn('Umami metrics API error', { error: e.message });
+    return [];
+  }
+}
+
 // ── Analytics API endpoint ──
 app.get('/api/admin/analytics', async (req, res) => {
   const token = req.headers['x-admin-secret'] || '';
@@ -11146,13 +11181,24 @@ app.get('/api/admin/analytics', async (req, res) => {
   try {
     const days = parseInt(req.query.days) || 30;
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    const { data, error } = await supabase
-      .from('analytics_snapshots')
-      .select('*')
-      .gte('date', since)
-      .order('date', { ascending: true });
-    if (error) throw error;
-    res.json({ snapshots: data || [] });
+    const endAt = Date.now();
+    const startAt = endAt - days * 24 * 60 * 60 * 1000;
+
+    const [snapshots, umamiStats, umamiReferrers, activityEvents] = await Promise.all([
+      supabase.from('analytics_snapshots').select('*').gte('date', since).order('date', { ascending: true }),
+      fetchUmamiStats(startAt, endAt),
+      fetchUmamiMetrics(startAt, endAt, 'referrer'),
+      supabase.from('activity_events').select('action, detail, created_at, user_email')
+        .gte('created_at', new Date(startAt).toISOString())
+        .order('created_at', { ascending: true }),
+    ]);
+
+    res.json({
+      snapshots: snapshots.data || [],
+      umami: umamiStats,
+      referrers: umamiReferrers,
+      events: activityEvents.data || [],
+    });
   } catch (e) {
     log.error('Analytics endpoint error', { error: e.message });
     res.status(500).json({ error: 'Internal server error' });
