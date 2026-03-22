@@ -1661,6 +1661,10 @@ function onSignIn(session) {
   localStorage.removeItem('bm_user');
   localStorage.removeItem('bm_token');
 
+  // Re-fetch lots now that auth token is available (fixes race where
+  // loadAllLots() fires before initAuth() resolves, gating all lots)
+  loadAllLots();
+
   // Check Pro status
   updateProStatus();
 }

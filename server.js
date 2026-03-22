@@ -88,11 +88,11 @@ app.use((req, res, next) => {
   const stripeSrc = STRIPE_ENABLED ? ' https://checkout.stripe.com' : '';
   res.setHeader('Content-Security-Policy',
     "default-src 'self'; " +
-    "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; " +
+    "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cloud.umami.is; " +
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
     "font-src 'self' https://fonts.gstatic.com; " +
     "img-src 'self' data: https:; " +
-    `connect-src 'self' https://*.supabase.co https://www.bridgematch.co.uk${stripeSrc}; ` +
+    `connect-src 'self' https://*.supabase.co https://www.bridgematch.co.uk https://cloud.umami.is https://api.umami.is${stripeSrc}; ` +
     (STRIPE_ENABLED ? "frame-src https://checkout.stripe.com; " : "frame-src 'none'; ") +
     "frame-ancestors 'none'; " +
     "form-action 'self'; " +
@@ -4617,20 +4617,6 @@ app.get('/api/quality-report', async (req, res) => {
   } catch (e) {
     log.error('Quality report error', { error: e.message });
     res.status(500).json({ error: 'Quality report failed. Check server logs.' });
-  }
-});
-
-app.get('*', (req, res) => {
-  try {
-    let html = readFileSync(join(__dirname, 'index.html'), 'utf-8');
-    // Inject Supabase config — JSON.stringify escapes any special chars to prevent XSS
-    html = html.replace("window.__SUPABASE_URL__ || ''", JSON.stringify(SUPABASE_URL || ''));
-    html = html.replace("window.__SUPABASE_ANON_KEY__ || ''", JSON.stringify(SUPABASE_ANON_KEY || ''));
-    html = html.replace("window.__AUTH_ENABLED__ || false", AUTH_ENABLED ? 'true' : 'false');
-    res.type('html').send(html);
-  } catch (e) {
-    log.error('Failed to inject config into index.html', { error: e.message });
-    res.sendFile(join(__dirname, 'index.html'));
   }
 });
 
@@ -11227,6 +11213,23 @@ app.post('/api/track/event', rateLimit(60000, 30), async (req, res) => {
   const user = await validateUserFromReq(req).catch(() => null);
   logActivityEvent(action, detail || {}, user?.email || null, getClientIP(req));
   res.json({ ok: true });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// CATCH-ALL — must be AFTER all route registrations
+// ═══════════════════════════════════════════════════════════════
+app.get('*', (req, res) => {
+  try {
+    let html = readFileSync(join(__dirname, 'index.html'), 'utf-8');
+    // Inject Supabase config — JSON.stringify escapes any special chars to prevent XSS
+    html = html.replace("window.__SUPABASE_URL__ || ''", JSON.stringify(SUPABASE_URL || ''));
+    html = html.replace("window.__SUPABASE_ANON_KEY__ || ''", JSON.stringify(SUPABASE_ANON_KEY || ''));
+    html = html.replace("window.__AUTH_ENABLED__ || false", AUTH_ENABLED ? 'true' : 'false');
+    res.type('html').send(html);
+  } catch (e) {
+    log.error('Failed to inject config into index.html', { error: e.message });
+    res.sendFile(join(__dirname, 'index.html'));
+  }
 });
 
 // ═══════════════════════════════════════════════════════════════
