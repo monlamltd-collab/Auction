@@ -2843,14 +2843,14 @@ function renderDealStackResults(idx, r, showHold) {
 }
 
 // Downloads
-function dlCSV(){if(window._userTier!=='premium'){showPaywall('CSV export is a Pro feature. Upgrade for full data exports.');return;}
+function dlCSV(){if(!window._userTier){$('signupModal').classList.add('show');return;}if(window._stripeEnabled!==false&&window._userTier!=='premium'){showPaywall('CSV export is a Pro feature. Upgrade for full data exports.');return;}
   const exportLots = window._filteredLots || LOTS;
   const rows=[['Rank','Lot','Score','Deal','TitleSplit','Units','Address','Guide','Affordability','Type','Beds','Tenure','Condition','Sqft','StreetAvg','BelowMkt%','EstYield%','EstRent/mo','Opps','Risks','URL']];
   exportLots.forEach((l,i)=>{
     rows.push([i+1,l.lot,l.score,l.dealType,l.titleSplit?'YES':'',l.units||'',l.address,l.price||'TBA',l._affTag||'',l.propType,l.beds??'',l.tenure,l.condition,l.sqft||'',l.streetAvg||'',l.belowMarket||'',l.estGrossYield||'',l.estMonthlyRent||'',(l.opps||[]).join(' | '),(l.risks||[]).join(' | '),l.url])});
   dl(rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n'),'auction_analysis.csv','text/csv');
 }
-function dlJSON(){if(window._userTier!=='premium'){showPaywall('JSON export is a Pro feature. Upgrade for full data exports.');return;}const exportLots=window._filteredLots||LOTS;dl(JSON.stringify(exportLots,null,2),'auction_analysis.json','application/json')}
+function dlJSON(){if(!window._userTier){$('signupModal').classList.add('show');return;}if(window._stripeEnabled!==false&&window._userTier!=='premium'){showPaywall('JSON export is a Pro feature. Upgrade for full data exports.');return;}const exportLots=window._filteredLots||LOTS;dl(JSON.stringify(exportLots,null,2),'auction_analysis.json','application/json')}
 function dl(c,n,t){const b=new Blob([c],{type:t}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=n;a.click()}
 
 // ═══════════════════════════════
