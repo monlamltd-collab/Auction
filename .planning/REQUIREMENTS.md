@@ -45,9 +45,9 @@
 
 ### AI Abstraction
 
-- [ ] **AI-01**: `callGemini()` extracted to `lib/ai-provider.js` with provider abstraction
-- [ ] **AI-02**: Token usage and cost logging per API call
-- [ ] **AI-03**: Model selection via env var (ready for future provider swap)
+- [x] **AI-01**: `callGemini()` extracted to `lib/ai-provider.js` with provider abstraction
+- [x] **AI-02**: Token usage and cost logging per API call
+- [x] **AI-03**: Model selection via env var (ready for future provider swap)
 
 ### Infrastructure
 
@@ -106,9 +106,9 @@
 | SCRP-02 | Phase 6 | Pending |
 | SCRP-03 | Phase 6 | Pending |
 | SCRP-04 | Phase 6 | Pending |
-| AI-01 | Phase 6 | Pending |
-| AI-02 | Phase 6 | Pending |
-| AI-03 | Phase 6 | Pending |
+| AI-01 | Phase 6 | Complete |
+| AI-02 | Phase 6 | Complete |
+| AI-03 | Phase 6 | Complete |
 | INFR-01 | Phase 4 | Complete |
 | INFR-02 | Phase 4 | Complete |
 | INFR-03 | Phase 4 | Complete |

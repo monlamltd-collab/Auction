@@ -37,23 +37,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-20)
 
 **Core value:** Every upcoming UK auction lot, with complete data, scored for investment potential and matched to bridging lenders -- so investors can find and fund deals in one place.
-**Current focus:** Phase 5: Measurement (analytics instrumentation + dashboard + UAT gap closure) -- COMPLETE
+**Current focus:** Phase 6: AI & Scraping Hardening (provider abstraction, cost logging, scraping resilience)
 
 ## Current Position
 
-Phase: 5 of 7 (Measurement) -- COMPLETE
-Plan: 3 of 3 in current phase (complete)
+Phase: 6 of 7 (AI & Scraping Hardening)
+Plan: 1 of 3 in current phase (complete)
 Status: Executing
-Last activity: 2026-03-22 -- Completed 05-03-PLAN.md (UAT gap closure fixes)
+Last activity: 2026-03-22 -- Completed 06-01-PLAN.md (AI provider abstraction)
 
-Progress: [██████████] 100%
+Progress: [████████░░] 80%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 7 (v1.2)
-- Average duration: 2.4min
-- Total execution time: 17min
+- Total plans completed: 8 (v1.2)
+- Average duration: 3.1min
+- Total execution time: 27min
 
 **By Phase:**
 
@@ -61,13 +61,14 @@ Progress: [██████████] 100%
 |-------|-------|-------|----------|
 | 04-foundation | 3 | 11min | 3.7min |
 | 05-measurement | 3 | 6min | 2.0min |
+| 06-ai-scraping-hardening | 1 | 10min | 10min |
 
 **Recent Trend:**
-- Last 5 plans: 05-03 (1min), 05-02 (2min), 05-01 (3min), 04-03 (4min), 04-02 (4min)
-- Trend: stable
+- Last 5 plans: 06-01 (10min), 05-03 (1min), 05-02 (2min), 05-01 (3min), 04-03 (4min)
+- Trend: 06-01 longer due to large refactor scope (5 callsites + new module)
 
 *Updated after each plan completion*
-| Phase 05 P03 | 1min | 2 tasks | 2 files |
+| Phase 06 P01 | 10min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -96,6 +97,9 @@ Recent decisions affecting current work:
 - [Phase 05]: Client-side funnel steps reference Umami dashboard rather than duplicating API calls
 - [Phase 05]: All three UAT fixes applied in single surgical commit -- no scope expansion
 - [Phase 05]: Catch-all route must always be last registered Express route
+- [Phase 06]: callAI() uses dependency injection (initAI) to share genAI/supabase instances
+- [Phase 06]: Daily AI budget is soft cap (warns but proceeds) to avoid breaking production
+- [Phase 06]: PDF extraction always forces Gemini regardless of AI_PROVIDER setting
 
 ### Pending Todos
 
@@ -109,9 +113,9 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-22T23:02:17.673Z
-Stopped at: Completed 05-03-PLAN.md
+Last session: 2026-03-22T23:55:00Z
+Stopped at: Completed 06-01-PLAN.md
 Resume file: None
 
 ---
-*Last updated: 2026-03-22 after 05-03 plan completion*
+*Last updated: 2026-03-22 after 06-01 plan completion*
