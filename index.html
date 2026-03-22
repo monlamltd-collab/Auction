@@ -687,6 +687,11 @@ footer .logo-f span{color:var(--green)}
   #signupModal .modal{max-width:calc(100vw - 32px) !important;margin:16px;padding:20px 16px}
 }
 </style>
+<!-- TODO: Set data-website-id from Umami Cloud dashboard (Settings -> Website ID) -->
+<!-- Umami Cloud Analytics - privacy-respecting, no cookies -->
+<script defer src="https://cloud.umami.is/script.js"
+  data-website-id=""
+  data-domains="auctions.bridgematch.co.uk"></script>
 </head>
 <body>
 
@@ -2734,6 +2739,13 @@ function calcDealStack(purchasePrice, gdv, worksCost, rentalIncome, ltvPct, addr
 // ── DEAL STACKING LIVE RECALCULATION ──
 let _dsTimers = {};
 function debounceDealStack(idx) {
+  if (window.umami && !window._bmFormStarted) {
+    window._bmFormStarted = true;
+    var lot = LOTS.find(function(l) { return l._idx === idx; }) || {};
+    umami.track('form_start', {
+      lot_number: lot.lot || '', house: lot._house || '', guide_price: lot.price || 0
+    });
+  }
   clearTimeout(_dsTimers[idx]);
   _dsTimers[idx] = setTimeout(function() { runDealStack(idx); }, 300);
 }
@@ -2765,6 +2777,7 @@ function runDealStack(idx) {
       '<p style="color:var(--text-muted); font-size:13px; text-align:center; padding:12px 0;">Guide price not available \u2014 deal stacking requires a price</p>';
     return;
   }
+  fetch('/api/track/event', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action:'deal_stacking', detail:{address: lot.address||''}})}).catch(function(){});
   renderDealStackResults(idx, result, rental > 0);
 }
 
@@ -2866,7 +2879,8 @@ function renderDealStackResults(idx, r, showHold) {
 }
 
 // Downloads
-function dlCSV(){if(!window._userTier){$('signupModal').classList.add('show');return;}if(window._stripeEnabled!==false&&window._userTier!=='premium'){showPaywall('CSV export is a Pro feature. Upgrade for full data exports.');return;}
+function dlCSV(){fetch('/api/track/event', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action:'csv_export'})}).catch(function(){});
+if(!window._userTier){$('signupModal').classList.add('show');return;}if(window._stripeEnabled!==false&&window._userTier!=='premium'){showPaywall('CSV export is a Pro feature. Upgrade for full data exports.');return;}
   const exportLots = window._filteredLots || LOTS;
   const rows=[['Rank','Lot','Score','Deal','TitleSplit','Units','Address','Guide','Affordability','Type','Beds','Tenure','Condition','Sqft','StreetAvg','BelowMkt%','EstYield%','EstRent/mo','Opps','Risks','URL']];
   exportLots.forEach((l,i)=>{
@@ -3003,6 +3017,9 @@ function getSignalChips(lot) {
 function expandCard(lot) {
   if (lot.anonGated) { $('signupModal').classList.add('show'); return; }
   if (lot.blurred) { if(window._stripeEnabled===false){$('signupModal').classList.add('show');}else{showPaywall('Upgrade to Pro for full lot details, AI analysis, and finance checks.');}return; }
+  if (window.umami) umami.track('lot_expand', {
+    lot_number: lot.lot || '', house: lot._house || '', guide_price: lot.price || 0
+  });
   // Close any existing expanded panel
   const existing = document.querySelector('.expanded-panel');
   if (existing) existing.remove();
@@ -3312,6 +3329,10 @@ function bridgeMatchLot(idx, event) {
   if (event) { event.preventDefault(); event.stopPropagation(); }
   const lot = LOTS.find(l => l._idx === idx);
   if (!lot) return;
+  if (window.umami) umami.track('finance_click', {
+    lot_number: lot.lot || '', house: lot._house || '', guide_price: lot.price || 0
+  });
+  fetch('/api/track/event', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action:'bridgematch_open', detail:{lot_number: lot.lot||'', house: lot._house||'', guide_price: lot.price||0}})}).catch(function(){});
 
   const isExpanded = expandedLotId === idx;
   if (!isExpanded) {
