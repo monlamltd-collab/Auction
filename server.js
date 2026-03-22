@@ -1197,6 +1197,7 @@ app.post('/api/signup', rateLimit(60000, 5), async (req, res) => {
 
     if (existing) {
       await supabase.from('users').update({ last_login: new Date().toISOString() }).eq('id', existing.id);
+      logActivityEvent('signin', {}, existing.email, getClientIP(req));
       // Don't reveal whether user exists — same response shape
       return res.json({ message: 'Check your email for a login link' });
     }
@@ -1209,6 +1210,7 @@ app.post('/api/signup', rateLimit(60000, 5), async (req, res) => {
 
     if (error) throw error;
     sendWelcomeEmail(newUser.email, newUser.name).catch(() => {});
+    logActivityEvent('signup', { source: 'web' }, newUser.email, getClientIP(req));
     return res.json({ message: 'Check your email for a login link' });
   } catch (err) {
     log.error('Signup error', { error: err.message });
@@ -11169,6 +11171,16 @@ app.post('/api/admin/seed-snapshot', async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// ── Lightweight event tracking for client-only actions ──
+app.post('/api/track/event', rateLimit(60000, 30), async (req, res) => {
+  const { action, detail } = req.body || {};
+  const allowed = ['deal_stacking', 'csv_export', 'bridgematch_open'];
+  if (!action || !allowed.includes(action)) return res.status(400).json({ error: 'Invalid action' });
+  const user = await validateUserFromReq(req).catch(() => null);
+  logActivityEvent(action, detail || {}, user?.email || null, getClientIP(req));
+  res.json({ ok: true });
 });
 
 // ═══════════════════════════════════════════════════════════════
