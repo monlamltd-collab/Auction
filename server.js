@@ -237,7 +237,7 @@ const RATE_LIMIT = STRIPE_ENABLED ? 5 : 50; // 50/day for signed-in users when S
 const CACHE_DAYS = 7; // fallback default
 const CACHE_TIERS = {
   high:   { houses: ['allsop','savills','sdl','network','bidx1'], ttlHours: 12 },
-  medium: { houses: ['cliveemson','edwardmellor','bondwolfe','strettons','countrywide','suttonkersh','tcpa','futureauctions','firstforauctions','harmanhealy','astleys','henrysykes','clarkesimpson','durrants','dawsons','goldings','auctionhousescotland','austingray','auctionhouseeastanglia','auctionhousenorthwest','auctionhousenortheast','auctionhousewales','auctionhousebirmingham','auctionhousekent','iamsold','buttersjohnbee','brownco','fssproperty'], ttlHours: 18 },
+  medium: { houses: ['cliveemson','edwardmellor','bondwolfe','strettons','countrywide','suttonkersh','tcpa','futureauctions','firstforauctions','harmanhealy','astleys','henrysykes','clarkesimpson','durrants','dawsons','goldings','auctionhousescotland','austingray','auctionhouseeastanglia','auctionhousenorthwest','auctionhousenortheast','auctionhousewales','auctionhousebirmingham','auctionhousekent','iamsold','buttersjohnbee','brownco','fssproperty','auctionhousedevon','auctionhouseeastmidlands','auctionhousewestmidlands','auctionhouseessex','auctionhousemanchester','romanway','hammerprice'], ttlHours: 18 },
   low:    { houses: [], ttlHours: 24 }  // everything else
 };
 function getCacheTTL(houseKey) {
@@ -5048,6 +5048,22 @@ function rewriteUrl(url, house) {
   }
   if (house === 'austingray') {
     return { baseUrl: 'https://www.auctionhouse.co.uk/sussexandhampshire', isApi: false, paginateAs: null, preferPuppeteer: true };
+  }
+  // Auction House UK batch 4 branches
+  if (house === 'auctionhousedevon') {
+    return { baseUrl: 'https://www.auctionhouse.co.uk/devonandcornwall/auction/search-results', isApi: false, paginateAs: null, preferPuppeteer: true };
+  }
+  if (house === 'auctionhouseeastmidlands') {
+    return { baseUrl: 'https://www.auctionhouse.co.uk/eastmidlands/auction/search-results', isApi: false, paginateAs: null, preferPuppeteer: true };
+  }
+  if (house === 'auctionhousewestmidlands') {
+    return { baseUrl: 'https://www.auctionhouse.co.uk/westmidlands/auction/search-results', isApi: false, paginateAs: null, preferPuppeteer: true };
+  }
+  if (house === 'auctionhouseessex') {
+    return { baseUrl: 'https://www.auctionhouse.co.uk/essex/auction/search-results', isApi: false, paginateAs: null, preferPuppeteer: true };
+  }
+  if (house === 'auctionhousemanchester') {
+    return { baseUrl: 'https://www.auctionhouse.co.uk/manchester/auction/search-results', isApi: false, paginateAs: null, preferPuppeteer: true };
   }
 
   // Hunters: Bamboo Auctions React SPA, needs Puppeteer
