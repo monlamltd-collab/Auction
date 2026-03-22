@@ -3325,6 +3325,88 @@ const PRESET_QUERIES = {
   'Flats and apartments': 'flats',
 };
 
+// ── Deterministic preset filters — bypass Gemini entirely ──
+// Each preset defines: filter (lot => boolean), sort (compare fn), report (count => string)
+const PRESET_FILTERS = {
+  'top-picks': {
+    filter: l => (l.score || 0) >= 3,
+    sort: (a, b) => (b.score || 0) - (a.score || 0),
+    report: (n, total) => n > 0
+      ? `Found ${n} high-scoring investment opportunities (score 3+) across ${total} auction lots. These properties show the strongest combination of investment signals — such as below-market pricing, development potential, motivated sellers, and value-add condition. Higher scores indicate more overlapping opportunity signals.`
+      : `No lots currently score 3 or above. Scores are based on investment signals like condition, tenure, yield, and seller motivation. Try browsing the full directory or check back when new catalogues are analysed.`,
+  },
+  'under-100k': {
+    filter: l => l.price && l.price > 0 && l.price < 100000,
+    sort: (a, b) => (a.price || Infinity) - (b.price || Infinity),
+    report: (n, total) => n > 0
+      ? `Found ${n} properties listed under £100,000 across ${total} lots. These are sorted by guide price, lowest first. Remember that guide prices at auction are often below the expected sale price.`
+      : `No properties currently listed under £100,000. Guide prices change as new catalogues are published — check back soon.`,
+  },
+  'vacant': {
+    filter: l => l.vacant === true,
+    sort: (a, b) => (b.score || 0) - (a.score || 0),
+    report: (n, total) => n > 0
+      ? `Found ${n} vacant properties across ${total} lots, sorted by investment score. Vacant possession means faster completion and immediate access for refurbishment or re-letting.`
+      : `No properties explicitly listed as vacant possession. Some lots may still be vacant but not stated in the listing — check individual lot details.`,
+  },
+  'flats': {
+    filter: l => l.propType === 'flat',
+    sort: (a, b) => (b.score || 0) - (a.score || 0),
+    report: (n, total) => n > 0
+      ? `Found ${n} flats and apartments across ${total} lots, sorted by investment score. Check tenure carefully — most flats are leasehold.`
+      : `No flats or apartments found in current catalogues.`,
+  },
+  'high-yield-8': {
+    filter: l => l.estGrossYield && l.estGrossYield >= 8,
+    sort: (a, b) => (b.estGrossYield || 0) - (a.estGrossYield || 0),
+    report: (n, total) => n > 0
+      ? `Found ${n} properties with estimated gross yield of 8% or above across ${total} lots, sorted by yield. These yields are estimates based on guide price and local rental data — verify with your own research.`
+      : `No properties currently show an estimated gross yield of 8% or above. Yields are calculated from guide prices and local rental data, so they update as new catalogues are published.`,
+  },
+  'title-splits': {
+    filter: l => l.titleSplit === true,
+    sort: (a, b) => (b.units || 0) - (a.units || 0) || (b.score || 0) - (a.score || 0),
+    report: (n, total) => n > 0
+      ? `Found ${n} potential title split opportunities across ${total} lots — freehold properties containing multiple self-contained units. Sorted by unit count. Title splitting can unlock significant value but requires legal and planning checks.`
+      : `No title split opportunities detected in current catalogues. These are identified by freehold multi-unit properties where individual flats could be sold separately.`,
+  },
+  'probate': {
+    filter: l => (l.opps || []).some(o => /executor|probate/i.test(o)),
+    sort: (a, b) => (b.score || 0) - (a.score || 0),
+    report: (n, total) => n > 0
+      ? `Found ${n} probate and executor sales across ${total} lots, sorted by investment score. These often come with motivated sellers and potential for below-market pricing.`
+      : `No probate or executor sales found in current catalogues. These are identified by keywords like "executor", "probate", "estate of" in lot descriptions.`,
+  },
+  'heavy-refurb': {
+    filter: l => l.condition === 'needs work' || l.condition === 'poor',
+    sort: (a, b) => (b.score || 0) - (a.score || 0),
+    report: (n, total) => n > 0
+      ? `Found ${n} properties needing refurbishment across ${total} lots, sorted by investment score. These range from cosmetic updates to full renovations — check lot details for specifics.`
+      : `No properties explicitly described as needing refurbishment in current catalogues.`,
+  },
+  'dev-land': {
+    filter: l => (l.opps || []).some(o => /development/i.test(o)),
+    sort: (a, b) => (b.score || 0) - (a.score || 0),
+    report: (n, total) => n > 0
+      ? `Found ${n} development opportunities across ${total} lots, sorted by investment score. These include properties with planning permission, development potential, or conversion opportunities.`
+      : `No development opportunities found in current catalogues. These are identified by keywords like "planning permission", "development potential", "conversion" in lot descriptions.`,
+  },
+  'commercial': {
+    filter: l => l.propType === 'commercial',
+    sort: (a, b) => (b.score || 0) - (a.score || 0),
+    report: (n, total) => n > 0
+      ? `Found ${n} commercial properties across ${total} lots, sorted by investment score. Includes shops, offices, retail units, industrial premises, and investment portfolios.`
+      : `No commercial properties found in current catalogues.`,
+  },
+  'land-dev': {
+    filter: l => l.propType === 'land' || (l.opps || []).some(o => /development/i.test(o)),
+    sort: (a, b) => (b.score || 0) - (a.score || 0),
+    report: (n, total) => n > 0
+      ? `Found ${n} land and development sites across ${total} lots, sorted by investment score. Includes building plots, development sites, and properties with planning permission.`
+      : `No land or development sites found in current catalogues.`,
+  },
+};
+
 function isPresetQuery(query) {
   return PRESET_QUERIES[query] || null;
 }
@@ -3394,200 +3476,79 @@ app.post('/api/smart-search', async (req, res) => {
   const presetSlug = isPresetQuery(query);
   const sf = soldFilter || 'all';
 
-  // Check smart search cache for preset queries
-  if (presetSlug) {
-    const cacheKey = `${presetSlug}:${sf}`;
-    const { data: presetCache } = await supabase
-      .from('smart_search_cache')
-      .select('*')
-      .eq('query_key', cacheKey)
-      .gt('expires_at', new Date().toISOString())
-      .single();
+  // ── Deterministic preset fast path — no AI needed ──
+  // Presets like "Best scoring deals", "Under £100k", "Vacant" etc. can be resolved
+  // by filtering/sorting on precomputed lot fields. Faster, more reliable, saves API credits.
+  const presetFilter = presetSlug ? PRESET_FILTERS[presetSlug] : null;
+  if (presetFilter) {
+    try {
+      const { data: cached } = await supabase
+        .from('cached_analyses')
+        .select('house, url, lots, total_lots')
+        .gt('expires_at', new Date().toISOString());
 
-    if (presetCache && (!presetCache.stale_urls || presetCache.stale_urls.length === 0)) {
-      // Fully fresh cache — return instantly
-      // Premium-only endpoint — no gating needed
-      const cachedResults = presetCache.results || [];
-      await incrementSearchCounter();
-      return res.json({
-        results: cachedResults,
-        report: presetCache.report || '',
-        sources: presetCache.sources || [],
-        totalSearched: presetCache.total_searched || 0,
-        cached: true,
-        searchesUsed, searchLimit,
-      });
-    }
+      if (!cached || cached.length === 0) {
+        await incrementSearchCounter();
+        return res.json({ results: [], report: 'No cached auction data available. Please analyse some auction catalogues first.', sources: [], totalSearched: 0, searchesUsed, searchLimit });
+      }
 
-    if (presetCache && presetCache.stale_urls && presetCache.stale_urls.length > 0) {
-      // Partially stale — only re-search the changed catalogues and merge
-      if (!process.env.GEMINI_API_KEY) return res.status(500).json({ error: 'API key not configured' });
-
-      try {
-        // Fetch only the changed catalogues
-        const { data: staleCatalogues } = await supabase
-          .from('cached_analyses')
-          .select('house, url, lots, total_lots')
-          .in('url', presetCache.stale_urls)
-          .gt('expires_at', new Date().toISOString());
-
-        if (!staleCatalogues || staleCatalogues.length === 0) {
-          // Stale catalogues expired or gone — strip old results from those sources and return
-          const cleanResults = (presetCache.results || []).filter(l =>
-            !presetCache.stale_urls.includes((l._sourceUrl || '').trim().replace(/\/+$/, '').toLowerCase())
-          );
-          const cleanSources = (presetCache.sources || []).filter(s =>
-            !presetCache.stale_urls.includes((s.url || '').trim().replace(/\/+$/, '').toLowerCase())
-          );
-          await supabase.from('smart_search_cache').update({
-            results: cleanResults, sources: cleanSources,
-            total_searched: cleanResults.length, stale_urls: [],
-          }).eq('query_key', cacheKey);
-          const gatedClean1 = cleanResults;
-          await incrementSearchCounter();
-          return res.json({ results: gatedClean1, report: presetCache.report || '', sources: cleanSources, totalSearched: cleanResults.length, cached: true, searchesUsed, searchLimit });
-        }
-
-        // Gather lots from only the changed catalogues
-        const deltaLots = [];
-        const deltaSources = [];
-        for (const c of staleCatalogues) {
-          if (c.lots && Array.isArray(c.lots)) {
-            deltaSources.push({ house: c.house, url: c.url, count: c.lots.length });
-            for (const lot of c.lots) {
-              deltaLots.push({ ...lot, _house: c.house, _sourceUrl: c.url });
-            }
+      // Gather all lots
+      const allLots = [];
+      const sources = [];
+      for (const c of cached) {
+        if (c.lots && Array.isArray(c.lots)) {
+          sources.push({ house: c.house, url: c.url, count: c.lots.length });
+          for (const lot of c.lots) {
+            allLots.push({ ...lot, _house: c.house, _sourceUrl: c.url });
           }
         }
-
-        // Apply sold filter to delta lots (prefer lot.status, fallback to bullets regex)
-        normaliseLotStatuses(deltaLots);
-        const filteredDelta = sf === 'available'
-          ? deltaLots.filter(l => l.status === 'available')
-          : sf === 'sold'
-          ? deltaLots.filter(l => l.status === 'sold' || l.status === 'stc' || l.status === 'withdrawn')
-          : deltaLots;
-
-        if (filteredDelta.length === 0) {
-          // Changed catalogues have no matching lots after filtering — just remove old results from those sources
-          const cleanResults = (presetCache.results || []).filter(l =>
-            !presetCache.stale_urls.includes((l._sourceUrl || '').trim().replace(/\/+$/, '').toLowerCase())
-          );
-          const cleanSources = (presetCache.sources || []).filter(s =>
-            !presetCache.stale_urls.includes((s.url || '').trim().replace(/\/+$/, '').toLowerCase())
-          );
-          for (const ds of deltaSources) cleanSources.push(ds);
-          await supabase.from('smart_search_cache').update({
-            results: cleanResults, sources: cleanSources,
-            source_urls: cleanSources.map(s => s.url),
-            total_searched: (presetCache.total_searched || 0) - deltaLots.length + filteredDelta.length,
-            stale_urls: [],
-          }).eq('query_key', cacheKey);
-          const gatedClean2 = cleanResults;
-          await incrementSearchCounter();
-          return res.json({ results: gatedClean2, report: presetCache.report || '', sources: cleanSources, totalSearched: cleanResults.length, cached: true, searchesUsed, searchLimit });
-        }
-
-        // Run Gemini on the delta lots
-        if (creditExhausted) {
-          const exhaustedAgo = creditExhaustedAt ? Math.round((Date.now() - creditExhaustedAt) / 60000) : '?';
-          log.warn('Incremental smart search skipped — Gemini quota exhausted', { exhaustedMinutesAgo: exhaustedAgo });
-          throw new Error('quota_exhausted'); // fall through to return stale cache
-        }
-        const queryTerms = query.toLowerCase().split(/\s+/).filter(t => t.length > 2);
-        const lotEntries = filteredDelta.map((l, i) => {
-          const summary = `[${i}] ${l._house} L${l.lot}: ${l.address} | £${l.price || '?'} | Score:${l.score || 0} | ${l.titleSplit ? 'TITLE_SPLIT' : ''} | ${(l.bullets || []).join('; ').substring(0, 150)}`;
-          const searchText = summary.toLowerCase();
-          const relevance = queryTerms.filter(t => searchText.includes(t)).length;
-          return { summary, relevance };
-        });
-        lotEntries.sort((a, b) => b.relevance - a.relevance);
-
-        const CONTEXT_LIMIT = 120000;
-        let lotSummaries = '';
-        let included = 0;
-        for (const entry of lotEntries) {
-          if (lotSummaries.length + entry.summary.length + 1 > CONTEXT_LIMIT) break;
-          lotSummaries += entry.summary + '\n';
-          included++;
-        }
-
-        const responseText = await callGemini(`You are a UK property investment analyst. A user has searched across ${filteredDelta.length} NEW auction lots from ${deltaSources.length} recently updated catalogues.
-
-Their search query: "${query}"
-
-Here are ${included} lots from the updated catalogues, sorted by relevance:
-
-${lotSummaries}
-
-TASK:
-1. Identify the lots that best match the user's query. Return the indices of matching lots.
-2. Write a one-line summary of what changed (e.g. "3 new heavy refurb properties found in Savills catalogue").
-
-Respond in this exact JSON format:
-{"indices":[0,5,12],"summary":"Brief change summary"}
-
-Only return lots that genuinely match the query.`, { maxTokens: 4000 });
-        log.info('smart_search_incremental', { model: MODEL_FLASH });
-        let parsed;
-        try {
-          let cleaned = responseText.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
-          const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-          parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : JSON.parse(cleaned);
-        } catch (e) {
-          const indicesMatch = responseText.match(/"indices"\s*:\s*\[([\d,\s]*)\]/);
-          parsed = { indices: indicesMatch ? indicesMatch[1].split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n)) : [], summary: '' };
-        }
-
-        const newMatches = (parsed.indices || [])
-          .filter(i => i >= 0 && i < filteredDelta.length)
-          .map(i => filteredDelta[i]);
-
-        // Merge: keep old results from unchanged catalogues + new results from changed ones
-        const staleUrlSet = new Set(presetCache.stale_urls);
-        const keptResults = (presetCache.results || []).filter(l =>
-          !staleUrlSet.has((l._sourceUrl || '').trim().replace(/\/+$/, '').toLowerCase())
-        );
-        const mergedResults = [...keptResults, ...newMatches];
-
-        // Merge sources
-        const keptSources = (presetCache.sources || []).filter(s =>
-          !staleUrlSet.has((s.url || '').trim().replace(/\/+$/, '').toLowerCase())
-        );
-        const mergedSources = [...keptSources, ...deltaSources];
-
-        const mergedReport = parsed.summary
-          ? `${presetCache.report || ''}\n\nUpdate: ${parsed.summary}`
-          : presetCache.report || '';
-
-        // Update cache with merged results
-        await supabase.from('smart_search_cache').update({
-          results: mergedResults,
-          report: mergedReport,
-          sources: mergedSources,
-          source_urls: mergedSources.map(s => s.url),
-          total_searched: (presetCache.total_searched || 0) + filteredDelta.length,
-          stale_urls: [],
-          cached_at: new Date().toISOString(),
-          expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-        }).eq('query_key', cacheKey);
-
-        console.log(`Incremental preset refresh: ${presetSlug} — ${newMatches.length} new matches from ${deltaSources.map(s => s.house).join(', ')}`);
-
-        const gatedMerged = mergedResults;
-        await incrementSearchCounter();
-        return res.json({
-          results: gatedMerged,
-          report: mergedReport,
-          sources: mergedSources,
-          totalSearched: (presetCache.total_searched || 0) + filteredDelta.length,
-          cached: true,
-          searchesUsed, searchLimit,
-        });
-      } catch (err) {
-        log.warn('Incremental preset refresh failed, falling through to full search', { error: err.message });
-        // Fall through to full search below
       }
+
+      // Dedup by normalised address
+      const dedupMap = new Map();
+      for (const lot of allLots) {
+        const normAddr = (lot.address || '').toLowerCase().replace(/[\s,]+/g, ' ').replace(/^(lot\s*\d+\s*[-:]?\s*)/i, '').trim();
+        if (normAddr.length < 5) { dedupMap.set(`__short_${dedupMap.size}`, lot); continue; }
+        const existing = dedupMap.get(normAddr);
+        if (existing) {
+          const richness = (l) => (l.score || 0) * 10 + (l.imageUrl ? 5 : 0) + (l.bullets?.length || 0) + (l.price ? 1 : 0);
+          if (richness(lot) > richness(existing)) dedupMap.set(normAddr, lot);
+        } else {
+          dedupMap.set(normAddr, lot);
+        }
+      }
+      const dedupedLots = [...dedupMap.values()];
+
+      // Apply sold filter
+      normaliseLotStatuses(dedupedLots);
+      const filteredLots = sf === 'available'
+        ? dedupedLots.filter(l => l.status === 'available')
+        : sf === 'sold'
+        ? dedupedLots.filter(l => l.status === 'sold' || l.status === 'stc' || l.status === 'withdrawn')
+        : dedupedLots;
+
+      // Apply preset filter and sort
+      const matchingLots = filteredLots.filter(presetFilter.filter);
+      matchingLots.sort(presetFilter.sort);
+
+      const report = presetFilter.report(matchingLots.length, filteredLots.length);
+
+      log.info('smart_search_deterministic', { preset: presetSlug, matches: matchingLots.length, total: filteredLots.length });
+
+      // Log activity
+      logActivityEvent('smart_search', { query, results_count: matchingLots.length, deterministic: true }, user?.email, getClientIP(req));
+
+      await incrementSearchCounter();
+      return res.json({
+        results: matchingLots,
+        report,
+        sources,
+        totalSearched: filteredLots.length,
+        searchesUsed, searchLimit,
+      });
+    } catch (err) {
+      log.warn('Deterministic preset search failed, falling through to AI search', { preset: presetSlug, error: err.message });
+      // Fall through to Gemini-based search below
     }
   }
 
