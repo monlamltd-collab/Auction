@@ -74,11 +74,12 @@ Plans:
   2. Token usage and estimated cost are logged per AI call and visible in admin dashboard
   3. All existing DOM extractors have been audited -- broken ones fixed, image coverage verified above 90%
   4. Admin dashboard surfaces actionable scraping data (broken extractors, coverage gaps, lot counts) without noise
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 06-01: TBD
-- [ ] 06-02: TBD
+- [ ] 06-01-PLAN.md — AI provider abstraction layer (callAI, Gemini + Grok, cost logging, budget tracking)
+- [ ] 06-02-PLAN.md — Scraping audit hardening (lot-count validation, auto-disable, image coverage, new houses)
+- [ ] 06-03-PLAN.md — Admin System Health tab (broken extractors, AI costs, coverage grid, pipeline health)
 
 ### Phase 7: Landing Page
 **Goal**: New visitors land on a compelling page that converts them to signed-in users
@@ -105,7 +106,7 @@ Phases execute in numeric order: 4 -> 4.1 -> 5 -> 5.1 -> 6 -> 7
 | 3. Deal Stacking & Tier Verification | v1.1 | 3/3 | Complete | 2026-03-16 |
 | 4. Foundation | v1.2 | 3/4 | In Progress | - |
 | 5. Measurement | v1.2 | 2/3 | In Progress | - |
-| 6. AI & Scraping Hardening | v1.2 | 0/2 | Not started | - |
+| 6. AI & Scraping Hardening | v1.2 | 0/3 | Not started | - |
 | 7. Landing Page | v1.2 | 0/1 | Not started | - |
 
 ---
