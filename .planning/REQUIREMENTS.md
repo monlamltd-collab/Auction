@@ -15,13 +15,13 @@
 
 ### Bug Fixes
 
-- [ ] **FIX-01**: Heavy refurb button triggers search execution, not just input population
-- [ ] **FIX-02**: Score sort orders lots within tiers (not just groups into tiers)
-- [ ] **FIX-03**: Empty state messaging when filters or AI search return 0 results
-- [ ] **FIX-04**: Search input trimmed and debounced
-- [ ] **FIX-05**: Negative page numbers guarded
-- [ ] **FIX-06**: Deal stacking widget reflows to single column on mobile
-- [ ] **FIX-07**: Sign-in page text no longer overflows container
+- [x] **FIX-01**: Heavy refurb button triggers search execution, not just input population
+- [x] **FIX-02**: Score sort orders lots within tiers (not just groups into tiers)
+- [x] **FIX-03**: Empty state messaging when filters or AI search return 0 results
+- [x] **FIX-04**: Search input trimmed and debounced
+- [x] **FIX-05**: Negative page numbers guarded
+- [x] **FIX-06**: Deal stacking widget reflows to single column on mobile
+- [x] **FIX-07**: Sign-in page text no longer overflows container
 - [x] **FIX-08**: CSV export has server-side tier check
 
 ### Landing Page
@@ -88,13 +88,13 @@
 | GATE-03 | Phase 4 | Complete |
 | GATE-04 | Phase 4 | Complete |
 | GATE-05 | Phase 4 | Complete |
-| FIX-01 | Phase 4 | Pending |
-| FIX-02 | Phase 4 | Pending |
-| FIX-03 | Phase 4 | Pending |
-| FIX-04 | Phase 4 | Pending |
-| FIX-05 | Phase 4 | Pending |
-| FIX-06 | Phase 4 | Pending |
-| FIX-07 | Phase 4 | Pending |
+| FIX-01 | Phase 4 | Complete |
+| FIX-02 | Phase 4 | Complete |
+| FIX-03 | Phase 4 | Complete |
+| FIX-04 | Phase 4 | Complete |
+| FIX-05 | Phase 4 | Complete |
+| FIX-06 | Phase 4 | Complete |
+| FIX-07 | Phase 4 | Complete |
 | FIX-08 | Phase 4 | Complete |
 | LAND-01 | Phase 7 | Pending |
 | LAND-02 | Phase 7 | Pending |
