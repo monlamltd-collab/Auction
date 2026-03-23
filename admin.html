@@ -228,6 +228,7 @@ tr:hover td { background: rgba(255,255,255,.02); }
   <div class="tab-nav">
     <button class="tab-btn active" data-tab="overview" onclick="switchTab('overview')">Overview</button>
     <button class="tab-btn" data-tab="analytics" onclick="switchTab('analytics')">Analytics</button>
+    <button class="tab-btn" data-tab="health" onclick="switchTab('health')">System Health</button>
   </div>
 
   <div class="main">
@@ -604,6 +605,77 @@ tr:hover td { background: rgba(255,255,255,.02); }
         </div>
       </div>
     </div><!-- /tab-analytics -->
+
+    <!-- System Health Tab -->
+    <div class="tab-pane" id="tab-health">
+      <div id="health-loading" class="loading"><span class="spinner"></span> Loading system health...</div>
+      <div id="health-content" style="display:none;">
+
+        <!-- Section 1: Broken Extractors -->
+        <div class="section">
+          <div class="section-header">
+            <h2>Broken Extractors</h2>
+            <span class="badge" id="broken-badge">-</span>
+          </div>
+          <div id="broken-extractors-list" style="padding:14px 18px;">
+            <div style="color:var(--green);font-size:.82rem;">All extractors healthy</div>
+          </div>
+        </div>
+
+        <!-- Section 2: AI Costs -->
+        <div class="section">
+          <div class="section-header">
+            <h2>AI Costs (Today)</h2>
+            <span class="badge" id="ai-cost-badge">-</span>
+          </div>
+          <div id="ai-cost-warning" style="display:none;padding:10px 18px;background:var(--red-bg);color:var(--red);font-weight:600;font-size:.82rem;border-bottom:1px solid var(--border);">
+            Daily AI budget exceeded!
+          </div>
+          <div style="padding:14px 18px;">
+            <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:12px;">
+              <span id="ai-cost-amount" style="font-size:1.6rem;font-weight:700;font-family:var(--mono);color:var(--green);">$0.00</span>
+              <span style="color:var(--text3);font-size:.82rem;">/ <span id="ai-cost-budget">$0.50</span></span>
+              <span id="ai-cost-calls" style="margin-left:auto;font-size:.72rem;color:var(--text3);font-family:var(--mono);">0 calls</span>
+            </div>
+            <div style="background:var(--surface2);border-radius:6px;height:8px;overflow:hidden;margin-bottom:16px;">
+              <div id="ai-cost-bar" style="height:100%;background:var(--green);border-radius:6px;transition:width .3s;width:0%;"></div>
+            </div>
+            <table id="ai-model-table">
+              <thead><tr><th>Model</th><th>Calls</th><th>Tokens In</th><th>Tokens Out</th><th>Cost</th></tr></thead>
+              <tbody id="ai-model-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Section 3: Coverage Grid -->
+        <div class="section">
+          <div class="section-header">
+            <h2>Coverage</h2>
+            <span class="badge" id="coverage-badge">-</span>
+          </div>
+          <div style="padding:14px 18px;">
+            <div style="display:flex;gap:16px;margin-bottom:12px;font-size:.78rem;color:var(--text2);">
+              <span>Houses: <strong id="cov-total">-</strong></span>
+              <span>Active: <strong id="cov-active" style="color:var(--green);">-</strong></span>
+              <span>Stale: <strong id="cov-stale" style="color:var(--text3);">-</strong></span>
+              <span>Lots: <strong id="cov-lots">-</strong></span>
+              <span>Avg Image: <strong id="cov-img">-</strong></span>
+            </div>
+            <div id="coverage-active-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin-bottom:12px;"></div>
+            <div id="coverage-stale-section"></div>
+          </div>
+        </div>
+
+        <!-- Section 4: Pipeline Health -->
+        <div class="section">
+          <div class="section-header">
+            <h2>Pipeline Health</h2>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;padding:14px 18px;" id="pipeline-grid"></div>
+        </div>
+
+      </div>
+    </div><!-- /tab-health -->
 
   </div>
 </div>
@@ -1263,6 +1335,7 @@ function switchTab(tab) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   document.querySelectorAll('.tab-pane').forEach(p => p.classList.toggle('active', p.id === 'tab-' + tab));
   if (tab === 'analytics') loadAnalytics();
+  if (tab === 'health') loadSystemHealth();
 }
 
 // ═══ Analytics ═══
@@ -1503,6 +1576,216 @@ function updatePerHouseChart() {
     return { label: h, data: snapshots.map(s => (s.lots_by_house || {})[h] || 0), borderColor: col, backgroundColor: 'transparent', tension: 0.3, borderWidth: 2 };
   });
   makeChart('chart-per-house', 'line', labels, datasets, { maintainAR: false });
+}
+
+// ═══ System Health Tab ═══
+let healthLoaded = false;
+
+async function loadSystemHealth() {
+  if (healthLoaded) return;
+  const loadingEl = document.getElementById('health-loading');
+  const contentEl = document.getElementById('health-content');
+  try {
+    const resp = await fetch(API + '/api/admin/system-health', { headers: { 'x-admin-secret': SECRET } });
+    if (!resp.ok) throw new Error('Failed to load system health');
+    const data = await resp.json();
+    healthLoaded = true;
+    renderBrokenExtractors(data.brokenExtractors || []);
+    renderAICosts(data.aiCosts || {});
+    renderCoverage(data.coverage || {});
+    renderPipeline(data.pipeline || {});
+    loadingEl.style.display = 'none';
+    contentEl.style.display = 'block';
+  } catch (err) {
+    loadingEl.innerHTML = '<span style="color:var(--red);">Failed to load: ' + err.message + '</span>';
+  }
+}
+
+function renderBrokenExtractors(broken) {
+  const container = document.getElementById('broken-extractors-list');
+  const badge = document.getElementById('broken-badge');
+  if (!broken.length) {
+    container.innerHTML = '<div style="color:var(--green);font-size:.82rem;padding:4px 0;">All extractors healthy</div>';
+    badge.className = 'badge badge-green';
+    badge.textContent = 'OK';
+    return;
+  }
+  badge.className = 'badge badge-red';
+  badge.textContent = broken.length + ' broken';
+  container.innerHTML = broken.map(house => `
+    <div class="alert-card alert-error" style="margin-bottom:8px;">
+      <span class="alert-severity">&#9888;</span>
+      <div style="flex:1;">
+        <strong>${house}</strong>
+        <div style="font-size:.72rem;color:var(--text3);margin-top:2px;">DOM extractor disabled -- using Gemini AI fallback. Run audit to diagnose.</div>
+      </div>
+      <button class="action-btn" style="font-size:.7rem;padding:4px 10px;" onclick="reEnableExtractor('${house}')">Re-enable</button>
+    </div>
+  `).join('');
+}
+
+async function reEnableExtractor(house) {
+  try {
+    const resp = await fetch(API + '/api/admin/broken-extractors', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-secret': SECRET },
+      body: JSON.stringify({ house, action: 'enable' }),
+    });
+    if (!resp.ok) throw new Error('Failed');
+    toast(house + ' extractor re-enabled', 'success');
+    healthLoaded = false;
+    loadSystemHealth();
+  } catch (err) {
+    toast('Error re-enabling: ' + err.message, 'error');
+  }
+}
+
+function renderAICosts(costs) {
+  const amount = document.getElementById('ai-cost-amount');
+  const budgetEl = document.getElementById('ai-cost-budget');
+  const callsEl = document.getElementById('ai-cost-calls');
+  const bar = document.getElementById('ai-cost-bar');
+  const warning = document.getElementById('ai-cost-warning');
+  const badge = document.getElementById('ai-cost-badge');
+  const tbody = document.getElementById('ai-model-tbody');
+
+  const daily = costs.dailyTotal || 0;
+  const budget = costs.budget || 0.50;
+  const pct = budget > 0 ? Math.min(100, Math.round(daily / budget * 100)) : 0;
+
+  amount.textContent = '$' + daily.toFixed(4);
+  amount.style.color = pct >= 100 ? 'var(--red)' : pct >= 75 ? 'var(--amber)' : 'var(--green)';
+  budgetEl.textContent = '$' + budget.toFixed(2);
+  callsEl.textContent = (costs.callCount || 0) + ' calls';
+  bar.style.width = pct + '%';
+  bar.style.background = pct >= 100 ? 'var(--red)' : pct >= 75 ? 'var(--amber)' : 'var(--green)';
+  warning.style.display = costs.overBudget ? 'block' : 'none';
+  badge.className = 'badge ' + (costs.overBudget ? 'badge-red' : 'badge-green');
+  badge.textContent = '$' + daily.toFixed(4);
+
+  const models = costs.byModel || {};
+  const rows = Object.entries(models);
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="color:var(--text3);text-align:center;">No AI calls today</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(([model, d]) => `
+    <tr>
+      <td class="mono">${model}</td>
+      <td class="mono">${d.calls}</td>
+      <td class="mono">${(d.tokens_in || 0).toLocaleString()}</td>
+      <td class="mono">${(d.tokens_out || 0).toLocaleString()}</td>
+      <td class="mono">$${(d.cost || 0).toFixed(4)}</td>
+    </tr>
+  `).join('');
+}
+
+function renderCoverage(cov) {
+  document.getElementById('cov-total').textContent = cov.totalHouses || 0;
+  document.getElementById('cov-active').textContent = cov.activeHouses || 0;
+  document.getElementById('cov-stale').textContent = cov.staleHouses || 0;
+  document.getElementById('cov-lots').textContent = (cov.totalLots || 0).toLocaleString();
+  document.getElementById('cov-img').textContent = (cov.avgImageCoverage || 0) + '%';
+  document.getElementById('coverage-badge').textContent = (cov.totalLots || 0) + ' lots';
+  document.getElementById('coverage-badge').className = 'badge badge-green';
+
+  const houses = cov.houses || [];
+  const active = houses.filter(h => h.status === 'active');
+  const stale = houses.filter(h => h.status !== 'active');
+
+  const grid = document.getElementById('coverage-active-grid');
+  grid.innerHTML = active.sort((a, b) => b.lotCount - a.lotCount).map(h => {
+    const imgColor = h.imageCoverage >= 90 ? 'var(--green)' : h.imageCoverage >= 70 ? 'var(--amber)' : 'var(--red)';
+    return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+        <span class="status-dot dot-green"></span>
+        <strong style="font-size:.78rem;">${h.displayName}</strong>
+      </div>
+      <div style="font-size:.72rem;color:var(--text3);display:flex;gap:10px;">
+        <span>${h.lotCount} lots</span>
+        <span style="color:${imgColor};">${h.imageCoverage}% images</span>
+      </div>
+    </div>`;
+  }).join('');
+
+  const staleSection = document.getElementById('coverage-stale-section');
+  if (stale.length > 0) {
+    staleSection.innerHTML = `
+      <details>
+        <summary style="cursor:pointer;font-size:.82rem;color:var(--text3);padding:4px 0;">${stale.length} inactive houses -- no upcoming auctions</summary>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin-top:8px;">
+          ${stale.sort((a, b) => b.lotCount - a.lotCount).map(h => `
+            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;opacity:.7;">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+                <span class="status-dot dot-grey"></span>
+                <strong style="font-size:.78rem;">${h.displayName}</strong>
+              </div>
+              <div style="font-size:.72rem;color:var(--text3);">${h.lotCount} lots | ${h.imageCoverage}% images</div>
+            </div>
+          `).join('')}
+        </div>
+      </details>
+    `;
+  } else {
+    staleSection.innerHTML = '';
+  }
+}
+
+function renderPipeline(pipeline) {
+  const grid = document.getElementById('pipeline-grid');
+  const fc = pipeline.firecrawl || {};
+  const gem = pipeline.gemini || {};
+  const pupp = pipeline.puppeteer || {};
+  const auto = pipeline.autoAnalyse || {};
+
+  const pctUsed = fc.creditBudget > 0 ? Math.round(fc.creditsUsed / fc.creditBudget * 100) : 0;
+  const fcStatus = fc.exhausted ? 'Exhausted' : fc.status === 'down' ? 'Temporarily Down' : 'OK';
+  const fcColor = fc.exhausted || fc.status === 'down' ? 'var(--red)' : 'var(--green)';
+  const fcDot = fc.exhausted || fc.status === 'down' ? 'dot-red' : 'dot-green';
+
+  const gemStatus = gem.exhausted ? 'Exhausted' : 'OK';
+  const gemColor = gem.exhausted ? 'var(--red)' : 'var(--green)';
+  const gemDot = gem.exhausted ? 'dot-red' : 'dot-green';
+
+  const puppStatus = pupp.available ? 'Available' : 'Unavailable';
+  const puppColor = pupp.available ? 'var(--green)' : 'var(--text3)';
+  const puppDot = pupp.available ? 'dot-green' : 'dot-grey';
+
+  const autoStatus = auto.running ? 'Running' : 'Idle';
+  const autoDot = auto.running ? 'dot-green' : 'dot-grey';
+  const autoColor = auto.running ? 'var(--green)' : 'var(--text3)';
+
+  grid.innerHTML = `
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+        <span class="status-dot ${fcDot}"></span>
+        <strong style="font-size:.82rem;">Firecrawl</strong>
+      </div>
+      <div style="font-size:.72rem;color:var(--text3);">Status: <span style="color:${fcColor};font-weight:600;">${fcStatus}</span></div>
+      <div style="font-size:.72rem;color:var(--text3);">Credits: ${fc.creditsUsed || 0} / ${fc.creditBudget || 0} (${pctUsed}%)</div>
+    </div>
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+        <span class="status-dot ${gemDot}"></span>
+        <strong style="font-size:.82rem;">AI Provider (${gem.provider || 'gemini'})</strong>
+      </div>
+      <div style="font-size:.72rem;color:var(--text3);">Status: <span style="color:${gemColor};font-weight:600;">${gemStatus}</span></div>
+    </div>
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+        <span class="status-dot ${puppDot}"></span>
+        <strong style="font-size:.82rem;">Puppeteer</strong>
+      </div>
+      <div style="font-size:.72rem;color:var(--text3);">Status: <span style="color:${puppColor};font-weight:600;">${puppStatus}</span></div>
+    </div>
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+        <span class="status-dot ${autoDot}"></span>
+        <strong style="font-size:.82rem;">Auto-Analyse</strong>
+      </div>
+      <div style="font-size:.72rem;color:var(--text3);">Status: <span style="color:${autoColor};font-weight:600;">${autoStatus}</span></div>
+    </div>
+  `;
 }
 
 // Auto-refresh every 5 minutes

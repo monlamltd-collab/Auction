@@ -4533,6 +4533,140 @@ app.get('/api/admin/ai-costs', async (req, res) => {
   }
 });
 
+// ── Consolidated system health endpoint ──
+app.get('/api/admin/system-health', async (req, res) => {
+  const token = req.headers['x-admin-secret'] || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
+    return res.status(403).json({ error: 'Invalid admin token' });
+  }
+  try {
+    // 1. Broken extractors
+    const brokenExtractors = [...BROKEN_EXTRACTORS];
+
+    // 2. AI costs
+    const aiSummary = getAICostSummary();
+    const todayStart = new Date();
+    todayStart.setUTCHours(0, 0, 0, 0);
+    let byModel = {};
+    const { data: aiData } = await supabase
+      .from('ai_usage')
+      .select('provider, model, tokens_in, tokens_out, est_cost')
+      .gte('created_at', todayStart.toISOString());
+    if (aiData) {
+      for (const row of aiData) {
+        const key = `${row.provider}/${row.model}`;
+        if (!byModel[key]) byModel[key] = { calls: 0, tokens_in: 0, tokens_out: 0, cost: 0 };
+        byModel[key].calls++;
+        byModel[key].tokens_in += row.tokens_in || 0;
+        byModel[key].tokens_out += row.tokens_out || 0;
+        byModel[key].cost += parseFloat(row.est_cost) || 0;
+      }
+    }
+    const aiCosts = {
+      dailyTotal: aiSummary.dailyCostTotal,
+      budget: aiSummary.budget,
+      overBudget: aiSummary.budgetExceeded,
+      byModel,
+      callCount: aiSummary.callCount,
+    };
+
+    // 3. Coverage — per-house lot counts and image coverage
+    const { data: cached } = await supabase
+      .from('cached_analyses')
+      .select('house, lots, expires_at, created_at');
+    const { data: skills } = await supabase
+      .from('house_skills')
+      .select('slug, status, last_scraped');
+
+    const skillMap = {};
+    if (skills) {
+      for (const s of skills) skillMap[s.slug] = s;
+    }
+
+    const now = new Date();
+    const houseMap = {};
+    let totalLots = 0;
+    let totalImages = 0;
+    let totalLotsForImg = 0;
+
+    if (cached) {
+      for (const row of cached) {
+        const slug = row.house;
+        if (!houseMap[slug]) {
+          houseMap[slug] = { slug, displayName: HOUSE_DISPLAY_NAMES[slug] || slug, lotCount: 0, imageCoverage: 0, status: 'active', lastScraped: null, _imgCount: 0, _lotCount: 0 };
+        }
+        const h = houseMap[slug];
+        const lots = Array.isArray(row.lots) ? row.lots : [];
+        h.lotCount += lots.length;
+        totalLots += lots.length;
+        for (const lot of lots) {
+          h._lotCount++;
+          totalLotsForImg++;
+          if (lot.imageUrl) { h._imgCount++; totalImages++; }
+        }
+        if (row.created_at && (!h.lastScraped || row.created_at > h.lastScraped)) {
+          h.lastScraped = row.created_at;
+        }
+        // Check if stale (expired)
+        if (row.expires_at && new Date(row.expires_at) < now) {
+          h.status = 'stale';
+        }
+      }
+    }
+
+    const houses = Object.values(houseMap).map(h => {
+      const skill = skillMap[h.slug];
+      if (skill && skill.status === 'broken') h.status = 'broken';
+      if (skill && skill.last_scraped) h.lastScraped = skill.last_scraped;
+      h.imageCoverage = h._lotCount > 0 ? Math.round(h._imgCount / h._lotCount * 100) : 0;
+      delete h._imgCount;
+      delete h._lotCount;
+      return h;
+    });
+
+    const activeHouses = houses.filter(h => h.status === 'active').length;
+    const staleHouses = houses.filter(h => h.status === 'stale').length;
+
+    const coverage = {
+      houses,
+      totalHouses: houses.length,
+      activeHouses,
+      staleHouses,
+      totalLots,
+      avgImageCoverage: totalLotsForImg > 0 ? Math.round(totalImages / totalLotsForImg * 100) : 0,
+    };
+
+    // 4. Pipeline health
+    const pipeline = {
+      firecrawl: {
+        status: fcCreditExhausted ? 'exhausted' : fcTemporarilyDown ? 'down' : 'ok',
+        creditsUsed: fcCreditsUsed,
+        creditBudget: FIRECRAWL_MONTHLY_BUDGET,
+        exhausted: fcCreditExhausted,
+      },
+      gemini: {
+        status: creditExhausted ? 'exhausted' : 'ok',
+        exhausted: creditExhausted,
+        provider: process.env.AI_PROVIDER || 'gemini',
+      },
+      puppeteer: {
+        status: puppeteer ? 'available' : 'unavailable',
+        available: !!puppeteer,
+      },
+      autoAnalyse: {
+        running: _autoAnalysisRunning,
+        lastRun: null,
+        nextRun: null,
+      },
+    };
+
+    res.json({ brokenExtractors, aiCosts, coverage, pipeline });
+  } catch (err) {
+    console.error('System health endpoint error:', err.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ── Missing images admin endpoint ──
 app.get('/api/admin/missing-images', async (req, res) => {
   const token = req.headers['x-admin-secret'] || '';
