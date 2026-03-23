@@ -4,6 +4,21 @@ milestone: v1.2
 milestone_name: Free-First Growth
 status: executing
 stopped_at: Completed 06-02-PLAN.md
+last_updated: "2026-03-23T22:17:04.479Z"
+last_activity: 2026-03-22 -- Completed 06-02-PLAN.md (scraping hardening + new houses)
+progress:
+  total_phases: 4
+  completed_phases: 3
+  total_plans: 10
+  completed_plans: 10
+---
+
+---
+gsd_state_version: 1.0
+milestone: v1.2
+milestone_name: Free-First Growth
+status: executing
+stopped_at: Completed 06-02-PLAN.md
 last_updated: "2026-03-22T23:57:24Z"
 last_activity: 2026-03-22 -- Completed 06-02-PLAN.md (scraping hardening + new houses)
 progress:
