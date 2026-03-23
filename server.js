@@ -43,8 +43,8 @@ for (const key of RECOMMENDED_ENV) {
 
 function escHtml(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 
-// ── Stripe feature flag: defaults to true (backwards compatible), set STRIPE_ENABLED=false to hibernate ──
-const STRIPE_ENABLED = process.env.STRIPE_ENABLED !== 'false';
+// ── Stripe feature flag: defaults to false (free-first), set STRIPE_ENABLED=true to reinstate payments ──
+const STRIPE_ENABLED = process.env.STRIPE_ENABLED === 'true';
 const stripe = STRIPE_ENABLED && process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
 const app = express();
 const PORT = process.env.PORT || 3000;
