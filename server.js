@@ -1075,6 +1075,42 @@ const HOUSE_ROOTS = {
   // ── EIG platform houses (batch 4, March 2026) ──
   romanway:               'https://romanway.eigonlineauctions.com/search',
   hammerprice:            'https://hammerprice.eigonlineauctions.com/search',
+  // ── Auction House UK regional branches (batch 5, March 2026) ──
+  auctionhousesouthyorkshire:  'https://www.auctionhouse.co.uk/southyorkshire/auction/search-results',
+  auctionhousewestyorkshire:   'https://www.auctionhouse.co.uk/westyorkshire/auction/search-results',
+  auctionhouseteesvalley:      'https://www.auctionhouse.co.uk/teesvalley/auction/search-results',
+  auctionhousehull:            'https://www.auctionhouse.co.uk/hullandeastyorkshire/auction/search-results',
+  auctionhousecumbria:         'https://www.auctionhouse.co.uk/cumbria/auction/search-results',
+  auctionhouselincolnshire:    'https://www.auctionhouse.co.uk/lincolnshire/auction/search-results',
+  auctionhouseuklondon:        'https://www.auctionhouse.co.uk/london/auction/search-results',
+  auctionhousebedsandbucks:    'https://www.auctionhouse.co.uk/bedsandbucks/auction/search-results',
+  auctionhousenorthamptonshire:'https://www.auctionhouse.co.uk/northamptonshire/auction/search-results',
+  auctionhouseoxfordshire:     'https://www.auctionhouse.co.uk/oxfordshire/auction/search-results',
+  auctionhouseleicestershire:  'https://www.auctionhouse.co.uk/leicestershire/auction/search-results',
+  auctionhousemidlands:        'https://www.auctionhouse.co.uk/midlands/auction/search-results',
+  auctionhousecoventry:        'https://www.auctionhouse.co.uk/coventryandwarwickshire/auction/search-results',
+  auctionhousenottsandderby:   'https://www.auctionhouse.co.uk/nottsandderby/auction/search-results',
+  auctionhousechesterfield:    'https://www.auctionhouse.co.uk/chesterfieldandnorthderbyshire/auction/search-results',
+  auctionhousestaffordshire:   'https://www.auctionhouse.co.uk/staffordshire/auction/search-results',
+  auctionhousenorthwales:      'https://www.auctionhouse.co.uk/northwales/auction/search-results',
+  auctionhousesouthwest:       'https://www.auctionhouse.co.uk/southwest/auction/search-results',
+  auctionhousenorthernireland: 'https://www.auctionhouse.co.uk/northernireland/auction/search-results',
+  auctionhousenational:        'https://www.auctionhouse.co.uk/national/auction/search-results',
+  // ── EIG platform houses (batch 5, March 2026) ──
+  sarahmains:             'https://sarah-mains.eigonlineauctions.com/search',
+  sageandco:              'https://sageandco.eigonlineauctions.com/search',
+  auctiontrade:           'https://auctiontrade.eigonlineauctions.com/search',
+  brggibson:              'https://brggibsonbelfastauctions.eigonlineauctions.com/search',
+  higginsdrysdale:        'https://higginsdrysdale.eigonlineauctions.com/search',
+  martinpole:             'https://martinpole.eigonlineauctions.com/search',
+  jonespeckover:          'https://jonespeckover.eigonlineauctions.com/search',
+  thepropertyauctionhouse:'https://thepropertyauctionhouse.eigonlineauctions.com/search',
+  propertyauctionagent:   'https://propertyauctionagent.eigonlineauctions.com/search',
+  lot9:                   'https://lot9.eigonlineauctions.com/search',
+  auctionnorth:           'https://auction-north.eigonlineauctions.com/search',
+  bowensonandwatson:      'https://bowensonandwatson.eigonlineauctions.com/search',
+  sheldonbosley:          'https://online.sheldonbosleyknight.co.uk/search',
+  nationalpropertyauctions:'https://nationalpropertyauctions.eigonlineauctions.com/search',
 };
 
 /*
@@ -4958,6 +4994,41 @@ const HOUSE_DISPLAY_NAMES = {
   auctionhousemanchester: 'Auction House Manchester',
   romanway: 'Roman Way Auctions',
   hammerprice: 'Hammer Price Auctions',
+  // ── Batch 5 (March 2026) ──
+  auctionhousesouthyorkshire: 'Auction House South Yorkshire',
+  auctionhousewestyorkshire: 'Auction House West Yorkshire',
+  auctionhouseteesvalley: 'Auction House North Yorkshire & Tees Valley',
+  auctionhousehull: 'Auction House Hull & East Yorkshire',
+  auctionhousecumbria: 'Auction House Cumbria',
+  auctionhouselincolnshire: 'Auction House Lincolnshire',
+  auctionhouseuklondon: 'Auction House UK London',
+  auctionhousebedsandbucks: 'Auction House Beds & Bucks',
+  auctionhousenorthamptonshire: 'Auction House Northamptonshire',
+  auctionhouseoxfordshire: 'Auction House Oxfordshire',
+  auctionhouseleicestershire: 'Auction House Leicestershire',
+  auctionhousemidlands: 'Auction House Midlands',
+  auctionhousecoventry: 'Auction House Coventry & Warwickshire',
+  auctionhousenottsandderby: 'Auction House Notts & Derby',
+  auctionhousechesterfield: 'Auction House Chesterfield & N Derbyshire',
+  auctionhousestaffordshire: 'Auction House Cheshire, Staffs & Shropshire',
+  auctionhousenorthwales: 'Auction House North Wales',
+  auctionhousesouthwest: 'Auction House South West',
+  auctionhousenorthernireland: 'Auction House Northern Ireland',
+  auctionhousenational: 'Auction House National',
+  sarahmains: 'Sarah Mains Auctions',
+  sageandco: 'Sage & Co Auctions',
+  auctiontrade: 'Auction Trade',
+  brggibson: 'BRG Gibson Belfast',
+  higginsdrysdale: 'Higgins Drysdale',
+  martinpole: 'Martin Pole Auctions',
+  jonespeckover: 'Jones Peckover',
+  thepropertyauctionhouse: 'The Property Auction House',
+  propertyauctionagent: 'Property Auction Agent',
+  lot9: 'Lot9 Auctions',
+  auctionnorth: 'Auction North',
+  bowensonandwatson: 'Bowen Son & Watson',
+  sheldonbosley: 'Sheldon Bosley Knight',
+  nationalpropertyauctions: 'National Property Auctions',
 };
 
 function getHouseDisplayName(slug, url) {
@@ -8427,11 +8498,11 @@ const DOM_EXTRACTORS = {
 };
 
 // Wire up EIG house aliases to the shared eigplatform extractor
-for (const slug of ['astleys', 'henrysykes', 'clarkesimpson', 'brownco', 'cheffinstimed', 'romanway', 'hammerprice']) {
+for (const slug of ['astleys', 'henrysykes', 'clarkesimpson', 'brownco', 'cheffinstimed', 'romanway', 'hammerprice', 'sarahmains', 'sageandco', 'auctiontrade', 'brggibson', 'higginsdrysdale', 'martinpole', 'jonespeckover', 'thepropertyauctionhouse', 'propertyauctionagent', 'lot9', 'auctionnorth', 'bowensonandwatson', 'sheldonbosley', 'nationalpropertyauctions']) {
   DOM_EXTRACTORS[slug] = DOM_EXTRACTORS.eigplatform;
 }
 // Wire up Auction House UK branches to the shared auctionhouseuk extractor
-for (const slug of ['auctionhousescotland', 'austingray', 'auctionhouseeastanglia', 'auctionhousenorthwest', 'auctionhousenortheast', 'auctionhousewales', 'auctionhousebirmingham', 'auctionhousekent', 'auctionhousedevon', 'auctionhouseeastmidlands', 'auctionhousewestmidlands', 'auctionhouseessex', 'auctionhousemanchester']) {
+for (const slug of ['auctionhousescotland', 'austingray', 'auctionhouseeastanglia', 'auctionhousenorthwest', 'auctionhousenortheast', 'auctionhousewales', 'auctionhousebirmingham', 'auctionhousekent', 'auctionhousedevon', 'auctionhouseeastmidlands', 'auctionhousewestmidlands', 'auctionhouseessex', 'auctionhousemanchester', 'auctionhousesouthyorkshire', 'auctionhousewestyorkshire', 'auctionhouseteesvalley', 'auctionhousehull', 'auctionhousecumbria', 'auctionhouselincolnshire', 'auctionhouseuklondon', 'auctionhousebedsandbucks', 'auctionhousenorthamptonshire', 'auctionhouseoxfordshire', 'auctionhouseleicestershire', 'auctionhousemidlands', 'auctionhousecoventry', 'auctionhousenottsandderby', 'auctionhousechesterfield', 'auctionhousestaffordshire', 'auctionhousenorthwales', 'auctionhousesouthwest', 'auctionhousenorthernireland', 'auctionhousenational']) {
   DOM_EXTRACTORS[slug] = DOM_EXTRACTORS.auctionhouseuk;
 }
 
