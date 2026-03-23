@@ -252,7 +252,7 @@ const HEADERS = {
 };
 const MAX_PAGES = 40;
 const MAX_PUPPETEER_PAGES = 15;
-const MAX_LOTS_PER_SCRAPE = 100;
+const MAX_LOTS_PER_SCRAPE = Infinity;
 const MAX_AUCTIONS_PER_HOUSE = 2;
 const TIMEOUT = 25000;
 // Houses where catalogue pages are JS-rendered — need Puppeteer for image backfill
