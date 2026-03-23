@@ -433,7 +433,7 @@
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 4571,
+      "[class*=\"lot\"]": 4581,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
@@ -459,11 +459,11 @@
       "lotlist"
     ],
     "selectors": {
-      ".lot": 187,
+      ".lot": 10,
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 1684,
+      "[class*=\"lot\"]": 91,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
@@ -1722,7 +1722,7 @@
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 117,
+      "[class*=\"lot\"]": 105,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
@@ -1759,7 +1759,6 @@
   "durrants": {
     "classes": [
       "e-n-menu-item",
-      "elementor-field-group-property_address",
       "elementor-grid-item",
       "elementor-icon-list-item",
       "elementor-icon-list-items",
@@ -1787,7 +1786,7 @@
       ".card": 0,
       ".listing": 0,
       "[class*=\"lot\"]": 0,
-      "[class*=\"property\"]": 3,
+      "[class*=\"property\"]": 2,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
       "article": 0,
