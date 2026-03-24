@@ -990,6 +990,9 @@ const HOUSE_EXTRACTION_HINTS = {
   auctionhousemanchester:  'Auction House Manchester. Auction House UK network (auctionhouse.co.uk/manchester). Cards in div.lot-search-result with p.grid-address, guide price in div.grid-view-guide, img.lot-image.',
   romanway:                'Roman Way Auctions. EIG platform (romanway.eigonlineauctions.com). Standard EIG lot-panel cards with h3.list-address, guide price in list-guideprice, and EIG CDN images.',
   hammerprice:             'Hammer Price Auctions. EIG platform (hammerprice.eigonlineauctions.com). Standard EIG lot-panel cards with h3.list-address, guide price in list-guideprice, and EIG CDN images.',
+  // ── Regional/independent houses (batch 6, March 2026) ──
+  underthehammer:          'Under The Hammer. Next.js React SPA (underthehammer.com). Property cards at /for-auction/properties with title, address, guide price, bedrooms, property type, images on blob.core.windows.net, and detail links to /for-auction/slug.',
+  lsk:                     'Lacy Scott & Knight Suffolk. Bamboo Auctions platform (lacyscottandknight.bambooauctions.com). React SPA with property cards showing title, address, guide price, bedrooms, property type, and detail links. Same structure as Hunters.',
 };
 
 // getExtractionModel() removed — tier selection now in callAI() callsites
@@ -1111,6 +1114,16 @@ const HOUSE_ROOTS = {
   bowensonandwatson:      'https://bowensonandwatson.eigonlineauctions.com/search',
   sheldonbosley:          'https://online.sheldonbosleyknight.co.uk/search',
   nationalpropertyauctions:'https://nationalpropertyauctions.eigonlineauctions.com/search',
+  // ── Regional/independent houses (batch 6, March 2026) ──
+  underthehammer:         'https://www.underthehammer.com/for-auction/properties',
+  lsk:                    'https://lacyscottandknight.bambooauctions.com/',
+  // ── Tier 2: High-value targets (March 2026) ──
+  foxandsons:             'https://www.foxandsonsauctions.co.uk/',
+  bagshaws:               'https://www.bagshawsauctions.co.uk/',
+  wilsons:                'https://www.wilsonsauctions.com/auctions/land-property-auctions',
+  strakers:               'https://www.strakers.co.uk/property-auctions/',
+  johnpye:                'https://www.johnpyeproperty.co.uk/Listing',
+  gascoignehalman:        'https://www.gascoignehalman.co.uk/auction.html',
 };
 
 /*
@@ -4956,6 +4969,31 @@ function detectAuctionHouse(url) {
   if (u.includes('iamsold.co.uk')) return 'iamsold';
   if (u.includes('romanway.eigonlineauctions')) return 'romanway';
   if (u.includes('hammerprice.eigonlineauctions')) return 'hammerprice';
+  // ── Regional/independent houses (batch 6, March 2026) ──
+  if (u.includes('underthehammer.com')) return 'underthehammer';
+  if (u.includes('lacyscottandknight.bambooauctions') || u.includes('lsk.co.uk')) return 'lsk';
+  // ── Tier 2/3 houses (March 2026) ──
+  if (u.includes('foxandsonsauctions.co.uk')) return 'foxandsons';
+  if (u.includes('bagshawsauctions.co.uk')) return 'bagshaws';
+  if (u.includes('wilsonsauctions.com')) return 'wilsons';
+  if (u.includes('strakers.co.uk')) return 'strakers';
+  if (u.includes('johnpyeproperty.co.uk')) return 'johnpye';
+  if (u.includes('gascoignehalman.co.uk')) return 'gascoignehalman';
+  // ── EIG batch 5 houses ──
+  if (u.includes('sarah-mains.eigonlineauctions')) return 'sarahmains';
+  if (u.includes('sageandco.eigonlineauctions')) return 'sageandco';
+  if (u.includes('auctiontrade.eigonlineauctions')) return 'auctiontrade';
+  if (u.includes('brggibsonbelfastauctions.eigonlineauctions')) return 'brggibson';
+  if (u.includes('higginsdrysdale.eigonlineauctions')) return 'higginsdrysdale';
+  if (u.includes('martinpole.eigonlineauctions')) return 'martinpole';
+  if (u.includes('jonespeckover.eigonlineauctions')) return 'jonespeckover';
+  if (u.includes('thepropertyauctionhouse.eigonlineauctions')) return 'thepropertyauctionhouse';
+  if (u.includes('propertyauctionagent.eigonlineauctions')) return 'propertyauctionagent';
+  if (u.includes('lot9.eigonlineauctions')) return 'lot9';
+  if (u.includes('auction-north.eigonlineauctions')) return 'auctionnorth';
+  if (u.includes('bowensonandwatson.eigonlineauctions')) return 'bowensonandwatson';
+  if (u.includes('sheldonbosleyknight')) return 'sheldonbosley';
+  if (u.includes('nationalpropertyauctions.eigonlineauctions')) return 'nationalpropertyauctions';
   return 'unknown';
 }
 
@@ -5029,6 +5067,15 @@ const HOUSE_DISPLAY_NAMES = {
   bowensonandwatson: 'Bowen Son & Watson',
   sheldonbosley: 'Sheldon Bosley Knight',
   nationalpropertyauctions: 'National Property Auctions',
+  // ── Regional/independent houses (batch 6, March 2026) ──
+  underthehammer: 'Under The Hammer',
+  lsk: 'Lacy Scott & Knight',
+  foxandsons: 'Fox & Sons Auctions',
+  bagshaws: 'Bagshaws Auctions',
+  wilsons: 'Wilsons Auctions',
+  strakers: 'Strakers',
+  johnpye: 'John Pye Property',
+  gascoignehalman: 'Gascoigne Halman',
 };
 
 function getHouseDisplayName(slug, url) {
@@ -8495,12 +8542,160 @@ const DOM_EXTRACTORS = {
     })()
   `,
 
+  // ── Wilsons Auctions (wilsonsauctions.com — l-grid__item cards) ──
+  wilsons: `
+    (() => {
+      const lots = [];
+      const seen = new Set();
+      const cards = document.querySelectorAll('.l-grid__item a[href*="/lots/"]');
+      let lotNum = 0;
+      for (const link of cards) {
+        const href = link.getAttribute('href') || '';
+        if (!href || seen.has(href)) continue;
+        seen.add(href);
+        lotNum++;
+        const card = link.closest('.l-grid__item') || link;
+        const text = card.textContent || '';
+        let address = '';
+        const heading = card.querySelector('h3, h2, h4');
+        if (heading) address = (heading.textContent || '').trim();
+        if (!address || address.length < 5) continue;
+        let price = null;
+        const pm = text.match(/(?:Guide|Reserve|Starting)[:\\s]*£([\\d,]+)/i);
+        if (pm) price = parseInt(pm[1].replace(/,/g, ''));
+        if (!price) { const gm = text.match(/£([\\d,]+)/); if (gm) price = parseInt(gm[1].replace(/,/g, '')); }
+        let imageUrl = '';
+        const img = card.querySelector('img');
+        if (img) imageUrl = img.getAttribute('src') || img.getAttribute('data-src') || '';
+        const bullets = [];
+        const bedMatch = text.match(/(\\d+)\\s*Bed/i);
+        if (bedMatch) bullets.push(bedMatch[1] + ' bedrooms');
+        const typeMatch = text.match(/\\b(House|Flat|Apartment|Bungalow|Land|Commercial|Cottage|Farm)\\b/i);
+        if (typeMatch) bullets.push(typeMatch[0]);
+        lots.push({ lot: lotNum, address: address.substring(0, 200), price, url: href, bullets, imageUrl: imageUrl || undefined });
+      }
+      return lots;
+    })()
+  `,
+
+  // ── Strakers (strakers.co.uk — .card.card-auction cards) ──
+  strakers: `
+    (() => {
+      const lots = [];
+      const seen = new Set();
+      const cards = document.querySelectorAll('.card-auction, .card[class*="auction"]');
+      let lotNum = 0;
+      for (const card of cards) {
+        lotNum++;
+        const text = card.textContent || '';
+        let address = '';
+        const heading = card.querySelector('h5 a, h4 a, h3 a');
+        if (heading) address = (heading.textContent || '').trim();
+        if (!address) {
+          const h = card.querySelector('h5, h4, h3');
+          if (h) address = (h.textContent || '').trim();
+        }
+        if (!address || address.length < 5) continue;
+        let price = null;
+        const priceEl = card.querySelector('.card__price');
+        if (priceEl) {
+          const pm = (priceEl.textContent || '').match(/£([\\d,]+)/);
+          if (pm) price = parseInt(pm[1].replace(/,/g, ''));
+        }
+        if (!price) { const pm = text.match(/£([\\d,]+)/); if (pm) price = parseInt(pm[1].replace(/,/g, '')); }
+        let imageUrl = '';
+        const img = card.querySelector('.card__head img');
+        if (img) imageUrl = img.getAttribute('src') || img.getAttribute('data-src') || '';
+        if (!imageUrl) { const anyImg = card.querySelector('img'); if (anyImg) imageUrl = anyImg.getAttribute('src') || ''; }
+        let url = '';
+        const link = card.querySelector('a[href]');
+        if (link) url = link.getAttribute('href') || '';
+        const lotMatch = text.match(/Lot\\s*(\\d+)/i);
+        const lot = lotMatch ? lotMatch[1] : String(lotNum);
+        if (seen.has(url || address)) continue;
+        seen.add(url || address);
+        lots.push({ lot, address: address.substring(0, 200), price, url, imageUrl: imageUrl || undefined });
+      }
+      return lots;
+    })()
+  `,
+
+  // ── Under The Hammer (Next.js SPA — underthehammer.com) ──
+  // React SPA, no server-rendered lot cards. The site uses /for-auction/properties
+  // which loads property data via client-side JS. DOM extractor will return <3 lots,
+  // triggering the Gemini AI fallback which handles JS-rendered content via Firecrawl.
+  underthehammer: `
+    (() => {
+      const lots = [];
+      const seen = new Set();
+      // UTH renders property cards client-side, but attempt to catch any SSR content
+      // Look for any property links with /for-auction/ pattern
+      const links = document.querySelectorAll('a[href*="/for-auction/"]');
+      let lotNum = 0;
+      for (const link of links) {
+        const href = link.getAttribute('href') || '';
+        if (!href || href === '/for-auction/properties' || seen.has(href)) continue;
+        if (!href.match(/\\/for-auction\\/[a-z0-9-]+$/i)) continue;
+        seen.add(href);
+        lotNum++;
+        // Walk up to find the card container
+        let card = link;
+        for (let i = 0; i < 6 && card.parentElement; i++) {
+          card = card.parentElement;
+          const cl = (card.className || '').toLowerCase();
+          if (cl.match(/card|property|listing|item|result/) || card.tagName === 'ARTICLE') break;
+        }
+        const text = card.textContent || '';
+        // Address from heading or text
+        let address = '';
+        const heading = card.querySelector('h2, h3, h4');
+        if (heading) address = (heading.textContent || '').trim();
+        if (!address || address.length < 5) {
+          // Try link title
+          const title = link.getAttribute('title') || link.textContent.trim();
+          if (title && title.length > 5) address = title;
+        }
+        if (!address || address.length < 5) continue;
+        // Price
+        let price = null;
+        const pm = text.match(/£([\\d,]+)/);
+        if (pm) price = parseInt(pm[1].replace(/,/g, ''));
+        // Image
+        let imageUrl = '';
+        const img = card.querySelector('img[src*="property"], img[src*="blob.core.windows.net"]');
+        if (img) imageUrl = img.getAttribute('src') || '';
+        if (!imageUrl) {
+          const anyImg = card.querySelector('img[alt]');
+          if (anyImg) {
+            const srcset = anyImg.getAttribute('srcset') || '';
+            const urlMatch = srcset.match(/url=([^&]+)/);
+            if (urlMatch) { try { imageUrl = decodeURIComponent(urlMatch[1]); } catch(e) {} }
+            if (!imageUrl) imageUrl = anyImg.getAttribute('src') || '';
+          }
+        }
+        // Bullets
+        const bullets = [];
+        const bedMatch = text.match(/(\\d+)\\s*bed/i);
+        if (bedMatch) bullets.push(bedMatch[1] + ' bedrooms');
+        const typeMatch = text.match(/\\b(Detached|Semi-Detached|Terrace|Flat|Apartment|Bungalow|House|Cottage|Land|Commercial)\\b/i);
+        if (typeMatch) bullets.push(typeMatch[0]);
+        lots.push({ lot: lotNum, address: address.substring(0, 200), price, url: href, bullets, imageUrl: imageUrl || undefined });
+      }
+      return lots;
+    })()
+  `,
+
 };
 
 // Wire up EIG house aliases to the shared eigplatform extractor
 for (const slug of ['astleys', 'henrysykes', 'clarkesimpson', 'brownco', 'cheffinstimed', 'romanway', 'hammerprice', 'sarahmains', 'sageandco', 'auctiontrade', 'brggibson', 'higginsdrysdale', 'martinpole', 'jonespeckover', 'thepropertyauctionhouse', 'propertyauctionagent', 'lot9', 'auctionnorth', 'bowensonandwatson', 'sheldonbosley', 'nationalpropertyauctions']) {
   DOM_EXTRACTORS[slug] = DOM_EXTRACTORS.eigplatform;
 }
+// Wire up Bamboo Auctions platform houses to the shared hunters extractor
+DOM_EXTRACTORS['lsk'] = DOM_EXTRACTORS.hunters;
+// Wire up Sequence/Connells platform houses to the shared barnardmarcus extractor
+DOM_EXTRACTORS['foxandsons'] = DOM_EXTRACTORS.barnardmarcus;
+DOM_EXTRACTORS['bagshaws'] = DOM_EXTRACTORS.barnardmarcus;
 // Wire up Auction House UK branches to the shared auctionhouseuk extractor
 for (const slug of ['auctionhousescotland', 'austingray', 'auctionhouseeastanglia', 'auctionhousenorthwest', 'auctionhousenortheast', 'auctionhousewales', 'auctionhousebirmingham', 'auctionhousekent', 'auctionhousedevon', 'auctionhouseeastmidlands', 'auctionhousewestmidlands', 'auctionhouseessex', 'auctionhousemanchester', 'auctionhousesouthyorkshire', 'auctionhousewestyorkshire', 'auctionhouseteesvalley', 'auctionhousehull', 'auctionhousecumbria', 'auctionhouselincolnshire', 'auctionhouseuklondon', 'auctionhousebedsandbucks', 'auctionhousenorthamptonshire', 'auctionhouseoxfordshire', 'auctionhouseleicestershire', 'auctionhousemidlands', 'auctionhousecoventry', 'auctionhousenottsandderby', 'auctionhousechesterfield', 'auctionhousestaffordshire', 'auctionhousenorthwales', 'auctionhousesouthwest', 'auctionhousenorthernireland', 'auctionhousenational']) {
   DOM_EXTRACTORS[slug] = DOM_EXTRACTORS.auctionhouseuk;
