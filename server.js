@@ -4655,8 +4655,10 @@ app.get('/api/admin/system-health', async (req, res) => {
         if (row.created_at && (!h.lastScraped || row.created_at > h.lastScraped)) {
           h.lastScraped = row.created_at;
         }
-        // Check if stale (expired)
-        if (row.expires_at && new Date(row.expires_at) < now) {
+        // A house is stale only if it has no lots AND its cache has expired.
+        // Houses with lots are always "active" — cache expiry just means
+        // the data should be refreshed, not that the house is inactive.
+        if (row.expires_at && new Date(row.expires_at) < now && h.lotCount === 0) {
           h.status = 'stale';
         }
       }
@@ -10710,6 +10712,46 @@ async function _doAutoAnalyseAll() {
     }
   } catch (e) {
     console.warn('AUTO-PURGE: cleanup failed (non-fatal) —', e.message);
+  }
+
+  // ── Step 0.5: Ensure every HOUSE_ROOTS entry has at least one calendar entry ──
+  // Many houses (EIG, AH UK, etc.) have root URLs that ARE the catalogue page.
+  // Without a calendar entry, they never get analysed. This guarantees every
+  // registered house gets scraped at least once, regardless of AI discovery.
+  try {
+    const { data: existingCalendar } = await supabase
+      .from('auction_calendar')
+      .select('house_slug, url');
+    const calendarSlugs = new Set((existingCalendar || []).map(r => r.house_slug).filter(Boolean));
+    const calendarUrls = new Set((existingCalendar || []).map(r => (r.url || '').trim().replace(/\/+$/, '').toLowerCase()));
+    let autoInserted = 0;
+    for (const [slug, rootUrl] of Object.entries(HOUSE_ROOTS)) {
+      const normUrl = rootUrl.trim().replace(/\/+$/, '').toLowerCase();
+      // Skip if this house already has any calendar entry
+      if (calendarSlugs.has(slug) || calendarUrls.has(normUrl)) continue;
+      // Auto-insert the root URL as a catalogue-ready entry
+      const { error } = await supabase.from('auction_calendar').insert({
+        house: HOUSE_DISPLAY_NAMES[slug] || slug,
+        house_slug: slug,
+        logo: '🔨',
+        date: new Date().toISOString().split('T')[0],
+        title: 'Current Catalogue',
+        url: rootUrl,
+        location: 'Online',
+        type: 'Residential & Commercial',
+        status: 'upcoming',
+        catalogue_ready: true,
+        updated_at: new Date().toISOString(),
+      });
+      if (!error) {
+        autoInserted++;
+      }
+    }
+    if (autoInserted > 0) {
+      console.log(`AUTO-CALENDAR: Inserted ${autoInserted} missing house root URLs into calendar`);
+    }
+  } catch (e) {
+    console.warn('AUTO-CALENDAR: root URL insertion failed (non-fatal) —', e.message);
   }
 
   // ── Step 1: Discover new catalogues from house root pages ──
