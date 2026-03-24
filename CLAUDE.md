@@ -82,6 +82,14 @@ Key functions:
 - `scrapePageWithFirecrawl(url, house)` — Multi-page wrapper with pagination
 - `backfillImagesWithFirecrawl(url, lots, house)` — Image backfill via rendered page + JSDOM extraction
 - `backfillImagesWithPuppeteer(url, lots, house)` — Puppeteer fallback for image backfill
+- `fetchLotPage(url)` — Smart lot-page fetcher: plain HTTP first, auto-escalates to Firecrawl if page appears JS-rendered (<500 chars visible text). Used by all three backfill functions (images, address, tenure)
+- `healBrokenHouse(slug, oldUrl)` — Self-healing: finds replacement catalogue URLs when a house returns 0 lots
+
+### Firecrawl-Powered Change Detection
+- `autoAnalyseOne()` probes each catalogue URL with Firecrawl before full scrape
+- Hashes the rendered HTML (not the JS shell) for accurate change detection
+- If content hash matches cached version → extends cache TTL without re-scraping (saves full scrape cost)
+- Falls back to plain HTTP probe if Firecrawl unavailable
 
 ### Firecrawl Credit Management
 - Monthly budget cap via `FIRECRAWL_MONTHLY_BUDGET` env var (default 15000)
@@ -91,6 +99,27 @@ Key functions:
 - Hash-based skip in `autoAnalyseOne()` saves ~50-70% of credits
 - Per-house skip via `FIRECRAWL_SKIP_HOUSES` env var
 - Stats visible at `/api/cost-monitor`
+
+### Self-Healing Discovery
+When a house that previously had lots returns 0, the system automatically attempts to find the new catalogue URL:
+1. **Inline healing** — triggered immediately in `autoAnalyseOne()` when 0-lot regression detected
+2. **Sweep healing** — runs at the end of `autoAnalyseAll()`, checks all unresolved `extractor_regression` alerts
+3. **Manual healing** — `POST /api/admin/heal` with `{ slug }` to trigger healing, or omit slug to view status
+
+**Healing process** (`healBrokenHouse()`):
+- Extracts base domain from `HOUSE_ROOTS`
+- Scrapes homepage with Firecrawl (falls back to plain fetch)
+- Also scrapes the root URL if different from homepage
+- Asks Gemini (capable tier) to find the new catalogue URL
+- Verifies new URL is reachable via Firecrawl before committing
+- Updates in-memory `HOUSE_ROOTS` + Supabase `auction_calendar`
+- Records `url_healed` or `healing_failed` pipeline alert
+
+**Cooldown**: Exponential backoff (24h → 48h → 96h, max 7 days) per house to avoid wasting credits on permanently broken houses.
+
+**Cost per heal attempt**: ~1-3 Firecrawl credits + 1 Gemini capable call
+
+**Discovery upgrade**: `discoverAndUpdateCalendar()` now uses Firecrawl instead of plain `fetch()` for root page scraping, with plain HTTP fallback.
 
 ### Rollback
 - **Instant**: Remove `FIRECRAWL_API_KEY` from env → all paths use Puppeteer

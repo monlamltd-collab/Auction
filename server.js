@@ -2781,6 +2781,46 @@ app.post('/api/admin/dedup-calendar', async (req, res) => {
   }
 });
 
+// Admin: trigger self-healing for a specific house or view healing status
+app.post('/api/admin/heal', async (req, res) => {
+  const token = req.headers['x-admin-secret'] || req.body?.secret || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
+    return res.status(403).json({ error: 'Invalid admin secret' });
+  }
+  const { slug } = req.body || {};
+  if (!slug) {
+    // Return healing status for all houses
+    const status = {};
+    for (const [s, state] of _healingState) {
+      status[s] = {
+        lastAttempt: state.lastAttempt ? new Date(state.lastAttempt).toISOString() : null,
+        attempts: state.attempts,
+        onCooldown: state.cooldownUntil ? Date.now() < state.cooldownUntil : false,
+        cooldownUntil: state.cooldownUntil ? new Date(state.cooldownUntil).toISOString() : null,
+      };
+    }
+    return res.json({ healingState: status, totalTracked: _healingState.size });
+  }
+
+  const rootUrl = HOUSE_ROOTS[slug];
+  if (!rootUrl) return res.status(404).json({ error: `Unknown house slug: ${slug}` });
+
+  // Clear cooldown to allow immediate retry
+  _healingState.delete(slug);
+
+  try {
+    const healedUrl = await healBrokenHouse(slug, rootUrl);
+    if (healedUrl) {
+      res.json({ healed: true, slug, oldUrl: rootUrl, newUrl: healedUrl });
+    } else {
+      res.json({ healed: false, slug, message: 'Healing did not find a new URL' });
+    }
+  } catch (e) {
+    log.error('Admin heal error', { slug, error: e.message });
+    res.status(500).json({ error: 'Healing failed', detail: e.message });
+  }
+});
+
 // Admin: delete an auction by ID
 app.delete('/api/admin/calendar/:id', async (req, res) => {
   const { secret } = req.body || {};
@@ -9023,6 +9063,45 @@ async function backfillImages(catalogueUrl, lots) {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════
+// FIRECRAWL LOT-PAGE FETCHER — shared helper for all backfill functions
+// ═══════════════════════════════════════════════════════════════
+// Fetches a lot page with plain HTTP first (cheap), then Firecrawl if
+// plain fetch returns too little content (JS-rendered page). Returns HTML string.
+async function fetchLotPage(url) {
+  // Try plain HTTP first — fast and free
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    const resp = await fetch(url, { headers: HEADERS, signal: controller.signal, redirect: 'follow' });
+    clearTimeout(timeout);
+    if (resp.ok) {
+      const html = await resp.text();
+      // If we got substantial content, no need for Firecrawl
+      // Heuristic: <500 chars of visible text means the page is likely JS-rendered
+      const visibleText = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+        .replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      if (visibleText.length > 500) {
+        return { html, url: resp.url || url, source: 'http' };
+      }
+      // Page looks JS-rendered — fall through to Firecrawl
+    }
+  } catch { /* timeout or network error — try Firecrawl */ }
+
+  // Firecrawl fallback — handles JS rendering, anti-bot
+  if (FIRECRAWL_API_KEY && !fcCreditExhausted) {
+    try {
+      const fcResult = await scrapeWithFirecrawl(url, { formats: ['rawHtml'] });
+      if (fcResult.html && fcResult.html.length > 100) {
+        return { html: fcResult.html, url: fcResult.sourceURL || url, source: 'firecrawl' };
+      }
+    } catch { /* Firecrawl failed — return null */ }
+  }
+
+  return null;
+}
+
 // Deep image backfill — fetch individual lot pages for lots still missing images
 // Used when catalogue page has junk/placeholder images that get stripped
 async function backfillImagesFromLotPages(lots, concurrency = 5) {
@@ -9035,20 +9114,18 @@ async function backfillImagesFromLotPages(lots, concurrency = 5) {
 
   const junk = /logo|icon|nav|sprite|\.svg|placeholder|no-image|modal\.png|_NYC\.|_LCC\.|_BMDC\.|council|utilit|cardwell|badge|spacer|pixel|facebook|twitter|1x1|gavel|backdrop|generic[_-]?image|coming[_-]?soon/i;
 
-  let filled = 0;
+  let filled = 0, fcUsed = 0;
   // Process in batches to limit concurrency
   for (let i = 0; i < capped.length; i += concurrency) {
     // 500ms delay between batches to respect rate limits
     if (i > 0) await new Promise(r => setTimeout(r, 500));
     const batch = capped.slice(i, i + concurrency);
-    const results = await Promise.allSettled(batch.map(async (lot) => {
+    await Promise.allSettled(batch.map(async (lot) => {
       try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 15000);
-        const resp = await fetch(lot.url, { headers: HEADERS, signal: controller.signal, redirect: 'follow' });
-        clearTimeout(timeout);
-        if (!resp.ok) return null;
-        const html = await resp.text();
+        const result = await fetchLotPage(lot.url);
+        if (!result) return null;
+        if (result.source === 'firecrawl') fcUsed++;
+        const html = result.html;
         // Find first non-junk property image (new regex per call to avoid shared lastIndex)
         const imgRe = /<img[^>]+(?:src|data-src|data-lazy-src|data-original)="([^"]+)"/gi;
         let m;
@@ -9058,7 +9135,7 @@ async function backfillImagesFromLotPages(lots, concurrency = 5) {
             // Resolve relative URL
             let imgUrl = src;
             if (!/^https?:\/\//i.test(imgUrl)) {
-              try { imgUrl = new URL(imgUrl, resp.url || lot.url).href; } catch { continue; }
+              try { imgUrl = new URL(imgUrl, result.url || lot.url).href; } catch { continue; }
             }
             lot.imageUrl = imgUrl;
             filled++;
@@ -9069,7 +9146,7 @@ async function backfillImagesFromLotPages(lots, concurrency = 5) {
       } catch { return null; }
     }));
   }
-  if (filled > 0) console.log(`Deep image backfill (lot pages): ${filled}/${missing.length} lots got images`);
+  if (filled > 0) console.log(`Deep image backfill (lot pages): ${filled}/${missing.length} lots got images${fcUsed > 0 ? ` (${fcUsed} via Firecrawl)` : ''}`);
   return filled;
 }
 
@@ -9081,18 +9158,16 @@ async function backfillAddressFromLotPages(lots, concurrency = 5) {
   if (missing.length === 0) return 0;
 
   const junk = /logo|icon|nav|sprite|\.svg|placeholder|no-image|badge|spacer|pixel|facebook|twitter|1x1|gavel|backdrop|generic[_-]?image|coming[_-]?soon/i;
-  let filled = 0;
+  let filled = 0, fcUsed = 0;
   for (let i = 0; i < missing.length; i += concurrency) {
     if (i > 0) await new Promise(r => setTimeout(r, 500));
     const batch = missing.slice(i, i + concurrency);
     await Promise.allSettled(batch.map(async (lot) => {
       try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 15000);
-        const resp = await fetch(lot.url, { headers: HEADERS, signal: controller.signal, redirect: 'follow' });
-        clearTimeout(timeout);
-        if (!resp.ok) return;
-        const html = await resp.text();
+        const result = await fetchLotPage(lot.url);
+        if (!result) return;
+        if (result.source === 'firecrawl') fcUsed++;
+        const html = result.html;
 
         // Extract address from common patterns: <h1>, <h2>, og:title, title tag
         let address = '';
@@ -9130,7 +9205,7 @@ async function backfillAddressFromLotPages(lots, concurrency = 5) {
             if (src && src.length > 20 && !src.startsWith('data:') && !junk.test(src)) {
               let imgUrl = src;
               if (!/^https?:\/\//i.test(imgUrl)) {
-                try { imgUrl = new URL(imgUrl, resp.url || lot.url).href; } catch { continue; }
+                try { imgUrl = new URL(imgUrl, result.url || lot.url).href; } catch { continue; }
               }
               lot.imageUrl = imgUrl;
               break;
@@ -9140,7 +9215,7 @@ async function backfillAddressFromLotPages(lots, concurrency = 5) {
       } catch { /* timeout or network error — skip */ }
     }));
   }
-  if (filled > 0) console.log(`Address backfill (lot pages): ${filled}/${missing.length} lots got addresses`);
+  if (filled > 0) console.log(`Address backfill (lot pages): ${filled}/${missing.length} lots got addresses${fcUsed > 0 ? ` (${fcUsed} via Firecrawl)` : ''}`);
   return filled;
 }
 
@@ -9151,18 +9226,15 @@ async function backfillTenureFromLotPages(lots, concurrency = 5) {
   const missing = lots.filter(l => l.url && !l.tenure && /^https?:\/\//i.test(l.url));
   if (missing.length === 0) return 0;
 
-  let filled = 0;
+  let filled = 0, fcUsed = 0;
   for (let i = 0; i < missing.length; i += concurrency) {
     const batch = missing.slice(i, i + concurrency);
     await Promise.allSettled(batch.map(async (lot) => {
       try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 15000);
-        const resp = await fetch(lot.url, { headers: HEADERS, signal: controller.signal, redirect: 'follow' });
-        clearTimeout(timeout);
-        if (!resp.ok) return;
-        const html = await resp.text();
-        const text = html.replace(/<[^>]+>/g, ' ').toLowerCase();
+        const result = await fetchLotPage(lot.url);
+        if (!result) return;
+        if (result.source === 'firecrawl') fcUsed++;
+        const text = result.html.replace(/<[^>]+>/g, ' ').toLowerCase();
         if (/share of freehold|share\s+of\s+the\s+freehold/.test(text)) { lot.tenure = 'Share of Freehold'; filled++; }
         else if (/flying freehold/.test(text)) { lot.tenure = 'Freehold'; filled++; }
         else if (/\bfreehold\b/.test(text) && !/leasehold/.test(text)) { lot.tenure = 'Freehold'; filled++; }
@@ -9175,7 +9247,7 @@ async function backfillTenureFromLotPages(lots, concurrency = 5) {
       } catch { /* timeout or network error — skip */ }
     }));
   }
-  if (filled > 0) console.log(`Tenure backfill (lot pages): ${filled}/${missing.length} lots got tenure`);
+  if (filled > 0) console.log(`Tenure backfill (lot pages): ${filled}/${missing.length} lots got tenure${fcUsed > 0 ? ` (${fcUsed} via Firecrawl)` : ''}`);
   return filled;
 }
 
@@ -10895,10 +10967,273 @@ async function _doAutoAnalyseAll() {
 
   console.log(`═══ AUTO-ANALYSIS COMPLETE: ${analysed} analysed, ${skipped} cached, ${failed} failed ═══\n`);
 
+  // ── Step 3: Proactive healing sweep for houses with unresolved 0-lot regressions ──
+  if (FIRECRAWL_API_KEY && !fcCreditExhausted) {
+    try {
+      const { data: unresolvedAlerts } = await supabase
+        .from('pipeline_alerts')
+        .select('house, message')
+        .eq('event_type', 'extractor_regression')
+        .eq('resolved', false)
+        .order('created_at', { ascending: false });
+
+      if (unresolvedAlerts && unresolvedAlerts.length > 0) {
+        // Deduplicate by house
+        const housesToHeal = [...new Set(unresolvedAlerts.map(a => a.house).filter(Boolean))];
+        console.log(`HEAL-SWEEP: ${housesToHeal.length} houses with unresolved regressions: ${housesToHeal.join(', ')}`);
+
+        let healed = 0;
+        for (const slug of housesToHeal) {
+          const rootUrl = HOUSE_ROOTS[slug];
+          if (!rootUrl) continue;
+
+          const healedUrl = await healBrokenHouse(slug, rootUrl);
+          if (healedUrl) {
+            healed++;
+            // Try re-analysing with the healed URL
+            try {
+              await autoAnalyseOne(healedUrl);
+            } catch { /* already logged inside */ }
+          }
+        }
+        if (healed > 0) {
+          console.log(`HEAL-SWEEP: ✓ Healed ${healed}/${housesToHeal.length} houses`);
+        }
+      }
+    } catch (healErr) {
+      console.warn('HEAL-SWEEP: failed (non-fatal) —', healErr.message);
+    }
+  }
+
   // ── Save daily analytics snapshot ──
   try { await saveDailySnapshot(); } catch (e) { console.warn('Daily snapshot failed:', e.message); }
 
   return { analysed, skipped, failed, total: ready.length };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SELF-HEALING DISCOVERY: Detect broken URLs and find replacements
+// ═══════════════════════════════════════════════════════════════
+// When a house returns 0 lots after scraping, this function attempts to
+// find the new catalogue URL by scraping the house's homepage with Firecrawl
+// and asking Gemini to locate the catalogue link.
+
+// Track healing state to avoid repeated attempts
+const _healingState = new Map(); // slug → { lastAttempt: Date, attempts: number, cooldownUntil: Date }
+
+async function healBrokenHouse(slug, oldUrl) {
+  if (!supabase || !FIRECRAWL_API_KEY) return null;
+
+  // Cooldown: don't retry healing for the same house within 24 hours
+  const state = _healingState.get(slug);
+  if (state && state.cooldownUntil && Date.now() < state.cooldownUntil) {
+    console.log(`HEAL: Skipping ${slug} — on cooldown until ${new Date(state.cooldownUntil).toISOString()}`);
+    return null;
+  }
+
+  const attempts = (state?.attempts || 0) + 1;
+  // Exponential backoff: 24h, 48h, 96h after each failed attempt (max 7 days)
+  const cooldownMs = Math.min(24 * 60 * 60 * 1000 * Math.pow(2, attempts - 1), 7 * 24 * 60 * 60 * 1000);
+
+  console.log(`HEAL: Attempting to heal ${slug} (attempt ${attempts}, old URL: ${oldUrl})`);
+
+  try {
+    // Extract base domain from the root URL
+    const rootUrl = HOUSE_ROOTS[slug];
+    if (!rootUrl) {
+      console.log(`HEAL: No HOUSE_ROOTS entry for ${slug}`);
+      return null;
+    }
+
+    const parsedUrl = new URL(rootUrl);
+    const homepageUrl = `${parsedUrl.protocol}//${parsedUrl.hostname}`;
+
+    // Use Firecrawl to render the homepage — handles JS, anti-bot, proxies
+    let html, markdown;
+    try {
+      const fcResult = await scrapeWithFirecrawl(homepageUrl, {
+        formats: ['rawHtml', 'markdown'],
+      });
+      html = fcResult.html;
+      markdown = fcResult.markdown;
+      console.log(`HEAL: Firecrawl scraped ${homepageUrl} (${(html || '').length} chars HTML, ${(markdown || '').length} chars markdown)`);
+    } catch (fcErr) {
+      console.log(`HEAL: Firecrawl failed for ${homepageUrl}: ${fcErr.message}`);
+
+      // Fallback to plain fetch if Firecrawl unavailable
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15000);
+        const resp = await fetch(homepageUrl, { headers: HEADERS, signal: controller.signal });
+        clearTimeout(timeout);
+        if (resp.ok) html = await resp.text();
+      } catch { /* silent */ }
+
+      if (!html) {
+        _healingState.set(slug, { lastAttempt: Date.now(), attempts, cooldownUntil: Date.now() + cooldownMs });
+        return null;
+      }
+    }
+
+    // Also try scraping the root URL directly if different from homepage
+    let rootHtml = '';
+    if (rootUrl !== homepageUrl && rootUrl !== homepageUrl + '/') {
+      try {
+        const fcRoot = await scrapeWithFirecrawl(rootUrl, { formats: ['rawHtml'] });
+        rootHtml = fcRoot.html || '';
+        console.log(`HEAL: Also scraped root URL ${rootUrl} (${rootHtml.length} chars)`);
+      } catch { /* silent — homepage was the priority */ }
+    }
+
+    // Extract text + links for AI analysis
+    const allHtml = html + '\n' + rootHtml;
+    const stripped = allHtml
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .substring(0, 8000);
+
+    const hrefMatches = [...allHtml.matchAll(/href="([^"]+)"/gi)];
+    const hrefs = [...new Set(hrefMatches.map(m => m[1]))]
+      .filter(h => !h.startsWith('#') && !h.startsWith('javascript:') && !h.startsWith('mailto:'))
+      .slice(0, 60);
+
+    if (hrefs.length === 0 && stripped.length < 200) {
+      console.log(`HEAL: Insufficient content from ${slug} homepage`);
+      _healingState.set(slug, { lastAttempt: Date.now(), attempts, cooldownUntil: Date.now() + cooldownMs });
+      return null;
+    }
+
+    // Ask Gemini to find the new catalogue URL
+    const aiText = await callAI(`You are helping fix a broken auction house scraper. The catalogue URL for this auction house has stopped returning lots.
+
+House: ${HOUSE_DISPLAY_NAMES[slug] || slug}
+Old catalogue URL (now broken/empty): ${oldUrl}
+Homepage: ${homepageUrl}
+
+Here is the text content from the house's website:
+${stripped}
+
+Here are all links found on the page:
+${hrefs.join('\n')}
+
+${markdown ? `\nMarkdown content:\n${(markdown || '').substring(0, 4000)}` : ''}
+
+TASK: Find the CURRENT catalogue/lots page URL for this auction house. The old URL "${oldUrl}" is no longer working. Look for:
+- Links containing words like "catalogue", "lots", "properties", "auction", "current", "upcoming", "search"
+- Links that match the pattern of the old URL but with updated paths/dates
+- The main page where auction lots are listed for browsing
+
+Return ONLY valid JSON: {"newUrl": "https://...", "confidence": "high|medium|low", "reason": "brief explanation"}
+If you cannot find a catalogue URL, return: {"newUrl": null, "confidence": "none", "reason": "explanation"}`, {
+      tier: 'capable',
+      maxTokens: 500,
+      taskType: 'healing',
+    });
+
+    let result;
+    try {
+      let text = aiText.trim();
+      if (text.startsWith('```')) text = text.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
+      result = JSON.parse(text);
+    } catch {
+      console.log(`HEAL: Failed to parse AI response for ${slug}`);
+      _healingState.set(slug, { lastAttempt: Date.now(), attempts, cooldownUntil: Date.now() + cooldownMs });
+      return null;
+    }
+
+    if (!result.newUrl || result.confidence === 'none') {
+      console.log(`HEAL: No new URL found for ${slug} — ${result.reason || 'unknown'}`);
+      _healingState.set(slug, { lastAttempt: Date.now(), attempts, cooldownUntil: Date.now() + cooldownMs });
+
+      // Alert admin: house needs manual intervention
+      try {
+        await supabase.from('pipeline_alerts').insert({
+          event_type: 'healing_failed',
+          severity: 'warning',
+          house: slug,
+          message: `Self-healing failed for ${HOUSE_DISPLAY_NAMES[slug] || slug}: ${result.reason || 'no catalogue URL found'}. Old URL: ${oldUrl}`,
+        });
+      } catch { /* silent */ }
+
+      return null;
+    }
+
+    // Validate the new URL is different and looks plausible
+    const newUrl = result.newUrl.trim();
+    const normOld = oldUrl.trim().replace(/\/+$/, '').toLowerCase();
+    const normNew = newUrl.replace(/\/+$/, '').toLowerCase();
+    if (normOld === normNew) {
+      console.log(`HEAL: AI returned the same URL for ${slug} — no change needed`);
+      _healingState.set(slug, { lastAttempt: Date.now(), attempts, cooldownUntil: Date.now() + cooldownMs });
+      return null;
+    }
+
+    // Verify the new URL is reachable before committing
+    try {
+      const verifyResult = await scrapeWithFirecrawl(newUrl, { formats: ['rawHtml'] });
+      const verifyHtml = verifyResult.html || '';
+      if (verifyHtml.length < 500) {
+        console.log(`HEAL: New URL ${newUrl} returned very little content (${verifyHtml.length} chars) — skipping`);
+        _healingState.set(slug, { lastAttempt: Date.now(), attempts, cooldownUntil: Date.now() + cooldownMs });
+        return null;
+      }
+    } catch (verifyErr) {
+      console.log(`HEAL: New URL ${newUrl} is not reachable: ${verifyErr.message}`);
+      _healingState.set(slug, { lastAttempt: Date.now(), attempts, cooldownUntil: Date.now() + cooldownMs });
+      return null;
+    }
+
+    console.log(`HEAL: ✓ Found new URL for ${slug}: ${newUrl} (confidence: ${result.confidence}, reason: ${result.reason})`);
+
+    // Update in-memory HOUSE_ROOTS
+    HOUSE_ROOTS[slug] = newUrl;
+
+    // Update the calendar entry
+    const { error: updateErr } = await supabase
+      .from('auction_calendar')
+      .update({ url: newUrl, updated_at: new Date().toISOString() })
+      .eq('house_slug', slug)
+      .eq('url', oldUrl);
+
+    if (updateErr) {
+      // If no exact URL match, insert a new entry
+      await supabase.from('auction_calendar').insert({
+        house: HOUSE_DISPLAY_NAMES[slug] || slug,
+        house_slug: slug,
+        logo: '🔨',
+        date: new Date().toISOString().split('T')[0],
+        title: 'Current Catalogue',
+        url: newUrl,
+        location: 'Online',
+        type: 'Residential & Commercial',
+        status: 'upcoming',
+        catalogue_ready: true,
+        updated_at: new Date().toISOString(),
+      });
+    }
+
+    // Record the successful heal
+    try {
+      await supabase.from('pipeline_alerts').insert({
+        event_type: 'url_healed',
+        severity: 'info',
+        house: slug,
+        message: `Self-healed ${HOUSE_DISPLAY_NAMES[slug] || slug}: ${oldUrl} → ${newUrl} (confidence: ${result.confidence})`,
+      });
+    } catch { /* silent */ }
+
+    // Reset healing state on success
+    _healingState.set(slug, { lastAttempt: Date.now(), attempts: 0, cooldownUntil: 0 });
+
+    return newUrl;
+
+  } catch (err) {
+    console.error(`HEAL: Unexpected error healing ${slug}:`, err.message);
+    _healingState.set(slug, { lastAttempt: Date.now(), attempts, cooldownUntil: Date.now() + cooldownMs });
+    return null;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -10910,22 +11245,45 @@ async function _doAutoAnalyseAll() {
 async function discoverAndUpdateCalendar() {
   if (!supabase || !process.env.GEMINI_API_KEY) return;
 
-  // Only discover for houses that have root URLs configured
-  const slugs = Object.keys(HOUSE_ROOTS);
-  console.log(`AUTO-DISCOVER: Checking ${slugs.length} house root pages for new catalogues`);
+  // Only discover for houses that DON'T already have a calendar entry.
+  // Houses with direct-catalogue URLs (EIG, AH UK, etc.) are auto-inserted
+  // by Step 0.5 in autoAnalyseAll() — no need to spend AI credits on them.
+  const { data: existingCalendar } = await supabase
+    .from('auction_calendar')
+    .select('house_slug')
+    .gte('date', new Date().toISOString().slice(0, 10));
+  const alreadyInCalendar = new Set((existingCalendar || []).map(r => r.house_slug).filter(Boolean));
+
+  const slugs = Object.keys(HOUSE_ROOTS).filter(s => !alreadyInCalendar.has(s));
+  console.log(`AUTO-DISCOVER: Checking ${slugs.length} house root pages for new catalogues (${alreadyInCalendar.size} already in calendar, skipped)`);
 
   let discovered = 0, errors = 0;
 
   for (const slug of slugs) {
     const rootUrl = HOUSE_ROOTS[slug];
     try {
-      // Fetch root page
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 15000);
-      const resp = await fetch(rootUrl, { headers: HEADERS, signal: controller.signal });
-      clearTimeout(timeout);
-      if (!resp.ok) continue;
-      const html = await resp.text();
+      // Fetch root page — prefer Firecrawl (handles JS rendering, anti-bot)
+      let html;
+      if (FIRECRAWL_API_KEY && !fcCreditExhausted) {
+        try {
+          const fcResult = await scrapeWithFirecrawl(rootUrl, { formats: ['rawHtml'] });
+          html = fcResult.html || '';
+        } catch (fcErr) {
+          console.log(`AUTO-DISCOVER: Firecrawl failed for ${slug}, falling back to plain fetch: ${fcErr.message}`);
+        }
+      }
+      // Fallback to plain HTTP if Firecrawl unavailable or failed
+      if (!html) {
+        try {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 15000);
+          const resp = await fetch(rootUrl, { headers: HEADERS, signal: controller.signal });
+          clearTimeout(timeout);
+          if (!resp.ok) continue;
+          html = await resp.text();
+        } catch { continue; }
+      }
+      if (!html) continue;
 
       // Extract text + links for AI
       const stripped = html
@@ -11061,29 +11419,40 @@ async function autoAnalyseOne(url) {
   const normalisedUrl = url.trim().replace(/\/+$/, '').toLowerCase();
 
   // HTML change detection — scrape first page and hash it
+  // Uses Firecrawl for JS-rendered houses so the hash reflects actual rendered content,
+  // not the empty JS shell. This makes the hash-skip optimisation work properly and
+  // avoids wasteful full re-scrapes every cycle.
   try {
-    const probeHtml = await fetchPage(scrapeUrl);
+    let probeHtml;
+    let probeSource = 'http';
+    if (FIRECRAWL_API_KEY && !fcCreditExhausted && !FIRECRAWL_SKIP.has(house)) {
+      // Use Firecrawl for the probe — 1 credit but saves a full scrape cycle if unchanged
+      try {
+        const fcProbe = await scrapeWithFirecrawl(scrapeUrl, { formats: ['rawHtml'] });
+        probeHtml = fcProbe.html || '';
+        probeSource = 'firecrawl';
+      } catch {
+        // Firecrawl failed for probe — fall back to plain HTTP
+        probeHtml = await fetchPage(scrapeUrl);
+      }
+    } else {
+      probeHtml = await fetchPage(scrapeUrl);
+    }
     const contentHash = createHash('md5').update(probeHtml).digest('hex');
     const { data: cached } = await supabase
       .from('cached_analyses')
       .select('content_hash, expires_at')
       .eq('url', normalisedUrl)
       .single();
-    // Check if cache entry is too old (>3 days) — force re-analysis even if hash matches
-    // because fetchPage() does plain HTTP, not Puppeteer, so JS-rendered sites always hash the same
-    const MAX_CACHE_AGE_MS = 24 * 3600000; // 24 hours
-    const cacheAge = cached?.expires_at ? Date.now() - (new Date(cached.expires_at).getTime() - getCacheTTL(house)) : Infinity;
-    const tooOld = cacheAge > MAX_CACHE_AGE_MS;
 
-    if (cached && cached.content_hash === contentHash && cached.expires_at && new Date(cached.expires_at) > new Date() && !tooOld) {
-      // Extend cache TTL since content hasn't changed and data is recent
+    if (cached && cached.content_hash === contentHash && cached.expires_at && new Date(cached.expires_at) > new Date()) {
+      // Extend cache TTL since content hasn't changed
       const newExpiry = new Date(Date.now() + getCacheTTL(house)).toISOString();
       await supabase.from('cached_analyses').update({ expires_at: newExpiry, last_scraped_at: new Date().toISOString() }).eq('url', normalisedUrl);
       hashHitCount++;
-      console.log(`Cache extended — content unchanged for ${house}`);
+      console.log(`Cache extended — content unchanged for ${house} (probe: ${probeSource})`);
       return;
     }
-    if (tooOld) console.log(`Cache too old for ${house} (${Math.round(cacheAge / 3600000)}h) — forcing re-analysis`);
     // Store hash for later upsert
     autoAnalyseOne._lastContentHash = contentHash;
   } catch (e) {
@@ -11299,6 +11668,19 @@ async function autoAnalyseOne(url) {
           message: `${HOUSE_DISPLAY_NAMES[house] || house} returned 0 lots (previously had ${prevSkill.last_lot_count})`
         });
         console.log(`ALERT: Extractor regression for ${house} (0 lots, was ${prevSkill.last_lot_count})`);
+
+        // ── Self-healing: try to find a new catalogue URL ──
+        console.log(`HEAL: Triggering self-healing for ${house} (was ${prevSkill.last_lot_count} lots, now 0)`);
+        const healedUrl = await healBrokenHouse(house, url);
+        if (healedUrl) {
+          console.log(`HEAL: ✓ ${house} healed — re-analysing with new URL: ${healedUrl}`);
+          // Re-analyse immediately with the new URL
+          try {
+            await autoAnalyseOne(healedUrl);
+          } catch (reErr) {
+            console.log(`HEAL: Re-analysis with healed URL failed for ${house}: ${reErr.message}`);
+          }
+        }
       }
     } catch (alertErr) { console.warn('ALERT: Failed to record extractor regression:', alertErr.message); }
     return;
