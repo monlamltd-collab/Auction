@@ -1123,7 +1123,6 @@ const HOUSE_ROOTS = {
   wilsons:                'https://www.wilsonsauctions.com/auctions/land-property-auctions',
   strakers:               'https://www.strakers.co.uk/property-auctions/',
   johnpye:                'https://www.johnpyeproperty.co.uk/Listing',
-  gascoignehalman:        'https://www.gascoignehalman.co.uk/auction.html',
 };
 
 /*
@@ -4978,7 +4977,6 @@ function detectAuctionHouse(url) {
   if (u.includes('wilsonsauctions.com')) return 'wilsons';
   if (u.includes('strakers.co.uk')) return 'strakers';
   if (u.includes('johnpyeproperty.co.uk')) return 'johnpye';
-  if (u.includes('gascoignehalman.co.uk')) return 'gascoignehalman';
   // ── EIG batch 5 houses ──
   if (u.includes('sarah-mains.eigonlineauctions')) return 'sarahmains';
   if (u.includes('sageandco.eigonlineauctions')) return 'sageandco';
@@ -5075,7 +5073,6 @@ const HOUSE_DISPLAY_NAMES = {
   wilsons: 'Wilsons Auctions',
   strakers: 'Strakers',
   johnpye: 'John Pye Property',
-  gascoignehalman: 'Gascoigne Halman',
 };
 
 function getHouseDisplayName(slug, url) {
