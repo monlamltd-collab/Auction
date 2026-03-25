@@ -1,6 +1,21 @@
 {
   "savills": {
-    "classes": [],
+    "classes": [
+      "itemid-338",
+      "notification-items",
+      "sub-nav-list-items",
+      "sv-card-title",
+      "sv-footer__list-item",
+      "sv-header__tool-item",
+      "sv-js-nav-item",
+      "sv-nav__item",
+      "sv-nav__items",
+      "sv-social__item",
+      "upcoming-calendar-content__auction_date",
+      "upcoming-calendar-content__auction_location",
+      "upcoming-calendar-content__auction_name",
+      "upcoming-calendar-content__auction_properties"
+    ],
     "selectors": {
       ".lot": 0,
       ".property": 0,
@@ -8,11 +23,11 @@
       ".listing": 0,
       "[class*=\"lot\"]": 0,
       "[class*=\"property\"]": 0,
-      "[class*=\"card\"]": 0,
+      "[class*=\"card\"]": 3,
       "[class*=\"listing\"]": 0,
       "article": 0,
       ".item": 0,
-      "[class*=\"auction\"]": 0,
+      "[class*=\"auction\"]": 31,
       "[class*=\"gallery\"]": 0
     }
   },
@@ -404,7 +419,6 @@
       "align-items-center",
       "grid-item",
       "home-lot-wrapper-link",
-      "item",
       "lot-image",
       "lot-search-result",
       "lot-search-wrapper",
@@ -419,12 +433,12 @@
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 4754,
+      "[class*=\"lot\"]": 4614,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
       "article": 0,
-      ".item": 1,
+      ".item": 0,
       "[class*=\"auction\"]": 0,
       "[class*=\"gallery\"]": 0
     }
@@ -567,13 +581,13 @@
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 49,
-      "[class*=\"property\"]": 197,
+      "[class*=\"lot\"]": 48,
+      "[class*=\"property\"]": 195,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
       "article": 0,
       ".item": 1,
-      "[class*=\"auction\"]": 100,
+      "[class*=\"auction\"]": 99,
       "[class*=\"gallery\"]": 0
     }
   },
@@ -596,34 +610,41 @@
       "lot"
     ],
     "selectors": {
-      ".lot": 34,
+      ".lot": 37,
       ".property": 0,
-      ".card": 34,
+      ".card": 37,
       ".listing": 0,
-      "[class*=\"lot\"]": 34,
-      "[class*=\"property\"]": 35,
-      "[class*=\"card\"]": 170,
+      "[class*=\"lot\"]": 37,
+      "[class*=\"property\"]": 38,
+      "[class*=\"card\"]": 185,
       "[class*=\"listing\"]": 0,
       "article": 0,
       ".item": 0,
-      "[class*=\"auction\"]": 39,
+      "[class*=\"auction\"]": 42,
       "[class*=\"gallery\"]": 0
     }
   },
   "mchughandco": {
-    "classes": [],
+    "classes": [
+      "align-items-center",
+      "align-items-xs-center",
+      "auction-countdown",
+      "auction-date-calendar",
+      "lot-amount",
+      "nav-item"
+    ],
     "selectors": {
       ".lot": 0,
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 0,
+      "[class*=\"lot\"]": 1,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
       "article": 0,
       ".item": 0,
-      "[class*=\"auction\"]": 0,
+      "[class*=\"auction\"]": 2,
       "[class*=\"gallery\"]": 0
     }
   },
@@ -703,7 +724,9 @@
       "fs-filters-item-locations-175",
       "fs-filters-item-locations-176",
       "fs-filters-item-locations-180",
+      "fs-filters-item-locations-182",
       "fs-filters-item-locations-19",
+      "fs-filters-item-locations-192",
       "fs-filters-item-locations-194",
       "fs-filters-item-locations-196",
       "fs-filters-item-locations-197",
@@ -800,12 +823,12 @@
       ".card": 30,
       ".listing": 0,
       "[class*=\"lot\"]": 0,
-      "[class*=\"property\"]": 337,
-      "[class*=\"card\"]": 367,
+      "[class*=\"property\"]": 333,
+      "[class*=\"card\"]": 364,
       "[class*=\"listing\"]": 0,
       "article": 0,
       ".item": 0,
-      "[class*=\"auction\"]": 64,
+      "[class*=\"auction\"]": 62,
       "[class*=\"gallery\"]": 0
     }
   },
@@ -836,6 +859,7 @@
       "auction-calendar-body",
       "auction-calendar-header",
       "auction-card",
+      "auction-current",
       "auction-dates",
       "auction-info",
       "auction-link",
@@ -921,24 +945,34 @@
       "[class*=\"listing\"]": 0,
       "article": 0,
       ".item": 0,
-      "[class*=\"auction\"]": 44,
+      "[class*=\"auction\"]": 45,
       "[class*=\"gallery\"]": 0
     }
   },
   "paulfosh": {
-    "classes": [],
+    "classes": [
+      "active-menu-item",
+      "lot-panel",
+      "lot-panels",
+      "olark-survey-form-item",
+      "olark-survey-form-item-email",
+      "olark-survey-form-item-name",
+      "olark-survey-form-item-phone",
+      "panel-auction-ended",
+      "panel-auction-ended-holder"
+    ],
     "selectors": {
       ".lot": 0,
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 0,
+      "[class*=\"lot\"]": 100,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
       "article": 0,
       ".item": 0,
-      "[class*=\"auction\"]": 0,
+      "[class*=\"auction\"]": 100,
       "[class*=\"gallery\"]": 0
     }
   },
@@ -1049,18 +1083,24 @@
     }
   },
   "bradleyhall": {
-    "classes": [],
+    "classes": [
+      "active-menu-item",
+      "align-items-center",
+      "item",
+      "lot-panel",
+      "lot-panels"
+    ],
     "selectors": {
       ".lot": 0,
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 0,
+      "[class*=\"lot\"]": 52,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
       "article": 0,
-      ".item": 0,
+      ".item": 1,
       "[class*=\"auction\"]": 0,
       "[class*=\"gallery\"]": 0
     }
@@ -1194,7 +1234,12 @@
     }
   },
   "landwood": {
-    "classes": [],
+    "classes": [
+      "active-menu-item",
+      "news-item",
+      "news-item-content",
+      "news-item-link"
+    ],
     "selectors": {
       ".lot": 0,
       ".property": 0,
@@ -1375,19 +1420,48 @@
     }
   },
   "tcpa": {
-    "classes": [],
+    "classes": [
+      "align-items-end",
+      "auction-dates-container",
+      "auction-dates-date",
+      "auction-dates-name",
+      "auction-dates-row",
+      "auction-dates-scroll",
+      "auction-dates-start",
+      "auction-dates-title",
+      "auctioneer-auctions-link",
+      "catalogue-link-wrapper",
+      "contact-property-links",
+      "grid-lot-panel-col",
+      "grid-lot-panel-row",
+      "lot-address",
+      "lot-auctioneer-name",
+      "lot-carousel",
+      "lot-panel",
+      "lot-panels",
+      "next-auction-wrap",
+      "offer-result-message",
+      "panel-auction-ended",
+      "panel-auction-ended-bottom",
+      "panel-auction-ended-holder",
+      "panel-auction-ended-holder-bottom",
+      "register-auction-panel",
+      "searchNextAuction",
+      "searchNextAuction-inner",
+      "spotlight-lot-panel"
+    ],
     "selectors": {
       ".lot": 0,
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 0,
-      "[class*=\"property\"]": 0,
+      "[class*=\"lot\"]": 270,
+      "[class*=\"property\"]": 50,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
       "article": 0,
       ".item": 0,
-      "[class*=\"auction\"]": 0,
+      "[class*=\"auction\"]": 368,
       "[class*=\"gallery\"]": 0
     }
   },
@@ -1452,19 +1526,29 @@
     }
   },
   "firstforauctions": {
-    "classes": [],
+    "classes": [
+      "align-items-center",
+      "lot-panel",
+      "lot-panels",
+      "lot-search",
+      "mobile-nav-item",
+      "nav-item",
+      "ot-cat-item",
+      "panel-auction-ended",
+      "panel-auction-ended-holder"
+    ],
     "selectors": {
       ".lot": 0,
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 0,
+      "[class*=\"lot\"]": 101,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
       "article": 0,
       ".item": 0,
-      "[class*=\"auction\"]": 0,
+      "[class*=\"auction\"]": 14,
       "[class*=\"gallery\"]": 0
     }
   },
@@ -1488,7 +1572,7 @@
       "[class*=\"listing\"]": 0,
       "article": 0,
       ".item": 0,
-      "[class*=\"auction\"]": 88,
+      "[class*=\"auction\"]": 82,
       "[class*=\"gallery\"]": 0
     }
   },
@@ -1590,29 +1674,35 @@
       ".card": 0,
       ".listing": 0,
       "[class*=\"lot\"]": 1,
-      "[class*=\"property\"]": 87,
+      "[class*=\"property\"]": 96,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
-      "article": 33,
+      "article": 36,
       ".item": 0,
       "[class*=\"auction\"]": 2,
-      "[class*=\"gallery\"]": 220
+      "[class*=\"gallery\"]": 238
     }
   },
   "astleys": {
-    "classes": [],
+    "classes": [
+      "lot-data-heading",
+      "lot-panel",
+      "lot-panels",
+      "panel-auction-ended",
+      "panel-auction-ended-holder"
+    ],
     "selectors": {
       ".lot": 0,
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 0,
+      "[class*=\"lot\"]": 77,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
       "article": 0,
       ".item": 0,
-      "[class*=\"auction\"]": 0,
+      "[class*=\"auction\"]": 52,
       "[class*=\"gallery\"]": 0
     }
   },
@@ -1629,7 +1719,7 @@
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 105,
+      "[class*=\"lot\"]": 111,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
@@ -1788,8 +1878,8 @@
       ".card": 0,
       ".listing": 0,
       "[class*=\"lot\"]": 41,
-      "[class*=\"property\"]": 198,
-      "[class*=\"card\"]": 214,
+      "[class*=\"property\"]": 199,
+      "[class*=\"card\"]": 215,
       "[class*=\"listing\"]": 26,
       "article": 0,
       ".item": 0,
@@ -1834,7 +1924,6 @@
       "breadcrumb-item",
       "grid-item",
       "home-lot-wrapper-link",
-      "item",
       "lot-image",
       "lot-search-result",
       "lot-search-wrapper",
@@ -1851,12 +1940,12 @@
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 188,
+      "[class*=\"lot\"]": 194,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
       "article": 0,
-      ".item": 1,
+      ".item": 0,
       "[class*=\"auction\"]": 0,
       "[class*=\"gallery\"]": 0
     }
@@ -2011,19 +2100,26 @@
     }
   },
   "brownco": {
-    "classes": [],
+    "classes": [
+      "lot-data-heading",
+      "lot-panel",
+      "lot-panels",
+      "nav-item",
+      "panel-auction-ended",
+      "panel-auction-ended-holder"
+    ],
     "selectors": {
       ".lot": 0,
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 0,
+      "[class*=\"lot\"]": 127,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
       "article": 0,
       ".item": 0,
-      "[class*=\"auction\"]": 0,
+      "[class*=\"auction\"]": 82,
       "[class*=\"gallery\"]": 0
     }
   },
@@ -2073,7 +2169,7 @@
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 39,
+      "[class*=\"lot\"]": 41,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
@@ -2206,7 +2302,7 @@
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 1532,
+      "[class*=\"lot\"]": 1526,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
@@ -2238,7 +2334,7 @@
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 2838,
+      "[class*=\"lot\"]": 2854,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
@@ -2270,7 +2366,7 @@
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 2157,
+      "[class*=\"lot\"]": 2155,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
@@ -2302,7 +2398,7 @@
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 1758,
+      "[class*=\"lot\"]": 1767,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
@@ -2321,7 +2417,6 @@
       "lot-image",
       "lot-search-result",
       "lot-search-wrapper",
-      "lotbg-commercial",
       "lotbg-online",
       "lotbg-residential",
       "nav-item",
@@ -2334,7 +2429,7 @@
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 598,
+      "[class*=\"lot\"]": 477,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
@@ -2364,7 +2459,7 @@
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 440,
+      "[class*=\"lot\"]": 439,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
@@ -2396,7 +2491,7 @@
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 1239,
+      "[class*=\"lot\"]": 1225,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
@@ -2409,7 +2504,6 @@
   "auctionhouseeastmidlands": {
     "classes": [
       "align-items-center",
-      "item",
       "nav-item",
       "trustpilot-widget"
     ],
@@ -2423,7 +2517,7 @@
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
       "article": 0,
-      ".item": 1,
+      ".item": 0,
       "[class*=\"auction\"]": 0,
       "[class*=\"gallery\"]": 0
     }
@@ -2431,7 +2525,6 @@
   "auctionhousewestmidlands": {
     "classes": [
       "align-items-center",
-      "item",
       "nav-item",
       "trustpilot-widget"
     ],
@@ -2445,7 +2538,7 @@
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
       "article": 0,
-      ".item": 1,
+      ".item": 0,
       "[class*=\"auction\"]": 0,
       "[class*=\"gallery\"]": 0
     }
@@ -2472,7 +2565,7 @@
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 101,
+      "[class*=\"lot\"]": 95,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
@@ -2551,7 +2644,7 @@
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 8984,
+      "[class*=\"lot\"]": 8982,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
@@ -2708,7 +2801,7 @@
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 4950,
+      "[class*=\"lot\"]": 4913,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
@@ -2740,7 +2833,7 @@
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 4277,
+      "[class*=\"lot\"]": 4326,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
@@ -2858,7 +2951,7 @@
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 180,
+      "[class*=\"lot\"]": 174,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
@@ -2943,7 +3036,7 @@
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 1028,
+      "[class*=\"lot\"]": 1022,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
@@ -2962,7 +3055,6 @@
       "lot-image",
       "lot-search-result",
       "lot-search-wrapper",
-      "lotbg-commercial",
       "lotbg-online",
       "lotbg-residential",
       "nav-item",
@@ -2975,7 +3067,7 @@
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 66,
+      "[class*=\"lot\"]": 18,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
@@ -3005,7 +3097,7 @@
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 865,
+      "[class*=\"lot\"]": 853,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
@@ -3018,7 +3110,6 @@
   "auctionhousenorthwales": {
     "classes": [
       "align-items-center",
-      "item",
       "nav-item",
       "trustpilot-widget"
     ],
@@ -3032,7 +3123,7 @@
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
       "article": 0,
-      ".item": 1,
+      ".item": 0,
       "[class*=\"auction\"]": 0,
       "[class*=\"gallery\"]": 0
     }
@@ -3059,7 +3150,7 @@
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 1239,
+      "[class*=\"lot\"]": 1225,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
@@ -3119,7 +3210,7 @@
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 1774,
+      "[class*=\"lot\"]": 1437,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
@@ -3130,19 +3221,26 @@
     }
   },
   "sarahmains": {
-    "classes": [],
+    "classes": [
+      "active-menu-item",
+      "align-items-center",
+      "lot-panel",
+      "lot-panels",
+      "panel-auction-ended",
+      "panel-auction-ended-holder"
+    ],
     "selectors": {
       ".lot": 0,
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 0,
+      "[class*=\"lot\"]": 100,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
       "article": 0,
       ".item": 0,
-      "[class*=\"auction\"]": 0,
+      "[class*=\"auction\"]": 78,
       "[class*=\"gallery\"]": 0
     }
   },
@@ -3170,6 +3268,7 @@
       "auctions-layout-component__StyledContainer-sc-287d4542-2",
       "auctions-layout-component__StyledMain-sc-287d4542-1",
       "breadcrumb-item",
+      "leaflet-map-styles__ResultsContainer-sc-eb45f1ba-8",
       "nav-item",
       "page-item",
       "property-card-styles__Address-sc-a6233016-5",
@@ -3180,11 +3279,9 @@
       "property-card-styles__EndedTag-sc-a6233016-21",
       "property-card-styles__ImageContainer-sc-a6233016-0",
       "property-card-styles__LocationIcon-sc-a6233016-7",
-      "property-card-styles__OrganisationLogo-sc-a6233016-11",
       "property-card-styles__Price-sc-a6233016-9",
       "property-card-styles__PropertyHeaderContainer-sc-a6233016-12",
       "property-card-styles__PropertyHeaderLeft-sc-a6233016-13",
-      "property-card-styles__PropertyHeaderRight-sc-a6233016-14",
       "property-card-styles__PropertyIconWrapper-sc-a6233016-30",
       "property-card-styles__PropertyInfoWrapper-sc-a6233016-29",
       "property-card-styles__PropertyType-sc-a6233016-10",
@@ -3192,7 +3289,9 @@
       "property-card-styles__ResponsiveNextImage-sc-a6233016-2",
       "property-card-styles__StyledOverlay-sc-a6233016-27",
       "property-card-styles__Title-sc-a6233016-4",
-      "tabs-styles__NavItem-sc-7966efe4-2"
+      "property-card-styles__WatchListWrapper-sc-a6233016-28",
+      "tabs-styles__NavItem-sc-7966efe4-2",
+      "watchlist-toggle-auctions-styles__WatchListToggleButton-sc-21afd301-0"
     ],
     "selectors": {
       ".lot": 0,
@@ -3200,12 +3299,12 @@
       ".card": 0,
       ".listing": 0,
       "[class*=\"lot\"]": 0,
-      "[class*=\"property\"]": 21,
-      "[class*=\"card\"]": 21,
+      "[class*=\"property\"]": 20,
+      "[class*=\"card\"]": 20,
       "[class*=\"listing\"]": 0,
       "article": 0,
       ".item": 0,
-      "[class*=\"auction\"]": 2,
+      "[class*=\"auction\"]": 5,
       "[class*=\"gallery\"]": 0
     }
   },
@@ -3320,6 +3419,319 @@
     "classes": [
       "nav-item"
     ],
+    "selectors": {
+      ".lot": 0,
+      ".property": 0,
+      ".card": 0,
+      ".listing": 0,
+      "[class*=\"lot\"]": 0,
+      "[class*=\"property\"]": 0,
+      "[class*=\"card\"]": 0,
+      "[class*=\"listing\"]": 0,
+      "article": 0,
+      ".item": 0,
+      "[class*=\"auction\"]": 0,
+      "[class*=\"gallery\"]": 0
+    }
+  },
+  "hammerprice": {
+    "classes": [],
+    "selectors": {
+      ".lot": 0,
+      ".property": 0,
+      ".card": 0,
+      ".listing": 0,
+      "[class*=\"lot\"]": 0,
+      "[class*=\"property\"]": 0,
+      "[class*=\"card\"]": 0,
+      "[class*=\"listing\"]": 0,
+      "article": 0,
+      ".item": 0,
+      "[class*=\"auction\"]": 0,
+      "[class*=\"gallery\"]": 0
+    }
+  },
+  "sageandco": {
+    "classes": [
+      "active-menu-item",
+      "lot-data-heading",
+      "lot-panel",
+      "lot-panels",
+      "panel-auction-ended",
+      "panel-auction-ended-holder"
+    ],
+    "selectors": {
+      ".lot": 0,
+      ".property": 0,
+      ".card": 0,
+      ".listing": 0,
+      "[class*=\"lot\"]": 39,
+      "[class*=\"property\"]": 0,
+      "[class*=\"card\"]": 0,
+      "[class*=\"listing\"]": 0,
+      "article": 0,
+      ".item": 0,
+      "[class*=\"auction\"]": 4,
+      "[class*=\"gallery\"]": 0
+    }
+  },
+  "auctiontrade": {
+    "classes": [],
+    "selectors": {
+      ".lot": 0,
+      ".property": 0,
+      ".card": 0,
+      ".listing": 0,
+      "[class*=\"lot\"]": 0,
+      "[class*=\"property\"]": 0,
+      "[class*=\"card\"]": 0,
+      "[class*=\"listing\"]": 0,
+      "article": 0,
+      ".item": 0,
+      "[class*=\"auction\"]": 0,
+      "[class*=\"gallery\"]": 0
+    }
+  },
+  "brggibson": {
+    "classes": [
+      "lot-item-wrapper",
+      "lot-list-address",
+      "panel-auction-ended",
+      "panel-auction-ended-holder"
+    ],
+    "selectors": {
+      ".lot": 0,
+      ".property": 0,
+      ".card": 0,
+      ".listing": 0,
+      "[class*=\"lot\"]": 129,
+      "[class*=\"property\"]": 0,
+      "[class*=\"card\"]": 0,
+      "[class*=\"listing\"]": 0,
+      "article": 43,
+      ".item": 0,
+      "[class*=\"auction\"]": 56,
+      "[class*=\"gallery\"]": 0
+    }
+  },
+  "higginsdrysdale": {
+    "classes": [
+      "active-menu-item",
+      "auction-lots-btn",
+      "lot-data-heading",
+      "lot-panel",
+      "lot-panels",
+      "panel-auction-ended",
+      "panel-auction-ended-holder"
+    ],
+    "selectors": {
+      ".lot": 0,
+      ".property": 0,
+      ".card": 0,
+      ".listing": 0,
+      "[class*=\"lot\"]": 152,
+      "[class*=\"property\"]": 0,
+      "[class*=\"card\"]": 0,
+      "[class*=\"listing\"]": 0,
+      "article": 0,
+      ".item": 0,
+      "[class*=\"auction\"]": 100,
+      "[class*=\"gallery\"]": 0
+    }
+  },
+  "martinpole": {
+    "classes": [
+      "active-menu-item",
+      "lot-data-heading",
+      "lot-panel",
+      "lot-panels",
+      "panel-auction-ended",
+      "panel-auction-ended-holder"
+    ],
+    "selectors": {
+      ".lot": 0,
+      ".property": 0,
+      ".card": 0,
+      ".listing": 0,
+      "[class*=\"lot\"]": 9,
+      "[class*=\"property\"]": 0,
+      "[class*=\"card\"]": 0,
+      "[class*=\"listing\"]": 0,
+      "article": 0,
+      ".item": 0,
+      "[class*=\"auction\"]": 4,
+      "[class*=\"gallery\"]": 0
+    }
+  },
+  "jonespeckover": {
+    "classes": [
+      "lot-data-heading",
+      "lot-panel",
+      "lot-panels",
+      "nav-item",
+      "panel-auction-ended",
+      "panel-auction-ended-holder"
+    ],
+    "selectors": {
+      ".lot": 0,
+      ".property": 0,
+      ".card": 0,
+      ".listing": 0,
+      "[class*=\"lot\"]": 30,
+      "[class*=\"property\"]": 0,
+      "[class*=\"card\"]": 0,
+      "[class*=\"listing\"]": 0,
+      "article": 0,
+      ".item": 0,
+      "[class*=\"auction\"]": 20,
+      "[class*=\"gallery\"]": 0
+    }
+  },
+  "thepropertyauctionhouse": {
+    "classes": [
+      "lot-data-heading",
+      "lot-panel",
+      "lot-panels",
+      "panel-auction-ended",
+      "panel-auction-ended-holder"
+    ],
+    "selectors": {
+      ".lot": 0,
+      ".property": 0,
+      ".card": 0,
+      ".listing": 0,
+      "[class*=\"lot\"]": 150,
+      "[class*=\"property\"]": 0,
+      "[class*=\"card\"]": 0,
+      "[class*=\"listing\"]": 0,
+      "article": 0,
+      ".item": 0,
+      "[class*=\"auction\"]": 48,
+      "[class*=\"gallery\"]": 0
+    }
+  },
+  "propertyauctionagent": {
+    "classes": [
+      "lot-data-heading",
+      "lot-panel",
+      "lot-panels",
+      "panel-auction-ended",
+      "panel-auction-ended-holder"
+    ],
+    "selectors": {
+      ".lot": 0,
+      ".property": 0,
+      ".card": 0,
+      ".listing": 0,
+      "[class*=\"lot\"]": 150,
+      "[class*=\"property\"]": 0,
+      "[class*=\"card\"]": 0,
+      "[class*=\"listing\"]": 0,
+      "article": 0,
+      ".item": 0,
+      "[class*=\"auction\"]": 90,
+      "[class*=\"gallery\"]": 0
+    }
+  },
+  "lot9": {
+    "classes": [
+      "active-menu-item",
+      "lot-data-heading",
+      "lot-panel",
+      "lot-panels",
+      "panel-auction-ended",
+      "panel-auction-ended-holder"
+    ],
+    "selectors": {
+      ".lot": 0,
+      ".property": 0,
+      ".card": 0,
+      ".listing": 0,
+      "[class*=\"lot\"]": 88,
+      "[class*=\"property\"]": 0,
+      "[class*=\"card\"]": 0,
+      "[class*=\"listing\"]": 0,
+      "article": 0,
+      ".item": 0,
+      "[class*=\"auction\"]": 56,
+      "[class*=\"gallery\"]": 0
+    }
+  },
+  "auctionnorth": {
+    "classes": [
+      "active-menu-item",
+      "lot-data-heading",
+      "lot-panel",
+      "lot-panels",
+      "panel-auction-ended",
+      "panel-auction-ended-holder"
+    ],
+    "selectors": {
+      ".lot": 0,
+      ".property": 0,
+      ".card": 0,
+      ".listing": 0,
+      "[class*=\"lot\"]": 103,
+      "[class*=\"property\"]": 0,
+      "[class*=\"card\"]": 0,
+      "[class*=\"listing\"]": 0,
+      "article": 0,
+      ".item": 0,
+      "[class*=\"auction\"]": 70,
+      "[class*=\"gallery\"]": 0
+    }
+  },
+  "bowensonandwatson": {
+    "classes": [
+      "lot-data-heading",
+      "lot-panel",
+      "lot-panels",
+      "panel-auction-ended",
+      "panel-auction-ended-holder"
+    ],
+    "selectors": {
+      ".lot": 0,
+      ".property": 0,
+      ".card": 0,
+      ".listing": 0,
+      "[class*=\"lot\"]": 55,
+      "[class*=\"property\"]": 0,
+      "[class*=\"card\"]": 0,
+      "[class*=\"listing\"]": 0,
+      "article": 0,
+      ".item": 0,
+      "[class*=\"auction\"]": 38,
+      "[class*=\"gallery\"]": 0
+    }
+  },
+  "sheldonbosley": {
+    "classes": [
+      "dropdown-item",
+      "item",
+      "lot-data-heading",
+      "lot-panel",
+      "lot-panels",
+      "nav-item",
+      "panel-auction-ended",
+      "panel-auction-ended-holder"
+    ],
+    "selectors": {
+      ".lot": 0,
+      ".property": 0,
+      ".card": 0,
+      ".listing": 0,
+      "[class*=\"lot\"]": 63,
+      "[class*=\"property\"]": 0,
+      "[class*=\"card\"]": 0,
+      "[class*=\"listing\"]": 0,
+      "article": 0,
+      ".item": 4,
+      "[class*=\"auction\"]": 42,
+      "[class*=\"gallery\"]": 0
+    }
+  },
+  "nationalpropertyauctions": {
+    "classes": [],
     "selectors": {
       ".lot": 0,
       ".property": 0,

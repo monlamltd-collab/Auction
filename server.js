@@ -1100,7 +1100,7 @@ const HOUSE_ROOTS = {
   auctionhousenorthernireland: 'https://www.auctionhouse.co.uk/northernireland/auction/search-results',
   auctionhousenational:        'https://www.auctionhouse.co.uk/national/auction/search-results',
   // ── EIG platform houses (batch 5, March 2026) ──
-  sarahmains:             'https://sarah-mains.eigonlineauctions.com/search',
+  sarahmains:             'https://www.auctionworks.co.uk/search',
   sageandco:              'https://sageandco.eigonlineauctions.com/search',
   auctiontrade:           'https://auctiontrade.eigonlineauctions.com/search',
   brggibson:              'https://brggibsonbelfastauctions.eigonlineauctions.com/search',
@@ -1112,7 +1112,7 @@ const HOUSE_ROOTS = {
   lot9:                   'https://lot9.eigonlineauctions.com/search',
   auctionnorth:           'https://auction-north.eigonlineauctions.com/search',
   bowensonandwatson:      'https://bowensonandwatson.eigonlineauctions.com/search',
-  sheldonbosley:          'https://online.sheldonbosleyknight.co.uk/search',
+  sheldonbosley:          'https://online.sbkauctions.co.uk/search',
   nationalpropertyauctions:'https://nationalpropertyauctions.eigonlineauctions.com/search',
   // ── Regional/independent houses (batch 6, March 2026) ──
   underthehammer:         'https://www.underthehammer.com/for-auction/properties',
@@ -5093,7 +5093,7 @@ const HOUSE_DISPLAY_NAMES = {
   auctionhousesouthwest: 'Auction House South West',
   auctionhousenorthernireland: 'Auction House Northern Ireland',
   auctionhousenational: 'Auction House National',
-  sarahmains: 'Sarah Mains Auctions',
+  sarahmains: 'https://www.auctionworks.co.uk/search',
   sageandco: 'Sage & Co Auctions',
   auctiontrade: 'Auction Trade',
   brggibson: 'BRG Gibson Belfast',
@@ -5105,7 +5105,7 @@ const HOUSE_DISPLAY_NAMES = {
   lot9: 'Lot9 Auctions',
   auctionnorth: 'Auction North',
   bowensonandwatson: 'Bowen Son & Watson',
-  sheldonbosley: 'Sheldon Bosley Knight',
+  sheldonbosley: 'https://online.sbkauctions.co.uk/search',
   nationalpropertyauctions: 'National Property Auctions',
   // ── Regional/independent houses (batch 6, March 2026) ──
   underthehammer: 'Under The Hammer',
