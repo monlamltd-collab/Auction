@@ -4891,27 +4891,36 @@ app.get('/api/quality-report', async (req, res) => {
     }
 
     for (const [house, data] of Object.entries(byHouse)) {
-      const lots = data.lots;
+      const rawLots = data.lots;
       const isStale = data.isStale;
       const ageHours = data.created_at ? Math.round((now - new Date(data.created_at)) / 3600000) : null;
+
+      // Deduplicate lots across URLs — keep richest version of each lot
+      const lotMap = new Map();
+      let dupes = 0;
+      for (const l of rawLots) {
+        const key = l.url || (l.address ? l.address.toLowerCase().replace(/[\s,]+/g, ' ').trim() : null);
+        if (!key || key.length < 5) { lotMap.set(`__nokey_${lotMap.size}`, l); continue; }
+        if (lotMap.has(key)) {
+          dupes++;
+          const existing = lotMap.get(key);
+          const richness = (lot) => (lot.score || 0) * 10 + (lot.imageUrl ? 5 : 0) + (lot.bullets?.length || 0) + (lot.price ? 1 : 0);
+          if (richness(l) > richness(existing)) lotMap.set(key, l);
+        } else {
+          lotMap.set(key, l);
+        }
+      }
+      const lots = [...lotMap.values()];
+
       const withImage = lots.filter(l => l.imageUrl).length;
       const imgCoverage = lots.length ? Math.round((withImage / lots.length) * 100) : 0;
-
-      // Duplicate check
-      const urls = new Set();
-      let dupes = 0;
-      for (const l of lots) {
-        const key = l.url || l.address;
-        if (key && urls.has(key)) dupes++;
-        else if (key) urls.add(key);
-      }
 
       totalLots += lots.length;
       totalDupes += dupes;
       if (lots.length === 0) housesWithZero++;
       if (isStale) staleHouses++;
 
-      const entry = { house, lots: lots.length, images: withImage, imgCoverage, dupes, ageHours, stale: !!isStale };
+      const entry = { house, lots: lots.length, rawLots: rawLots.length, images: withImage, imgCoverage, dupes, ageHours, stale: !!isStale };
       report.houses.push(entry);
 
       if (lots.length === 0) report.issues.push({ severity: 'critical', house, msg: 'Zero lots — extractor may be broken' });
@@ -10781,6 +10790,36 @@ async function _doAutoAnalyseAll() {
       if (purged > 0) {
         console.log(`AUTO-PURGE: Removed ${purged} cached_analyses rows for past-only auctions (${pastCalendar.length} past, ${purgeable.length} purgeable after protecting ${upcomingUrls.size} upcoming URLs)`);
       }
+    }
+
+    // Also purge orphaned cache entries — URLs not in any calendar entry at all
+    const { data: allCalendar } = await supabase.from('auction_calendar').select('url');
+    const allCalendarUrls = new Set((allCalendar || []).map(r => normalise(r.url)).filter(Boolean));
+    const { data: allCached } = await supabase.from('cached_analyses').select('url');
+    if (allCached) {
+      const orphaned = allCached
+        .map(r => normalise(r.url))
+        .filter(u => u && !allCalendarUrls.has(u));
+      if (orphaned.length > 0) {
+        let orphanPurged = 0;
+        for (let i = 0; i < orphaned.length; i += BATCH) {
+          const batch = orphaned.slice(i, i + BATCH);
+          const { data: deleted, error } = await supabase.from('cached_analyses').delete().in('url', batch).select('url');
+          if (!error && deleted) orphanPurged += deleted.length;
+        }
+        if (orphanPurged > 0) console.log(`AUTO-PURGE: Removed ${orphanPurged} orphaned cache entries (no calendar match)`);
+      }
+    }
+
+    // Purge expired cache entries older than 7 days — no point keeping ancient stale data
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 3600000).toISOString();
+    const { data: oldExpired, error: oldErr } = await supabase
+      .from('cached_analyses')
+      .delete()
+      .lt('expires_at', sevenDaysAgo)
+      .select('url');
+    if (!oldErr && oldExpired && oldExpired.length > 0) {
+      console.log(`AUTO-PURGE: Removed ${oldExpired.length} cache entries expired >7 days ago`);
     }
   } catch (e) {
     console.warn('AUTO-PURGE: cleanup failed (non-fatal) —', e.message);
