@@ -751,6 +751,12 @@ function timeUntil(date) {
   return `${Math.round(hrs / 24)}d`;
 }
 
+function toggleHouseDetail(slug) {
+  const rows = document.querySelectorAll('.house-detail-' + slug);
+  const visible = rows.length > 0 && rows[0].style.display !== 'none';
+  rows.forEach(r => r.style.display = visible ? 'none' : 'table-row');
+}
+
 // ── Pipeline Alerts ──
 async function loadAlerts() {
   const data = await apiFetch('/api/admin/alerts');
@@ -928,43 +934,115 @@ async function loadCacheStatus() {
   if (sLotsEl && summary.expiredLots) sLotsEl.title = `${summary.activeLots} active + ${summary.expiredLots} expired = ${summary.totalLots} total`;
   document.getElementById('houses-badge').textContent = `${summary.totalCached} houses`;
 
-  // Build house table
+  // Build house table — collapse multiple URLs per house into one row
   const tbody = document.getElementById('houses-tbody');
   if (!cached || cached.length === 0) {
     tbody.innerHTML = '<tr><td colspan="11" class="text-muted" style="text-align:center;padding:24px;">No cached data — waiting for next auto-analysis cycle</td></tr>';
   } else {
-    // Sort by lots descending
-    cached.sort((a, b) => (b.total_lots || 0) - (a.total_lots || 0));
-    let totalUnder100k = 0, yieldSum = 0, yieldCount = 0;
-    const freshCount = cached.filter(h => new Date(h.expires_at) >= new Date()).length;
-    document.getElementById('s-houses').textContent = freshCount;
-    document.getElementById('s-houses-sub').textContent = `${cached.length} total, ${summary.totalReady} calendar-ready`;
+    // Group cache entries by house
+    const byHouse = {};
+    for (const h of cached) {
+      const key = h.house || 'unknown';
+      if (!byHouse[key]) byHouse[key] = [];
+      byHouse[key].push(h);
+    }
 
-    tbody.innerHTML = cached.map(h => {
-      const isExpired = new Date(h.expires_at) < new Date();
-      const dotClass = isExpired ? 'dot-amber' : 'dot-green';
-      const statusText = isExpired ? 'Stale' : 'Fresh';
-      if (!isExpired) {
-        totalUnder100k += h.under_100k || 0;
-        if (h.avg_yield) { yieldSum += h.avg_yield; yieldCount++; }
+    // Aggregate stats per house
+    const houses = Object.entries(byHouse).map(([name, entries]) => {
+      let totalLots = 0, topPicks = 0, titleSplits = 0, under100k = 0;
+      let yieldSum = 0, yieldCount = 0;
+      let newestScrape = null, latestExpiry = null;
+      let anyFresh = false, scrapedWith = null, extractedWith = null;
+      const seenLotKeys = new Set();
+      let dedupedLots = 0;
+
+      for (const e of entries) {
+        const lots = e.total_lots || 0;
+        totalLots += lots;
+        topPicks += e.top_picks || 0;
+        titleSplits += e.title_splits || 0;
+        under100k += e.under_100k || 0;
+        if (e.avg_yield) { yieldSum += e.avg_yield * lots; yieldCount += lots; }
+
+        const scrapeDate = new Date(e.last_scraped_at || e.created_at);
+        if (!newestScrape || scrapeDate > newestScrape) {
+          newestScrape = scrapeDate;
+          scrapedWith = e.scraped_with;
+          extractedWith = e.extracted_with;
+        }
+        const expDate = new Date(e.expires_at);
+        if (!latestExpiry || expDate > latestExpiry) latestExpiry = expDate;
+        if (expDate >= new Date()) anyFresh = true;
       }
-      const slug = Object.entries(KNOWN_HOUSES).find(([k, v]) => v === h.house)?.[0] || h.house.toLowerCase().replace(/[^a-z]/g, '');
-      return `<tr style="${isExpired ? 'opacity:.5;' : ''}">
+
+      const avgYield = yieldCount > 0 ? (yieldSum / yieldCount) : null;
+
+      return {
+        name, entries, totalLots, topPicks, titleSplits, under100k,
+        avgYield, newestScrape, latestExpiry, anyFresh,
+        scrapedWith, extractedWith, urlCount: entries.length
+      };
+    });
+
+    // Sort by total lots descending
+    houses.sort((a, b) => b.totalLots - a.totalLots);
+
+    let totalUnder100k = 0, aggYieldSum = 0, aggYieldCount = 0;
+    const freshHouseCount = houses.filter(h => h.anyFresh).length;
+    document.getElementById('s-houses').textContent = freshHouseCount;
+    document.getElementById('s-houses-sub').textContent = `${houses.length} houses, ${summary.totalReady} calendar-ready`;
+
+    tbody.innerHTML = houses.map(h => {
+      const isStale = !h.anyFresh;
+      const dotClass = isStale ? 'dot-amber' : 'dot-green';
+      const statusText = isStale ? 'Stale' : 'Fresh';
+      if (!isStale) {
+        totalUnder100k += h.under100k || 0;
+        if (h.avgYield) { aggYieldSum += h.avgYield; aggYieldCount++; }
+      }
+      const slug = Object.entries(KNOWN_HOUSES).find(([k, v]) => v === h.name)?.[0] || h.name.toLowerCase().replace(/[^a-z]/g, '');
+      const urlBadge = h.urlCount > 1 ? ` <span class="mono text-muted" style="font-size:.7rem;font-weight:400;">${h.urlCount} URLs</span>` : '';
+      const yieldStr = h.avgYield ? h.avgYield.toFixed(1) + '%' : '-';
+
+      let rows = `<tr style="${isStale ? 'opacity:.5;' : ''}" class="house-row" data-house="${esc(slug)}">
         <td><span class="status-dot ${dotClass}"></span>${statusText}</td>
-        <td><strong>${esc(h.house)}</strong></td>
-        <td class="mono">${h.total_lots || 0}</td>
+        <td><strong>${esc(h.name)}</strong>${urlBadge}</td>
+        <td class="mono">${h.totalLots}</td>
         <td class="mono text-muted">-</td>
-        <td class="mono">${h.top_picks || 0}</td>
-        <td class="mono">${h.title_splits || 0}</td>
-        <td class="mono ${h.avg_yield ? 'text-green' : 'text-muted'}">${h.avg_yield ? h.avg_yield + '%' : '-'}</td>
-        <td>${getPipelineHtml(h.house, h.scraped_with, h.extracted_with)}</td>
-        <td class="mono">${timeAgo(h.last_scraped_at || h.created_at)}</td>
-        <td class="mono ${isExpired ? 'text-amber' : ''}">${isExpired ? 'expired' : timeUntil(h.expires_at)}</td>
-        <td><button class="btn-rescrape" onclick="rescrapeHouse('${slug}','${esc(h.house)}')" title="Clear cache and rescrape this house now">Re-scrape</button></td>
+        <td class="mono">${h.topPicks}</td>
+        <td class="mono">${h.titleSplits}</td>
+        <td class="mono ${h.avgYield ? 'text-green' : 'text-muted'}">${yieldStr}</td>
+        <td>${getPipelineHtml(h.name, h.scrapedWith, h.extractedWith)}</td>
+        <td class="mono">${timeAgo(h.newestScrape)}</td>
+        <td class="mono ${isStale ? 'text-amber' : ''}">${isStale ? 'expired' : timeUntil(h.latestExpiry)}</td>
+        <td><button class="btn-rescrape" onclick="rescrapeHouse('${slug}','${esc(h.name)}')" title="Clear cache and rescrape this house now">Re-scrape</button>${h.urlCount > 1 ? ` <button class="btn-rescrape" onclick="toggleHouseDetail('${esc(slug)}')" title="Show/hide individual URLs" style="font-size:.65rem;padding:2px 6px;">+</button>` : ''}</td>
       </tr>`;
+
+      // Add hidden detail rows for each URL if multiple
+      if (h.urlCount > 1) {
+        for (const e of h.entries) {
+          const eExpired = new Date(e.expires_at) < new Date();
+          const eDot = eExpired ? 'dot-amber' : 'dot-green';
+          const shortUrl = (e.url || '').replace(/^https?:\/\//, '').substring(0, 60);
+          rows += `<tr class="house-detail house-detail-${esc(slug)}" style="display:none;opacity:.6;font-size:.8rem;">
+            <td><span class="status-dot ${eDot}"></span></td>
+            <td style="padding-left:24px;"><a href="${esc(e.url)}" target="_blank" title="${esc(e.url)}">${esc(shortUrl)}${e.url && e.url.length > 60 ? '...' : ''}</a></td>
+            <td class="mono">${e.total_lots || 0}</td>
+            <td class="mono text-muted">-</td>
+            <td class="mono">${e.top_picks || 0}</td>
+            <td class="mono">${e.title_splits || 0}</td>
+            <td class="mono">${e.avg_yield ? e.avg_yield + '%' : '-'}</td>
+            <td>${getPipelineHtml(h.name, e.scraped_with, e.extracted_with)}</td>
+            <td class="mono">${timeAgo(e.last_scraped_at || e.created_at)}</td>
+            <td class="mono ${eExpired ? 'text-amber' : ''}">${eExpired ? 'expired' : timeUntil(e.expires_at)}</td>
+            <td></td>
+          </tr>`;
+        }
+      }
+      return rows;
     }).join('');
     document.getElementById('s-under100k').textContent = totalUnder100k.toLocaleString();
-    document.getElementById('s-yield').textContent = yieldCount ? (yieldSum / yieldCount).toFixed(1) + '%' : '-';
+    document.getElementById('s-yield').textContent = aggYieldCount ? (aggYieldSum / aggYieldCount).toFixed(1) + '%' : '-';
   }
 
   // Missing houses (server already filters to upcoming-only via getCalendarAuctions)
