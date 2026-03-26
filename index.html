@@ -93,15 +93,19 @@ a{color:var(--green);text-decoration:none}a:hover{text-decoration:underline}
 .sp-per-page{flex-shrink:0}
 .sp-lots-dd{flex-shrink:0}
 /* Row 2: Filters — secondary, muted background */
-.sp-filter-row{display:flex;flex-wrap:wrap;gap:5px 7px;align-items:center;padding:8px 16px;background:var(--bg-primary, #f5f7fa);border-bottom:1px solid var(--border)}
-.sp-filter-row .tb-select,.sp-filter-row .tb-search{padding:5px 8px;font-size:.76rem;background:var(--white);border-color:var(--border)}
-.sp-filter-row .tb-search{min-width:70px;max-width:90px;flex:0}
-.sp-filter-row label{font-size:.76rem;color:var(--text3);display:flex;align-items:center;gap:4px;white-space:nowrap;cursor:pointer}
-.sp-filter-row label input[type="checkbox"]{width:14px;height:14px;accent-color:var(--green);cursor:pointer}
+.sp-filter-row{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;padding:10px 18px;background:var(--bg-primary, #f5f7fa);border-bottom:1px solid var(--border)}
+.sp-filter-row .tb-select,.sp-filter-row .tb-search{padding:8px 14px;font-size:.84rem;min-height:40px;border-radius:8px;background:var(--white);border-color:var(--border)}
+.sp-filter-row .tb-search{min-width:80px;max-width:100px;flex:0}
+.sp-filter-row label{font-size:.84rem;color:var(--text3);display:flex;align-items:center;gap:4px;white-space:nowrap;cursor:pointer}
+.sp-filter-row label input[type="checkbox"]{width:16px;height:16px;accent-color:var(--green);cursor:pointer}
+.sp-secondary{background:var(--white);border-bottom:1px solid var(--border);padding:6px 18px}
+.sp-secondary .tb-select,.sp-secondary .tb-search{font-size:.78rem;padding:6px 10px;min-height:34px}
 .sp-filter-label{font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--text4);margin-right:2px;flex-shrink:0}
 /* Row 3: Quick chips */
-.chip-row{display:flex;flex-wrap:wrap;gap:5px;align-items:center;padding:8px 16px}
-.chip-row .ex-btn{font-size:.7rem;padding:3px 8px}
+.chip-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 18px}
+.chip-row .ex-btn{font-size:.78rem;padding:6px 12px}
+.chip-row .ex-btn.ai-chip{background:#faf8f0;border-color:#e8dfc8;color:#8b6914}
+.chip-row .ex-btn.ai-chip:hover{background:#f0eadc;border-color:#c9a94e;color:#6b5010}
 .chip-row .adv-toggle{font-size:.75rem}
 .chip-sep{width:1px;height:16px;background:var(--border);margin:0 4px;flex-shrink:0}
 /* Legacy compat */
@@ -110,7 +114,7 @@ a{color:var(--green);text-decoration:none}a:hover{text-decoration:underline}
 .unified-bar .tb-search{min-width:140px;flex:1}
 .ub-sep{width:1px;height:24px;background:var(--border);margin:0 2px;flex-shrink:0}
 .price-dd{position:relative;display:inline-block}
-.price-dd-btn{padding:5px 8px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--white);font-size:.76rem;color:var(--text);font-family:inherit;cursor:pointer;white-space:nowrap}
+.price-dd-btn{padding:8px 14px;border-radius:8px;border:1px solid var(--border);background:var(--white);font-size:.84rem;min-height:40px;color:var(--text);font-family:inherit;cursor:pointer;white-space:nowrap}
 .price-dd-btn.active-filter{border-color:var(--green);color:var(--green)}
 .price-pop{display:none;position:absolute;top:100%;left:0;background:var(--white);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.12);padding:12px;z-index:20;min-width:260px}
 .price-pop.open{display:flex;gap:8px}
@@ -128,7 +132,7 @@ a{color:var(--green);text-decoration:none}a:hover{text-decoration:underline}
 .filter-field select,.filter-field input{width:100%;padding:10px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:.85rem;font-family:inherit;outline:0}
 .filter-field select:focus,.filter-field input:focus{border-color:var(--green)}
 
-.ex-btn{font-size:.73rem;padding:4px 10px;border-radius:16px;border:1px solid var(--border);background:var(--white);color:var(--text3);cursor:pointer;font-family:inherit;transition:all .15s}
+.ex-btn{font-size:.8rem;padding:7px 14px;border-radius:20px;border:1px solid var(--border);background:var(--white);color:var(--text3);cursor:pointer;font-family:inherit;transition:all .15s;font-weight:500}
 .ex-btn:hover{background:var(--green-light);color:var(--green);border-color:var(--green)}
 .adv-toggle{font-size:.8rem;color:var(--text3);cursor:pointer;border:none;background:none;font-family:inherit;text-decoration:underline;text-underline-offset:2px}
 .adv-toggle:hover{color:var(--green)}
@@ -540,7 +544,7 @@ footer .logo-f span{color:var(--green)}
 
 /* House dropdown popover */
 .house-dropdown{position:relative;display:inline-block}
-.house-dropdown-btn{padding:5px 8px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--white);font-size:.76rem;color:var(--text);font-family:inherit;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:4px}
+.house-dropdown-btn{padding:8px 14px;border-radius:8px;border:1px solid var(--border);background:var(--white);font-size:.84rem;min-height:40px;color:var(--text);font-family:inherit;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:4px}
 .house-dropdown-btn.active-filter{border-color:var(--green);color:var(--green)}
 .house-dropdown-btn::after{content:'▾';font-size:.7rem;color:var(--text3)}
 .house-popover{display:none;position:absolute;top:100%;left:0;margin-top:4px;background:var(--white);border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:0 4px 16px rgba(0,0,0,.1);z-index:100;min-width:240px;max-height:320px;overflow-y:auto}
@@ -563,8 +567,9 @@ footer .logo-f span{color:var(--green)}
   .sp-search-row{flex-wrap:wrap}
   .sp-ai-group{min-width:160px}
   .sp-text-search{max-width:none}
-  .sp-filter-row{gap:4px 5px}
-  .sp-filter-row .tb-select,.sp-filter-row .tb-search{font-size:.73rem;padding:5px 6px;min-height:36px}
+  .sp-filter-row{gap:6px 8px}
+  .sp-filter-row .tb-select,.sp-filter-row .tb-search{font-size:.78rem;padding:6px 10px;min-height:36px}
+  .sp-secondary .tb-select,.sp-secondary .tb-search{font-size:.74rem;padding:5px 8px;min-height:32px}
   .stats-grid{grid-template-columns:1fr 1fr}
   .budget-row{grid-template-columns:1fr}
   .fp-row{grid-template-columns:1fr}
@@ -604,8 +609,9 @@ footer .logo-f span{color:var(--green)}
   .hero-sub{font-size:.88rem;margin-bottom:20px}
   .search-panel{padding:0}
   .sp-search-row{padding:10px 12px}
-  .sp-filter-row{padding:6px 12px}
-  .chip-row{padding:6px 12px}
+  .sp-filter-row{padding:8px 12px}
+  .sp-secondary{padding:5px 12px}
+  .chip-row{padding:8px 12px}
   .search-input{padding:11px 14px;font-size:.88rem}
   .filters{grid-template-columns:1fr 1fr;gap:8px}
   .filter-field select,.filter-field input{padding:9px 10px;font-size:.82rem}
@@ -824,7 +830,7 @@ footer .logo-f span{color:var(--green)}
       <select class="tb-select sp-lots-dd" id="fAfford" onchange="renderLots()" style="display:none"><option value="all">All lots</option><option value="affordable">Affordable</option><option value="in_budget">In budget only</option><option value="full_finance">Zero deposit only</option></select>
     </div>
     <!-- ROW 2: Filters — secondary, muted background -->
-    <div class="sp-filter-row">
+    <div class="sp-filter-row sp-primary">
       <div class="house-dropdown" id="houseDropdown">
         <button class="house-dropdown-btn" id="houseDropdownBtn" onclick="toggleHousePopover(event)" aria-label="Select auction houses" aria-expanded="false" aria-haspopup="listbox">All houses</button>
         <div class="house-popover" id="housePopover">
@@ -850,30 +856,32 @@ footer .logo-f span{color:var(--green)}
         </div>
       </div>
       <select class="tb-select" id="fBeds" onchange="renderLots()" aria-label="Minimum bedrooms">
-        <option value="">Beds: Any</option><option value="1">1+</option><option value="2">2+</option><option value="3">3+</option><option value="4">4+</option><option value="5">5+</option><option value="6">6+</option>
+        <option value="">Bedrooms</option><option value="1">1+</option><option value="2">2+</option><option value="3">3+</option><option value="4">4+</option><option value="5">5+</option><option value="6">6+</option>
       </select>
       <select class="tb-select" id="fType" onchange="renderLots()" aria-label="Property type">
-        <option value="">All types</option><option value="house">House</option><option value="flat">Flat</option><option value="bungalow">Bungalow</option><option value="commercial">Commercial</option><option value="land">Land</option><option value="garage">Garage</option><option value="other">Other</option>
+        <option value="">Property type</option><option value="house">House</option><option value="flat">Flat</option><option value="bungalow">Bungalow</option><option value="commercial">Commercial</option><option value="land">Land</option><option value="garage">Garage</option><option value="other">Other</option>
       </select>
       <select class="tb-select" id="fLocation" onchange="renderLots()" aria-label="Location">
-        <option value="">Anywhere</option>
+        <option value="">Region</option>
         <option value="london">London</option><option value="south east">South East</option><option value="south west">South West</option><option value="east">East of England</option><option value="west midlands">West Midlands</option><option value="east midlands">East Midlands</option><option value="north west">North West</option><option value="north east">North East</option><option value="yorkshire">Yorkshire</option><option value="wales">Wales</option><option value="scotland">Scotland</option>
       </select>
-      <select class="tb-select" id="fDeal" onchange="renderLots()" aria-label="Deal type"><option value="">All deals</option></select>
+      <select class="tb-select" id="fSoldTop" onchange="renderLots()" aria-label="Lot status">
+        <option value="all">Lot status</option><option value="available">Available only</option><option value="sold">Sold only</option><option value="stc">Sale Agreed</option><option value="withdrawn">Withdrawn</option>
+      </select>
+      <button class="ex-btn" onclick="clearAllFilters()" style="margin-left:auto;font-weight:600;color:var(--accent-danger,#c0392b);" title="Reset all dropdown filters and search text back to defaults">Clear filters</button>
+    </div>
+    <div class="sp-filter-row sp-secondary">
+      <select class="tb-select" id="fDeal" onchange="renderLots()" aria-label="Deal type"><option value="">Opportunity</option></select>
+      <select class="tb-select" id="fTenure" onchange="renderLots()" aria-label="Tenure type">
+        <option value="">Tenure</option><option value="Freehold">Freehold</option><option value="Leasehold">Leasehold</option><option value="Share of Freehold">Share of FH</option>
+      </select>
+      <input class="tb-search" type="text" id="fPostcode" placeholder="Postcode..." oninput="renderLots()" aria-label="Filter by postcode">
+      <select class="tb-select" id="fExcludePOA" onchange="renderLots()" aria-label="Include or exclude POA lots"><option value="">Price info</option><option value="yes">Hide POA</option></select>
+      <select class="tb-select" id="fLookahead" onchange="saveLookahead();renderLots()" aria-label="Auction lookahead"><option value="1">Next auction only</option><option value="2" selected>Next 2 auctions</option><option value="all">All auctions</option></select>
+      <label><input type="checkbox" id="fShowPast" onchange="onShowPastChange()"> Show past auctions</label>
       <select class="tb-select" id="fCondition" onchange="renderLots()" aria-label="Property condition" style="display:none">
         <option value="">Any condition</option><option value="needs work">Needs work</option><option value="good">Good</option><option value="vacant">Vacant</option><option value="tenanted">Tenanted</option>
       </select>
-      <select class="tb-select" id="fTenure" onchange="renderLots()" aria-label="Tenure type">
-        <option value="">Any tenure</option><option value="Freehold">Freehold</option><option value="Leasehold">Leasehold</option><option value="Share of Freehold">Share of FH</option>
-      </select>
-      <select class="tb-select" id="fSoldTop" onchange="renderLots()" aria-label="Lot status">
-        <option value="all">All statuses</option><option value="available">Available only</option><option value="sold">Sold only</option><option value="stc">Sale Agreed</option><option value="withdrawn">Withdrawn</option>
-      </select>
-      <input class="tb-search" type="text" id="fPostcode" placeholder="Postcode..." oninput="renderLots()" aria-label="Filter by postcode">
-      <select class="tb-select" id="fExcludePOA" onchange="renderLots()" aria-label="Include or exclude POA lots"><option value="">Inc. POA</option><option value="yes">Excl. POA</option></select>
-      <select class="tb-select" id="fLookahead" onchange="saveLookahead();renderLots()" aria-label="Auction lookahead"><option value="1">Next auction</option><option value="2" selected>Next 2 auctions</option><option value="all">All upcoming</option></select>
-      <label><input type="checkbox" id="fShowPast" onchange="onShowPastChange()"> Show past auctions</label>
-      <button class="ex-btn" onclick="clearAllFilters()" style="margin-left:auto;font-weight:600;color:var(--accent-danger,#c0392b);" title="Reset all dropdown filters and search text back to defaults">Clear filters</button>
     </div>
     <!-- ROW 3: Quick filter chips + AI shortcuts -->
     <div class="chip-row">
@@ -883,12 +891,11 @@ footer .logo-f span{color:var(--green)}
       <button class="ex-btn" onclick="applyPreset('devland')">Dev land</button>
       <button class="ex-btn" onclick="applyPreset('under100')">Under £100k</button>
       <button class="ex-btn" onclick="applyPreset('vacant')">Vacant</button>
-      <button class="ex-btn" onclick="applyPreset('reset')">Reset filters</button>
       <span class="chip-sep"></span>
-      <button class="ex-btn" onclick="setQ('Properties needing heavy refurbishment')">✨ Heavy refurb</button>
-      <button class="ex-btn" onclick="setQ('Best scoring deals')">✨ Top picks</button>
-      <button class="ex-btn" onclick="setQ('Probate or executor sales')">✨ Probate</button>
-      <button class="ex-btn" onclick="toggleAdvanced()" id="fpToggleBtn" title="Set your bridging finance parameters (cash available, property type, loan term) to see which lenders would fund each lot. Click to expand the finance filter panel.">💰 Bridging Check</button>
+      <button class="ex-btn ai-chip" onclick="setQ('Properties needing heavy refurbishment')">✨ Heavy refurb</button>
+      <button class="ex-btn ai-chip" onclick="setQ('Best scoring deals')">✨ Top picks</button>
+      <button class="ex-btn ai-chip" onclick="setQ('Probate or executor sales')">✨ Probate</button>
+      <button class="ex-btn ai-chip" onclick="toggleAdvanced()" id="fpToggleBtn" title="Set your bridging finance parameters (cash available, property type, loan term) to see which lenders would fund each lot. Click to expand the finance filter panel.">💰 Bridging Check</button>
     </div>
     <div class="advanced" id="advancedPanel">
       <div style="font-size:.75rem;color:#6b7c8d;padding:0 0 8px;line-height:1.4;">Set your bridging finance parameters below. Lots will show a funding badge indicating how many lenders would finance the deal and at what terms.</div>
@@ -2270,7 +2277,7 @@ function showView(v) {
 // ═══════════════════════════════
 function buildLotFilters(){
   const deals=new Set(LOTS.map(l=>l.dealType).filter(Boolean));
-  $('fDeal').innerHTML='<option value="">All deals</option>'+[...deals].sort().map(d=>`<option value="${esc(d)}">${esc(d)}</option>`).join('');
+  $('fDeal').innerHTML='<option value="">Opportunity</option>'+[...deals].sort().map(d=>`<option value="${esc(d)}">${esc(d)}</option>`).join('');
 
   /* fTS dropdown removed — title splits shown inline via section dividers */
 
@@ -2470,7 +2477,7 @@ function renderLots(){
       bannerEl.style.cssText='background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:8px;padding:8px 12px;margin:8px 0;font-size:.85rem;display:flex;align-items:center;justify-content:space-between';
       const sr=$('statsRow');if(sr)sr.parentNode.insertBefore(bannerEl,sr.nextSibling);
     }
-    if(bannerEl)bannerEl.innerHTML='⚠️ Showing multiple auction dates — '+dupCount+' lots appear in more than one catalogue. Change from "All upcoming" to "Next auction only" in the Auction Date filter to show just one. <button onclick="sessionStorage.setItem(\'bm_dismiss_lookahead\',\'1\');this.parentNode.remove()" style="background:none;border:none;cursor:pointer;font-size:1rem;color:#856404">✕</button>';
+    if(bannerEl)bannerEl.innerHTML='⚠️ Showing multiple auction dates — '+dupCount+' lots appear in more than one catalogue. Change from "All auctions" to "Next auction only" in the Auction Date filter to show just one. <button onclick="sessionStorage.setItem(\'bm_dismiss_lookahead\',\'1\');this.parentNode.remove()" style="background:none;border:none;cursor:pointer;font-size:1rem;color:#856404">✕</button>';
   }else if(bannerEl){
     bannerEl.remove();
   }
