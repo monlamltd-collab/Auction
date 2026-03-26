@@ -1917,6 +1917,7 @@ function makeChart(canvasId, type, labels, datasets, opts = {}) {
 }
 
 async function loadAnalytics() {
+  try {
   // Fetch live data + historical snapshots + skills in parallel
   const days = analyticsRange || 30;
   const queryDays = days === 0 ? 365 : days;
@@ -1924,7 +1925,7 @@ async function loadAnalytics() {
     apiFetch('/api/cache-status'),
     apiFetch('/api/quality-report'),
     apiFetch(`/api/admin/analytics?days=${queryDays}`),
-    apiFetch('/api/skills'),
+    apiFetch('/api/skills').catch(() => ({ skills: [], summary: {} })),
   ]);
 
   // ── LIVE SUMMARY CARDS ──
@@ -2024,13 +2025,18 @@ async function loadAnalytics() {
   }
 
   // ── LIVE BAR CHART: lots + image coverage per house ──
-  const barLabels = liveByHouse.map(h => h.house);
-  const barLots = liveByHouse.map(h => h.lots);
-  const barImgs = liveByHouse.map(h => Math.round(h.lots * h.imgPct / 100));
-  makeChart('chart-house-bars', 'bar', barLabels, [
-    { label: 'Total Lots', data: barLots, backgroundColor: 'rgba(34,197,94,.6)', borderColor: '#22c55e', borderWidth: 1 },
-    { label: 'With Images', data: barImgs, backgroundColor: 'rgba(59,130,246,.6)', borderColor: '#3b82f6', borderWidth: 1 },
-  ], { maintainAR: false, extra: { scales: { x: { ticks: { color: '#6b7280', font: { size: 9 }, maxRotation: 90, minRotation: 45 } } } } });
+  if (liveByHouse.length > 0) {
+    const barLabels = liveByHouse.map(h => h.house);
+    const barLots = liveByHouse.map(h => h.lots);
+    const barImgs = liveByHouse.map(h => Math.round(h.lots * h.imgPct / 100));
+    makeChart('chart-house-bars', 'bar', barLabels, [
+      { label: 'Total Lots', data: barLots, backgroundColor: 'rgba(34,197,94,.6)', borderColor: '#22c55e', borderWidth: 1 },
+      { label: 'With Images', data: barImgs, backgroundColor: 'rgba(59,130,246,.6)', borderColor: '#3b82f6', borderWidth: 1 },
+    ], { maintainAR: false, extra: { scales: { x: { ticks: { color: '#6b7280', font: { size: 9 }, maxRotation: 90, minRotation: 45 } } } } });
+  } else {
+    const el = document.getElementById('chart-house-bars')?.parentElement;
+    if (el) el.innerHTML = '<div class="text-muted" style="padding:40px;text-align:center;">No cached house data to chart yet.</div>';
+  }
 
   // ── HISTORICAL CHARTS ──
   const snapshots = analytics.snapshots || [];
@@ -2099,6 +2105,11 @@ async function loadAnalytics() {
         <div class="tile-lots">${s.last_lot_count || s.lastLotCount || 0} lots</div>
       </div>`;
     }).join('');
+  }
+  } catch (e) {
+    console.error('loadAnalytics error:', e);
+    const grid = document.getElementById('health-grid');
+    if (grid) grid.innerHTML = '<div class="text-muted" style="padding:20px;text-align:center;">Failed to load health data. Try refreshing.</div>';
   }
 }
 
