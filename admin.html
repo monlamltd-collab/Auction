@@ -197,6 +197,41 @@ tr:hover td { background: rgba(255,255,255,.02); }
 /* Toast */
 .toast { position: fixed; bottom: 20px; right: 20px; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 18px; font-size: .82rem; z-index: 100; animation: slideIn .3s ease; }
 @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+/* Daily changelog */
+.daily-changelog { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 16px; margin-bottom: 12px; font-size: .75rem; color: var(--text3); font-family: var(--mono); }
+.daily-changelog .delta-up { color: var(--green); }
+.daily-changelog .delta-down { color: var(--red); }
+
+/* Attention Required */
+.attn-section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 16px; overflow: hidden; }
+.attn-header { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+.attn-header h2 { font-size: .88rem; font-weight: 700; }
+.attn-item { padding: 8px 18px; border-bottom: 1px solid var(--border); font-size: .82rem; display: flex; align-items: center; gap: 10px; }
+.attn-item:last-child { border-bottom: none; }
+.attn-item.attn-red { background: var(--red-bg); }
+.attn-item.attn-amber { background: var(--amber-bg); }
+.attn-item .attn-label { font-weight: 600; min-width: 100px; }
+.attn-item .attn-detail { flex: 1; color: var(--text2); font-size: .78rem; }
+.attn-item .attn-meta { color: var(--text3); font-size: .72rem; font-family: var(--mono); margin-left: auto; white-space: nowrap; }
+.attn-all-clear { padding: 16px 18px; color: var(--green); font-weight: 600; font-size: .85rem; text-align: center; }
+.attn-group { padding: 10px 18px; border-bottom: 1px solid var(--border); }
+.attn-group-header { display: flex; align-items: center; gap: 8px; font-size: .82rem; font-weight: 600; }
+.attn-group-header .count { font-family: var(--mono); color: var(--text3); font-weight: 400; }
+
+/* Missing catalogues categories */
+.missing-cat { border-bottom: 1px solid var(--border); }
+.missing-cat:last-child { border-bottom: none; }
+.missing-cat summary { padding: 12px 18px; font-size: .82rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+.missing-cat summary:hover { background: rgba(255,255,255,.02); }
+.missing-cat-content { padding: 0 18px 12px; }
+.missing-cat-item { padding: 4px 0; font-size: .78rem; color: var(--text2); display: flex; align-items: center; gap: 8px; }
+.missing-month-group { margin-top: 6px; }
+.missing-month-label { font-size: .72rem; font-weight: 600; color: var(--text3); text-transform: uppercase; padding: 4px 0; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
+
+/* Collapsed missing images */
+.missing-images-details summary { padding: 14px 18px; font-size: .82rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+.missing-images-details summary:hover { background: rgba(255,255,255,.02); }
 </style>
 </head>
 <body>
@@ -234,6 +269,9 @@ tr:hover td { background: rgba(255,255,255,.02); }
   <div class="main">
     <div class="tab-pane active" id="tab-overview">
 
+    <!-- Daily Changelog -->
+    <div class="daily-changelog" id="daily-changelog">Loading snapshot comparison...</div>
+
     <!-- Pipeline Alerts -->
     <div class="section" id="alertsSection">
       <div class="section-header">
@@ -247,8 +285,17 @@ tr:hover td { background: rgba(255,255,255,.02); }
       </details>
     </div>
 
-    <!-- House Health / Freshness -->
-    <div class="section" id="freshnessSection">
+    <!-- Attention Required -->
+    <div class="attn-section" id="attentionSection">
+      <div class="attn-header">
+        <h2>Attention Required</h2>
+        <span class="badge" id="attn-badge">Loading...</span>
+      </div>
+      <div id="attn-body"><div class="loading"><span class="spinner"></span> Checking...</div></div>
+    </div>
+
+    <!-- House Health / Freshness (hidden on overview, used by health tab) -->
+    <div class="section" id="freshnessSection" style="display:none;">
       <div class="section-header">
         <h2>House Health</h2>
       </div>
@@ -308,13 +355,13 @@ tr:hover td { background: rgba(255,255,255,.02); }
                 <th title="Fresh = cached data is still valid. Stale = cache has expired and data will be re-scraped on the next analysis cycle">Status</th>
                 <th title="Auction house name (slug identifier used internally)">House</th>
                 <th title="Total number of individual lots extracted from this house's catalogue">Lots</th>
-                <th title="Percentage of lots that have an image URL. Low coverage may indicate broken image extraction or lazy-loading issues">Images</th>
-                <th title="Number of lots flagged as high-scoring investment opportunities by the scoring engine (score based on condition, yield, opportunities)">Top Picks</th>
-                <th title="Number of lots detected as having title split potential — properties that could be split into multiple titles for added value">Title Splits</th>
+                <th title="Percentage of lots that have an image URL. Low coverage may indicate broken image extraction or lazy-loading issues">Imgs %</th>
+                <th title="Number of lots flagged as high-scoring investment opportunities by the scoring engine">Top Picks</th>
                 <th title="Average estimated gross yield across lots from this house that have yield data">Yield</th>
-                <th title="Full extraction pipeline: Fetch (how HTML was obtained) → Extract (how lots were parsed from HTML) → Images (how lot images were obtained)">Pipeline</th>
-                <th title="How long ago this house's data was last scraped and cached">Age</th>
-                <th title="Time until the cached data expires. Once expired, the house will be re-scraped on the next auto-analysis cycle">Expires</th>
+                <th title="Full extraction pipeline: Fetch → Extract">Pipeline</th>
+                <th title="How long ago this house's data was last scraped and cached">Last Scrape</th>
+                <th title="Next upcoming auction date for this house from the calendar">Next Auction</th>
+                <th title="Time until the cached data expires">Cache Expires</th>
                 <th title="Manually trigger a rescrape for this house">Actions</th>
               </tr>
             </thead>
@@ -366,6 +413,53 @@ tr:hover td { background: rgba(255,255,255,.02); }
         <div class="engine-item" title="Number of lead enquiries submitted by users (e.g. requesting bridging finance quotes or further info on a lot)"><div><div class="label">Leads</div><div class="val" id="a-leads">-</div></div></div>
         <div class="engine-item" title="Total of all tracked events in the last 24 hours (analyses + searches + leads + page views)"><div><div class="label">Total Events</div><div class="val" id="a-events">-</div></div></div>
       </div>
+    </div>
+
+    <!-- Missing Catalogues (categorised) -->
+    <div class="section" id="missing-section" style="display:none;">
+      <div class="section-header">
+        <h2 title="Houses that have a calendar entry but no cached lot data — categorised by status">Missing Catalogues</h2>
+        <span class="badge badge-amber" id="missing-badge">-</span>
+      </div>
+      <div id="missing-categorised"></div>
+    </div>
+
+    <!-- Missing Images (collapsed by default) -->
+    <div class="section" id="missing-images-section">
+      <details class="missing-images-details">
+        <summary>
+          <span id="missing-images-summary-line">Loading image coverage...</span>
+          <span class="badge badge-amber" id="missing-images-badge" style="margin-left:auto;">-</span>
+          <button class="topbar-btn" onclick="event.stopPropagation(); loadMissingImages()" title="Refresh missing image data" style="margin-left:8px;">Refresh</button>
+        </summary>
+        <div style="padding:10px 18px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border);">
+          <div class="stat-label" style="margin-bottom:0;">Overall Image Coverage</div>
+          <span class="mono" id="missing-images-coverage" style="font-weight:700;font-size:1rem;">-</span>
+          <span class="text-muted" id="missing-images-summary" style="font-size:.78rem;">-</span>
+          <div style="margin-left:auto;display:flex;align-items:center;gap:6px;">
+            <label style="font-size:.7rem;color:var(--text3);font-weight:600;text-transform:uppercase;">Filter House</label>
+            <select id="missing-images-house-filter" onchange="loadMissingImages()" style="padding:5px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:inherit;font-size:.78rem;">
+              <option value="">All houses</option>
+            </select>
+          </div>
+        </div>
+        <div style="overflow-x:auto;max-height:500px;overflow-y:auto;">
+          <table>
+            <thead>
+              <tr>
+                <th title="Auction house name">House</th>
+                <th title="Lot number within the catalogue">Lot #</th>
+                <th title="Property address">Address</th>
+                <th title="Link to the catalogue page containing this lot">Catalogue URL</th>
+                <th title="Scheduled auction date for this lot">Auction Date</th>
+              </tr>
+            </thead>
+            <tbody id="missing-images-tbody">
+              <tr><td colspan="5" class="loading"><span class="spinner"></span> Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </details>
     </div>
 
     <!-- Add Auction -->
@@ -427,57 +521,6 @@ tr:hover td { background: rgba(255,255,255,.02); }
       </div>
     </div>
 
-    <!-- Missing Images -->
-    <div class="section" id="missing-images-section">
-      <div class="section-header">
-        <h2 title="Lots across all cached houses that are missing an image URL. Filter by house to investigate.">Missing Images</h2>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span class="badge badge-amber" id="missing-images-badge">-</span>
-          <button class="topbar-btn" onclick="loadMissingImages()" title="Refresh missing image data">Refresh</button>
-        </div>
-      </div>
-      <div style="padding:10px 18px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border);">
-        <div class="stat-label" style="margin-bottom:0;">Overall Image Coverage</div>
-        <span class="mono" id="missing-images-coverage" style="font-weight:700;font-size:1rem;">-</span>
-        <span class="text-muted" id="missing-images-summary" style="font-size:.78rem;">-</span>
-        <div style="margin-left:auto;display:flex;align-items:center;gap:6px;">
-          <label style="font-size:.7rem;color:var(--text3);font-weight:600;text-transform:uppercase;">Filter House</label>
-          <select id="missing-images-house-filter" onchange="loadMissingImages()" style="padding:5px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:inherit;font-size:.78rem;">
-            <option value="">All houses</option>
-          </select>
-        </div>
-      </div>
-      <div style="overflow-x:auto;max-height:500px;overflow-y:auto;">
-        <table>
-          <thead>
-            <tr>
-              <th title="Auction house name">House</th>
-              <th title="Lot number within the catalogue">Lot #</th>
-              <th title="Property address">Address</th>
-              <th title="Link to the catalogue page containing this lot">Catalogue URL</th>
-              <th title="Scheduled auction date for this lot">Auction Date</th>
-            </tr>
-          </thead>
-          <tbody id="missing-images-tbody">
-            <tr><td colspan="5" class="loading"><span class="spinner"></span> Loading...</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- Missing Houses -->
-    <div class="section" id="missing-section" style="display:none;">
-      <div class="section-header">
-        <h2 title="Houses that have a calendar entry but no cached lot data — their catalogue URL may be broken, not yet live, or the scraper failed">Missing Catalogues</h2>
-        <span class="badge badge-amber" id="missing-badge">-</span>
-      </div>
-      <div style="overflow-x:auto;">
-        <table>
-          <thead><tr><th>House</th><th>Date</th><th>URL</th></tr></thead>
-          <tbody id="missing-tbody"></tbody>
-        </table>
-      </div>
-    </div>
     </div><!-- /tab-overview -->
 
     <!-- Analytics Tab -->
@@ -885,6 +928,9 @@ async function loadMissingImages() {
   }
 
   document.getElementById('missing-images-summary').textContent = `${total} lots missing images across ${houses} houses`;
+  // Update collapsed summary line
+  const covText = document.getElementById('missing-images-coverage')?.textContent || '-';
+  document.getElementById('missing-images-summary-line').innerHTML = `Missing Images &mdash; ${covText} image coverage &mdash; ${total} lots missing images across ${houses} houses`;
 
   // Render table
   const tbody = document.getElementById('missing-images-tbody');
@@ -906,6 +952,159 @@ async function loadMissingImages() {
   }).join('');
 }
 
+// ── Daily Changelog ──
+let _lastCacheData = null;
+let _lastQualityData = null;
+let _lastCostData = null;
+let _calendarData = [];
+
+function updateDailyChangelog() {
+  const el = document.getElementById('daily-changelog');
+  const prev = localStorage.getItem('ab_last_snapshot');
+  const now = {
+    totalLots: parseInt(document.getElementById('s-lots').textContent.replace(/,/g, '')) || 0,
+    houseCount: parseInt(document.getElementById('s-houses').textContent) || 0,
+    imageCoverage: parseInt((document.getElementById('missing-images-coverage')?.textContent || '0').replace('%', '')) || 0,
+    timestamp: Date.now()
+  };
+
+  if (prev) {
+    try {
+      const p = JSON.parse(prev);
+      const ago = timeAgo(new Date(p.timestamp));
+      const parts = [];
+      const hDelta = now.houseCount - (p.houseCount || 0);
+      const lDelta = now.totalLots - (p.totalLots || 0);
+      if (hDelta !== 0) parts.push(`<span class="${hDelta > 0 ? 'delta-up' : 'delta-down'}">${hDelta > 0 ? '+' : ''}${hDelta} houses</span>`);
+      if (lDelta !== 0) parts.push(`<span class="${lDelta > 0 ? 'delta-up' : 'delta-down'}">${lDelta > 0 ? '+' : ''}${lDelta.toLocaleString()} lots</span>`);
+      if (p.imageCoverage !== undefined && now.imageCoverage !== p.imageCoverage) {
+        const imgDir = now.imageCoverage > p.imageCoverage ? 'delta-up' : 'delta-down';
+        parts.push(`image coverage <span class="${imgDir}">${p.imageCoverage}% &rarr; ${now.imageCoverage}%</span>`);
+      }
+      el.innerHTML = parts.length > 0
+        ? parts.join(', ') + ` since ${ago}`
+        : `No changes since ${ago}`;
+    } catch (_) {
+      el.textContent = 'First visit -- snapshot saved for future comparisons';
+    }
+  } else {
+    el.textContent = 'First visit -- snapshot saved for future comparisons';
+  }
+
+  localStorage.setItem('ab_last_snapshot', JSON.stringify(now));
+}
+
+// ── Attention Required ──
+function updateAttentionRequired() {
+  const body = document.getElementById('attn-body');
+  const badge = document.getElementById('attn-badge');
+  const items = [];
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+
+  // Scrape Failures: houses in cached with 0 lots that have been scraped before
+  if (_lastCacheData && _lastCacheData.cached) {
+    const byHouse = {};
+    for (const h of _lastCacheData.cached) {
+      const key = h.house || 'unknown';
+      if (!byHouse[key]) byHouse[key] = { totalLots: 0, lastScraped: null };
+      byHouse[key].totalLots += (h.total_lots || 0);
+      const sd = new Date(h.last_scraped_at || h.created_at);
+      if (!byHouse[key].lastScraped || sd > byHouse[key].lastScraped) byHouse[key].lastScraped = sd;
+    }
+    for (const [name, info] of Object.entries(byHouse)) {
+      if (info.totalLots === 0 && info.lastScraped) {
+        const slug = Object.entries(KNOWN_HOUSES).find(([k, v]) => v === name)?.[0] || name.toLowerCase().replace(/[^a-z]/g, '');
+        items.push({
+          type: 'red',
+          label: 'Scrape Failure',
+          detail: esc(name),
+          meta: 'Last: ' + timeAgo(info.lastScraped),
+          action: `<button class="btn-rescrape" onclick="rescrapeHouse('${slug}','${esc(name)}')">Retry</button>`
+        });
+      }
+    }
+  }
+
+  // Never Scraped: from missing array
+  if (_lastCacheData && _lastCacheData.missing) {
+    const cachedHouseSlugs = new Set();
+    if (_lastCacheData.cached) {
+      for (const h of _lastCacheData.cached) {
+        const slug = Object.entries(KNOWN_HOUSES).find(([k, v]) => v === h.house)?.[0] || (h.house || '').toLowerCase().replace(/[^a-z]/g, '');
+        cachedHouseSlugs.add(slug);
+        cachedHouseSlugs.add(h.house);
+      }
+    }
+    const neverScraped = _lastCacheData.missing.filter(m => {
+      const d = new Date(m.date); d.setHours(0, 0, 0, 0);
+      if (d > today) return false; // future, not a concern yet
+      const mSlug = Object.entries(KNOWN_HOUSES).find(([k, v]) => v === m.house)?.[0] || (m.house || '').toLowerCase().replace(/[^a-z]/g, '');
+      return !cachedHouseSlugs.has(mSlug) && !cachedHouseSlugs.has(m.house);
+    });
+    if (neverScraped.length > 0) {
+      items.push({
+        type: 'amber',
+        label: 'Never Scraped',
+        detail: `${neverScraped.length} houses with catalogue-ready dates but never scraped`,
+        meta: '',
+        action: `<button class="action-btn" onclick="triggerAction('analyse-all')" style="font-size:.7rem;padding:4px 10px;">Scrape All New</button>`
+      });
+    }
+  }
+
+  // Low Image Coverage
+  if (_lastQualityData && _lastQualityData.houses) {
+    for (const h of _lastQualityData.houses) {
+      if ((h.imgCoverage || 0) < 50 && (h.totalLots || 0) > 0) {
+        items.push({
+          type: 'amber',
+          label: 'Low Images',
+          detail: esc(h.house),
+          meta: (h.imgCoverage || 0) + '%',
+          action: ''
+        });
+      }
+    }
+  }
+
+  // Credit Warnings
+  if (_lastCostData && _lastCostData.firecrawl) {
+    const fc = _lastCostData.firecrawl;
+    if (fc.monthlyBudget > 0 && fc.creditsUsed > 0) {
+      const pct = Math.round(fc.creditsUsed / fc.monthlyBudget * 100);
+      if (pct > 80) {
+        items.push({
+          type: pct > 95 ? 'red' : 'amber',
+          label: 'Credits',
+          detail: `Firecrawl ${pct}% used (${fc.creditsUsed} / ${fc.monthlyBudget})`,
+          meta: pct > 95 ? 'CRITICAL' : 'Warning',
+          action: ''
+        });
+      }
+    }
+  }
+
+  if (items.length === 0) {
+    body.innerHTML = '<div class="attn-all-clear">All systems healthy -- nothing needs attention</div>';
+    badge.className = 'badge badge-green';
+    badge.textContent = 'All clear';
+  } else {
+    const redCount = items.filter(i => i.type === 'red').length;
+    const amberCount = items.filter(i => i.type === 'amber').length;
+    badge.className = `badge ${redCount > 0 ? 'badge-red' : 'badge-amber'}`;
+    badge.textContent = `${items.length} items`;
+    body.innerHTML = items.map(i => `
+      <div class="attn-item attn-${i.type}">
+        <span class="status-dot dot-${i.type}"></span>
+        <span class="attn-label">${i.label}</span>
+        <span class="attn-detail">${i.detail}</span>
+        <span class="attn-meta">${i.meta}</span>
+        ${i.action}
+      </div>
+    `).join('');
+  }
+}
+
 async function refreshAll() {
   document.getElementById('last-refresh').textContent = 'Refreshing...';
   await Promise.all([
@@ -919,6 +1118,8 @@ async function refreshAll() {
     loadFreshness(),
     loadMissingImages(),
   ]);
+  updateAttentionRequired();
+  updateDailyChangelog();
   document.getElementById('last-refresh').textContent = 'Updated ' + new Date().toLocaleTimeString();
 }
 
@@ -992,10 +1193,44 @@ async function loadCacheStatus() {
     document.getElementById('s-houses').textContent = freshHouseCount;
     document.getElementById('s-houses-sub').textContent = `${houses.length} houses, ${summary.totalReady} calendar-ready`;
 
+    // Build a map of house -> nearest future auction date from calendar
+    const nextAuctionMap = {};
+    const nowDate = new Date();
+    if (_calendarData && _calendarData.length) {
+      for (const a of _calendarData) {
+        const aDate = new Date(a.date);
+        if (aDate >= nowDate) {
+          const hName = a.house;
+          if (!nextAuctionMap[hName] || aDate < new Date(nextAuctionMap[hName])) {
+            nextAuctionMap[hName] = a.date;
+          }
+        }
+      }
+    }
+
+    // Build freshness map for Last Scrape data
+    const freshnessMap = {};
+    if (freshnessData && freshnessData.length) {
+      for (const f of freshnessData) {
+        freshnessMap[f.house || f.slug] = f;
+      }
+    }
+
     tbody.innerHTML = houses.map(h => {
       const isStale = !h.anyFresh;
-      const dotClass = isStale ? 'dot-amber' : 'dot-green';
-      const statusText = isStale ? 'Stale' : 'Fresh';
+      // Determine health status from freshness data
+      const fData = freshnessMap[h.name];
+      let dotClass, statusText;
+      if (fData && fData.status === 'broken') {
+        dotClass = 'dot-red'; statusText = 'Broken';
+      } else if (fData && fData.status === 'degraded') {
+        dotClass = 'dot-amber'; statusText = 'Warning';
+      } else if (isStale) {
+        dotClass = 'dot-amber'; statusText = 'Stale';
+      } else {
+        dotClass = 'dot-green'; statusText = 'Fresh';
+      }
+
       if (!isStale) {
         totalUnder100k += h.under100k || 0;
         if (h.avgYield) { aggYieldSum += h.avgYield; aggYieldCount++; }
@@ -1004,16 +1239,20 @@ async function loadCacheStatus() {
       const urlBadge = h.urlCount > 1 ? ` <span class="mono text-muted" style="font-size:.7rem;font-weight:400;">${h.urlCount} URLs</span>` : '';
       const yieldStr = h.avgYield ? h.avgYield.toFixed(1) + '%' : '-';
 
+      // Next auction from calendar
+      const nextAuction = nextAuctionMap[h.name];
+      const nextAuctionStr = nextAuction ? new Date(nextAuction).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '-';
+
       let rows = `<tr style="${isStale ? 'opacity:.5;' : ''}" class="house-row" data-house="${esc(slug)}">
         <td><span class="status-dot ${dotClass}"></span>${statusText}</td>
         <td><strong>${esc(h.name)}</strong>${urlBadge}</td>
         <td class="mono">${h.totalLots}</td>
         <td class="mono text-muted">-</td>
         <td class="mono">${h.topPicks}</td>
-        <td class="mono">${h.titleSplits}</td>
         <td class="mono ${h.avgYield ? 'text-green' : 'text-muted'}">${yieldStr}</td>
         <td>${getPipelineHtml(h.name, h.scrapedWith, h.extractedWith)}</td>
         <td class="mono">${timeAgo(h.newestScrape)}</td>
+        <td class="mono">${nextAuctionStr}</td>
         <td class="mono ${isStale ? 'text-amber' : ''}">${isStale ? 'expired' : timeUntil(h.latestExpiry)}</td>
         <td><button class="btn-rescrape" onclick="rescrapeHouse('${slug}','${esc(h.name)}')" title="Clear cache and rescrape this house now">Re-scrape</button>${h.urlCount > 1 ? ` <button class="btn-rescrape" onclick="toggleHouseDetail('${esc(slug)}')" title="Show/hide individual URLs" style="font-size:.65rem;padding:2px 6px;">+</button>` : ''}</td>
       </tr>`;
@@ -1030,10 +1269,10 @@ async function loadCacheStatus() {
             <td class="mono">${e.total_lots || 0}</td>
             <td class="mono text-muted">-</td>
             <td class="mono">${e.top_picks || 0}</td>
-            <td class="mono">${e.title_splits || 0}</td>
             <td class="mono">${e.avg_yield ? e.avg_yield + '%' : '-'}</td>
             <td>${getPipelineHtml(h.name, e.scraped_with, e.extracted_with)}</td>
             <td class="mono">${timeAgo(e.last_scraped_at || e.created_at)}</td>
+            <td></td>
             <td class="mono ${eExpired ? 'text-amber' : ''}">${eExpired ? 'expired' : timeUntil(e.expires_at)}</td>
             <td></td>
           </tr>`;
@@ -1045,14 +1284,108 @@ async function loadCacheStatus() {
     document.getElementById('s-yield').textContent = aggYieldCount ? (aggYieldSum / aggYieldCount).toFixed(1) + '%' : '-';
   }
 
-  // Missing houses (server already filters to upcoming-only via getCalendarAuctions)
+  // Store for attention required
+  _lastCacheData = data;
+
+  // Missing catalogues - categorised
   if (missing && missing.length > 0) {
     document.getElementById('missing-section').style.display = 'block';
     document.getElementById('missing-badge').textContent = missing.length + ' missing';
-    document.getElementById('missing-tbody').innerHTML = missing.map(m => {
-      const dateStr = m.date ? new Date(m.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '-';
-      return `<tr><td>${esc(m.house)}</td><td class="mono">${dateStr}</td><td class="mono" style="font-size:.75rem;"><a href="${esc(m.url)}" target="_blank">${esc(m.url)}</a></td></tr>`;
-    }).join('');
+
+    const todayMidnight = new Date(); todayMidnight.setHours(0, 0, 0, 0);
+    const cachedHouseNames = new Set((cached || []).map(c => c.house));
+
+    const neverScraped = [];
+    const scrapeFailures = [];
+    const futureAuctions = [];
+
+    for (const m of missing) {
+      const mDate = new Date(m.date); mDate.setHours(0, 0, 0, 0);
+      if (mDate > todayMidnight) {
+        futureAuctions.push(m);
+      } else if (cachedHouseNames.has(m.house)) {
+        scrapeFailures.push(m);
+      } else {
+        neverScraped.push(m);
+      }
+    }
+
+    let catHtml = '';
+
+    // Never Scraped
+    if (neverScraped.length > 0) {
+      catHtml += `<details class="missing-cat">
+        <summary>
+          <span class="status-dot dot-amber"></span>
+          Awaiting First Scrape (${neverScraped.length})
+          <button class="action-btn" onclick="event.stopPropagation(); triggerAction('analyse-all')" style="font-size:.7rem;padding:4px 10px;margin-left:auto;">Scrape All New</button>
+        </summary>
+        <div class="missing-cat-content">
+          ${neverScraped.map(m => {
+            const dateStr = m.date ? new Date(m.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '-';
+            return `<div class="missing-cat-item"><span>${esc(m.house)}</span><span class="mono text-muted" style="font-size:.72rem;">${dateStr}</span></div>`;
+          }).join('')}
+        </div>
+      </details>`;
+    }
+
+    // Scrape Failures
+    if (scrapeFailures.length > 0) {
+      catHtml += `<details class="missing-cat">
+        <summary>
+          <span class="status-dot dot-red"></span>
+          Scrape Failures Today (${scrapeFailures.length})
+          <button class="action-btn" onclick="event.stopPropagation(); triggerAction('analyse-all')" style="font-size:.7rem;padding:4px 10px;margin-left:auto;">Retry All</button>
+        </summary>
+        <div class="missing-cat-content">
+          ${scrapeFailures.map(m => {
+            const dateStr = m.date ? new Date(m.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '-';
+            const slug = Object.entries(KNOWN_HOUSES).find(([k, v]) => v === m.house)?.[0] || (m.house || '').toLowerCase().replace(/[^a-z]/g, '');
+            return `<div class="missing-cat-item">
+              <span>${esc(m.house)}</span>
+              <span class="mono text-muted" style="font-size:.72rem;">${dateStr}</span>
+              <a href="${esc(m.url)}" target="_blank" class="mono" style="font-size:.68rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc((m.url || '').replace(/^https?:\/\//, '').substring(0, 50))}</a>
+              <button class="btn-rescrape" onclick="rescrapeHouse('${slug}','${esc(m.house)}')" style="font-size:.65rem;padding:2px 6px;">Retry</button>
+            </div>`;
+          }).join('')}
+        </div>
+      </details>`;
+    }
+
+    // Future Auctions
+    if (futureAuctions.length > 0) {
+      // Group by month
+      const byMonth = {};
+      for (const m of futureAuctions) {
+        const d = new Date(m.date);
+        const key = d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+        if (!byMonth[key]) byMonth[key] = [];
+        byMonth[key].push(m);
+      }
+      const monthEntries = Object.entries(byMonth);
+      const monthSummary = monthEntries.map(([k, v]) => `${k} (${v.length})`).join(' | ');
+
+      catHtml += `<details class="missing-cat">
+        <summary>
+          <span class="status-dot dot-grey"></span>
+          Future Auctions (${futureAuctions.length})
+          <span class="mono text-muted" style="font-size:.7rem;margin-left:8px;">${monthSummary}</span>
+        </summary>
+        <div class="missing-cat-content">
+          ${monthEntries.map(([month, items]) => `
+            <div class="missing-month-group">
+              <div class="missing-month-label">${month} (${items.length})</div>
+              ${items.map(m => {
+                const dateStr = m.date ? new Date(m.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '-';
+                return `<div class="missing-cat-item"><span>${esc(m.house)}</span><span class="mono text-muted" style="font-size:.72rem;">${dateStr}</span></div>`;
+              }).join('')}
+            </div>
+          `).join('')}
+        </div>
+      </details>`;
+    }
+
+    document.getElementById('missing-categorised').innerHTML = catHtml;
   } else {
     document.getElementById('missing-section').style.display = 'none';
   }
@@ -1061,6 +1394,7 @@ async function loadCacheStatus() {
 async function loadQualityReport() {
   const data = await apiFetch('/api/quality-report');
   if (data.error) return;
+  _lastQualityData = data;
 
   // Update image coverage in houses table
   if (data.houses) {
@@ -1106,6 +1440,7 @@ async function loadQualityReport() {
 async function loadCostMonitor() {
   const data = await apiFetch('/api/cost-monitor');
   if (data.error) return;
+  _lastCostData = data;
 
   const fc = data.firecrawl || {};
   const fcEnabled = fc.enabled;
@@ -1155,6 +1490,7 @@ async function loadCalendar() {
   const data = await apiFetch('/api/auctions');
   if (data.error) return;
   const auctions = data.auctions || [];
+  _calendarData = auctions;
   document.getElementById('calendar-badge').textContent = `${auctions.length} upcoming`;
 
   const tbody = document.getElementById('calendar-tbody');
