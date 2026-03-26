@@ -682,9 +682,7 @@ footer .logo-f span{color:var(--green)}
 }
 
 /* FIX-07: Sign-in modal text overflow */
-#signupModal .modal{box-sizing:border-box;overflow-y:auto;overflow-x:hidden;overflow-wrap:break-word;word-wrap:break-word;width:90%;max-width:400px;min-width:280px}
-#signupModal .modal label{display:flex;align-items:flex-start;gap:6px;margin-bottom:5px;cursor:pointer;max-width:100%}
-#signupModal .modal label span{flex:1;min-width:0}
+#signupModal .modal{box-sizing:border-box;overflow-wrap:break-word;word-wrap:break-word;overflow:hidden}
 @media(max-width:440px){
   #signupModal .modal{max-width:calc(100vw - 32px) !important;min-width:0;margin:16px;padding:20px 16px;width:calc(100vw - 32px)}
 }
@@ -756,15 +754,15 @@ footer .logo-f span{color:var(--green)}
         <input id="signupEmail" placeholder="Email address" type="email" aria-label="Email address for sign-in" style="margin-bottom:12px">
         <div id="signupError" style="color:var(--red);font-size:.82rem;margin-bottom:8px;display:none"></div>
         <button class="btn-main" style="width:100%;padding:14px;font-size:.9rem" id="btnSendMagicLink" onclick="handleSendMagicLink()">Send Magic Link</button>
-        <div style="text-align:left;margin:14px 0 0;font-size:.75rem;color:var(--text4)">
-          <label style="display:flex;align-items:flex-start;gap:6px;margin-bottom:5px;cursor:pointer">
-            <input type="checkbox" id="consentAlerts" checked style="margin-top:2px;accent-color:var(--green);flex-shrink:0">
-            <span>Send me auction alerts and feature updates</span>
-          </label>
-          <label style="display:flex;align-items:flex-start;gap:6px;cursor:pointer">
-            <input type="checkbox" id="consentPartner" style="margin-top:2px;accent-color:var(--green);flex-shrink:0">
-            <span>Hear about BridgeMatch finance tools and partner offers</span>
-          </label>
+        <div style="text-align:left;margin:14px 0 0;font-size:.75rem;color:var(--text4);width:100%;box-sizing:border-box">
+          <div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:5px;cursor:pointer" onclick="document.getElementById('consentAlerts').click()">
+            <input type="checkbox" id="consentAlerts" checked style="margin-top:2px;accent-color:var(--green);flex-shrink:0;width:16px;height:16px" onclick="event.stopPropagation()">
+            <span style="line-height:1.4">Send me auction alerts and feature updates</span>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:6px;cursor:pointer" onclick="document.getElementById('consentPartner').click()">
+            <input type="checkbox" id="consentPartner" style="margin-top:2px;accent-color:var(--green);flex-shrink:0;width:16px;height:16px" onclick="event.stopPropagation()">
+            <span style="line-height:1.4">Hear about BridgeMatch finance tools and partner offers</span>
+          </div>
         </div>
         <div class="modal-note">No password needed · No spam · Unsubscribe anytime</div>
       </div>
