@@ -328,10 +328,8 @@ tr:hover td { background: rgba(255,255,255,.02); }
 
     <!-- Scraping Engine Status -->
     <div class="section">
-      <div class="section-header">
-        <h2 title="Status of the scraping engines used to fetch auction catalogue pages. Firecrawl is primary, Puppeteer is fallback">Scraping Engines</h2>
-        <span class="badge" id="engine-badge">-</span>
-      </div>
+      <details>
+      <summary style="padding:14px 18px;font-size:.88rem;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:8px;">Scraping Engines <span class="badge" id="engine-badge" style="font-size:.7rem;">-</span></summary>
       <div class="engine-bar" id="engine-bar">
         <div class="engine-item" title="Firecrawl is the primary managed scraping API. Handles JS rendering, anti-bot, and proxy rotation. Falls back to Puppeteer when unavailable"><div><div class="label">Firecrawl</div><div class="val" id="e-fc-status">-</div></div></div>
         <div class="engine-item" title="Firecrawl API credits used this month vs monthly budget cap. Auto-falls back to Puppeteer when exhausted"><div><div class="label">Credits Used</div><div class="val" id="e-fc-credits">-</div></div></div>
@@ -339,6 +337,7 @@ tr:hover td { background: rgba(255,255,255,.02); }
         <div class="engine-item" title="Puppeteer (headless Chrome) availability. Used as fallback scraper when Firecrawl is unavailable or for houses that need browser rendering"><div><div class="label">Puppeteer</div><div class="val" id="e-pupp-status">-</div></div></div>
         <div class="engine-item" title="Gemini API requests per day. Free tier limit is 1,500 RPD. Used for AI lot extraction when DOM extractors return insufficient data"><div><div class="label">Gemini RPD</div><div class="val" id="e-gemini">-</div></div></div>
       </div>
+      </details>
     </div>
 
     <div class="two-col">
@@ -373,46 +372,23 @@ tr:hover td { background: rgba(255,255,255,.02); }
       </div>
     </div>
 
-    <div class="two-col">
-      <!-- Issues -->
-      <div class="section">
-        <div class="section-header">
-          <h2 title="Data quality issues detected across all houses. Critical = broken extraction or zero lots. Warning = low image coverage, duplicates, or stale data">Issues</h2>
-          <span class="badge" id="issues-badge">-</span>
-        </div>
-        <div id="issues-list">
-          <div class="loading"><span class="spinner"></span> Loading...</div>
-        </div>
-      </div>
-
-      <!-- Calendar -->
-      <div class="section">
-        <div class="section-header">
-          <h2 title="Auction dates from the calendar. 'Ready' means the catalogue URL is confirmed and lots can be scraped. 'Pending' means the date is known but no catalogue link yet">Upcoming Auctions</h2>
-          <span class="badge badge-blue" id="calendar-badge">-</span>
-        </div>
-        <div style="overflow-x:auto; max-height: 400px; overflow-y: auto;">
-          <table>
-            <thead><tr><th title="Auction house name">House</th><th title="Scheduled auction date">Date</th><th title="Ready = catalogue URL confirmed and scrapeable. Pending = date known but catalogue not yet available">Ready</th><th title="Remove this calendar entry"></th></tr></thead>
-            <tbody id="calendar-tbody">
-              <tr><td colspan="3" class="loading"><span class="spinner"></span> Loading...</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
+    <!-- Issues and Calendar removed — data now in Attention Required + Next Auction column + Missing Catalogues -->
+    <div id="issues-list" style="display:none;"></div>
+    <span id="issues-badge" style="display:none;"></span>
+    <div id="calendar-tbody" style="display:none;"></div>
+    <span id="calendar-badge" style="display:none;"></span>
 
     <!-- Activity -->
     <div class="section">
-      <div class="section-header">
-        <h2 title="User activity metrics from the last 24 hours, tracked via the daily stats endpoint">Activity (24h)</h2>
-      </div>
+      <details>
+      <summary style="padding:14px 18px;font-size:.88rem;font-weight:700;cursor:pointer;">Activity (24h)</summary>
       <div class="engine-bar" id="activity-bar">
-        <div class="engine-item" title="Number of catalogue analyses triggered by users in the last 24 hours (each analysis scrapes and extracts lots from a catalogue URL)"><div><div class="label">Analyses</div><div class="val" id="a-analyses">-</div></div></div>
-        <div class="engine-item" title="Number of AI-powered smart searches performed by users (natural language queries matched against lot data)"><div><div class="label">AI Searches</div><div class="val" id="a-searches">-</div></div></div>
-        <div class="engine-item" title="Number of lead enquiries submitted by users (e.g. requesting bridging finance quotes or further info on a lot)"><div><div class="label">Leads</div><div class="val" id="a-leads">-</div></div></div>
-        <div class="engine-item" title="Total of all tracked events in the last 24 hours (analyses + searches + leads + page views)"><div><div class="label">Total Events</div><div class="val" id="a-events">-</div></div></div>
+        <div class="engine-item"><div><div class="label">Analyses</div><div class="val" id="a-analyses">-</div></div></div>
+        <div class="engine-item"><div><div class="label">AI Searches</div><div class="val" id="a-searches">-</div></div></div>
+        <div class="engine-item"><div><div class="label">Leads</div><div class="val" id="a-leads">-</div></div></div>
+        <div class="engine-item"><div><div class="label">Total Events</div><div class="val" id="a-events">-</div></div></div>
       </div>
+      </details>
     </div>
 
     <!-- Missing Catalogues (categorised) -->
@@ -464,7 +440,8 @@ tr:hover td { background: rgba(255,255,255,.02); }
 
     <!-- Add Auction -->
     <div class="section">
-      <div class="section-header"><h2 title="Manually add an auction to the calendar. Auto-detects the house from the URL. Mark 'Catalogue ready' if the lots page is live and scrapeable">Add Auction URL</h2></div>
+      <details>
+      <summary style="padding:14px 18px;font-size:.88rem;font-weight:700;cursor:pointer;">Add Auction URL</summary>
       <form class="add-auction-form" onsubmit="addAuction(event)">
         <div class="field">
           <label>Catalogue URL</label>
@@ -488,11 +465,13 @@ tr:hover td { background: rgba(255,255,255,.02); }
         </div>
         <button type="submit" class="action-btn" id="aa-submit" style="align-self:flex-end;" title="Saves this auction to the calendar database. It will appear in the Upcoming Auctions list and be available for scraping">Add to Calendar</button>
       </form>
+      </details>
     </div>
 
     <!-- Quick Actions -->
     <div class="section">
-      <div class="section-header"><h2 title="Admin actions to manually trigger scraping, caching, and maintenance operations">Quick Actions</h2></div>
+      <details>
+      <summary style="padding:14px 18px;font-size:.88rem;font-weight:700;cursor:pointer;">Quick Actions</summary>
       <div class="actions-grid">
         <div class="action-item">
           <button class="action-btn" onclick="triggerAction('analyse-all')" title="Re-scrapes every auction house from scratch, ignoring cache. Takes 30-60 min. Use after fixing an extractor or when lots look stale">Force Re-Analyse All</button>
@@ -519,6 +498,7 @@ tr:hover td { background: rgba(255,255,255,.02); }
           <p class="action-desc">Deletes all cached lot data. Frontend will show 0 lots until next analysis runs. Use with caution — mainly for debugging.</p>
         </div>
       </div>
+      </details>
     </div>
 
     </div><!-- /tab-overview -->
