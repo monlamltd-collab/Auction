@@ -681,8 +681,10 @@ footer .logo-f span{color:var(--green)}
   .deal-stack-widget>div[style*="grid-template-columns"]>div[style*="grid-column"]{grid-column:auto !important}
 }
 
-/* FIX-07: Sign-in modal text overflow on small screens */
-#signupModal .modal{box-sizing:border-box;overflow-wrap:break-word;word-wrap:break-word}
+/* FIX-07: Sign-in modal text overflow */
+#signupModal .modal{box-sizing:border-box;overflow:hidden;overflow-wrap:break-word;word-wrap:break-word}
+#signupModal .modal label{display:flex;align-items:flex-start;gap:6px;margin-bottom:5px;cursor:pointer;max-width:100%}
+#signupModal .modal label span{flex:1;min-width:0}
 @media(max-width:440px){
   #signupModal .modal{max-width:calc(100vw - 32px) !important;margin:16px;padding:20px 16px}
 }
@@ -738,7 +740,7 @@ footer .logo-f span{color:var(--green)}
 
   <!-- ═══════ AUTH MODAL (Magic Link) ═══════ -->
   <div class="modal-bg" id="signupModal" role="dialog" aria-modal="true" aria-labelledby="authModalTitle">
-    <div class="modal" style="max-width:420px">
+    <div class="modal" style="max-width:400px">
       <!-- Step 1: Email + consent -->
       <div id="authStep1">
         <h2 id="authModalTitle" style="font-size:1.4rem;margin-bottom:12px">Sign in to Auction Brain</h2>
