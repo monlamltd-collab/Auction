@@ -1152,6 +1152,48 @@ const HOUSE_ROOTS = {
   ahlondon:               'https://ahlondon.eigonlineauctions.com/search',
   starpropertyonline:     'https://star-property-online.eigonlineauctions.com/search',
   brggibsondublin:        'https://brggibsondublinauctions.eigonlineauctions.com/search',
+  // ── Batch 8: Comprehensive UK coverage (March 2026) ──
+  // National / Online
+  propertysolvers:        'https://auctions.propertysolvers.co.uk/properties',
+  pugh:                   'https://www.pugh-auctions.com/auctions/',
+  markjenkinson:          'https://www.markjenkinson.co.uk/auction/',
+  regionalauctioneers:    'https://www.regionalpropertyauctioneers.co.uk/properties',
+  // South East
+  clarkegammon:           'https://www.clarkegammon.co.uk/auction/',
+  nesbits:                'https://www.nesbits.co.uk/property-auctions/',
+  pearsons:               'https://www.pearsons.com/auction/',
+  foxgrant:               'https://www.foxgrant.com/auctions/',
+  lextons:                'https://www.lextons.com/auctions/',
+  // South West
+  bradleysdevon:          'https://www.bradleys-estate-agents.co.uk/auction/',
+  taylerandfletcher:      'https://www.taylerandfletcher.co.uk/property-auctions/',
+  luscombemaye:           'https://www.luscombemaye.com/auctions/',
+  lodgeandthomas:         'https://www.lodgeandthomas.com/auction/',
+  bondoxboroughphillips:  'https://www.bondoxboroughphillips.co.uk/auction/',
+  charlesdarrow:          'https://www.charlesdarrow.co.uk/auctions/',
+  // Eastern England
+  aldreds:                'https://www.aldreds.co.uk/auction/',
+  humberts:               'https://www.humberts.com/auctions/',
+  // Wales
+  allwalesauction:        'https://www.allwalesauction.com/auctions/',
+  evansbros:              'https://www.evansbros.co.uk/property-auctions/',
+  herbertrthomasandco:    'https://www.herbertrthomasandco.co.uk/auction/',
+  johnfrancis:            'https://www.johnfrancis.co.uk/auction/',
+  morrismarshall:         'https://www.morrismarshall.co.uk/property-auctions/',
+  // Midlands
+  andrewgrant:            'https://andrewgrant.com/auctions/',
+  gherbertbanks:          'https://www.gherbertbanks.co.uk/auctions/',
+  hawkesford:             'https://www.hawkesford.co.uk/auctions/',
+  howkinsandharrison:     'https://www.howkinsandharrison.co.uk/auctions/',
+  scargillmann:           'https://www.scargillmann.co.uk/auction/',
+  // North West
+  mellerbraggins:         'https://www.mellerbraggins.com/auctions/',
+  smithandsons:           'https://www.smithandsons.net/auctions/',
+  wrightmarshall:         'https://www.wrightmarshall.co.uk/auction/',
+  // North East / Cumbria / Lake District
+  hackneyandleigh:        'https://www.hackneyandleigh.co.uk/auctions/',
+  // Scotland
+  onlinepropertyauctionsscotland: 'https://www.onlinepropertyauctionsscotland.co.uk/properties/',
 };
 
 /*
@@ -5180,6 +5222,25 @@ const HOUSE_DISPLAY_NAMES = {
   ahlondon: 'Auction House London EIG',
   starpropertyonline: 'Star Property Online',
   brggibsondublin: 'BRG Gibson Dublin',
+  // ── Batch 8 (March 2026) ──
+  propertysolvers: 'Property Solvers', pugh: 'Pugh Auctions',
+  markjenkinson: 'Mark Jenkinson', regionalauctioneers: 'Regional Property Auctioneers',
+  clarkegammon: 'Clarke Gammon', nesbits: 'Nesbits', pearsons: 'Pearsons',
+  foxgrant: 'Fox Grant', lextons: 'Lextons',
+  bradleysdevon: 'Bradleys', taylerandfletcher: 'Tayler & Fletcher',
+  luscombemaye: 'Luscombe Maye', lodgeandthomas: 'Lodge & Thomas',
+  bondoxboroughphillips: 'Bond Oxborough Phillips', charlesdarrow: 'Charles Darrow',
+  aldreds: 'Aldreds', humberts: 'Humberts',
+  allwalesauction: 'All Wales Auction', evansbros: 'Evans Bros',
+  herbertrthomasandco: 'Herbert R Thomas', johnfrancis: 'John Francis',
+  morrismarshall: 'Morris Marshall & Poole',
+  andrewgrant: 'Andrew Grant', gherbertbanks: 'G Herbert Banks',
+  hawkesford: 'Hawkesford', howkinsandharrison: 'Howkins & Harrison',
+  scargillmann: 'Scargill Mann',
+  mellerbraggins: 'Meller Braggins', smithandsons: 'Smith & Sons',
+  wrightmarshall: 'Wright Marshall',
+  hackneyandleigh: 'Hackney & Leigh',
+  onlinepropertyauctionsscotland: 'Online Property Auctions Scotland',
 };
 
 function getHouseDisplayName(slug, url) {
