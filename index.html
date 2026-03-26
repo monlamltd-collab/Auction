@@ -84,11 +84,9 @@ a{color:var(--green);text-decoration:none}a:hover{text-decoration:underline}
 .search-panel{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:0;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.03);position:sticky;top:56px;z-index:10;overflow:visible}
 /* Row 1: Search bar — most prominent */
 .sp-search-row{display:flex;gap:8px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border)}
-.sp-text-search{flex:1;min-width:120px;max-width:220px}
-.sp-ai-group{display:flex;gap:0;flex:2;min-width:200px;position:relative}
-.sp-ai-group .tb-search{border-radius:var(--radius-sm) 0 0 var(--radius-sm);border-right:none;padding-left:34px}
+.sp-ai-group{display:flex;gap:0;flex:1;position:relative}
+.sp-ai-group .tb-search{border-radius:var(--radius-sm) 0 0 var(--radius-sm);border-right:none}
 .sp-ai-group .btn-main{border-radius:0 var(--radius-sm) var(--radius-sm) 0;padding:8px 20px}
-.sp-ai-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:.82rem;color:var(--text4);pointer-events:none;z-index:1}
 .sp-page-info{font-size:.72rem;color:var(--text3);white-space:nowrap;margin-left:4px}
 .sp-per-page{flex-shrink:0}
 .sp-lots-dd{flex-shrink:0}
@@ -108,6 +106,25 @@ a{color:var(--green);text-decoration:none}a:hover{text-decoration:underline}
 .chip-row .ex-btn.ai-chip:hover{background:#f0eadc;border-color:#c9a94e;color:#6b5010}
 .chip-row .adv-toggle{font-size:.75rem}
 .chip-sep{width:1px;height:16px;background:var(--border);margin:0 4px;flex-shrink:0}
+/* ── More Filters Popover ── */
+.more-filters-dd{position:relative;display:inline-block}
+.more-filters-btn{padding:8px 14px;border-radius:8px;border:1px solid var(--border);background:var(--white);font-size:.84rem;min-height:40px;color:var(--text);font-family:inherit;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:6px}
+.more-filters-btn:hover{border-color:var(--green);color:var(--green)}
+.mf-dot{width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block}
+.more-filters-pop{display:none;position:absolute;top:100%;right:0;margin-top:4px;background:var(--white);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:100;padding:16px;min-width:320px}
+.more-filters-pop.open{display:block}
+.mf-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mf-field label{display:block;font-size:.7rem;font-weight:600;color:var(--text3);margin-bottom:3px;text-transform:uppercase;letter-spacing:.03em}
+.mf-field .tb-select,.mf-field .tb-search{width:100%;font-size:.82rem;padding:8px 10px;min-height:36px}
+.mf-check{grid-column:1/-1}
+.mf-check label{display:flex;align-items:center;gap:6px;font-size:.82rem;text-transform:none;font-weight:500;color:var(--text);cursor:pointer}
+.mf-check input[type="checkbox"]{width:16px;height:16px;accent-color:var(--green)}
+.mf-clear{display:block;width:100%;margin-top:12px;padding:8px;background:none;border:none;border-top:1px solid var(--border);padding-top:10px;color:var(--accent-danger,#c0392b);font-size:.8rem;font-weight:600;cursor:pointer;font-family:inherit;text-align:center}
+.mf-clear:hover{text-decoration:underline}
+/* ── Favourite Heart ── */
+.fav-btn{position:absolute;top:8px;right:8px;width:34px;height:34px;border-radius:50%;border:none;background:rgba(255,255,255,.85);color:var(--text3);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;z-index:3;backdrop-filter:blur(4px);line-height:1;padding:0}
+.fav-btn:hover{background:rgba(255,255,255,.95);color:var(--accent-danger,#c0392b);transform:scale(1.1)}
+.fav-btn.fav-active{color:var(--accent-danger,#c0392b);background:rgba(255,255,255,.95)}
 /* Legacy compat */
 .unified-bar{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center}
 .unified-bar .tb-select,.unified-bar .tb-search{padding:7px 10px;font-size:.8rem}
@@ -566,7 +583,6 @@ footer .logo-f span{color:var(--green)}
   .unified-bar .tb-select,.unified-bar .tb-search{font-size:.76rem;padding:6px 8px;min-height:40px}
   .sp-search-row{flex-wrap:wrap}
   .sp-ai-group{min-width:160px}
-  .sp-text-search{max-width:none}
   .sp-filter-row{gap:6px 8px}
   .sp-filter-row .tb-select,.sp-filter-row .tb-search{font-size:.78rem;padding:6px 10px;min-height:36px}
   .sp-secondary .tb-select,.sp-secondary .tb-search{font-size:.74rem;padding:5px 8px;min-height:32px}
@@ -591,7 +607,6 @@ footer .logo-f span{color:var(--green)}
   .cta-primary,.cta-secondary{width:100%;justify-content:center}
   .unified-bar{gap:4px}
   .sp-search-row{flex-direction:column;gap:6px}
-  .sp-text-search{max-width:none;width:100%}
   .sp-ai-group{width:100%}
   .sp-page-info{text-align:center;width:100%}
   .steps{grid-template-columns:1fr}
@@ -717,8 +732,6 @@ footer .logo-f span{color:var(--green)}
             <span class="acct-tier" id="acctTier">Free</span>
           </div>
           <div class="acct-divider"></div>
-          <a class="acct-item" id="acctManage" onclick="openBillingPortal();closeAccountMenu()">Manage plan</a>
-          <a class="acct-item" id="acctUpgrade" onclick="showPaywall();closeAccountMenu()">Upgrade</a>
           <div class="acct-divider"></div>
           <a class="acct-item acct-signout" onclick="signOut();closeAccountMenu()">Sign out</a>
         </div>
@@ -732,7 +745,7 @@ footer .logo-f span{color:var(--green)}
   <header class="hero">
     <div class="hero-badge"><span class="badge-dot"></span> Live auction data updated daily</div>
     <h1>Your unfair advantage<br>at <em>auction</em></h1>
-    <p class="hero-sub">AI scores every lot across 30+ UK auction houses. Check bridging finance from <span class="lender-count-dynamic">68</span> lenders in one click. Free to browse — Pro unlocks full AI analysis.</p>
+    <p class="hero-sub">AI scores every lot across 30+ UK auction houses. Check bridging finance from <span class="lender-count-dynamic">68</span> lenders in one click. Completely free — sign in to unlock AI features.</p>
     <div class="hero-ctas">
       <a href="#filterBar" class="cta-primary" onclick="event.preventDefault();document.getElementById('filterBar').scrollIntoView({behavior:'smooth'})">Browse Auction Deals →</a>
     </div>
@@ -750,13 +763,14 @@ footer .logo-f span{color:var(--green)}
       <div id="authStep1">
         <h2 id="authModalTitle" style="font-size:1.4rem;margin-bottom:12px">Sign in to Auction Brain</h2>
         <div style="background:var(--bg-primary, #f5f7fa);border-radius:10px;padding:12px 14px;margin-bottom:18px;text-align:left">
-          <div style="font-size:.8rem;font-weight:600;color:var(--navy);margin-bottom:6px">Your free account includes:</div>
+          <div style="font-size:.8rem;font-weight:600;color:var(--navy);margin-bottom:6px">Sign in to unlock AI features:</div>
           <div style="display:flex;flex-direction:column;gap:4px;font-size:.78rem;color:var(--text2)">
-            <span>✓ 14-day Pro trial — unlimited AI searches</span>
-            <span>✓ 10 free AI searches per day after trial</span>
-            <span>✓ Full lot data, scores, and addresses</span>
+            <span>✓ AI-powered smart search across all lots</span>
+            <span>✓ Investment scores &amp; opportunity detection</span>
             <span>✓ BridgeMatch finance check on every lot</span>
+            <span>✓ Deal stacking calculator</span>
           </div>
+          <div style="font-size:.72rem;color:var(--accent);font-weight:600;margin-top:6px">100% free — no credit card needed</div>
         </div>
         <input id="signupEmail" placeholder="Email address" type="email" aria-label="Email address for sign-in" style="margin-bottom:12px">
         <div id="signupError" style="color:var(--red);font-size:.82rem;margin-bottom:8px;display:none"></div>
@@ -783,28 +797,22 @@ footer .logo-f span{color:var(--green)}
     </div>
   </div>
 
-  <!-- ═══════ PAYWALL MODAL ═══════ -->
+  <!-- ═══════ LIMIT MODAL (daily AI search cap) ═══════ -->
   <div class="modal-bg" id="paywallModal">
-    <div class="modal" style="max-width:500px">
-      <div class="modal-icon">⚡</div>
-      <h2>Upgrade to Pro</h2>
-      <p id="paywallReason">You've used your free AI searches for today. Go Pro for unlimited.</p>
-      <div class="paywall-cards">
-        <div class="paywall-card popular" onclick="startCheckout('monthly')">
-          <div class="plan-name">Pro</div>
-          <div class="price">£9.99</div>
-          <div class="period">per month · cancel anytime</div>
-          <div class="plan-desc">Unlimited AI searches, every day</div>
+    <div class="modal" style="max-width:420px">
+      <div class="modal-icon">🔍</div>
+      <h2>Daily AI limit reached</h2>
+      <p id="paywallReason">You've used your AI searches for today. Your allowance resets at midnight.</p>
+      <div style="background:var(--bg-primary, #f5f7fa);border-radius:10px;padding:14px;margin:16px 0;text-align:left;font-size:.82rem;color:var(--text2)">
+        <div style="font-weight:600;margin-bottom:6px">While you wait, you can still:</div>
+        <div style="display:flex;flex-direction:column;gap:3px">
+          <span>✓ Browse all lots with full data and images</span>
+          <span>✓ Use all filters and sorting</span>
+          <span>✓ Run BridgeMatch finance checks</span>
+          <span>✓ View scores and opportunities</span>
         </div>
       </div>
-      <ul class="paywall-features">
-        <li>Unlimited AI searches across all catalogues</li>
-        <li>AI scores, opportunities & risks for every lot</li>
-        <li>CSV/JSON export of results</li>
-        <li>Portfolio tracking (coming soon)</li>
-      </ul>
-      <div class="paywall-free-note">Free users get 10 AI searches per day. BridgeMatch finance matching is always free.</div>
-      <button onclick="$('paywallModal').classList.remove('show')" style="margin-top:12px;background:none;border:none;color:var(--text3);cursor:pointer;font-size:.85rem;width:100%">Maybe later</button>
+      <button onclick="$('paywallModal').classList.remove('show')" class="btn-main" style="width:100%;padding:12px">Got it</button>
     </div>
   </div>
 
@@ -817,33 +825,18 @@ footer .logo-f span{color:var(--green)}
 
   <!-- ═══════ UNIFIED FILTER BAR ═══════ -->
   <div class="search-panel" id="filterBar">
-    <!-- ROW 1: Search + AI — primary actions -->
+    <!-- ROW 1: Search — primary action -->
     <div class="sp-search-row">
-      <input class="tb-search sp-text-search" type="text" id="fSearch" placeholder="Search lots..." oninput="renderLots()">
       <div class="sp-ai-group">
-        <span class="sp-ai-icon">✨</span>
-        <input class="tb-search" id="smartQuery" placeholder="AI search..." aria-label="AI-powered search query">
+        <input class="tb-search" id="smartQuery" placeholder="Search by address, keyword, or ask AI..." oninput="localFilter()" aria-label="Search or AI-powered query">
         <button class="btn-main" id="mainBtn" onclick="handleSearch()" aria-label="Search auction lots">Search</button>
       </div>
       <select class="tb-select sp-per-page" id="fPerPage" onchange="savePerPage();_currentPage=1;renderLots()" aria-label="Lots per page"><option value="20">20 / page</option><option value="30">30 / page</option><option value="50" selected>50 / page</option><option value="100">100 / page</option></select>
       <span class="sp-page-info" id="filterBarCount"></span>
       <select class="tb-select sp-lots-dd" id="fAfford" onchange="renderLots()" style="display:none"><option value="all">All lots</option><option value="affordable">Affordable</option><option value="in_budget">In budget only</option><option value="full_finance">Zero deposit only</option></select>
     </div>
-    <!-- ROW 2: Filters — secondary, muted background -->
+    <!-- ROW 2: Filters -->
     <div class="sp-filter-row sp-primary">
-      <div class="house-dropdown" id="houseDropdown">
-        <button class="house-dropdown-btn" id="houseDropdownBtn" onclick="toggleHousePopover(event)" aria-label="Select auction houses" aria-expanded="false" aria-haspopup="listbox">All houses</button>
-        <div class="house-popover" id="housePopover">
-          <input class="house-popover-search" type="text" placeholder="Search houses..." oninput="filterHouseList(this.value)" aria-label="Search auction houses">
-          <div id="houseCheckList"></div>
-        </div>
-      </div>
-      <select class="tb-select" id="fSort" onchange="renderLots()" aria-label="Sort lots by">
-        <option value="score">Score (high → low)</option>
-        <option value="price_asc">Price (low → high)</option>
-        <option value="price_desc">Price (high → low)</option>
-        <option value="yield">Yield (high → low)</option>
-      </select>
       <div class="price-dd" id="priceDropdown">
         <button class="price-dd-btn" id="priceDdBtn" onclick="togglePricePopover(event)">Any price</button>
         <div class="price-pop" id="pricePopover">
@@ -865,37 +858,64 @@ footer .logo-f span{color:var(--green)}
         <option value="">Region</option>
         <option value="london">London</option><option value="south east">South East</option><option value="south west">South West</option><option value="east">East of England</option><option value="west midlands">West Midlands</option><option value="east midlands">East Midlands</option><option value="north west">North West</option><option value="north east">North East</option><option value="yorkshire">Yorkshire</option><option value="wales">Wales</option><option value="scotland">Scotland</option>
       </select>
-      <select class="tb-select" id="fSoldTop" onchange="renderLots()" aria-label="Lot status">
-        <option value="all">Lot status</option><option value="available">Available only</option><option value="sold">Sold only</option><option value="stc">Sale Agreed</option><option value="withdrawn">Withdrawn</option>
+      <select class="tb-select" id="fSort" onchange="renderLots()" aria-label="Sort lots by">
+        <option value="score">Score (high → low)</option>
+        <option value="price_asc">Price (low → high)</option>
+        <option value="price_desc">Price (high → low)</option>
+        <option value="yield">Yield (high → low)</option>
       </select>
-      <button class="ex-btn" onclick="clearAllFilters()" style="margin-left:auto;font-weight:600;color:var(--accent-danger,#c0392b);" title="Reset all dropdown filters and search text back to defaults">Clear filters</button>
-    </div>
-    <div class="sp-filter-row sp-secondary">
-      <select class="tb-select" id="fDeal" onchange="renderLots()" aria-label="Deal type"><option value="">Opportunity</option></select>
-      <select class="tb-select" id="fTenure" onchange="renderLots()" aria-label="Tenure type">
-        <option value="">Tenure</option><option value="Freehold">Freehold</option><option value="Leasehold">Leasehold</option><option value="Share of Freehold">Share of FH</option>
-      </select>
-      <input class="tb-search" type="text" id="fPostcode" placeholder="Postcode..." oninput="renderLots()" aria-label="Filter by postcode">
-      <select class="tb-select" id="fExcludePOA" onchange="renderLots()" aria-label="Include or exclude POA lots"><option value="">Price info</option><option value="yes">Hide POA</option></select>
-      <select class="tb-select" id="fLookahead" onchange="saveLookahead();renderLots()" aria-label="Auction lookahead"><option value="1">Next auction only</option><option value="2" selected>Next 2 auctions</option><option value="all">All auctions</option></select>
-      <label><input type="checkbox" id="fShowPast" onchange="onShowPastChange()"> Show past auctions</label>
-      <select class="tb-select" id="fCondition" onchange="renderLots()" aria-label="Property condition" style="display:none">
-        <option value="">Any condition</option><option value="needs work">Needs work</option><option value="good">Good</option><option value="vacant">Vacant</option><option value="tenanted">Tenanted</option>
-      </select>
-    </div>
-    <!-- ROW 3: Quick filter chips + AI shortcuts -->
-    <div class="chip-row">
-      <button class="ex-btn" onclick="applyPreset('refurb150')">Refurb under £150k</button>
-      <button class="ex-btn" onclick="applyPreset('titlesplit')">Title splits</button>
-      <button class="ex-btn" onclick="applyPreset('highyield')">Yield 8%+</button>
-      <button class="ex-btn" onclick="applyPreset('devland')">Dev land</button>
-      <button class="ex-btn" onclick="applyPreset('under100')">Under £100k</button>
-      <button class="ex-btn" onclick="applyPreset('vacant')">Vacant</button>
-      <span class="chip-sep"></span>
-      <button class="ex-btn ai-chip" onclick="setQ('Properties needing heavy refurbishment')">✨ Heavy refurb</button>
-      <button class="ex-btn ai-chip" onclick="setQ('Best scoring deals')">✨ Top picks</button>
-      <button class="ex-btn ai-chip" onclick="setQ('Probate or executor sales')">✨ Probate</button>
-      <button class="ex-btn ai-chip" onclick="toggleAdvanced()" id="fpToggleBtn" title="Set your bridging finance parameters (cash available, property type, loan term) to see which lenders would fund each lot. Click to expand the finance filter panel.">💰 Bridging Check</button>
+      <div class="more-filters-dd" id="moreFiltersDD">
+        <button class="more-filters-btn" id="moreFiltersBtn" onclick="toggleMoreFilters(event)">More filters <span class="mf-dot" id="mfDot" style="display:none"></span></button>
+        <div class="more-filters-pop" id="moreFiltersPop">
+          <div class="mf-grid">
+            <div class="mf-field" style="grid-column:1/-1">
+              <label>Auction house</label>
+              <div class="house-dropdown" id="houseDropdown" style="width:100%">
+                <button class="house-dropdown-btn" id="houseDropdownBtn" onclick="toggleHousePopover(event)" aria-label="Select auction houses" aria-expanded="false" aria-haspopup="listbox" style="width:100%;text-align:left">All houses</button>
+                <div class="house-popover" id="housePopover">
+                  <input class="house-popover-search" type="text" placeholder="Search houses..." oninput="filterHouseList(this.value)" aria-label="Search auction houses">
+                  <div id="houseCheckList"></div>
+                </div>
+              </div>
+            </div>
+            <div class="mf-field">
+              <label>Lot status</label>
+              <select class="tb-select" id="fSoldTop" onchange="renderLots();updateMoreDot()" aria-label="Lot status">
+                <option value="all">All statuses</option><option value="available">Available only</option><option value="sold">Sold only</option><option value="stc">Sale Agreed</option><option value="withdrawn">Withdrawn</option>
+              </select>
+            </div>
+            <div class="mf-field">
+              <label>Opportunity</label>
+              <select class="tb-select" id="fDeal" onchange="renderLots();updateMoreDot()" aria-label="Deal type"><option value="">All deals</option></select>
+            </div>
+            <div class="mf-field">
+              <label>Tenure</label>
+              <select class="tb-select" id="fTenure" onchange="renderLots();updateMoreDot()" aria-label="Tenure type">
+                <option value="">Any tenure</option><option value="Freehold">Freehold</option><option value="Leasehold">Leasehold</option><option value="Share of Freehold">Share of FH</option>
+              </select>
+            </div>
+            <div class="mf-field">
+              <label>Postcode</label>
+              <input class="tb-search" type="text" id="fPostcode" placeholder="e.g. BS1" oninput="renderLots();updateMoreDot()" aria-label="Filter by postcode">
+            </div>
+            <div class="mf-field">
+              <label>Price info</label>
+              <select class="tb-select" id="fExcludePOA" onchange="renderLots();updateMoreDot()" aria-label="Include or exclude POA lots"><option value="">Include POA</option><option value="yes">Hide POA</option></select>
+            </div>
+            <div class="mf-field">
+              <label>Auction window</label>
+              <select class="tb-select" id="fLookahead" onchange="saveLookahead();renderLots()" aria-label="Auction lookahead"><option value="1">Next auction only</option><option value="2" selected>Next 2 auctions</option><option value="all">All auctions</option></select>
+            </div>
+            <div class="mf-field mf-check">
+              <label><input type="checkbox" id="fShowPast" onchange="onShowPastChange()"> Show past auctions</label>
+            </div>
+            <select class="tb-select" id="fCondition" onchange="renderLots()" aria-label="Property condition" style="display:none">
+              <option value="">Any condition</option><option value="needs work">Needs work</option><option value="good">Good</option><option value="vacant">Vacant</option><option value="tenanted">Tenanted</option>
+            </select>
+          </div>
+          <button class="mf-clear" onclick="clearAllFilters()">Clear all filters</button>
+        </div>
+      </div>
     </div>
     <div class="advanced" id="advancedPanel">
       <div style="font-size:.75rem;color:#6b7c8d;padding:0 0 8px;line-height:1.4;">Set your bridging finance parameters below. Lots will show a funding badge indicating how many lenders would finance the deal and at what terms.</div>
@@ -1094,7 +1114,7 @@ let LENDER_DATA=[];
 const BATCH_SIZE=60;
 let _pendingCards=[];
 let _batchObserver=null;
-function isPremium(){if(window._stripeEnabled===false)return !!window._userTier;return window._userTier==='premium';} // Gated behind auth; all signed-in users are premium when Stripe disabled
+function isPremium(){return !!window._userTier && window._userTier !== 'anon';} // All signed-in users get full access
 let _searchAbort=null; // AbortController for in-flight searches
 let _searchTimers=[]; // setTimeout IDs for step animations
 let _searchReader=null; // SSE ReadableStreamDefaultReader (for cleanup on abort)
@@ -1115,16 +1135,79 @@ function resetSearchState(){
 }
 
 function clearAllFilters(){
-  const resets={fDeal:'',fType:'',fCondition:'',fTenure:'',fLocation:'',fAfford:'all',fSoldTop:'all',fSearch:'',fSort:'score',fBeds:'',fPostcode:'',fMinPrice:'',fMaxPrice:''};
+  const resets={fDeal:'',fType:'',fCondition:'',fTenure:'',fLocation:'',fAfford:'all',fSoldTop:'all',fSort:'score',fBeds:'',fPostcode:'',fMinPrice:'',fMaxPrice:'',fExcludePOA:''};
   for(const[id,val] of Object.entries(resets)){const el=$(id);if(el)el.value=val}
-  if($('fExcludePOA')) $('fExcludePOA').value='';
   if($('fShowPast')) { $('fShowPast').checked=false; onShowPastChange(); }
   _selectedHouses.clear();
   updateHouseBtn();
   updatePriceBtn();
   $('smartQuery').value='';
+  updateMoreDot();
   if(SMART_RESULTS){ LOTS=ALL_LOTS; SMART_RESULTS=null; $('resultsTitle').textContent=ALL_LOTS.length.toLocaleString()+' auction lots'; }
   renderLots();
+}
+
+// ── LOCAL FILTER (instant text filtering) ──
+function localFilter(){ renderLots(); }
+
+// ── MORE FILTERS POPOVER ──
+function toggleMoreFilters(e) {
+  e.stopPropagation();
+  var pop = $('moreFiltersPop');
+  pop.classList.toggle('open');
+  if (pop.classList.contains('open')) {
+    setTimeout(function() {
+      document.addEventListener('click', closeMoreFilters);
+    }, 0);
+  }
+}
+function closeMoreFilters(e) {
+  var pop = $('moreFiltersPop');
+  if (pop && !pop.contains(e.target) && e.target !== $('moreFiltersBtn')) {
+    pop.classList.remove('open');
+    document.removeEventListener('click', closeMoreFilters);
+  }
+}
+function updateMoreDot() {
+  var active = ($('fSoldTop')?.value||'all') !== 'all' ||
+    $('fDeal')?.value || $('fTenure')?.value ||
+    ($('fPostcode')?.value||'').trim() || $('fExcludePOA')?.value;
+  $('mfDot').style.display = active ? '' : 'none';
+}
+
+// ── FAVOURITES ──
+function getFavourites() {
+  try { return JSON.parse(localStorage.getItem('bm_favourites') || '[]'); } catch(e) { return []; }
+}
+function saveFavourites(favs) {
+  try { localStorage.setItem('bm_favourites', JSON.stringify(favs)); } catch(e) {}
+}
+function isFavourite(lot) {
+  if (!lot) return false;
+  var key = (lot._house || '') + ':' + (lot.lot || '') + ':' + (lot.address || '');
+  return getFavourites().indexOf(key) !== -1;
+}
+function getFavKey(lot) {
+  return (lot._house || '') + ':' + (lot.lot || '') + ':' + (lot.address || '');
+}
+function toggleFav(idx, event) {
+  event.stopPropagation();
+  if (!window._userTier) { $('signupModal').classList.add('show'); return; }
+  var lot = LOTS[idx];
+  if (!lot) return;
+  var key = getFavKey(lot);
+  var favs = getFavourites();
+  var i = favs.indexOf(key);
+  if (i === -1) { favs.push(key); } else { favs.splice(i, 1); }
+  saveFavourites(favs);
+  var card = document.getElementById('lot-' + idx);
+  if (card) {
+    var btn = card.querySelector('.fav-btn');
+    if (btn) {
+      btn.classList.toggle('fav-active', i === -1);
+      btn.innerHTML = i === -1 ? '&#9829;' : '&#9825;';
+    }
+  }
 }
 
 // Price popover toggle
@@ -1333,13 +1416,13 @@ function handleSearch(){
 }
 
 function setQ(q){
-  if(!window._userTier){if(window._stripeEnabled===false){$('signupModal').classList.add('show');}else{showPaywall('Sign up for free to get 5 AI searches per day, or upgrade to Pro for unlimited.');}return}
+  if(!window._userTier){$('signupModal').classList.add('show');return}
   $('smartQuery').value=q;
   runSmartSearch(q);
 }
 function applyPreset(name){
   // Reset all filters first
-  const resets={fDeal:'',fType:'',fCondition:'',fTenure:'',fLocation:'',fSoldTop:'all',fSearch:'',fSort:'score',fBeds:'',fPostcode:'',fMinPrice:'',fMaxPrice:'',fExcludePOA:''};
+  const resets={fDeal:'',fType:'',fCondition:'',fTenure:'',fLocation:'',fSoldTop:'all',fSort:'score',fBeds:'',fPostcode:'',fMinPrice:'',fMaxPrice:'',fExcludePOA:''};
   for(const[id,val] of Object.entries(resets)){const el=$(id);if(el)el.value=val}
   $('smartQuery').value='';
   if(name==='refurb150'){$('fCondition').value='needs work';$('fMaxPrice').value='150000'}
@@ -1751,11 +1834,12 @@ $('paywallModal').addEventListener('click', e => { if (e.target === $('paywallMo
 // STRIPE / PAYWALL
 // ═══════════════════════════════
 function showPaywall(reason) {
-  // When Stripe is disabled, redirect to sign-up modal instead of paywall
-  if (window._stripeEnabled === false) {
+  // When not signed in, show sign-up modal
+  if (!window._userTier) {
     $('signupModal').classList.add('show');
     return;
   }
+  // Signed in — show daily limit modal
   if (reason) $('paywallReason').textContent = reason;
   $('paywallModal').classList.add('show');
 }
@@ -1806,7 +1890,7 @@ async function openBillingPortal() {
       const toast = document.createElement('div');
       const isSuccess = paymentStatus === 'success';
       toast.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:' + (isSuccess ? '#2e7d32' : '#6b7c8d') + ';color:white;padding:12px 24px;border-radius:8px;font-weight:600;z-index:999;font-size:.9rem;box-shadow:0 4px 20px rgba(0,0,0,.15)';
-      toast.textContent = isSuccess ? 'Payment successful! You now have Pro access.' : (window._stripeEnabled===false ? 'Checkout cancelled.' : 'Checkout cancelled. You can upgrade any time from your account menu.');
+      toast.textContent = isSuccess ? 'Welcome! You now have full access.' : 'Checkout cancelled.';
       document.body.appendChild(toast);
       setTimeout(() => toast.remove(), 5000);
     }, 500);
@@ -1827,43 +1911,12 @@ async function updateProStatus() {
     const oldBadge = document.querySelector('.pro-badge');
     if (oldBadge) oldBadge.remove();
 
-    // When Stripe is disabled, hide all payment UI and treat signed-in users as premium
-    if (window._stripeEnabled === false) {
-      emailEl.insertAdjacentHTML('afterend', '<span class="pro-badge">FREE</span>');
-      $('acctTier').textContent = 'Member';
-      $('acctTier').classList.add('pro');
-      if ($('acctManage')) $('acctManage').style.display = 'none';
-      if ($('acctUpgrade')) $('acctUpgrade').style.display = 'none';
-      // Remove any trial banners
-      const existingBanner = document.querySelector('.trial-banner');
-      if (existingBanner) existingBanner.remove();
-    } else if (data.trial) {
-      // Trial state — show orange TRIAL badge with days remaining
-      emailEl.insertAdjacentHTML('afterend', '<span class="pro-badge trial-badge">TRIAL · ' + data.trialDaysLeft + 'd</span>');
-      $('acctTier').textContent = 'Pro Trial';
-      $('acctTier').classList.add('pro');
-      if ($('acctManage')) $('acctManage').style.display = 'none';
-      // Show countdown banner when <= 5 days left
-      if (data.trialDaysLeft <= 5) {
-        const existingBanner = document.querySelector('.trial-banner');
-        if (existingBanner) existingBanner.remove();
-        const banner = document.createElement('div');
-        banner.className = 'trial-banner';
-        banner.innerHTML = '<span>Your Pro trial ends in ' + data.trialDaysLeft + ' day' + (data.trialDaysLeft !== 1 ? 's' : '') + '</span> <button onclick="showPaywall(\'Keep unlimited AI searches — upgrade now!\');this.parentElement.remove()">Upgrade to Pro</button>';
-        document.body.prepend(banner);
-      }
-    } else if (data.tier === 'premium') {
-      emailEl.insertAdjacentHTML('afterend', '<span class="pro-badge">PRO</span>');
-      $('acctTier').textContent = 'Pro';
-      $('acctTier').classList.add('pro');
-      if ($('acctManage')) $('acctManage').style.display = '';
-      if ($('acctUpgrade')) $('acctUpgrade').style.display = 'none';
-    } else {
-      $('acctTier').textContent = 'Free';
-      $('acctTier').classList.remove('pro');
-      if ($('acctManage')) $('acctManage').style.display = 'none';
-      if ($('acctUpgrade')) $('acctUpgrade').style.display = '';
-    }
+    // All signed-in users are members — no paid tiers
+    $('acctTier').textContent = 'Member';
+    $('acctTier').classList.add('pro');
+    // Remove any legacy trial banners
+    const existingBanner = document.querySelector('.trial-banner');
+    if (existingBanner) existingBanner.remove();
     // Store for search counter display
     window._userTier = data.tier;
     window._scansUsed = data.scansUsed;
@@ -1882,33 +1935,9 @@ async function updateProStatus() {
 // When another tab changes tier via Stripe checkout or status refresh,
 // this tab picks up the change instantly without polling.
 function refreshTierUI() {
-  // Update account dropdown tier label
-  const tier = window._userTier;
-  if ($('acctTier')) {
-    if (window._stripeEnabled === false) {
-      // Stripe disabled — hide all payment UI
-      $('acctTier').textContent = 'Member';
-      $('acctTier').classList.add('pro');
-      if ($('acctManage')) $('acctManage').style.display = 'none';
-      if ($('acctUpgrade')) $('acctUpgrade').style.display = 'none';
-    } else if (tier === 'premium') {
-      $('acctTier').textContent = 'Pro';
-      $('acctTier').classList.add('pro');
-      if ($('acctManage')) $('acctManage').style.display = '';
-      if ($('acctUpgrade')) $('acctUpgrade').style.display = 'none';
-    } else {
-      $('acctTier').textContent = 'Free';
-      $('acctTier').classList.remove('pro');
-      if ($('acctManage')) $('acctManage').style.display = 'none';
-      if ($('acctUpgrade')) $('acctUpgrade').style.display = '';
-    }
-  }
-  // Update pro badge
-  const oldBadge = document.querySelector('.pro-badge');
-  if (oldBadge) oldBadge.remove();
-  const emailEl = $('userEmail');
-  if (emailEl && tier === 'premium') {
-    emailEl.insertAdjacentHTML('afterend', '<span class="pro-badge">PRO</span>');
+  if ($('acctTier') && window._userTier) {
+    $('acctTier').textContent = 'Member';
+    $('acctTier').classList.add('pro');
   }
 }
 
@@ -2010,12 +2039,12 @@ async function runAnalysis(url){
 
       // Show scan counter for free users
       if (data.blurred) {
-        showPaywall(window._stripeEnabled===false ? 'Sign in free for full AI analysis.' : 'You\'ve used your ' + data.scanLimit + ' free AI scans. Upgrade to see full analysis.');
+        showPaywall('You\'ve used your AI scans for today. Your allowance resets at midnight.');
       } else if (data.scansUsed !== undefined && data.scanLimit && (window._userTier || 'free') === 'free') {
         const remaining = Math.max(0, data.scanLimit - data.scansUsed);
         const counter = document.querySelector('.scan-counter') || document.createElement('div');
         counter.className = 'scan-counter';
-        counter.textContent = remaining > 0 ? remaining + ' free scan' + (remaining !== 1 ? 's' : '') + ' remaining' : 'No free scans remaining';
+        counter.textContent = remaining > 0 ? remaining + ' AI scan' + (remaining !== 1 ? 's' : '') + ' remaining today' : 'Daily AI scan limit reached';
         if (!counter.parentNode) $('resultsPanel').insertBefore(counter, $('resultsPanel').firstChild);
       }
     }, data.cached ? 500 : 1200);
@@ -2120,13 +2149,9 @@ async function runAnalysis(url){
 // SMART SEARCH
 // ═══════════════════════════════
 async function runSmartSearch(query) {
-  // Anonymous users must sign up; free users get 5/day (server enforces limit)
+  // Anonymous users must sign in
   if (!window._userTier || window._userTier === 'anon') {
-    if (window._stripeEnabled === false) {
-      $('signupModal').classList.add('show');
-    } else {
-      showPaywall('Sign up for free to get 5 AI searches per day, or upgrade to Pro for unlimited.');
-    }
+    $('signupModal').classList.add('show');
     return;
   }
 
@@ -2182,7 +2207,7 @@ async function runSmartSearch(query) {
       if (data.error === 'premium_required') {
         const _pp=$('progressPanel'); if(_pp) _pp.style.display='none';
         const _sb=$('mainBtn'); if(_sb){_sb.disabled=false;_sb.textContent='Search';}
-        showPaywall(data.message || (window._stripeEnabled===false ? 'Sign in free for AI searches.' : 'Sign up for free to get 5 AI searches per day, or upgrade to Pro for unlimited.'));
+        showPaywall(data.message || 'Sign in free to use AI search.');
         return;
       }
       if (data.error === 'rate_limited') {
@@ -2197,14 +2222,12 @@ async function runSmartSearch(query) {
           $('signupError').textContent = '';
           $('signupEmail').value = '';
           $('signupEmail').focus();
-          // Show a helpful message above the form
           const errEl = $('signupError');
-          errEl.textContent = window._stripeEnabled===false ? 'Sign in free for unlimited AI searches!' : 'Sign up for 10 free AI searches per day + a 14-day Pro trial!';
+          errEl.textContent = 'Sign in free to unlock AI searches!';
           errEl.style.display = '';
           errEl.style.color = 'var(--accent)';
         } else {
-          showPaywall(data.message || (window._stripeEnabled===false ? 'Sign in free for AI searches.' : 'Daily AI search limit reached. Upgrade to Pro for unlimited.'));
-        }
+          showPaywall(data.message || 'You\'ve used your AI searches for today. Your allowance resets at midnight.');
         return;
       }
       if (data.error === 'ai_quota_exhausted') {
@@ -2384,7 +2407,7 @@ function renderLots(){
   const minP=+$('fMinPrice').value, maxP=+$('fMaxPrice').value, minBeds=+$('fBeds').value;
   const ft=$('fType').value, fd=$('fDeal').value, fa=$('fAfford')?.value||'all';
   const fsold=$('fSoldTop')?.value||'';
-  const fs=$('fSearch').value.toLowerCase();
+  const fs=$('smartQuery').value.toLowerCase();
   const fco=$('fCondition')?.value||'', ften=$('fTenure')?.value||'';
   const floc=$('fLocation')?.value||'';
   const fpc=$('fPostcode')?.value.trim().toUpperCase()||'';
@@ -2599,11 +2622,11 @@ function card(l){
 
   // Card footer links
   const viewLink = l.url ? '<a href="' + safeHref(l.url) + '" target="_blank" rel="noopener noreferrer" class="card-view-link" onclick="event.stopPropagation()">View listing ↗</a>' : '<span></span>';
-  const bmBtn = l.price ? '<button class="card-bm-btn" onclick="bridgeMatchLot(' + l._idx + ',event)">🧩 BridgeMatch It</button>' : '';
+  const bmBtn = '';
 
   const endedClass = (l._auctionDate && l._auctionDate < new Date().toISOString().slice(0,10)) ? ' card-ended' : '';
   const blurredClass = l.blurred ? ' blurred' : '';
-  const blurTextAttr = l.blurred ? ' data-blur-text="' + (window._stripeEnabled === false ? 'Sign in free for full details' : 'Upgrade for full address, AI scores & listing link') + '"' : '';
+  const blurTextAttr = l.blurred ? ' data-blur-text="Sign in free for full details"' : '';
   return '<div class="lot-card' + endedClass + blurredClass + '"' + blurTextAttr + ' id="lot-' + l._idx + '" tabindex="0" role="article" aria-label="Lot ' + esc(l.lot || '') + ' — ' + esc(l.address || 'Address not available') + '" onclick="expandCard(LOTS[' + l._idx + '])" onkeydown="if(event.key===\'Enter\'){this.click()}">' +
     getCardImageHtml(l) +
     '<div class="card-body">' +
@@ -2892,14 +2915,14 @@ function renderDealStackResults(idx, r, showHold) {
 
 // Downloads
 function dlCSV(){fetch('/api/track/event', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action:'csv_export'})}).catch(function(){});
-if(!window._userTier){$('signupModal').classList.add('show');return;}if(window._stripeEnabled!==false&&window._userTier!=='premium'){showPaywall('CSV export is a Pro feature. Upgrade for full data exports.');return;}
+if(!window._userTier){$('signupModal').classList.add('show');return;}
   const exportLots = window._filteredLots || LOTS;
   const rows=[['Rank','Lot','Score','Deal','TitleSplit','Units','Address','Guide','Affordability','Type','Beds','Tenure','Condition','Sqft','StreetAvg','BelowMkt%','EstYield%','EstRent/mo','Opps','Risks','URL']];
   exportLots.forEach((l,i)=>{
     rows.push([i+1,l.lot,l.score,l.dealType,l.titleSplit?'YES':'',l.units||'',l.address,l.price||'TBA',l._affTag||'',l.propType,l.beds??'',l.tenure,l.condition,l.sqft||'',l.streetAvg||'',l.belowMarket||'',l.estGrossYield||'',l.estMonthlyRent||'',(l.opps||[]).join(' | '),(l.risks||[]).join(' | '),l.url])});
   dl(rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n'),'auction_analysis.csv','text/csv');
 }
-function dlJSON(){if(!window._userTier){$('signupModal').classList.add('show');return;}if(window._stripeEnabled!==false&&window._userTier!=='premium'){showPaywall('JSON export is a Pro feature. Upgrade for full data exports.');return;}const exportLots=window._filteredLots||LOTS;dl(JSON.stringify(exportLots,null,2),'auction_analysis.json','application/json')}
+function dlJSON(){if(!window._userTier){$('signupModal').classList.add('show');return;}const exportLots=window._filteredLots||LOTS;dl(JSON.stringify(exportLots,null,2),'auction_analysis.json','application/json')}
 function dl(c,n,t){const b=new Blob([c],{type:t}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=n;a.click()}
 
 // ═══════════════════════════════
@@ -2991,11 +3014,14 @@ function getStatusOverlay(lot) {
 
 function getCardImageHtml(lot) {
   const overlay = getStatusOverlay(lot);
+  const favActive = isFavourite(lot);
+  const favHtml = '<button class="fav-btn' + (favActive ? ' fav-active' : '') + '" onclick="toggleFav(' + lot._idx + ',event)" aria-label="' + (favActive ? 'Remove from' : 'Add to') + ' favourites">' + (favActive ? '&#9829;' : '&#9825;') + '</button>';
   if (!lot.imageUrl || !isValidImageUrl(lot.imageUrl)) {
     return '<div class="card-image-wrapper">' +
       getPlaceholderHtml(lot.propType) +
       overlay +
       getCardImageBadges(lot) +
+      favHtml +
     '</div>';
   }
   return '<div class="card-image-wrapper">' +
@@ -3006,6 +3032,7 @@ function getCardImageHtml(lot) {
     ' data-proptype="' + esc(lot.propType || 'house') + '">' +
     overlay +
     getCardImageBadges(lot) +
+    favHtml +
   '</div>';
 }
 
@@ -3028,7 +3055,7 @@ function getSignalChips(lot) {
 
 function expandCard(lot) {
   if (lot.anonGated) { $('signupModal').classList.add('show'); return; }
-  if (lot.blurred) { if(window._stripeEnabled===false){$('signupModal').classList.add('show');}else{showPaywall('Upgrade to Pro for full lot details, AI analysis, and finance checks.');}return; }
+  if (lot.blurred) { $('signupModal').classList.add('show'); return; }
   if (window.umami) umami.track('lot_expand', {
     lot_number: lot.lot || '', house: lot._house || '', guide_price: lot.price || 0
   });
@@ -3090,7 +3117,7 @@ function expandCard(lot) {
         '</div></details>';
     } else {
       return '<details class="premium-feature">' +
-        '<summary>Yield Analysis' + (window._stripeEnabled===false ? '' : ' <span style="font-size:11px;color:var(--accent-warn)">PRO</span>') + '</summary>' +
+        '<summary>Yield Analysis</summary>' +
         '<div class="pf-blurred">' +
           '<div class="pf-blur-content">' +
             '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span>Gross Yield</span><span>X.X%</span></div>' +
@@ -3098,9 +3125,8 @@ function expandCard(lot) {
             '<div style="display:flex;justify-content:space-between"><span>Rating</span><span style="background:#e8f5e9;padding:2px 8px;border-radius:4px">Good</span></div>' +
           '</div>' +
           '<div class="pf-upgrade-cta">' +
-            '<div style="font-size:14px;font-weight:600;color:var(--text)">' + (window._stripeEnabled===false ? 'Sign in free for Yield Analysis' : 'Unlock Yield Analysis with Pro') + '</div>' +
-            (window._stripeEnabled===false ? '' : '<div style="font-size:12px;color:var(--text-muted);margin-top:4px">From \u00a39.99/mo</div>') +
-            '<button onclick="showPaywall(\'yield_analysis\')">' + (window._stripeEnabled===false ? 'Sign in free' : 'Upgrade Now') + '</button>' +
+            '<div style="font-size:14px;font-weight:600;color:var(--text)">Sign in free for Yield Analysis</div>' +
+            '<button onclick="showPaywall(\'yield_analysis\')">Sign in free</button>' +
           '</div>' +
         '</div></details>';
     }
@@ -3130,7 +3156,7 @@ function expandCard(lot) {
         '</div></details>';
     } else {
       return '<details class="premium-feature">' +
-        '<summary>Comparables' + (window._stripeEnabled===false ? '' : ' <span style="font-size:11px;color:var(--accent-warn)">PRO</span>') + '</summary>' +
+        '<summary>Comparables</summary>' +
         '<div class="pf-blurred">' +
           '<div class="pf-blur-content">' +
             '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span>Street Average</span><span>\u00a3XXX,XXX</span></div>' +
@@ -3138,9 +3164,8 @@ function expandCard(lot) {
             '<div style="display:flex;justify-content:space-between"><span>vs Market</span><span style="color:var(--accent)">XX% below</span></div>' +
           '</div>' +
           '<div class="pf-upgrade-cta">' +
-            '<div style="font-size:14px;font-weight:600;color:var(--text)">' + (window._stripeEnabled===false ? 'Sign in free for Comparables' : 'Unlock Comparables with Pro') + '</div>' +
-            (window._stripeEnabled===false ? '' : '<div style="font-size:12px;color:var(--text-muted);margin-top:4px">From \u00a39.99/mo</div>') +
-            '<button onclick="showPaywall(\'comparables\')">' + (window._stripeEnabled===false ? 'Sign in free' : 'Upgrade Now') + '</button>' +
+            '<div style="font-size:14px;font-weight:600;color:var(--text)">Sign in free for Comparables</div>' +
+            '<button onclick="showPaywall(\'comparables\')">Sign in free</button>' +
           '</div>' +
         '</div></details>';
     }
@@ -3155,7 +3180,7 @@ function expandCard(lot) {
         '</div></details>';
     } else {
       return '<details class="premium-feature">' +
-        '<summary>Deal Stacking Calculator' + (window._stripeEnabled===false ? '' : ' <span style="font-size:11px;color:var(--accent-warn)">PRO</span>') + '</summary>' +
+        '<summary>Deal Stacking Calculator</summary>' +
         '<div class="pf-blurred">' +
           '<div class="pf-blur-content">' +
             '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">' +
@@ -3165,9 +3190,8 @@ function expandCard(lot) {
             '</div>' +
           '</div>' +
           '<div class="pf-upgrade-cta">' +
-            '<div style="font-size:14px;font-weight:600;color:var(--text)">' + (window._stripeEnabled===false ? 'Sign in free for Deal Stacking' : 'Unlock Deal Stacking with Pro') + '</div>' +
-            (window._stripeEnabled===false ? '' : '<div style="font-size:12px;color:var(--text-muted);margin-top:4px">From \u00a39.99/mo</div>') +
-            '<button onclick="showPaywall(\'deal_stacking\')">' + (window._stripeEnabled===false ? 'Sign in free' : 'Upgrade Now') + '</button>' +
+            '<div style="font-size:14px;font-weight:600;color:var(--text)">Sign in free for Deal Stacking</div>' +
+            '<button onclick="showPaywall(\'deal_stacking\')">Sign in free</button>' +
           '</div>' +
         '</div></details>';
     }
@@ -3267,7 +3291,7 @@ function expandCard(lot) {
           '</p>' +
           '<button onclick="showPaywall(\'deal_stacking\')" ' +
             'style="padding:10px 24px; background:var(--accent); color:#fff; border:none; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer;">' +
-            (window._stripeEnabled===false ? 'Sign in free' : 'Upgrade to Pro \u2014 \u00a39.99/mo') +
+            'Sign in free' +
           '</button>' +
         '</div>') +
       (bulletsHtml ? '<ul class="exp-bullets">' + bulletsHtml + '</ul>' : '') +
@@ -3366,7 +3390,7 @@ function bridgeMatchLot(idx, event) {
 // ═══════════════════════════════
 // SHAREABLE FILTER URLs (#65)
 // ═══════════════════════════════
-const FILTER_PARAMS=['fSearch','fSort','fMinPrice','fMaxPrice','fBeds','fType','fLocation','fDeal','fCondition','fTenure','fSoldTop','fPostcode','fExcludePOA'];
+const FILTER_PARAMS=['smartQuery','fSort','fMinPrice','fMaxPrice','fBeds','fType','fLocation','fDeal','fCondition','fTenure','fSoldTop','fPostcode','fExcludePOA'];
 function restoreFiltersFromURL(){
   const p=new URLSearchParams(window.location.search);
   for(const id of FILTER_PARAMS){const v=p.get(id);if(v&&$(id))$(id).value=v}

@@ -1698,7 +1698,14 @@ app.post('/api/stripe/portal', async (req, res) => {
 
 // GET /api/stripe/status — return user's subscription status
 app.get('/api/stripe/status', async (req, res) => {
-  if (!STRIPE_ENABLED) return res.json({ active: false, stripeEnabled: false });
+  if (!STRIPE_ENABLED) {
+    const user = await validateUserFromReq(req);
+    if (!user) return res.json({ active: false, stripeEnabled: false });
+    const searchDate = user.ai_searches_date ? new Date(user.ai_searches_date).toISOString().slice(0, 10) : null;
+    const today = new Date().toISOString().slice(0, 10);
+    const aiSearchesUsed = searchDate === today ? (user.ai_searches_today || 0) : 0;
+    return res.json({ active: true, tier: 'member', stripeEnabled: false, aiSearchesUsed, aiSearchLimit: getAISearchLimit(user) });
+  }
   const user = await validateUserFromReq(req);
   if (!user) return res.status(401).json({ error: 'Authentication required' });
 
