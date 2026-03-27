@@ -1347,10 +1347,11 @@ function matchesRegion(addr, region){
   const pc=getPostcodePrefix(addr);
   if(pc && (REGION_POSTCODES[region]||[]).includes(pc)) return true;
 
-  // Fallback: match town/city names in address
+  // Fallback: match town/city names in address (word boundary to avoid street name false positives)
   const towns=REGION_TOWNS[region]||[];
   for(const town of towns){
-    if(addrLower.includes(town)) return true;
+    const re=new RegExp('\\b'+town.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\b','i');
+    if(re.test(addr)) return true;
   }
   return false;
 }
