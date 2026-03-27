@@ -3168,32 +3168,7 @@ function expandCard(lot) {
         '</div></details>';
     }
   })();
-  const dealStackTeaser = (function() {
-    if (isPremium()) {
-      return '<details class="premium-feature">' +
-        '<summary>Deal Stacking Calculator</summary>' +
-        '<div class="pf-content" style="text-align:center;padding:16px">' +
-          '<p style="color:var(--text-muted);font-size:13px;margin:0 0 8px">Full deal stacking calculator is in the Finance section to the right.</p>' +
-          '<p style="color:var(--text-muted);font-size:12px;margin:0">Enter GDV and works cost to see Flip vs Hold analysis.</p>' +
-        '</div></details>';
-    } else {
-      return '<details class="premium-feature">' +
-        '<summary>Deal Stacking Calculator</summary>' +
-        '<div class="pf-blurred">' +
-          '<div class="pf-blur-content">' +
-            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">' +
-              '<div><strong>Flip</strong></div><div><strong>Hold</strong></div>' +
-              '<div>Net Profit: \u00a3XX,XXX</div><div>Cashflow/mo: \u00a3XXX</div>' +
-              '<div>ROI: XX.X%</div><div>CoC: XX.X%</div>' +
-            '</div>' +
-          '</div>' +
-          '<div class="pf-upgrade-cta">' +
-            '<div style="font-size:14px;font-weight:600;color:var(--text)">Sign in free for Deal Stacking</div>' +
-            '<button onclick="showPaywall(\'deal_stacking\')">Sign in free</button>' +
-          '</div>' +
-        '</div></details>';
-    }
-  })();
+  const dealStackTeaser = ''; // Removed — real calculator is in the right column
 
   panel.innerHTML =
     '<button class="exp-close-btn" onclick="closeExpandedPanel()" aria-label="Close panel" title="Close">&times;</button>' +
@@ -3298,6 +3273,11 @@ function expandCard(lot) {
   // Insert after the card
   cardEl.after(panel);
   panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  // Auto-run finance check if lot has a price
+  if (lot.price) {
+    setTimeout(() => triggerFinanceCheck(lot._idx), 200);
+  }
 }
 
 function closeExpandedPanel() {
@@ -3351,7 +3331,7 @@ function triggerFinanceCheck(idx) {
         html += '<div class="fw-lenders">' + lenders.map(l => '<span class="fw-lender-chip">' + esc(l.name || l.lender || l) + '</span>').join('') + '</div>';
       }
       html += '</div>';
-      html += '<a class="fw-cta" href="/check?loan=' + encodeURIComponent(loanAmount) + '&value=' + encodeURIComponent(lot.price) + '&type=' + encodeURIComponent(apiType) + '" target="_blank">See all ' + count + ' matches on BridgeMatch →</a>';
+      html += '<a class="fw-cta" href="/check?price=' + encodeURIComponent(lot.price) + '&type=' + encodeURIComponent(lot.propType || 'house') + (lot.address ? '&address=' + encodeURIComponent(lot.address) : '') + '" target="_blank">See all ' + count + ' matches on BridgeMatch →</a>';
       resultsEl.innerHTML = html;
     } catch (e) {
       resultsEl.innerHTML = '<div class="fw-error">Unable to check finance — try again later</div>';
