@@ -2228,6 +2228,7 @@ async function runSmartSearch(query) {
           errEl.style.color = 'var(--accent)';
         } else {
           showPaywall(data.message || 'You\'ve used your AI searches for today. Your allowance resets at midnight.');
+        }
         return;
       }
       if (data.error === 'ai_quota_exhausted') {
