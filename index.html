@@ -3147,28 +3147,28 @@ function expandCard(lot) {
       else if (bm && bm >= 10) contextNote = 'Moderate discount \u2014 potential for value-add';
       else if (bm && bm > 0) contextNote = 'Marginal discount \u2014 limited upside without development';
       else contextNote = 'At or above market \u2014 ensure your exit strategy supports the numbers';
-      return '<details class="premium-feature" open>' +
-        '<summary>Comparables</summary>' +
-        '<div class="pf-content" style="display:flex;flex-wrap:wrap;gap:16px;align-items:center">' +
-          '<div style="display:flex;gap:6px;align-items:baseline"><span style="color:var(--text-muted);font-size:12px">Street Average</span><span style="font-weight:600">' + saDisplay + '</span></div>' +
-          '<div style="display:flex;gap:6px;align-items:baseline"><span style="color:var(--text-muted);font-size:12px">Guide Price</span><span style="font-weight:600">' + gpDisplay + '</span></div>' +
-          '<div style="display:flex;gap:6px;align-items:baseline"><span style="color:var(--text-muted);font-size:12px">vs Market</span><span style="font-weight:600;color:' + bmColor + '">' + bmDisplay + '</span></div>' +
-          '<div style="font-size:12px;color:var(--text-muted);font-style:italic">' + contextNote + '</div>' +
-        '</div></details>';
+      return '<div style="padding:12px 14px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;background:var(--bg-card)">' +
+          '<div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:10px">Comparables</div>' +
+          '<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center">' +
+            '<div style="display:flex;gap:6px;align-items:baseline"><span style="color:var(--text-muted);font-size:12px">Street Average</span><span style="font-weight:600">' + saDisplay + '</span></div>' +
+            '<div style="display:flex;gap:6px;align-items:baseline"><span style="color:var(--text-muted);font-size:12px">Guide Price</span><span style="font-weight:600">' + gpDisplay + '</span></div>' +
+            '<div style="display:flex;gap:6px;align-items:baseline"><span style="color:var(--text-muted);font-size:12px">vs Market</span><span style="font-weight:600;color:' + bmColor + '">' + bmDisplay + '</span></div>' +
+            '<div style="font-size:12px;color:var(--text-muted);font-style:italic">' + contextNote + '</div>' +
+          '</div>' +
+        '</div>';
     } else {
-      return '<details class="premium-feature">' +
-        '<summary>Comparables</summary>' +
-        '<div class="pf-blurred">' +
-          '<div class="pf-blur-content">' +
-            '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span>Street Average</span><span>\u00a3XXX,XXX</span></div>' +
-            '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span>Guide Price</span><span>\u00a3XX,XXX</span></div>' +
-            '<div style="display:flex;justify-content:space-between"><span>vs Market</span><span style="color:var(--accent)">XX% below</span></div>' +
+      return '<div style="padding:12px 14px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;background:var(--bg-card);position:relative">' +
+          '<div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:10px">Comparables</div>' +
+          '<div style="filter:blur(4px);pointer-events:none;user-select:none;display:flex;flex-wrap:wrap;gap:16px">' +
+            '<div style="display:flex;gap:6px;align-items:baseline"><span style="color:var(--text-muted);font-size:12px">Street Average</span><span style="font-weight:600">\u00a3XXX,XXX</span></div>' +
+            '<div style="display:flex;gap:6px;align-items:baseline"><span style="color:var(--text-muted);font-size:12px">Guide Price</span><span style="font-weight:600">\u00a3XX,XXX</span></div>' +
+            '<div style="display:flex;gap:6px;align-items:baseline"><span style="color:var(--text-muted);font-size:12px">vs Market</span><span style="font-weight:600;color:var(--accent)">XX% below</span></div>' +
           '</div>' +
-          '<div class="pf-upgrade-cta">' +
+          '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;z-index:2;background:rgba(255,255,255,0.9);padding:16px 24px;border-radius:10px;box-shadow:0 2px 12px rgba(0,0,0,0.1)">' +
             '<div style="font-size:14px;font-weight:600;color:var(--text)">Sign in free for Comparables</div>' +
-            '<button onclick="showPaywall(\'comparables\')">Sign in free</button>' +
+            '<button onclick="showPaywall(\'comparables\')" style="margin-top:8px;padding:8px 20px;background:var(--accent);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">Sign in free</button>' +
           '</div>' +
-        '</div></details>';
+        '</div>';
     }
   })();
   // Build deal stacking calculator HTML
