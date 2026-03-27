@@ -494,7 +494,11 @@ footer .logo-f span{color:var(--green)}
 .card-bm-btn:hover{background:var(--green2);transform:translateY(-1px);text-decoration:none!important}
 
 /* ── EXPANDED CARD PANEL ── */
-.expanded-panel{grid-column:1/-1;background:var(--white);border:1px solid #d5dde5;border-radius:0 0 var(--radius) var(--radius);padding:20px 24px;display:grid;grid-template-columns:60% 40%;gap:24px;animation:slideDown .25s ease;position:relative}
+.expanded-panel{grid-column:1/-1;background:var(--white);border:1px solid #d5dde5;border-radius:0 0 var(--radius) var(--radius);padding:20px 24px;display:grid;grid-template-columns:1fr;gap:20px;animation:slideDown .25s ease;position:relative}
+.exp-top{display:grid;grid-template-columns:60% 40%;gap:24px}
+.exp-tools{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.exp-tools .finance-widget,.exp-tools .deal-stack-widget{margin-top:0}
+.exp-bottom{}
 .exp-close-btn{position:absolute;top:10px;right:10px;width:32px;height:32px;border-radius:50%;border:1px solid var(--border);background:var(--white);color:var(--text2);font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:5;transition:all .15s;line-height:1;padding:0;font-family:inherit;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 .exp-close-btn:hover{background:var(--red-light);color:var(--red);border-color:var(--red)}
 .coming-soon-label{display:inline-block;font-size:.65rem;font-weight:700;padding:2px 7px;border-radius:10px;background:var(--amber-light);color:var(--amber);margin-left:6px;vertical-align:middle;letter-spacing:.3px;text-transform:uppercase}
@@ -598,6 +602,8 @@ footer .logo-f span{color:var(--green)}
   .oc-text{min-width:0}
   .scan-steps{gap:12px}
   .expanded-panel{grid-template-columns:1fr}
+  .exp-top{grid-template-columns:1fr}
+  .exp-tools{grid-template-columns:1fr}
 }
 @media(max-width:640px){
   .lots-grid{grid-template-columns:1fr}
@@ -3141,13 +3147,13 @@ function expandCard(lot) {
       else if (bm && bm >= 10) contextNote = 'Moderate discount \u2014 potential for value-add';
       else if (bm && bm > 0) contextNote = 'Marginal discount \u2014 limited upside without development';
       else contextNote = 'At or above market \u2014 ensure your exit strategy supports the numbers';
-      return '<details class="premium-feature">' +
+      return '<details class="premium-feature" open>' +
         '<summary>Comparables</summary>' +
-        '<div class="pf-content">' +
-          '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span>Street Average</span><span style="font-weight:600">' + saDisplay + '</span></div>' +
-          '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span>Guide Price</span><span style="font-weight:600">' + gpDisplay + '</span></div>' +
-          '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span>vs Market</span><span style="font-weight:600;color:' + bmColor + '">' + bmDisplay + '</span></div>' +
-          '<div style="font-size:12px;color:var(--text-muted);margin-top:4px;font-style:italic">' + contextNote + '</div>' +
+        '<div class="pf-content" style="display:flex;flex-wrap:wrap;gap:16px;align-items:center">' +
+          '<div style="display:flex;gap:6px;align-items:baseline"><span style="color:var(--text-muted);font-size:12px">Street Average</span><span style="font-weight:600">' + saDisplay + '</span></div>' +
+          '<div style="display:flex;gap:6px;align-items:baseline"><span style="color:var(--text-muted);font-size:12px">Guide Price</span><span style="font-weight:600">' + gpDisplay + '</span></div>' +
+          '<div style="display:flex;gap:6px;align-items:baseline"><span style="color:var(--text-muted);font-size:12px">vs Market</span><span style="font-weight:600;color:' + bmColor + '">' + bmDisplay + '</span></div>' +
+          '<div style="font-size:12px;color:var(--text-muted);font-style:italic">' + contextNote + '</div>' +
         '</div></details>';
     } else {
       return '<details class="premium-feature">' +
@@ -3165,57 +3171,10 @@ function expandCard(lot) {
         '</div></details>';
     }
   })();
-  const dealStackTeaser = ''; // Removed — real calculator is in the right column
-
-  panel.innerHTML =
-    '<button class="exp-close-btn" onclick="closeExpandedPanel()" aria-label="Close panel" title="Close">&times;</button>' +
-    '<div class="exp-left">' +
-      imgHtml +
-      '<div class="exp-analysis">' +
-        '<div class="exp-analysis-header">AI Analysis</div>' +
-        '<div class="exp-analysis-text">' + esc(analysisText || 'No detailed analysis available.') + '</div>' +
-      '</div>' +
-      (signalsHtml ? '<div class="exp-signals">' + signalsHtml + '</div>' : '') +
-      // ── EPC & Flood Enrichment (ungated — visible to ALL users) ──
-      '<div class="exp-enrichment" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:8px">' +
-        // EPC Rating badge
-        (lot.epcRating
-          ? '<div style="padding:6px 12px;border-radius:6px;font-size:.85rem;font-weight:600;' +
-            'background:' + (/[AB]/.test(lot.epcRating) ? '#e8f5ee' : /[CD]/.test(lot.epcRating) ? '#fef3e2' : '#fdf0ee') + ';' +
-            'color:' + (/[AB]/.test(lot.epcRating) ? 'var(--accent)' : /[CD]/.test(lot.epcRating) ? 'var(--accent-warn)' : 'var(--accent-danger)') + '">' +
-            'EPC: ' + esc(lot.epcRating) + (lot.epcScore ? ' (' + lot.epcScore + ')' : '') +
-            (lot.epcDate ? '<span style="font-weight:400;font-size:.75rem;margin-left:6px;opacity:.7">(assessed ' + esc(lot.epcDate) + ')</span>' : '') +
-          '</div>'
-          : '<div style="padding:6px 12px;border-radius:6px;font-size:.85rem;color:var(--text-muted,#6b7c8d);background:var(--surface2,#f0f2f5)">EPC: \u2014</div>') +
-        // Flood Zone badge
-        (lot.floodZone
-          ? '<div style="padding:6px 12px;border-radius:6px;font-size:.85rem;font-weight:600;' +
-            'background:' + (lot.floodZone === '3' ? '#fdf0ee' : lot.floodZone === '2' ? '#fef3e2' : '#e8f5ee') + ';' +
-            'color:' + (lot.floodZone === '3' ? 'var(--accent-danger)' : lot.floodZone === '2' ? 'var(--accent-warn)' : 'var(--accent)') + '">' +
-            'Flood Zone ' + esc(lot.floodZone) + ' \u2014 ' + (lot.floodZone === '3' ? 'High Risk' : lot.floodZone === '2' ? 'Medium Risk' : 'Low Risk') +
-          '</div>'
-          : '<div style="padding:6px 12px;border-radius:6px;font-size:.85rem;color:var(--text-muted,#6b7c8d);background:var(--surface2,#f0f2f5)">Flood Zone: \u2014</div>') +
-      '</div>' +
-      // ── Premium feature sections ──
-      yieldSection +
-      compSection +
-      dealStackTeaser +
-    '</div>' +
-    '<div class="exp-right">' +
-      '<div class="finance-widget" id="finance-widget-' + lot._idx + '">' +
-        '<div class="fw-header"><div class="fw-title">\ud83e\udde9 Finance Check</div><span class="fw-powered">Powered by BridgeMatch</span></div>' +
-        '<div class="fw-prefilled">' +
-          '<div class="fw-field"><div class="fw-field-label">PURCHASE PRICE</div><div class="fw-field-value">' + (lot.price ? '\u00a3' + lot.price.toLocaleString() : 'TBA') + '</div></div>' +
-          '<div class="fw-field"><div class="fw-field-label">PROPERTY TYPE</div><div class="fw-field-value">' + esc(lot.propType || 'Residential') + '</div></div>' +
-        '</div>' +
-        '<div class="fw-slider-row"><span class="fw-slider-label">Loan to Value</span><span class="fw-slider-value" id="ltv-val-' + lot._idx + '">70%</span></div>' +
-        '<input type="range" class="fw-range" id="ltv-slider-' + lot._idx + '" min="50" max="80" step="5" value="70" oninput="updateLTV(' + lot._idx + ',this.value)">' +
-        '<div id="fw-results-' + lot._idx + '" class="fw-empty">Adjust LTV and tap Check</div>' +
-        (lot.price ? '<button class="fw-cta" onclick="triggerFinanceCheck(' + lot._idx + ')">Check finance →</button>' : '') +
-      '</div>' +
-      (isPremium() ? (function() {
+  // Build deal stacking calculator HTML
+  var dealStackHtml = (isPremium() ? (function() {
         var dsSDLT = lot.price ? calcSDLT(lot.price, detectCountry(lot.address || '')) : 0;
-        return '<div class="deal-stack-widget" id="deal-stack-' + lot._idx + '" style="margin-top:16px; padding:16px; background:var(--bg-card); border-radius:12px; border:1px solid rgba(0,0,0,0.08);">' +
+        return '<div class="deal-stack-widget" id="deal-stack-' + lot._idx + '" style="padding:16px; background:var(--bg-card); border-radius:12px; border:1px solid rgba(0,0,0,0.08);">' +
           '<h4 style="margin:0 0 12px; font-family:var(--font-main); font-size:15px; font-weight:600; color:var(--text);">' +
             '\ud83d\udcca Deal Stacking Calculator' +
           '</h4>' +
@@ -3252,7 +3211,7 @@ function expandCard(lot) {
           '<div id="ds-results-' + lot._idx + '"></div>' +
         '</div>';
       })() :
-        '<div class="deal-stack-widget" style="margin-top:16px; padding:20px; background:var(--bg-card); border-radius:12px; border:1px solid rgba(0,0,0,0.08); text-align:center;">' +
+        '<div class="deal-stack-widget" style="padding:20px; background:var(--bg-card); border-radius:12px; border:1px solid rgba(0,0,0,0.08); text-align:center;">' +
           '<h4 style="margin:0 0 8px; font-family:var(--font-main); font-size:15px; font-weight:600; color:var(--text);">' +
             'Deal Stacking Calculator' +
           '</h4>' +
@@ -3263,9 +3222,65 @@ function expandCard(lot) {
             'style="padding:10px 24px; background:var(--accent); color:#fff; border:none; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer;">' +
             'Sign in free' +
           '</button>' +
-        '</div>') +
-      (bulletsHtml ? '<ul class="exp-bullets">' + bulletsHtml + '</ul>' : '') +
-    '</div>';
+        '</div>');
+
+  panel.innerHTML =
+    '<button class="exp-close-btn" onclick="closeExpandedPanel()" aria-label="Close panel" title="Close">&times;</button>' +
+    // ── Row 1: Overview (60/40) ──
+    '<div class="exp-top">' +
+      '<div class="exp-left">' +
+        imgHtml +
+        '<div class="exp-analysis">' +
+          '<div class="exp-analysis-header">AI Analysis</div>' +
+          '<div class="exp-analysis-text">' + esc(analysisText || 'No detailed analysis available.') + '</div>' +
+        '</div>' +
+        // ── EPC & Flood Enrichment (ungated — visible to ALL users) ──
+        '<div class="exp-enrichment" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:8px">' +
+          // EPC Rating badge
+          (lot.epcRating
+            ? '<div style="padding:6px 12px;border-radius:6px;font-size:.85rem;font-weight:600;' +
+              'background:' + (/[AB]/.test(lot.epcRating) ? '#e8f5ee' : /[CD]/.test(lot.epcRating) ? '#fef3e2' : '#fdf0ee') + ';' +
+              'color:' + (/[AB]/.test(lot.epcRating) ? 'var(--accent)' : /[CD]/.test(lot.epcRating) ? 'var(--accent-warn)' : 'var(--accent-danger)') + '">' +
+              'EPC: ' + esc(lot.epcRating) + (lot.epcScore ? ' (' + lot.epcScore + ')' : '') +
+              (lot.epcDate ? '<span style="font-weight:400;font-size:.75rem;margin-left:6px;opacity:.7">(assessed ' + esc(lot.epcDate) + ')</span>' : '') +
+            '</div>'
+            : '<div style="padding:6px 12px;border-radius:6px;font-size:.85rem;color:var(--text-muted,#6b7c8d);background:var(--surface2,#f0f2f5)">EPC: \u2014</div>') +
+          // Flood Zone badge
+          (lot.floodZone
+            ? '<div style="padding:6px 12px;border-radius:6px;font-size:.85rem;font-weight:600;' +
+              'background:' + (lot.floodZone === '3' ? '#fdf0ee' : lot.floodZone === '2' ? '#fef3e2' : '#e8f5ee') + ';' +
+              'color:' + (lot.floodZone === '3' ? 'var(--accent-danger)' : lot.floodZone === '2' ? 'var(--accent-warn)' : 'var(--accent)') + '">' +
+              'Flood Zone ' + esc(lot.floodZone) + ' \u2014 ' + (lot.floodZone === '3' ? 'High Risk' : lot.floodZone === '2' ? 'Medium Risk' : 'Low Risk') +
+            '</div>'
+            : '<div style="padding:6px 12px;border-radius:6px;font-size:.85rem;color:var(--text-muted,#6b7c8d);background:var(--surface2,#f0f2f5)">Flood Zone: \u2014</div>') +
+        '</div>' +
+      '</div>' +
+      '<div class="exp-right">' +
+        (signalsHtml ? '<div class="exp-signals">' + signalsHtml + '</div>' : '') +
+        yieldSection +
+      '</div>' +
+    '</div>' +
+    // ── Row 2: Tools side-by-side (50/50) ──
+    '<div class="exp-tools">' +
+      '<div class="finance-widget" id="finance-widget-' + lot._idx + '">' +
+        '<div class="fw-header"><div class="fw-title">\ud83e\udde9 Finance Check</div><span class="fw-powered">Powered by BridgeMatch</span></div>' +
+        '<div class="fw-prefilled">' +
+          '<div class="fw-field"><div class="fw-field-label">PURCHASE PRICE</div><div class="fw-field-value">' + (lot.price ? '\u00a3' + lot.price.toLocaleString() : 'TBA') + '</div></div>' +
+          '<div class="fw-field"><div class="fw-field-label">PROPERTY TYPE</div><div class="fw-field-value">' + esc(lot.propType || 'Residential') + '</div></div>' +
+        '</div>' +
+        '<div class="fw-slider-row"><span class="fw-slider-label">Loan to Value</span><span class="fw-slider-value" id="ltv-val-' + lot._idx + '">70%</span></div>' +
+        '<input type="range" class="fw-range" id="ltv-slider-' + lot._idx + '" min="50" max="80" step="5" value="70" oninput="updateLTV(' + lot._idx + ',this.value)">' +
+        '<div id="fw-results-' + lot._idx + '" class="fw-empty">Adjust LTV and tap Check</div>' +
+        (lot.price ? '<button class="fw-cta" onclick="triggerFinanceCheck(' + lot._idx + ')">Check finance \u2192</button>' : '') +
+      '</div>' +
+      dealStackHtml +
+    '</div>' +
+    // ── Row 3: Comparables (full width) ──
+    '<div class="exp-bottom">' +
+      compSection +
+    '</div>' +
+    // ── Lot description bullets ──
+    (bulletsHtml ? '<ul class="exp-bullets">' + bulletsHtml + '</ul>' : '');
 
   // Insert after the card
   cardEl.after(panel);
