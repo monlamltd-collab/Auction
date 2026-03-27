@@ -122,9 +122,9 @@ a{color:var(--green);text-decoration:none}a:hover{text-decoration:underline}
 .mf-clear{display:block;width:100%;margin-top:12px;padding:8px;background:none;border:none;border-top:1px solid var(--border);padding-top:10px;color:var(--accent-danger,#c0392b);font-size:.8rem;font-weight:600;cursor:pointer;font-family:inherit;text-align:center}
 .mf-clear:hover{text-decoration:underline}
 /* ── Favourite Heart ── */
-.fav-btn{position:absolute;top:8px;right:8px;width:34px;height:34px;border-radius:50%;border:none;background:rgba(255,255,255,.85);color:var(--text3);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;z-index:3;backdrop-filter:blur(4px);line-height:1;padding:0}
-.fav-btn:hover{background:rgba(255,255,255,.95);color:var(--accent-danger,#c0392b);transform:scale(1.1)}
-.fav-btn.fav-active{color:var(--accent-danger,#c0392b);background:rgba(255,255,255,.95)}
+.fav-btn{width:32px;height:32px;border-radius:50%;border:1px solid var(--border);background:var(--white);color:var(--text4);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;line-height:1;padding:0;flex-shrink:0}
+.fav-btn:hover{border-color:var(--accent-danger,#c0392b);color:var(--accent-danger,#c0392b);transform:scale(1.1)}
+.fav-btn.fav-active{color:var(--accent-danger,#c0392b);border-color:var(--accent-danger,#c0392b);background:#fef2f2}
 /* Legacy compat */
 .unified-bar{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center}
 .unified-bar .tb-select,.unified-bar .tb-search{padding:7px 10px;font-size:.8rem}
@@ -2623,7 +2623,8 @@ function card(l){
 
   // Card footer links
   const viewLink = l.url ? '<a href="' + safeHref(l.url) + '" target="_blank" rel="noopener noreferrer" class="card-view-link" onclick="event.stopPropagation()">View listing ↗</a>' : '<span></span>';
-  const bmBtn = '';
+  const favActive = isFavourite(l);
+  const favBtn = '<button class="fav-btn' + (favActive ? ' fav-active' : '') + '" onclick="toggleFav(' + l._idx + ',event)" aria-label="' + (favActive ? 'Remove from' : 'Add to') + ' favourites">' + (favActive ? '&#9829;' : '&#9825;') + '</button>';
 
   const endedClass = (l._auctionDate && l._auctionDate < new Date().toISOString().slice(0,10)) ? ' card-ended' : '';
   const blurredClass = l.blurred ? ' blurred' : '';
@@ -2640,7 +2641,7 @@ function card(l){
       '</div>' : '') +
       (chipsHtml ? '<div class="card-chips">' + chipsHtml + '</div>' : '') +
     '</div>' +
-    '<div class="card-footer">' + viewLink + bmBtn + '</div>' +
+    '<div class="card-footer">' + viewLink + favBtn + '</div>' +
   '</div>';
 }
 
@@ -3015,14 +3016,11 @@ function getStatusOverlay(lot) {
 
 function getCardImageHtml(lot) {
   const overlay = getStatusOverlay(lot);
-  const favActive = isFavourite(lot);
-  const favHtml = '<button class="fav-btn' + (favActive ? ' fav-active' : '') + '" onclick="toggleFav(' + lot._idx + ',event)" aria-label="' + (favActive ? 'Remove from' : 'Add to') + ' favourites">' + (favActive ? '&#9829;' : '&#9825;') + '</button>';
   if (!lot.imageUrl || !isValidImageUrl(lot.imageUrl)) {
     return '<div class="card-image-wrapper">' +
       getPlaceholderHtml(lot.propType) +
       overlay +
       getCardImageBadges(lot) +
-      favHtml +
     '</div>';
   }
   return '<div class="card-image-wrapper">' +
@@ -3033,7 +3031,6 @@ function getCardImageHtml(lot) {
     ' data-proptype="' + esc(lot.propType || 'house') + '">' +
     overlay +
     getCardImageBadges(lot) +
-    favHtml +
   '</div>';
 }
 
