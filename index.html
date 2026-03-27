@@ -858,6 +858,9 @@ footer .logo-f span{color:var(--green)}
         <option value="">Region</option>
         <option value="london">London</option><option value="south east">South East</option><option value="south west">South West</option><option value="east">East of England</option><option value="west midlands">West Midlands</option><option value="east midlands">East Midlands</option><option value="north west">North West</option><option value="north east">North East</option><option value="yorkshire">Yorkshire</option><option value="wales">Wales</option><option value="scotland">Scotland</option>
       </select>
+      <select class="tb-select" id="fSoldTop" onchange="renderLots()" aria-label="Lot status">
+        <option value="all">Lot status</option><option value="available">Available only</option><option value="sold">Sold only</option><option value="stc">Sale Agreed</option><option value="withdrawn">Withdrawn</option>
+      </select>
       <select class="tb-select" id="fSort" onchange="renderLots()" aria-label="Sort lots by">
         <option value="score">Score (high → low)</option>
         <option value="price_asc">Price (low → high)</option>
@@ -877,12 +880,6 @@ footer .logo-f span{color:var(--green)}
                   <div id="houseCheckList"></div>
                 </div>
               </div>
-            </div>
-            <div class="mf-field">
-              <label>Lot status</label>
-              <select class="tb-select" id="fSoldTop" onchange="renderLots();updateMoreDot()" aria-label="Lot status">
-                <option value="all">All statuses</option><option value="available">Available only</option><option value="sold">Sold only</option><option value="stc">Sale Agreed</option><option value="withdrawn">Withdrawn</option>
-              </select>
             </div>
             <div class="mf-field">
               <label>Opportunity</label>
@@ -1169,8 +1166,7 @@ function closeMoreFilters(e) {
   }
 }
 function updateMoreDot() {
-  var active = ($('fSoldTop')?.value||'all') !== 'all' ||
-    $('fDeal')?.value || $('fTenure')?.value ||
+  var active = $('fDeal')?.value || $('fTenure')?.value ||
     ($('fPostcode')?.value||'').trim() || $('fExcludePOA')?.value;
   $('mfDot').style.display = active ? '' : 'none';
 }
