@@ -66,6 +66,7 @@ a:hover { text-decoration: underline; }
 .section-header { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
 .section-header h2 { font-size: .88rem; font-weight: 700; }
 .section-header .badge { font-size: .7rem; font-weight: 600; padding: 2px 8px; border-radius: 10px; }
+.intel-group-body.collapsed { display: none; }
 .badge-green { background: var(--green-bg); color: var(--green); }
 .badge-amber { background: var(--amber-bg); color: var(--amber); }
 .badge-red { background: var(--red-bg); color: var(--red); }
@@ -265,6 +266,7 @@ tr:hover td { background: rgba(255,255,255,.02); }
     <button class="tab-btn active" data-tab="overview" onclick="switchTab('overview')">Overview</button>
     <button class="tab-btn" data-tab="analytics" onclick="switchTab('analytics')">Analytics</button>
     <button class="tab-btn" data-tab="health" onclick="switchTab('health')">System Health</button>
+    <button class="tab-btn" data-tab="intelligence" onclick="switchTab('intelligence')">House Intelligence</button>
   </div>
 
   <div class="main">
@@ -700,6 +702,19 @@ tr:hover td { background: rgba(255,255,255,.02); }
 
       </div>
     </div><!-- /tab-health -->
+
+    <div class="tab-pane" id="tab-intelligence">
+      <div id="intel-loading" style="text-align:center;padding:40px;color:var(--text3);">Loading intelligence data...</div>
+      <div id="intel-content" style="display:none;">
+
+        <!-- Summary stats -->
+        <div class="stats-grid" id="intel-stats" style="margin-bottom:20px;"></div>
+
+        <!-- Platform groups -->
+        <div id="intel-platforms"></div>
+
+      </div>
+    </div><!-- /tab-intelligence -->
 
   </div>
 </div>
@@ -1615,11 +1630,49 @@ function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&
 // ── Pipeline display ──
 // Maps house slug → extractor type for the pipeline column
 const EXTRACTOR_TYPE = {
-  // EIG platform houses
+  // EIG platform houses — shared SaaS at *.eigonlineauctions.com
   paulfosh:'eig', firstforauctions:'eig', harmanhealy:'eig', seelauctions:'eig',
   robinsonhall:'eig', tcpa:'eig', astleys:'eig', henrysykes:'eig', clarkesimpson:'eig',
-  // Auction House UK template
-  auctionhousescotland:'ahuk', austingray:'ahuk',
+  durrants:'eig', dawsons:'eig', goldings:'eig', cottons:'eig', dedmangray:'eig',
+  bradleyhall:'eig', landwood:'eig', mchughandco:'eig', brownco:'eig',
+  romanway:'eig', hammerprice:'eig', sageandco:'eig', auctiontrade:'eig',
+  brggibson:'eig', higginsdrysdale:'eig', martinpole:'eig', jonespeckover:'eig',
+  thepropertyauctionhouse:'eig', propertyauctionagent:'eig', lot9:'eig',
+  auctionnorth:'eig', bowensonandwatson:'eig', nationalpropertyauctions:'eig',
+  ahlondon:'eig', starpropertyonline:'eig', brggibsondublin:'eig',
+  // Auction House UK network — shared auctionhouse.co.uk platform
+  auctionhouse:'ahuk', auctionhousescotland:'ahuk', austingray:'ahuk',
+  auctionhousedevon:'ahuk', auctionhouseeastmidlands:'ahuk', auctionhousewestmidlands:'ahuk',
+  auctionhouseessex:'ahuk', auctionhousemanchester:'ahuk', auctionhouseeastanglia:'ahuk',
+  auctionhousenorthwest:'ahuk', auctionhousenortheast:'ahuk', auctionhousewales:'ahuk',
+  auctionhousebirmingham:'ahuk', auctionhousekent:'ahuk',
+  auctionhousesouthyorkshire:'ahuk', auctionhousewestyorkshire:'ahuk',
+  auctionhouseteesvalley:'ahuk', auctionhousehull:'ahuk',
+  auctionhousecumbria:'ahuk', auctionhouselincolnshire:'ahuk',
+  auctionhouseuklondon:'ahuk', auctionhousebedsandbucks:'ahuk',
+  auctionhousenorthamptonshire:'ahuk', auctionhouseoxfordshire:'ahuk',
+  auctionhouseleicestershire:'ahuk', auctionhousemidlands:'ahuk',
+  auctionhousecoventry:'ahuk', auctionhousenottsandderby:'ahuk',
+  auctionhousechesterfield:'ahuk', auctionhousestaffordshire:'ahuk',
+  auctionhousenorthwales:'ahuk', auctionhousesouthwest:'ahuk',
+  auctionhousenorthernireland:'ahuk', auctionhousenational:'ahuk',
+  // API-based
+  allsop:'api',
+  // PDF-only
+  buttersjohnbee:'pdf',
+  // React SPA (Bamboo Auctions)
+  hunters:'spa', lsk:'spa',
+  // Custom DOM extractors — bespoke per house
+  savills:'custom', sdl:'custom', network:'custom', bondwolfe:'custom',
+  barnardmarcus:'custom', auctionhouselondon:'custom', cliveemson:'custom',
+  strettons:'custom', acuitus:'custom', hollismorgan:'custom', maggsandallen:'custom',
+  knightfrank:'custom', pattinson:'custom', bidx1:'custom', philliparnold:'custom',
+  edwardmellor:'custom', barnettross:'custom', connectuk:'custom',
+  auctionestates:'custom', loveitts:'custom', probateauction:'custom',
+  countrywide:'custom', venmore:'custom', futureauctions:'custom',
+  kivells:'custom', suttonkersh:'custom', iamsold:'custom',
+  agentsproperty:'custom', andrewcraig:'custom', cheffins:'custom',
+  cheffinstimed:'custom', fssproperty:'custom', wilsons:'custom', strakers:'custom',
 };
 function getPipelineHtml(house, engine, extractedWith) {
   // Fetch tag
@@ -1906,6 +1959,7 @@ function switchTab(tab) {
   document.querySelectorAll('.tab-pane').forEach(p => p.classList.toggle('active', p.id === 'tab-' + tab));
   if (tab === 'analytics') loadAnalytics();
   if (tab === 'health') loadSystemHealth();
+  if (tab === 'intelligence') loadIntelligence();
 }
 
 // ═══ Analytics ═══
@@ -2367,6 +2421,191 @@ function renderPipeline(pipeline) {
       <div style="font-size:.72rem;color:var(--text3);">Status: <span style="color:${autoColor};font-weight:600;">${autoStatus}</span></div>
     </div>
   `;
+}
+
+// ═══ Auction House Intelligence ═══
+const PLATFORM_META = {
+  eig:    { label: 'EIG Platform',        color: 'blue',  desc: 'Essential Information Group SaaS — shared lot-panel structure, EIG CDN images' },
+  ahuk:   { label: 'Auction House UK',    color: 'green', desc: 'Regional franchise network on auctionhouse.co.uk — shared template extractor' },
+  custom: { label: 'Custom DOM',          color: 'amber', desc: 'Bespoke per-house CSS selectors — highest fidelity but most maintenance' },
+  api:    { label: 'API',                 color: 'green', desc: 'Direct JSON API endpoint — best data quality, no HTML parsing' },
+  spa:    { label: 'React SPA',           color: 'amber', desc: 'JavaScript-rendered apps (Bamboo Auctions) — requires Puppeteer' },
+  pdf:    { label: 'PDF Only',            color: 'red',   desc: 'Catalogue published as PDF — requires Gemini AI extraction' },
+  unknown:{ label: 'No Extractor',        color: 'red',   desc: 'No DOM extractor configured — falls back to Gemini AI on raw HTML' },
+};
+
+let _intelLoaded = false;
+async function loadIntelligence() {
+  if (_intelLoaded) return;
+  const data = await apiFetch('/api/cache-status');
+  if (data.error) return;
+
+  const { cached, missing } = data;
+  _intelLoaded = true;
+
+  // Build per-house performance map from cached data
+  const housePerf = {};
+  for (const c of (cached || [])) {
+    const slug = Object.entries(KNOWN_HOUSES).find(([k, v]) => v === c.house)?.[0] || '';
+    const platform = EXTRACTOR_TYPE[slug] || 'unknown';
+    if (!housePerf[slug]) {
+      housePerf[slug] = {
+        name: c.house, slug, platform,
+        totalLots: 0, hasData: true,
+        scrapedWith: c.scraped_with || 'unknown',
+        extractedWith: c.extracted_with || 'unknown',
+        expired: c._expired,
+        lastScraped: c.last_scraped_at || c.created_at,
+      };
+    }
+    housePerf[slug].totalLots += c.total_lots || 0;
+  }
+
+  // Add missing houses (no cached data)
+  for (const m of (missing || [])) {
+    const slug = Object.entries(KNOWN_HOUSES).find(([k, v]) => v === m.house)?.[0] || '';
+    if (slug && !housePerf[slug]) {
+      const platform = EXTRACTOR_TYPE[slug] || 'unknown';
+      housePerf[slug] = {
+        name: m.house, slug, platform,
+        totalLots: 0, hasData: false,
+        scrapedWith: '-', extractedWith: '-',
+        expired: false, lastScraped: null,
+      };
+    }
+  }
+
+  // Also add all KNOWN_HOUSES that aren't in either list
+  for (const [slug, name] of Object.entries(KNOWN_HOUSES)) {
+    if (!housePerf[slug]) {
+      const platform = EXTRACTOR_TYPE[slug] || 'unknown';
+      housePerf[slug] = {
+        name, slug, platform,
+        totalLots: 0, hasData: false,
+        scrapedWith: '-', extractedWith: '-',
+        expired: false, lastScraped: null,
+      };
+    }
+  }
+
+  // Group by platform
+  const groups = {};
+  for (const h of Object.values(housePerf)) {
+    if (!groups[h.platform]) groups[h.platform] = [];
+    groups[h.platform].push(h);
+  }
+
+  // Compute stats per group
+  const groupStats = {};
+  for (const [plat, houses] of Object.entries(groups)) {
+    const withData = houses.filter(h => h.hasData);
+    const totalLots = houses.reduce((s, h) => s + h.totalLots, 0);
+    groupStats[plat] = {
+      total: houses.length,
+      scraped: withData.length,
+      failed: houses.length - withData.length,
+      successRate: houses.length > 0 ? Math.round((withData.length / houses.length) * 100) : 0,
+      totalLots,
+      houses,
+    };
+  }
+
+  // Render summary stats
+  const totalHouses = Object.keys(housePerf).length;
+  const scrapedHouses = Object.values(housePerf).filter(h => h.hasData).length;
+  const totalLots = Object.values(housePerf).reduce((s, h) => s + h.totalLots, 0);
+  const unknownCount = (groups.unknown || []).length;
+
+  document.getElementById('intel-stats').innerHTML = `
+    <div class="stat-card">
+      <div class="stat-label">Total Houses</div>
+      <div class="stat-value">${totalHouses}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Successfully Scraped</div>
+      <div class="stat-value green">${scrapedHouses}</div>
+      <div class="stat-sub">${Math.round((scrapedHouses/totalHouses)*100)}% coverage</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total Lots</div>
+      <div class="stat-value blue">${totalLots.toLocaleString()}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Platform Types</div>
+      <div class="stat-value">${Object.keys(groups).length}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">No Extractor</div>
+      <div class="stat-value ${unknownCount > 0 ? 'red' : 'green'}">${unknownCount}</div>
+      <div class="stat-sub">need DOM extractor</div>
+    </div>
+  `;
+
+  // Render platform groups — ordered by size
+  const platformOrder = ['eig', 'ahuk', 'custom', 'api', 'spa', 'pdf', 'unknown'];
+  let platHtml = '';
+
+  for (const plat of platformOrder) {
+    const stats = groupStats[plat];
+    if (!stats) continue;
+    const meta = PLATFORM_META[plat];
+    const rateColor = stats.successRate >= 80 ? 'green' : stats.successRate >= 50 ? 'amber' : 'red';
+
+    platHtml += `
+    <div class="section" style="margin-bottom:16px;">
+      <div class="section-header" style="cursor:pointer;" onclick="this.parentElement.querySelector('.intel-group-body').classList.toggle('collapsed')">
+        <h2 style="display:flex;align-items:center;gap:8px;">
+          <span class="badge badge-${meta.color}">${meta.label}</span>
+          <span style="font-weight:400;font-size:.85rem;color:var(--text2);">${stats.total} houses</span>
+          <span class="badge badge-${rateColor}" style="margin-left:auto;">${stats.successRate}% scraped</span>
+          <span style="font-size:.75rem;color:var(--text3);">${stats.totalLots.toLocaleString()} lots</span>
+        </h2>
+      </div>
+      <div style="padding:4px 18px 8px;font-size:.78rem;color:var(--text3);">${meta.desc}</div>
+      <div class="intel-group-body">
+        <table style="width:100%;font-size:.78rem;border-collapse:collapse;">
+          <thead>
+            <tr style="border-bottom:1px solid var(--border);text-align:left;">
+              <th style="padding:6px 12px;">House</th>
+              <th style="padding:6px 8px;">Status</th>
+              <th style="padding:6px 8px;">Lots</th>
+              <th style="padding:6px 8px;">Scraper</th>
+              <th style="padding:6px 8px;">Extractor</th>
+              <th style="padding:6px 8px;">Last Scraped</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${stats.houses.sort((a, b) => b.totalLots - a.totalLots).map(h => {
+              const statusBadge = h.hasData
+                ? (h.expired ? '<span class="badge badge-amber">Stale</span>' : '<span class="badge badge-green">Live</span>')
+                : '<span class="badge badge-red">No Data</span>';
+              const scraperTag = h.scrapedWith === 'firecrawl' ? '<span class="pipe-tag pipe-fc">Firecrawl</span>'
+                : h.scrapedWith === 'puppeteer' ? '<span class="pipe-tag pipe-pupp">Puppeteer</span>'
+                : h.scrapedWith === '-' ? '<span style="color:var(--text3);">-</span>'
+                : '<span class="pipe-tag pipe-http">HTTP</span>';
+              const extractTag = h.extractedWith === 'gemini' ? '<span class="pipe-tag pipe-gemini">Gemini</span>'
+                : h.extractedWith === 'dom' ? '<span class="pipe-tag pipe-dom">DOM</span>'
+                : h.extractedWith === '-' ? '<span style="color:var(--text3);">-</span>'
+                : `<span class="pipe-tag pipe-dom">${esc(h.extractedWith)}</span>`;
+              const lastStr = h.lastScraped ? new Date(h.lastScraped).toLocaleDateString('en-GB', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }) : '-';
+              return `<tr style="border-bottom:1px solid var(--border);">
+                <td style="padding:5px 12px;font-weight:500;">${esc(h.name)}</td>
+                <td style="padding:5px 8px;">${statusBadge}</td>
+                <td style="padding:5px 8px;${h.totalLots === 0 ? 'color:var(--red)' : ''}">${h.totalLots || '-'}</td>
+                <td style="padding:5px 8px;">${scraperTag}</td>
+                <td style="padding:5px 8px;">${extractTag}</td>
+                <td style="padding:5px 8px;font-size:.72rem;color:var(--text3);">${lastStr}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+  }
+
+  document.getElementById('intel-platforms').innerHTML = platHtml;
+  document.getElementById('intel-loading').style.display = 'none';
+  document.getElementById('intel-content').style.display = 'block';
 }
 
 // Auto-refresh every 5 minutes
