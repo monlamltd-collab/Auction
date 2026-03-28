@@ -2442,7 +2442,7 @@ const PLATFORM_META = {
   api:              { label: 'API',                    color: 'green', desc: 'Direct JSON API endpoint — best data quality, no HTML parsing needed.' },
   spa:              { label: 'React SPA (Bamboo)',     color: 'amber', desc: 'Bamboo Auctions platform — React/Next.js apps requiring Puppeteer.' },
   pdf:              { label: 'PDF Only',               color: 'red',   desc: 'Catalogue published as PDF — requires Gemini AI extraction. Expensive and less reliable.' },
-  unknown:          { label: 'No Extractor',           color: 'red',   desc: 'No DOM extractor configured — falls back to Gemini AI on raw HTML. Needs a DOM extractor written.' },
+  unknown:          { label: 'No Extractor',           color: 'red',   desc: 'No DOM extractor configured — uses universal pattern matcher then Gemini AI fallback. Houses with 0 lots need investigation.' },
 };
 
 let _intelLoaded = false;
@@ -2610,6 +2610,90 @@ async function loadIntelligence() {
             }).join('')}
           </tbody>
         </table>
+      </div>
+    </div>`;
+  }
+
+  // Add diagnostic summary for no-extractor houses
+  if (groups.unknown && groups.unknown.length > 0) {
+    const unknowns = groups.unknown;
+    const working = unknowns.filter(h => h.hasData && h.totalLots > 0);
+    const attempted = unknowns.filter(h => h.hasData && h.totalLots === 0);
+    const neverTried = unknowns.filter(h => !h.hasData);
+
+    platHtml += `
+    <div class="section" style="margin-bottom:16px;border-left:3px solid var(--amber);">
+      <div class="section-header">
+        <h2 style="font-size:.88rem;">No-Extractor Diagnostic</h2>
+      </div>
+      <div style="padding:14px 18px;">
+        <div class="stats-grid" style="margin-bottom:16px;">
+          <div class="stat-card">
+            <div class="stat-label">Working via Fallback</div>
+            <div class="stat-value green">${working.length}</div>
+            <div class="stat-sub">Universal extractor or Gemini succeeds</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Attempted, 0 Lots</div>
+            <div class="stat-value red">${attempted.length}</div>
+            <div class="stat-sub">Scraped but extraction failed</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Never Attempted</div>
+            <div class="stat-value amber">${neverTried.length}</div>
+            <div class="stat-sub">Not yet reached by auto-analyse</div>
+          </div>
+        </div>
+
+        ${working.length > 0 ? `
+        <details style="margin-bottom:12px;">
+          <summary style="cursor:pointer;font-weight:600;font-size:.8rem;color:var(--green);padding:6px 0;">
+            ✓ Working via fallback (${working.length}) — low priority, fallback is handling these
+          </summary>
+          <div style="padding:8px 0;font-size:.76rem;">
+            ${working.map(h => `<span style="display:inline-block;background:var(--green-bg);color:var(--green);padding:2px 8px;border-radius:10px;margin:2px;font-size:.72rem;">${esc(h.name)} (${h.totalLots} lots)</span>`).join('')}
+          </div>
+        </details>` : ''}
+
+        ${attempted.length > 0 ? `
+        <details open style="margin-bottom:12px;">
+          <summary style="cursor:pointer;font-weight:600;font-size:.8rem;color:var(--red);padding:6px 0;">
+            ✗ Failed extraction (${attempted.length}) — needs investigation
+          </summary>
+          <div style="padding:8px 0;">
+            <table style="width:100%;font-size:.76rem;border-collapse:collapse;">
+              <thead><tr style="border-bottom:1px solid var(--border);text-align:left;">
+                <th style="padding:4px 8px;">House</th>
+                <th style="padding:4px 8px;">Scraper Used</th>
+                <th style="padding:4px 8px;">Extractor Used</th>
+                <th style="padding:4px 8px;">Possible Action</th>
+              </tr></thead>
+              <tbody>
+                ${attempted.map(h => {
+                  let action = 'Write DOM extractor';
+                  if (h.extractedWith === 'gemini') action = 'Gemini returned 0 lots — check if URL has a catalogue';
+                  else if (h.scrapedWith === '-') action = 'Scrape not reaching this house — check calendar entry';
+                  return `<tr style="border-bottom:1px solid var(--border);">
+                    <td style="padding:4px 8px;font-weight:500;">${esc(h.name)}</td>
+                    <td style="padding:4px 8px;">${esc(h.scrapedWith)}</td>
+                    <td style="padding:4px 8px;">${esc(h.extractedWith)}</td>
+                    <td style="padding:4px 8px;color:var(--amber);font-size:.72rem;">${action}</td>
+                  </tr>`;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        </details>` : ''}
+
+        ${neverTried.length > 0 ? `
+        <details style="margin-bottom:12px;">
+          <summary style="cursor:pointer;font-weight:600;font-size:.8rem;color:var(--amber);padding:6px 0;">
+            ? Never attempted (${neverTried.length}) — waiting for auto-analyse cycle
+          </summary>
+          <div style="padding:8px 0;font-size:.76rem;">
+            ${neverTried.map(h => `<span style="display:inline-block;background:var(--amber-bg);color:var(--amber);padding:2px 8px;border-radius:10px;margin:2px;font-size:.72rem;">${esc(h.name)}</span>`).join('')}
+          </div>
+        </details>` : ''}
       </div>
     </div>`;
   }
