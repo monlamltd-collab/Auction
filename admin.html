@@ -1662,17 +1662,22 @@ const EXTRACTOR_TYPE = {
   buttersjohnbee:'pdf',
   // React SPA (Bamboo Auctions)
   hunters:'spa', lsk:'spa',
-  // Custom DOM extractors — bespoke per house
-  savills:'custom', sdl:'custom', network:'custom', bondwolfe:'custom',
-  barnardmarcus:'custom', auctionhouselondon:'custom', cliveemson:'custom',
-  strettons:'custom', acuitus:'custom', hollismorgan:'custom', maggsandallen:'custom',
-  knightfrank:'custom', pattinson:'custom', bidx1:'custom', philliparnold:'custom',
-  edwardmellor:'custom', barnettross:'custom', connectuk:'custom',
-  auctionestates:'custom', loveitts:'custom', probateauction:'custom',
-  countrywide:'custom', venmore:'custom', futureauctions:'custom',
-  kivells:'custom', suttonkersh:'custom', iamsold:'custom',
-  agentsproperty:'custom', andrewcraig:'custom', cheffins:'custom',
-  cheffinstimed:'custom', fssproperty:'custom', wilsons:'custom', strakers:'custom',
+  // JS-rendered + paginated — SPAs needing Puppeteer with multi-page support
+  savills:'js-paginated', sdl:'js-paginated',
+  // JS-rendered single-page — need Puppeteer but no pagination
+  hollismorgan:'js-single', maggsandallen:'js-single', bondwolfe:'js-single',
+  network:'js-single', pattinson:'js-single', barnardmarcus:'js-single',
+  auctionhouselondon:'js-single', cliveemson:'js-single', strettons:'js-single',
+  acuitus:'js-single', probateauction:'js-single', knightfrank:'js-single',
+  // Static paginated — plain HTML with pagination
+  suttonkersh:'static-paginated',
+  // Static simple — plain HTTP fetch, single page
+  countrywide:'static', venmore:'static', futureauctions:'static',
+  kivells:'static', edwardmellor:'static', barnettross:'static',
+  philliparnold:'static', connectuk:'static', auctionestates:'static',
+  loveitts:'static', agentsproperty:'static', andrewcraig:'static',
+  cheffins:'static', cheffinstimed:'static', fssproperty:'static',
+  iamsold:'static', wilsons:'static', strakers:'static', bidx1:'static',
 };
 function getPipelineHtml(house, engine, extractedWith) {
   // Fetch tag
@@ -1689,7 +1694,10 @@ function getPipelineHtml(house, engine, extractedWith) {
     const ext = EXTRACTOR_TYPE[slug];
     if (ext === 'eig') extractTag = '<span class="pipe-tag pipe-eig">EIG DOM</span>';
     else if (ext === 'ahuk') extractTag = '<span class="pipe-tag pipe-eig">AHUK DOM</span>';
-    else extractTag = '<span class="pipe-tag pipe-dom">DOM</span>';
+    else if (ext === 'api') extractTag = '<span class="pipe-tag pipe-dom">API</span>';
+    else if (ext === 'pdf') extractTag = '<span class="pipe-tag pipe-gemini">PDF+AI</span>';
+    else if (ext) extractTag = '<span class="pipe-tag pipe-dom">DOM</span>';
+    else extractTag = '<span class="pipe-tag pipe-gemini">AI Fallback</span>';
   }
 
   return `<span class="pipe">${fetchTag}<span class="pipe-arrow">&rarr;</span>${extractTag}</span>`;
@@ -2425,13 +2433,16 @@ function renderPipeline(pipeline) {
 
 // ═══ Auction House Intelligence ═══
 const PLATFORM_META = {
-  eig:    { label: 'EIG Platform',        color: 'blue',  desc: 'Essential Information Group SaaS — shared lot-panel structure, EIG CDN images' },
-  ahuk:   { label: 'Auction House UK',    color: 'green', desc: 'Regional franchise network on auctionhouse.co.uk — shared template extractor' },
-  custom: { label: 'Custom DOM',          color: 'amber', desc: 'Bespoke per-house CSS selectors — highest fidelity but most maintenance' },
-  api:    { label: 'API',                 color: 'green', desc: 'Direct JSON API endpoint — best data quality, no HTML parsing' },
-  spa:    { label: 'React SPA',           color: 'amber', desc: 'JavaScript-rendered apps (Bamboo Auctions) — requires Puppeteer' },
-  pdf:    { label: 'PDF Only',            color: 'red',   desc: 'Catalogue published as PDF — requires Gemini AI extraction' },
-  unknown:{ label: 'No Extractor',        color: 'red',   desc: 'No DOM extractor configured — falls back to Gemini AI on raw HTML' },
+  eig:              { label: 'EIG Platform',           color: 'blue',  desc: 'Essential Information Group SaaS — shared lot-panel structure, EIG CDN images. One generic extractor covers all ~40 houses.' },
+  ahuk:             { label: 'Auction House UK',       color: 'green', desc: 'Regional franchise network on auctionhouse.co.uk — one template extractor covers all ~34 branches.' },
+  'js-paginated':   { label: 'JS Rendered + Paginated',color: 'amber', desc: 'JavaScript SPAs with multi-page catalogues — need Puppeteer/Firecrawl + page-loop logic. Most complex to scrape.' },
+  'js-single':      { label: 'JS Rendered (Single Page)',color:'amber', desc: 'JavaScript-rendered sites — need Puppeteer/Firecrawl but no pagination. Custom DOM extractor per house.' },
+  'static-paginated':{ label: 'Static HTML + Paginated',color:'green', desc: 'Plain HTML with pagination — fast plain HTTP fetch with page-loop.' },
+  static:           { label: 'Static HTML',            color: 'green', desc: 'Plain HTML, single page — fastest and most reliable. Simple HTTP fetch + DOM parsing.' },
+  api:              { label: 'API',                    color: 'green', desc: 'Direct JSON API endpoint — best data quality, no HTML parsing needed.' },
+  spa:              { label: 'React SPA (Bamboo)',     color: 'amber', desc: 'Bamboo Auctions platform — React/Next.js apps requiring Puppeteer.' },
+  pdf:              { label: 'PDF Only',               color: 'red',   desc: 'Catalogue published as PDF — requires Gemini AI extraction. Expensive and less reliable.' },
+  unknown:          { label: 'No Extractor',           color: 'red',   desc: 'No DOM extractor configured — falls back to Gemini AI on raw HTML. Needs a DOM extractor written.' },
 };
 
 let _intelLoaded = false;
@@ -2542,7 +2553,7 @@ async function loadIntelligence() {
   `;
 
   // Render platform groups — ordered by size
-  const platformOrder = ['eig', 'ahuk', 'custom', 'api', 'spa', 'pdf', 'unknown'];
+  const platformOrder = ['eig', 'ahuk', 'js-paginated', 'js-single', 'static-paginated', 'static', 'api', 'spa', 'pdf', 'unknown'];
   let platHtml = '';
 
   for (const plat of platformOrder) {
