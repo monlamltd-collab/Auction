@@ -4519,6 +4519,62 @@ app.post('/api/analyse-all', async (req, res) => {
   }
 });
 
+// Scrape only houses that have never been cached — much lighter than autoAnalyseAll
+app.post('/api/analyse-new', async (req, res) => {
+  const adminToken = req.headers['x-admin-secret'] || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(adminToken, process.env.ADMIN_SECRET)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  try {
+    // Get all catalogue-ready auctions
+    const allAuctions = await getCalendarAuctions();
+    const ready = allAuctions.filter(a => a.catalogueReady);
+
+    // Get already-cached URLs
+    const { data: cached } = await supabase
+      .from('cached_analyses')
+      .select('url');
+    const cachedUrls = new Set((cached || []).map(c => (c.url || '').trim().replace(/\/+$/, '').toLowerCase()));
+
+    // Filter to only uncached
+    const uncached = ready.filter(a => !cachedUrls.has((a.url || '').trim().replace(/\/+$/, '').toLowerCase()));
+
+    // Dedup by house
+    const byHouse = new Map();
+    for (const a of uncached) {
+      if (!byHouse.has(a.house)) byHouse.set(a.house, a);
+    }
+    const toScrape = [...byHouse.values()];
+
+    log.info(`ANALYSE-NEW: ${toScrape.length} uncached houses to scrape (${ready.length} total ready, ${cachedUrls.size} cached)`);
+    res.json({
+      message: `Scraping ${toScrape.length} new houses in background`,
+      houses: toScrape.map(a => a.house),
+      total: toScrape.length,
+    });
+
+    // Run in background
+    let done = 0, failed = 0;
+    for (const auction of toScrape) {
+      try {
+        console.log(`ANALYSE-NEW: [${done + failed + 1}/${toScrape.length}] ${auction.house} — ${auction.url}`);
+        await autoAnalyseOne(auction.url);
+        done++;
+      } catch (e) {
+        console.error(`ANALYSE-NEW: ✗ ${auction.house} failed: ${e.message}`);
+        failed++;
+      }
+      // Brief pause between houses
+      await new Promise(r => setTimeout(r, 3000));
+    }
+    console.log(`ANALYSE-NEW COMPLETE: ${done} succeeded, ${failed} failed out of ${toScrape.length}`);
+  } catch (e) {
+    log.error('Analyse-new error', { error: e.message });
+    if (!res.headersSent) res.status(500).json({ error: e.message });
+  }
+});
+
 // ═══════════════════════════════════════════════════════════════
 // ADMIN DASHBOARD
 // ═══════════════════════════════════════════════════════════════

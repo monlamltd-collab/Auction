@@ -477,6 +477,10 @@ tr:hover td { background: rgba(255,255,255,.02); }
       <summary style="padding:14px 18px;font-size:.88rem;font-weight:700;cursor:pointer;">Quick Actions</summary>
       <div class="actions-grid">
         <div class="action-item">
+          <button class="action-btn" onclick="triggerAction('analyse-new')" title="Scrapes only houses with no cached data. Much faster than full re-analysis. Runs in background.">Scrape New Houses Only</button>
+          <p class="action-desc">Scrapes only uncached houses — skips everything already scraped. Fast and safe. Runs in background.</p>
+        </div>
+        <div class="action-item">
           <button class="action-btn" onclick="triggerAction('analyse-all')" title="Re-scrapes every auction house from scratch, ignoring cache. Takes 30-60 min. Use after fixing an extractor or when lots look stale">Force Re-Analyse All</button>
           <p class="action-desc">Re-scrapes every auction house from scratch, ignoring cache. Takes 30-60 min. Use after fixing an extractor or when lots look stale.</p>
         </div>
@@ -1323,7 +1327,7 @@ async function loadCacheStatus() {
         <summary>
           <span class="status-dot dot-blue"></span>
           Today's Auctions (${todayAuctions.length})
-          <button class="action-btn" onclick="event.stopPropagation(); triggerAction('analyse-all')" style="font-size:.7rem;padding:4px 10px;margin-left:auto;">Scrape All</button>
+          <button class="action-btn" onclick="event.stopPropagation(); triggerAction('analyse-new')" style="font-size:.7rem;padding:4px 10px;margin-left:auto;">Scrape New</button>
         </summary>
         <div class="missing-cat-content">
           ${todayAuctions.map(m => {
@@ -1377,7 +1381,7 @@ async function loadCacheStatus() {
         <summary>
           <span class="status-dot dot-grey"></span>
           Always-On Catalogues (${alwaysOn.length})
-          <button class="action-btn" onclick="event.stopPropagation(); triggerAction('analyse-all')" style="font-size:.7rem;padding:4px 10px;margin-left:auto;">Scrape All</button>
+          <button class="action-btn" onclick="event.stopPropagation(); triggerAction('analyse-new')" style="font-size:.7rem;padding:4px 10px;margin-left:auto;">Scrape New</button>
         </summary>
         <div class="missing-cat-content">
           ${alwaysOn.sort((a, b) => (a.house || '').localeCompare(b.house || '')).map(m => {
@@ -1588,7 +1592,11 @@ async function triggerAction(action) {
 
   try {
     let result;
-    if (action === 'analyse-all') {
+    if (action === 'analyse-new') {
+      toast('Scraping uncached houses only — running in background...');
+      result = await apiFetch('/api/analyse-new', { method: 'POST' });
+      if (result && result.total !== undefined) toast(`Scraping ${result.total} new houses in background`, 'success');
+    } else if (action === 'analyse-all') {
       toast('Triggering full re-analysis... this may take a while');
       result = await apiFetch('/api/analyse-all', { method: 'POST' });
     } else if (action === 'backfill-images') {
