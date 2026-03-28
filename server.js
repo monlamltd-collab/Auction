@@ -12351,13 +12351,17 @@ async function logActivityEvent(action, detail = {}, email = null, ip = null) {
 // Helper: get catalogue-ready auctions (used by auto-analyse)
 async function getCalendarAuctions() {
   const today = new Date().toISOString().slice(0, 10);
+  // Include last 7 days for past failed scrape auditing
+  const lookback = new Date();
+  lookback.setDate(lookback.getDate() - 7);
+  const lookbackDate = lookback.toISOString().slice(0, 10);
   // Try Supabase first
   try {
     const { data, error } = await supabase
       .from('auction_calendar')
       .select('house, url, date, catalogue_ready')
       .eq('catalogue_ready', true)
-      .gte('date', today)
+      .gte('date', lookbackDate)
       .order('date', { ascending: true });
 
     if (!error && data && data.length > 0) {
@@ -12374,7 +12378,7 @@ async function getCalendarAuctions() {
 
   // Fallback to hardcoded
   return FALLBACK_CALENDAR
-    .filter(a => a.catalogueReady && a.date >= today)
+    .filter(a => a.catalogueReady && a.date >= lookbackDate)
     .map(a => ({
       house: a.house,
       url: a.url,
