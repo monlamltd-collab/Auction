@@ -4555,9 +4555,9 @@ app.post('/api/analyse-new', async (req, res) => {
     });
 
     // Run in background — process in parallel batches for speed
-    // Gemini rate limit is 15 RPM, so we can safely run 3 concurrent scrapes
-    // (each takes ~10-30s, so 3 concurrent ≈ 5-10 RPM)
-    const CONCURRENCY = 3;
+    // With probe skip for uncached houses, each only does 1 Firecrawl call.
+    // Gemini rate limit is 15 RPM but DOM-extractor houses don't need Gemini.
+    const CONCURRENCY = 5;
     let done = 0, failed = 0;
     for (let i = 0; i < toScrape.length; i += CONCURRENCY) {
       const batch = toScrape.slice(i, i + CONCURRENCY);
@@ -11672,40 +11672,44 @@ async function autoAnalyseOne(url) {
   // Uses Firecrawl for JS-rendered houses so the hash reflects actual rendered content,
   // not the empty JS shell. This makes the hash-skip optimisation work properly and
   // avoids wasteful full re-scrapes every cycle.
-  try {
-    let probeHtml;
-    let probeSource = 'http';
-    if (FIRECRAWL_API_KEY && !fcCreditExhausted && !FIRECRAWL_SKIP.has(house)) {
-      // Use Firecrawl for the probe — 1 credit but saves a full scrape cycle if unchanged
-      try {
-        const fcProbe = await scrapeWithFirecrawl(scrapeUrl, { formats: ['rawHtml'] });
-        probeHtml = fcProbe.html || '';
-        probeSource = 'firecrawl';
-      } catch {
-        // Firecrawl failed for probe — fall back to plain HTTP
+  // OPTIMISATION: Skip the probe entirely for never-cached URLs — there's nothing to
+  // compare against, so the probe wastes a Firecrawl credit and 5-15 seconds.
+  const { data: existingCache } = await supabase
+    .from('cached_analyses')
+    .select('content_hash, expires_at')
+    .eq('url', normalisedUrl)
+    .maybeSingle();
+
+  if (existingCache) {
+    try {
+      let probeHtml;
+      let probeSource = 'http';
+      if (FIRECRAWL_API_KEY && !fcCreditExhausted && !FIRECRAWL_SKIP.has(house)) {
+        try {
+          const fcProbe = await scrapeWithFirecrawl(scrapeUrl, { formats: ['rawHtml'] });
+          probeHtml = fcProbe.html || '';
+          probeSource = 'firecrawl';
+        } catch {
+          probeHtml = await fetchPage(scrapeUrl);
+        }
+      } else {
         probeHtml = await fetchPage(scrapeUrl);
       }
-    } else {
-      probeHtml = await fetchPage(scrapeUrl);
-    }
-    const contentHash = createHash('md5').update(probeHtml).digest('hex');
-    const { data: cached } = await supabase
-      .from('cached_analyses')
-      .select('content_hash, expires_at')
-      .eq('url', normalisedUrl)
-      .single();
+      const contentHash = createHash('md5').update(probeHtml).digest('hex');
 
-    if (cached && cached.content_hash === contentHash && cached.expires_at && new Date(cached.expires_at) > new Date()) {
-      // Extend cache TTL since content hasn't changed
-      const newExpiry = new Date(Date.now() + getCacheTTL(house)).toISOString();
-      await supabase.from('cached_analyses').update({ expires_at: newExpiry, last_scraped_at: new Date().toISOString() }).eq('url', normalisedUrl);
-      hashHitCount++;
-      console.log(`Cache extended — content unchanged for ${house} (probe: ${probeSource})`);
-      return;
+      if (existingCache.content_hash === contentHash && existingCache.expires_at && new Date(existingCache.expires_at) > new Date()) {
+        const newExpiry = new Date(Date.now() + getCacheTTL(house)).toISOString();
+        await supabase.from('cached_analyses').update({ expires_at: newExpiry, last_scraped_at: new Date().toISOString() }).eq('url', normalisedUrl);
+        hashHitCount++;
+        console.log(`Cache extended — content unchanged for ${house} (probe: ${probeSource})`);
+        return;
+      }
+      autoAnalyseOne._lastContentHash = contentHash;
+    } catch (e) {
+      autoAnalyseOne._lastContentHash = null;
     }
-    // Store hash for later upsert
-    autoAnalyseOne._lastContentHash = contentHash;
-  } catch (e) {
+  } else {
+    // Never cached — skip probe, will hash after full scrape
     autoAnalyseOne._lastContentHash = null;
   }
 
