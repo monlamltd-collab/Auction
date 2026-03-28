@@ -4554,19 +4554,27 @@ app.post('/api/analyse-new', async (req, res) => {
       total: toScrape.length,
     });
 
-    // Run in background
+    // Run in background — process in parallel batches for speed
+    // Gemini rate limit is 15 RPM, so we can safely run 3 concurrent scrapes
+    // (each takes ~10-30s, so 3 concurrent ≈ 5-10 RPM)
+    const CONCURRENCY = 3;
     let done = 0, failed = 0;
-    for (const auction of toScrape) {
-      try {
-        console.log(`ANALYSE-NEW: [${done + failed + 1}/${toScrape.length}] ${auction.house} — ${auction.url}`);
-        await autoAnalyseOne(auction.url);
-        done++;
-      } catch (e) {
-        console.error(`ANALYSE-NEW: ✗ ${auction.house} failed: ${e.message}`);
-        failed++;
+    for (let i = 0; i < toScrape.length; i += CONCURRENCY) {
+      const batch = toScrape.slice(i, i + CONCURRENCY);
+      const results = await Promise.allSettled(
+        batch.map(async (auction, idx) => {
+          const n = i + idx + 1;
+          console.log(`ANALYSE-NEW: [${n}/${toScrape.length}] ${auction.house} — ${auction.url}`);
+          await autoAnalyseOne(auction.url);
+          return auction.house;
+        })
+      );
+      for (const r of results) {
+        if (r.status === 'fulfilled') { done++; }
+        else { failed++; console.error(`ANALYSE-NEW: ✗ failed: ${r.reason?.message || r.reason}`); }
       }
-      // Brief pause between houses
-      await new Promise(r => setTimeout(r, 3000));
+      // Brief pause between batches (autoAnalyseOne has its own Gemini rate limiting)
+      if (i + CONCURRENCY < toScrape.length) await new Promise(r => setTimeout(r, 1000));
     }
     console.log(`ANALYSE-NEW COMPLETE: ${done} succeeded, ${failed} failed out of ${toScrape.length}`);
   } catch (e) {
