@@ -4199,7 +4199,7 @@ app.get('/api/cache-status', async (req, res) => {
         missingCount: missing.length,
       },
       cached: (cached || []).map(c => ({ ...c, _expired: c.expires_at <= now })),
-      missing: missing.map(a => ({ house: a.house, url: a.url, date: a.date })),
+      missing: missing.map(a => ({ house: a.house, url: a.url, date: a.date, status: a.status || 'upcoming' })),
     });
   } catch (e) {
     log.error('Cache status error', { error: e.message });
@@ -10882,17 +10882,18 @@ async function _doAutoAnalyseAll() {
     const today = new Date().toISOString().slice(0, 10);
     const normalise = u => (u || '').trim().replace(/\/+$/, '').toLowerCase();
 
-    // Get URLs from past calendar entries
+    // Get URLs from past calendar entries (exclude always_on — they don't expire)
     const { data: pastCalendar } = await supabase
       .from('auction_calendar')
       .select('url')
-      .lt('date', today);
+      .lt('date', today)
+      .neq('status', 'always_on');
 
-    // Get URLs from upcoming calendar entries (to protect from purge)
+    // Get URLs from upcoming calendar entries + always_on (protect from purge)
     const { data: upcomingCalendar } = await supabase
       .from('auction_calendar')
       .select('url')
-      .gte('date', today);
+      .or(`date.gte.${today},status.eq.always_on`);
 
     if (pastCalendar && pastCalendar.length > 0) {
       const upcomingUrls = new Set((upcomingCalendar || []).map(r => normalise(r.url)));
@@ -10951,8 +10952,12 @@ async function _doAutoAnalyseAll() {
 
   // ── Step 0.5: Ensure every HOUSE_ROOTS entry has at least one calendar entry ──
   // Many houses (EIG, AH UK, etc.) have root URLs that ARE the catalogue page.
-  // Without a calendar entry, they never get analysed. This guarantees every
-  // registered house gets scraped at least once, regardless of AI discovery.
+  // Without a calendar entry, they never get analysed. These are "always-on"
+  // houses — their catalogue is permanently live, not tied to a specific date.
+  // We mark them status='always_on' with a sentinel date so they:
+  //   - Never get purged by the date-based cleanup in Step 0
+  //   - Show separately in the admin UI from dated auctions
+  //   - Still get scraped by autoAnalyseOne like any other catalogue-ready entry
   try {
     const { data: existingCalendar } = await supabase
       .from('auction_calendar')
@@ -10964,17 +10969,17 @@ async function _doAutoAnalyseAll() {
       const normUrl = rootUrl.trim().replace(/\/+$/, '').toLowerCase();
       // Skip if this house already has any calendar entry
       if (calendarSlugs.has(slug) || calendarUrls.has(normUrl)) continue;
-      // Auto-insert the root URL as a catalogue-ready entry
+      // Auto-insert as always-on catalogue with sentinel date (won't be purged)
       const { error } = await supabase.from('auction_calendar').insert({
         house: HOUSE_DISPLAY_NAMES[slug] || slug,
         house_slug: slug,
         logo: '🔨',
-        date: new Date().toISOString().split('T')[0],
+        date: '2099-12-31',
         title: 'Current Catalogue',
         url: rootUrl,
         location: 'Online',
         type: 'Residential & Commercial',
-        status: 'upcoming',
+        status: 'always_on',
         catalogue_ready: true,
         updated_at: new Date().toISOString(),
       });
@@ -10983,7 +10988,25 @@ async function _doAutoAnalyseAll() {
       }
     }
     if (autoInserted > 0) {
-      console.log(`AUTO-CALENDAR: Inserted ${autoInserted} missing house root URLs into calendar`);
+      console.log(`AUTO-CALENDAR: Inserted ${autoInserted} always-on house root URLs into calendar`);
+    }
+
+    // Migrate any existing auto-inserted entries (date=today, title='Current Catalogue')
+    // that were created by the old logic — convert them to always_on
+    const { data: migratable } = await supabase
+      .from('auction_calendar')
+      .select('id')
+      .eq('title', 'Current Catalogue')
+      .neq('status', 'always_on');
+    if (migratable && migratable.length > 0) {
+      const { error: migErr } = await supabase
+        .from('auction_calendar')
+        .update({ status: 'always_on', date: '2099-12-31' })
+        .eq('title', 'Current Catalogue')
+        .neq('status', 'always_on');
+      if (!migErr) {
+        console.log(`AUTO-CALENDAR: Migrated ${migratable.length} legacy entries to always_on`);
+      }
     }
   } catch (e) {
     console.warn('AUTO-CALENDAR: root URL insertion failed (non-fatal) —', e.message);
@@ -12355,13 +12378,13 @@ async function getCalendarAuctions() {
   const lookback = new Date();
   lookback.setDate(lookback.getDate() - 7);
   const lookbackDate = lookback.toISOString().slice(0, 10);
-  // Try Supabase first
+  // Try Supabase first — include dated auctions (lookback) + always_on houses
   try {
     const { data, error } = await supabase
       .from('auction_calendar')
-      .select('house, url, date, catalogue_ready')
+      .select('house, url, date, catalogue_ready, status')
       .eq('catalogue_ready', true)
-      .gte('date', lookbackDate)
+      .or(`date.gte.${lookbackDate},status.eq.always_on`)
       .order('date', { ascending: true });
 
     if (!error && data && data.length > 0) {
@@ -12370,13 +12393,14 @@ async function getCalendarAuctions() {
         url: row.url,
         date: row.date,
         catalogueReady: row.catalogue_ready,
+        status: row.status || 'upcoming',
       }));
     }
   } catch (e) {
     console.warn('Calendar DB read failed in getCalendarAuctions, using fallback:', e.message);
   }
 
-  // Fallback to hardcoded
+  // Fallback to hardcoded (no always_on in fallback)
   return FALLBACK_CALENDAR
     .filter(a => a.catalogueReady && a.date >= lookbackDate)
     .map(a => ({
@@ -12384,5 +12408,6 @@ async function getCalendarAuctions() {
       url: a.url,
       date: a.date,
       catalogueReady: a.catalogueReady,
+      status: 'upcoming',
     }));
 }

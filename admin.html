@@ -1276,20 +1276,29 @@ async function loadCacheStatus() {
     const todayMidnight = new Date(); todayMidnight.setHours(0, 0, 0, 0);
     const tomorrowMidnight = new Date(todayMidnight); tomorrowMidnight.setDate(tomorrowMidnight.getDate() + 1);
 
+    const alwaysOn = [];
     const todayAuctions = [];
     const futureMissing = [];
     const pastFailed = [];
 
     for (const m of missing) {
-      const mDate = new Date(m.date); mDate.setHours(0, 0, 0, 0);
-      if (mDate.getTime() === todayMidnight.getTime()) {
-        todayAuctions.push(m);
-      } else if (mDate >= tomorrowMidnight) {
-        futureMissing.push(m);
+      if (m.status === 'always_on') {
+        alwaysOn.push(m);
       } else {
-        pastFailed.push(m);
+        const mDate = new Date(m.date); mDate.setHours(0, 0, 0, 0);
+        if (mDate.getTime() === todayMidnight.getTime()) {
+          todayAuctions.push(m);
+        } else if (mDate >= tomorrowMidnight) {
+          futureMissing.push(m);
+        } else {
+          pastFailed.push(m);
+        }
       }
     }
+
+    // Update badge to only count actionable missing (exclude always-on from headline)
+    const actionableCount = todayAuctions.length + futureMissing.length;
+    document.getElementById('missing-badge').textContent = actionableCount > 0 ? actionableCount + ' missing' : alwaysOn.length + ' always-on';
 
     let catHtml = '';
 
@@ -1314,7 +1323,7 @@ async function loadCacheStatus() {
       </details>`;
     }
 
-    // Future Missing — upcoming auctions not yet scraped
+    // Future Missing — upcoming dated auctions not yet scraped
     if (futureMissing.length > 0) {
       // Group by month
       const byMonth = {};
@@ -1347,7 +1356,28 @@ async function loadCacheStatus() {
       </details>`;
     }
 
-    // Past Failed Scrapes — auctions that have passed without being scraped (audit trail)
+    // Always-On Catalogues — permanent catalogue pages not yet scraped
+    if (alwaysOn.length > 0) {
+      catHtml += `<details class="missing-cat">
+        <summary>
+          <span class="status-dot dot-grey"></span>
+          Always-On Catalogues (${alwaysOn.length})
+          <button class="action-btn" onclick="event.stopPropagation(); triggerAction('analyse-all')" style="font-size:.7rem;padding:4px 10px;margin-left:auto;">Scrape All</button>
+        </summary>
+        <div class="missing-cat-content">
+          ${alwaysOn.sort((a, b) => (a.house || '').localeCompare(b.house || '')).map(m => {
+            const slug = Object.entries(KNOWN_HOUSES).find(([k, v]) => v === m.house)?.[0] || (m.house || '').toLowerCase().replace(/[^a-z]/g, '');
+            return `<div class="missing-cat-item">
+              <span>${esc(m.house)}</span>
+              <a href="${esc(m.url)}" target="_blank" class="mono" style="font-size:.68rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc((m.url || '').replace(/^https?:\/\//, '').substring(0, 50))}</a>
+              <button class="btn-rescrape" onclick="rescrapeHouse('${slug}','${esc(m.house)}')" style="font-size:.65rem;padding:2px 6px;">Scrape</button>
+            </div>`;
+          }).join('')}
+        </div>
+      </details>`;
+    }
+
+    // Past Failed Scrapes — dated auctions that passed without being scraped (audit trail)
     if (pastFailed.length > 0) {
       catHtml += `<details class="missing-cat">
         <summary>
