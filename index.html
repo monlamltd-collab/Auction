@@ -3135,6 +3135,13 @@ function getPropertyTypeIcon(type) {
   return icons[type] || icons.house;
 }
 
+function optimImg(url, width) {
+  if (!url || typeof url !== 'string') return url;
+  try {
+    return 'https://wsrv.nl/?url=' + encodeURIComponent(url) + '&w=' + (width || 400) + '&q=75&output=webp&default=1';
+  } catch { return url; }
+}
+
 function getPlaceholderHtml(type) {
   return '<div class="card-image-placeholder">' + getPropertyTypeIcon(type || 'house') + '<span class="ph-label">No photo available</span></div>';
 }
@@ -3236,7 +3243,7 @@ function getCardImageHtml(lot) {
   }
   return '<div class="card-image-wrapper">' +
     '<div class="card-image-shimmer"></div>' +
-    '<img class="card-image" src="' + esc(lot.imageUrl) + '" alt="' + esc((lot.address || 'Auction property') + ' — ' + (lot._house || 'auction lot')) + '" loading="lazy" ' +
+    '<img class="card-image" src="' + esc(optimImg(lot.imageUrl, 400)) + '" alt="' + esc((lot.address || 'Auction property') + ' — ' + (lot._house || 'auction lot')) + '" loading="lazy" decoding="async" width="400" height="300" ' +
     'onload="this.previousElementSibling.style.display=\'none\';if(this.naturalWidth<120||this.naturalHeight<90){this.outerHTML=getPlaceholderHtml(this.dataset.proptype)}" ' +
     'onerror="this.outerHTML=getPlaceholderHtml(this.dataset.proptype)"' +
     ' data-proptype="' + esc(lot.propType || 'house') + '">' +
@@ -3286,7 +3293,7 @@ function expandCard(lot) {
   // Build expanded panel
   const validImg = lot.imageUrl && isValidImageUrl(lot.imageUrl);
   const imgHtml = validImg
-    ? '<img class="exp-large-img" src="' + esc(lot.imageUrl) + '" alt="' + esc(lot.address || 'Auction property') + '" onerror="this.outerHTML=\'<div class=exp-large-img-placeholder>' + getPropertyTypeIcon(lot.propType) + '</div>\'">'
+    ? '<img class="exp-large-img" src="' + esc(optimImg(lot.imageUrl, 600)) + '" alt="' + esc(lot.address || 'Auction property') + '" decoding="async" onerror="this.outerHTML=\'<div class=exp-large-img-placeholder>' + getPropertyTypeIcon(lot.propType) + '</div>\'">'
     : '<div class="exp-large-img-placeholder">' + getPropertyTypeIcon(lot.propType) + '</div>';
 
   const analysisText = (lot.bullets || []).join('. ');
