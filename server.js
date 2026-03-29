@@ -11666,8 +11666,17 @@ No catalogues? Return {"catalogues": []}`, { tier: 'capable', maxTokens: 1500, t
       } catch { continue; }
 
       // Upsert discovered catalogues into Supabase calendar
+      const lotUrlPatterns = [
+        /\/lot\/details?\//i, /\/lot\/\d+(?:[/#?]|$)/i,
+        /\/property\/details?\//i, /\/properties\/\d+(?:[/#?]|$)/i,
+        /\/properties\/lot\//i, /lot[_-]?id=/i, /property[_-]?id=/i,
+      ];
       for (const cat of catalogues) {
         if (!cat.url) continue;
+        if (lotUrlPatterns.some(p => p.test(cat.url))) {
+          console.log(`AUTO-DISCOVER: Skipping lot-level URL: ${cat.url}`);
+          continue;
+        }
         const normUrl = normaliseUrl(cat.url);
 
         // Check if this URL is already in the calendar
@@ -12092,7 +12101,7 @@ async function autoAnalyseOne(url) {
 
   await supabase.from('cached_analyses').upsert({
     url: normalisedUrl,
-    house,
+    house: HOUSE_DISPLAY_NAMES[house] || house,
     total_lots: newTotalLots,
     title_splits: newTitleSplits,
     top_picks: newTopPicks,

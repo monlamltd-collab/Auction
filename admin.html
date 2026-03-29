@@ -2465,7 +2465,7 @@ async function loadIntelligence() {
   // Build per-house performance map from cached data
   const housePerf = {};
   for (const c of (cached || [])) {
-    const slug = Object.entries(KNOWN_HOUSES).find(([k, v]) => v === c.house)?.[0] || '';
+    const slug = KNOWN_HOUSES[c.house] ? c.house : Object.entries(KNOWN_HOUSES).find(([k, v]) => v === c.house)?.[0] || '';
     const platform = EXTRACTOR_TYPE[slug] || 'unknown';
     if (!housePerf[slug]) {
       housePerf[slug] = {
@@ -2482,7 +2482,7 @@ async function loadIntelligence() {
 
   // Add missing houses (no cached data)
   for (const m of (missing || [])) {
-    const slug = Object.entries(KNOWN_HOUSES).find(([k, v]) => v === m.house)?.[0] || '';
+    const slug = KNOWN_HOUSES[m.house] ? m.house : Object.entries(KNOWN_HOUSES).find(([k, v]) => v === m.house)?.[0] || '';
     if (slug && !housePerf[slug]) {
       const platform = EXTRACTOR_TYPE[slug] || 'unknown';
       housePerf[slug] = {
