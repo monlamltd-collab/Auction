@@ -2530,7 +2530,7 @@ function renderLots(){
   else if(fco==='good') lots=lots.filter(l=>l.condition==='good');
   else if(fco==='vacant') lots=lots.filter(l=>l.vacant);
   else if(fco==='tenanted') lots=lots.filter(l=>l.vacant===false);
-  else if(fco==='repossession') lots=lots.filter(l=>(l.bullets||[]).join(' ').toLowerCase().match(/\b(repossess|repo|receivership|lpa receiver|mortgagee|possession|bank.?sale)\b/i)||(l.opps||[]).join(' ').toLowerCase().includes('repossess'));
+  else if(fco==='repossession') lots=lots.filter(l=>(l.bullets||[]).join(' ').toLowerCase().match(/\b(repossess(?:ion|ed)?|receivership|lpa receiver|mortgagee.?(?:sale|possess)|bank.?sale)\b/i)||(l.opps||[]).join(' ').toLowerCase().match(/repossess|receivership/i));
   if(floc) lots=lots.filter(l=>matchesRegion(l.address, floc));
   if(fpc) lots=lots.filter(l=>(l.address||'').toUpperCase().includes(fpc));
   if(fa==='affordable'&&fp.cash) lots=lots.filter(l=>l._affTag!=='out_of_reach');
