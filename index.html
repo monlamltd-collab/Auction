@@ -2535,8 +2535,10 @@ function renderLots(){
   if(fa==='affordable'&&fp.cash) lots=lots.filter(l=>l._affTag!=='out_of_reach');
   if(fa==='in_budget'&&fp.cash) lots=lots.filter(l=>l._affTag==='in_budget'||l._affTag==='unknown');
   if(fa==='full_finance'&&fp.cash) lots=lots.filter(l=>l._affTag==='full_finance');
-  if(!fsold||fsold==='all') lots=lots.filter(l=>!l.status||l.status==='available'||l.status==='unsold');
-  else if(fsold==='available') lots=lots.filter(l=>l.status==='available'||!l.status);
+  const _today=new Date().toISOString().slice(0,10);
+  const _notEnded=l=>!l._auctionDate||l._auctionDate>=_today;
+  if(!fsold||fsold==='all') lots=lots.filter(l=>(!l.status||l.status==='available'||l.status==='unsold')&&_notEnded(l));
+  else if(fsold==='available') lots=lots.filter(l=>(l.status==='available'||!l.status)&&_notEnded(l));
   else if(fsold==='unsold') lots=lots.filter(l=>l.status==='unsold');
   else if(fsold==='sold') lots=lots.filter(l=>l.status==='sold');
   else if(fsold==='stc') lots=lots.filter(l=>l.status==='stc');
