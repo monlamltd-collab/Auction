@@ -11084,11 +11084,12 @@ async function _doAutoAnalyseAll() {
       });
       if (!error) {
         autoInserted++;
+      } else {
+        console.warn(`AUTO-CALENDAR: Failed to insert ${slug}: ${error.message || JSON.stringify(error)}`);
       }
     }
-    if (autoInserted > 0) {
-      console.log(`AUTO-CALENDAR: Inserted ${autoInserted} always-on house root URLs into calendar`);
-    }
+    console.log(`AUTO-CALENDAR: Step 0.5 complete — ${autoInserted} new always-on entries inserted, ${calendarSlugs.size} active slugs found, ${Object.keys(HOUSE_ROOTS).length} total houses`);
+
 
     // Migrate any existing auto-inserted entries (date=today, title='Current Catalogue')
     // that were created by the old logic — convert them to always_on
@@ -12494,6 +12495,9 @@ async function getCalendarAuctions() {
       .or(`date.gte.${lookbackDate},status.eq.always_on`)
       .order('date', { ascending: true });
 
+    const alwaysOn = (data || []).filter(r => r.status === 'always_on').length;
+    const dated = (data || []).filter(r => r.status !== 'always_on').length;
+    console.log(`getCalendarAuctions: Supabase returned ${(data || []).length} rows (${alwaysOn} always_on, ${dated} dated), error=${error ? error.message : 'none'}`);
     if (!error && data && data.length > 0) {
       return data.map(row => ({
         house: row.house,
@@ -12503,13 +12507,15 @@ async function getCalendarAuctions() {
         status: row.status || 'upcoming',
       }));
     }
+    console.log('getCalendarAuctions: Supabase returned 0 rows, falling through to fallback');
   } catch (e) {
     console.warn('Calendar DB read failed in getCalendarAuctions, using fallback:', e.message);
   }
 
   // Fallback to hardcoded (no always_on in fallback)
-  return FALLBACK_CALENDAR
-    .filter(a => a.catalogueReady && a.date >= lookbackDate)
+  const fallbackFiltered = FALLBACK_CALENDAR.filter(a => a.catalogueReady && a.date >= lookbackDate);
+  console.log(`getCalendarAuctions: Using FALLBACK — ${FALLBACK_CALENDAR.filter(a => a.catalogueReady).length} catalogue-ready, ${fallbackFiltered.length} within lookback (${lookbackDate})`);
+  return fallbackFiltered
     .map(a => ({
       house: a.house,
       url: a.url,
