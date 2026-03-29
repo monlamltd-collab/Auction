@@ -11094,18 +11094,8 @@ async function _doAutoAnalyseAll() {
     console.warn('AUTO-CALENDAR: root URL insertion failed (non-fatal) —', e.message);
   }
 
-  // ── Step 1: Discover new catalogues from house root pages ──
-  // Runs once per cycle to find new auction URLs that aren't in the calendar yet.
-  // Discovery uses Gemini to extract catalogue links, so skip when credits exhausted.
-  if (creditExhausted) {
-    console.log('AUTO-DISCOVER: Skipping — Gemini API rate limited (discovery requires AI)');
-  } else {
-    await discoverAndUpdateCalendar().catch(e =>
-      console.error('AUTO-DISCOVER: failed —', e.message)
-    );
-  }
-
-  // ── Step 2: Analyse all catalogue-ready auctions ──
+  // ── Step 1: Analyse all catalogue-ready auctions FIRST ──
+  // Discovery is deferred to AFTER scraping so users see fresh lots quickly.
   const allReady = await getCalendarAuctions();
   // Limit to nearest MAX_AUCTIONS_PER_HOUSE upcoming dates per house
   const byHouse = {};
@@ -11271,6 +11261,16 @@ async function _doAutoAnalyseAll() {
     } catch (healErr) {
       console.warn('HEAL-SWEEP: failed (non-fatal) —', healErr.message);
     }
+  }
+
+  // ── Step 4: Discover new catalogues AFTER scraping ──
+  // Discovery is expensive (Firecrawl + Gemini per house) so runs after lots are live.
+  if (creditExhausted) {
+    console.log('AUTO-DISCOVER: Skipping — Gemini API rate limited (discovery requires AI)');
+  } else {
+    await discoverAndUpdateCalendar().catch(e =>
+      console.error('AUTO-DISCOVER: failed —', e.message)
+    );
   }
 
   // ── Save daily analytics snapshot ──
