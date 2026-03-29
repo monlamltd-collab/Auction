@@ -4117,6 +4117,47 @@ app.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
       imgStripped
     });
 
+    // ── Post-processing enrichment fixes ──
+    const todayStr = new Date().toISOString().slice(0, 10);
+    for (const lot of cleanLots) {
+      // 1. Auto-reclassify past-auction lots as "unsold" if still "available"
+      if (lot._auctionDate && lot._auctionDate < todayStr &&
+          (!lot.status || lot.status === 'available')) {
+        lot.status = 'unsold';
+      }
+
+      // 2. Structural risk flag for ultra-low prices
+      if (lot.price && lot.price < 25000 && lot.propType !== 'land' && lot.propType !== 'other') {
+        if (!lot.risks) lot.risks = [];
+        if (!lot.risks.some(r => /low.*price|significant works/i.test(r))) {
+          lot.risks.push('Very low guide — likely significant works required');
+        }
+      }
+
+      // 3. Infer propType from address/title when "other" or "unknown"
+      if (!lot.propType || lot.propType === 'other' || lot.propType === 'unknown') {
+        const addr = (lot.address || '').toLowerCase();
+        if (/\bflat\b|\bapt\b|\bapartment\b/.test(addr)) lot.propType = 'flat';
+        else if (/\bhouse\b|\bcottage\b|\bvilla\b|\blodge\b/.test(addr)) lot.propType = 'house';
+        else if (/\bbungalow\b/.test(addr)) lot.propType = 'bungalow';
+        else if (/\bland\b|\bplot\b|\bgarage\b|\bparking\b|\bkiosk\b/.test(addr)) lot.propType = 'land';
+        else if (/\bshop\b|\boffice\b|\bwarehouse\b|\bindustrial\b|\bhotel\b|\bpub\b/.test(addr)) lot.propType = 'commercial';
+      }
+
+      // 4. Mark fallback rent estimates so they're not confused with real data
+      if (lot.estAnnualRent && lot.estMonthlyRent) {
+        const defaultRent = Math.round(825 * 1.10); // VOA_RENTS._default[2] * RENT_UPLIFT._default
+        if (lot.estMonthlyRent === defaultRent && !lot.beds) {
+          lot._rentEstimated = true; // Signal to frontend this is a generic estimate
+        }
+      }
+
+      // 5. Freehold opp tag for residential if not already present
+      if (lot.tenure === 'Freehold' && ['house', 'bungalow'].includes(lot.propType)) {
+        if (lot.opps && !lot.opps.includes('Freehold')) lot.opps.push('Freehold');
+      }
+    }
+
     // Directory data: free for all, but AI analysis layer requires signup
     // Anonymous users see address/price/image/house but not scores/opps/risks/dealType
     const adminToken = req.headers['x-admin-secret'] || '';
@@ -10609,12 +10650,19 @@ async function enrichLots(lots, house, sourceUrl, onProgress) {
       type: s.propertyType,
     }));
 
-    // Calculate street average (last 3 years)
-    const relevantSales = sales.filter(s => s.price > 0);
+    // Calculate street average (last 3 years) — type-aware where possible
+    const allSales = sales.filter(s => s.price > 0);
+    // Try type-matched comps first (flat vs flat, house vs house)
+    const typeMap = { flat: /flat|maisonette/i, house: /terraced|semi|detached/i, bungalow: /bungalow/i };
+    const typePattern = typeMap[lot.propType];
+    const typedSales = typePattern ? allSales.filter(s => typePattern.test(s.propertyType || '')) : [];
+    // Use typed comps if we have 2+, otherwise fall back to all sales
+    const relevantSales = typedSales.length >= 2 ? typedSales : allSales;
     if (relevantSales.length > 0) {
       const avg = Math.round(relevantSales.reduce((s, x) => s + x.price, 0) / relevantSales.length);
       lot.streetAvg = avg;
       lot.streetSalesCount = relevantSales.length;
+      lot._compType = typedSales.length >= 2 ? 'matched' : 'all'; // Signal comp quality
       
       // Bargain score: how far below street average is the guide price?
       // Only score for residential — street comps are house sales, meaningless for land/garage/commercial
@@ -10642,13 +10690,12 @@ async function enrichLots(lots, house, sourceUrl, onProgress) {
       lot.streetSalesCount = 0;
     }
 
-    // Rental yield estimate
-    const monthlyRent = estimateMonthlyRent(lot.address, lot.beds);
-    lot.estMonthlyRent = monthlyRent;
-    lot.estAnnualRent = monthlyRent * 12;
-    // Yield estimate: only for property types that generate rental income (not land/garage)
+    // Rental yield estimate — only for property types that generate rental income
     const yieldEligible = ['house', 'bungalow', 'flat', 'commercial'].includes(lot.propType);
-    if (lot.price && lot.price > 0) {
+    const monthlyRent = yieldEligible ? estimateMonthlyRent(lot.address, lot.beds) : 0;
+    lot.estMonthlyRent = monthlyRent || null;
+    lot.estAnnualRent = monthlyRent ? monthlyRent * 12 : null;
+    if (lot.price && lot.price > 0 && lot.estAnnualRent) {
       lot.estGrossYield = Math.round((lot.estAnnualRent / lot.price) * 1000) / 10;
       if (yieldEligible && lot.estGrossYield > 8 && !lot.opps.some(o => o.includes('GIY') || o.includes('yield'))) {
         lot.score += 2.5;
