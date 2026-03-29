@@ -3694,11 +3694,19 @@ app.post('/api/smart-search', async (req, res) => {
 
       // Apply sold filter
       normaliseLotStatuses(dedupedLots);
-      const filteredLots = sf === 'available'
-        ? dedupedLots.filter(l => l.status === 'available')
+      const filteredLots = sf === 'everything'
+        ? dedupedLots
+        : sf === 'available'
+        ? dedupedLots.filter(l => !l.status || l.status === 'available')
         : sf === 'sold'
         ? dedupedLots.filter(l => l.status === 'sold' || l.status === 'stc' || l.status === 'withdrawn')
-        : dedupedLots;
+        : sf === 'unsold'
+        ? dedupedLots.filter(l => l.status === 'unsold')
+        : sf === 'stc'
+        ? dedupedLots.filter(l => l.status === 'stc')
+        : sf === 'withdrawn'
+        ? dedupedLots.filter(l => l.status === 'withdrawn')
+        : dedupedLots.filter(l => !l.status || l.status === 'available' || l.status === 'unsold');
 
       // Apply preset filter and sort
       const matchingLots = filteredLots.filter(presetFilter.filter);
@@ -3787,11 +3795,15 @@ app.post('/api/smart-search', async (req, res) => {
 
     // Apply sold filter before sending to Gemini (prefer lot.status, fallback to bullets regex)
     normaliseLotStatuses(dedupedAllLots);
-    const filteredLots = soldFilter === 'available'
-      ? dedupedAllLots.filter(l => l.status === 'available')
+    const filteredLots = soldFilter === 'everything'
+      ? dedupedAllLots
+      : soldFilter === 'available'
+      ? dedupedAllLots.filter(l => !l.status || l.status === 'available')
       : soldFilter === 'sold'
       ? dedupedAllLots.filter(l => l.status === 'sold' || l.status === 'stc' || l.status === 'withdrawn')
-      : dedupedAllLots;
+      : soldFilter === 'unsold'
+      ? dedupedAllLots.filter(l => l.status === 'unsold')
+      : dedupedAllLots.filter(l => !l.status || l.status === 'available' || l.status === 'unsold');
 
     // Build a compact lot summary for Gemini, prioritising query-relevant lots
     const queryTerms = query.toLowerCase().split(/\s+/).filter(t => t.length > 2);
@@ -5914,7 +5926,7 @@ For each lot, return a JSON object with these fields:
 - price: number or null (guide price in pounds, null if TBA/not stated)
 - url: string (detail page URL if found, empty string if not)
 - tenure: string or null — one of "Freehold", "Leasehold", "Share of Freehold", or null. Look for: freehold, leasehold, share of freehold, flying freehold, long leasehold, years remaining/unexpired. If not explicitly stated, infer from context (e.g. "125 year lease" = Leasehold, ground rent mentioned = Leasehold). Only return null if there is genuinely no indication.
-- status: string — one of "available", "sold", "stc", "withdrawn". Default "available" if not stated. Look for: SOLD, STC, Sale Agreed, Withdrawn, Under Offer, Prior to Auction.
+- status: string — one of "available", "sold", "unsold", "stc", "withdrawn". Default "available" if not stated. "unsold" means the auction took place but the lot did not sell (no bids met the reserve). Look for: SOLD, STC, Sale Agreed, Withdrawn, Under Offer, Prior to Auction, UNSOLD, Not Sold, Passed, No Sale.
 - bullets: array of strings (key features/description points - bedrooms, condition, sq ft, special circumstances etc)
 
 Return ONLY a JSON array of lot objects, no other text. If a page has no lots, return an empty array.
@@ -5923,7 +5935,7 @@ Important:
 - Extract the COMPLETE address including postcode
 - Guide prices may be shown as "Guide Price £X" or "Guide £X" or just "£X"
 - Tenure is a PRIORITY field — always look for it in the description, legal pack summary, and property details
-- Status field: check for sold/STC/withdrawn markers, badges, labels, or overlays on the lot listing
+- Status field: check for sold/STC/withdrawn markers, badges, labels, or overlays on the lot listing. "Unsold" or "Not Sold" or "Passed" means the auction happened but the lot didn't sell — these are distinct from "available" (not yet auctioned).
 - Bullet points include things like: property type, bedrooms, condition, sq ft, vacant/tenanted, executor sale, development potential, completion terms
 - Include ALL lots, even commercial ones or land
 
@@ -6018,7 +6030,7 @@ For each lot, return a JSON object with these fields:
 - price: number or null (guide price in pounds, null if TBA/not stated)
 - url: string (empty string — PDFs don't have lot URLs)
 - tenure: string or null — one of "Freehold", "Leasehold", "Share of Freehold", or null. Look for: freehold, leasehold, share of freehold, flying freehold, long leasehold, years remaining/unexpired. If not explicitly stated, infer from context (e.g. "125 year lease" = Leasehold, ground rent mentioned = Leasehold). Only return null if there is genuinely no indication.
-- status: string — one of "available", "sold", "stc", "withdrawn". Default "available" if not stated.
+- status: string — one of "available", "sold", "unsold", "stc", "withdrawn". Default "available" if not stated. "unsold" means the auction took place but the lot did not sell (no bids met the reserve). Look for: UNSOLD, Not Sold, Passed, No Sale.
 - bullets: array of strings (key features/description points - bedrooms, condition, sq ft, special circumstances etc)
 
 Return ONLY a JSON array of lot objects, no other text.
@@ -6103,17 +6115,19 @@ function normaliseLotStatuses(lots) {
     if (!lot.status) {
       // Check bullets for legacy status detection
       const bulletStr = (lot.bullets || []).join(' ');
-      if (/\bSOLD\b/i.test(bulletStr)) lot.status = 'sold';
+      if (/\bUNSOLD\b|\bNOT.?SOLD\b|\bPASSED\b|\bNO.?SALE\b/i.test(bulletStr)) lot.status = 'unsold';
+      else if (/\bSOLD\b/i.test(bulletStr)) lot.status = 'sold';
       else if (/\bSTC\b|\bSALE.?AGREED\b|\bUNDER.?OFFER\b/i.test(bulletStr)) lot.status = 'stc';
       else if (/\bWITHDRAWN\b|\bPOSTPONED\b/i.test(bulletStr)) lot.status = 'withdrawn';
       else lot.status = 'available';
     }
     // Normalise any non-standard values
     const s = (lot.status || '').toLowerCase().trim();
-    if (/sold/i.test(s) && !/stc|agreed/i.test(s)) lot.status = 'sold';
+    if (/unsold|not.?sold|passed|no.?sale/i.test(s)) lot.status = 'unsold';
+    else if (/sold/i.test(s) && !/stc|agreed/i.test(s)) lot.status = 'sold';
     else if (/stc|agreed|under.?offer/i.test(s)) lot.status = 'stc';
     else if (/withdrawn|postponed/i.test(s)) lot.status = 'withdrawn';
-    else if (s !== 'sold' && s !== 'stc' && s !== 'withdrawn') lot.status = 'available';
+    else if (s !== 'sold' && s !== 'stc' && s !== 'withdrawn' && s !== 'unsold') lot.status = 'available';
   }
   return lots;
 }
@@ -9746,11 +9760,17 @@ function analyseLot(raw) {
   if (L.condition === 'poor') { s += 2.5; sb.push({ signal: 'Poor condition', pts: 2.5 }); L.opps.push('Poor condition'); }
   if (executor) { s += 1.5; sb.push({ signal: 'Executor/probate', pts: 1.5 }); L.opps.push('Executor/probate'); }
   if (receivership) { s += 2; sb.push({ signal: 'Receivership', pts: 2 }); L.opps.push('Receivership'); }
-  if (devP) { s += 2; sb.push({ signal: 'Development potential', pts: 2 }); L.opps.push('Development potential'); }
+  // Development potential: full score for dwellings (it's a genuine uplift signal),
+  // reduced for land (it's table stakes — almost every land listing says this)
+  if (devP && L.propType !== 'land') { s += 2; sb.push({ signal: 'Development potential', pts: 2 }); L.opps.push('Development potential'); }
+  else if (devP && L.propType === 'land') { s += 0.5; sb.push({ signal: 'Development potential', pts: 0.5 }); L.opps.push('Development potential'); }
   if (extP) { s += 1.5; sb.push({ signal: 'Extension/HMO potential', pts: 1.5 }); L.opps.push('Extension/HMO potential'); }
-  if (L.vacant && ['house', 'bungalow', 'flat', 'land'].includes(L.propType)) { s += 1; sb.push({ signal: 'Vacant', pts: 1 }); L.opps.push('Vacant'); }
+  // Vacant: meaningful for dwellings (no tenant = faster refurb), not for land (land is always vacant)
+  if (L.vacant && ['house', 'bungalow', 'flat'].includes(L.propType)) { s += 1; sb.push({ signal: 'Vacant', pts: 1 }); L.opps.push('Vacant'); }
+  else if (L.vacant && L.propType === 'land') { L.opps.push('Vacant'); } // tag it but no score boost
   if (L.tenure === 'Freehold' && ['house', 'bungalow'].includes(L.propType)) { s += 0.5; sb.push({ signal: 'Freehold', pts: 0.5 }); L.opps.push('Freehold'); }
-  if (L.sqft && L.price) {
+  // £/sqft: only meaningful for dwellings with actual floor area (not land/acreage)
+  if (L.sqft && L.price && L.propType !== 'land') {
     const p = L.price / L.sqft;
     if (p < 200) { s += 2; sb.push({ signal: `£${Math.round(p)}/sqft`, pts: 2 }); L.opps.push(`£${Math.round(p)}/sqft`); }
     else if (p < 300) { s += 1; sb.push({ signal: `£${Math.round(p)}/sqft`, pts: 1 }); L.opps.push(`£${Math.round(p)}/sqft`); }
@@ -10598,14 +10618,20 @@ async function enrichLots(lots, house, sourceUrl, onProgress) {
       lot.streetSalesCount = relevantSales.length;
       
       // Bargain score: how far below street average is the guide price?
+      // Only score for residential — street comps are house sales, meaningless for land/garage/commercial
+      const compReliable = ['house', 'bungalow', 'flat'].includes(lot.propType);
       if (lot.price && avg > 0) {
         const discount = ((avg - lot.price) / avg) * 100;
         lot.belowMarket = Math.round(discount);
-        if (discount > 20) {
+        if (compReliable && discount > 20) {
           lot.score += 2;
+          lot.scoreBreakdown = lot.scoreBreakdown || [];
+          lot.scoreBreakdown.push({ signal: `${lot.belowMarket}% below market`, pts: 2 });
           lot.opps.push(`${lot.belowMarket}% below market`);
-        } else if (discount > 10) {
+        } else if (compReliable && discount > 10) {
           lot.score += 1;
+          lot.scoreBreakdown = lot.scoreBreakdown || [];
+          lot.scoreBreakdown.push({ signal: `${lot.belowMarket}% below market`, pts: 1 });
           lot.opps.push(`${lot.belowMarket}% below market`);
         } else if (discount < -10) {
           lot.risks.push(`${Math.abs(lot.belowMarket)}% above market avg`);
@@ -10621,13 +10647,19 @@ async function enrichLots(lots, house, sourceUrl, onProgress) {
     const monthlyRent = estimateMonthlyRent(lot.address, lot.beds);
     lot.estMonthlyRent = monthlyRent;
     lot.estAnnualRent = monthlyRent * 12;
+    // Yield estimate: only for property types that generate rental income (not land/garage)
+    const yieldEligible = ['house', 'bungalow', 'flat', 'commercial'].includes(lot.propType);
     if (lot.price && lot.price > 0) {
       lot.estGrossYield = Math.round((lot.estAnnualRent / lot.price) * 1000) / 10;
-      if (lot.estGrossYield > 8 && !lot.opps.some(o => o.includes('GIY'))) {
+      if (yieldEligible && lot.estGrossYield > 8 && !lot.opps.some(o => o.includes('GIY') || o.includes('yield'))) {
         lot.score += 2.5;
+        lot.scoreBreakdown = lot.scoreBreakdown || [];
+        lot.scoreBreakdown.push({ signal: `Est. ${lot.estGrossYield}% yield`, pts: 2.5 });
         lot.opps.push(`Est. ${lot.estGrossYield}% yield`);
-      } else if (lot.estGrossYield > 6 && !lot.opps.some(o => o.includes('GIY'))) {
+      } else if (yieldEligible && lot.estGrossYield > 6 && !lot.opps.some(o => o.includes('GIY') || o.includes('yield'))) {
         lot.score += 1.5;
+        lot.scoreBreakdown = lot.scoreBreakdown || [];
+        lot.scoreBreakdown.push({ signal: `Est. ${lot.estGrossYield}% yield`, pts: 1.5 });
         lot.opps.push(`Est. ${lot.estGrossYield}% yield`);
       }
       lot.score = Math.max(0, Math.min(10, Math.round(lot.score * 10) / 10));
