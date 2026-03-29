@@ -2577,11 +2577,16 @@ function renderLots(){
 
   // Sort
   const sortVal=$('fSort')?.value||'date_asc';
-  if(sortVal==='date_asc') lots.sort((a,b)=>{
-    const da=a._auctionDate||'9999-12-31', db=b._auctionDate||'9999-12-31';
-    if(da!==db) return da<db?-1:1;
-    return (b.score||0)-(a.score||0);
-  });
+  if(sortVal==='date_asc'){
+    const today=new Date().toISOString().slice(0,10);
+    lots.sort((a,b)=>{
+      const da=a._auctionDate||'9999-12-31', db=b._auctionDate||'9999-12-31';
+      const aPast=da<today?1:0, bPast=db<today?1:0;
+      if(aPast!==bPast) return aPast-bPast; // future first, past last
+      if(da!==db) return da<db?-1:1;
+      return (b.score||0)-(a.score||0);
+    });
+  }
   else if(sortVal==='price_asc') lots.sort((a,b)=>((a.price||Infinity)-(b.price||Infinity)));
   else if(sortVal==='price_desc') lots.sort((a,b)=>((b.price||0)-(a.price||0)));
   else if(sortVal==='yield') lots.sort((a,b)=>((b.estGrossYield||0)-(a.estGrossYield||0)));
