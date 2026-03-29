@@ -120,7 +120,7 @@ app.use((req, res, next) => {
   const stripeSrc = STRIPE_ENABLED ? ' https://checkout.stripe.com' : '';
   res.setHeader('Content-Security-Policy',
     "default-src 'self'; " +
-    "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cloud.umami.is; " +
+    "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://cloud.umami.is; " +
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
     "font-src 'self' https://fonts.gstatic.com; " +
     "img-src 'self' data: https:; " +
@@ -4923,7 +4923,7 @@ app.get('/api/admin/missing-images', async (req, res) => {
     // Fetch future/current catalogues only
     let query = supabase
       .from('cached_analyses')
-      .select('house, url, lots, auction_date')
+      .select('house, url, lots, created_at')
       .gte('expires_at', new Date().toISOString());
 
     if (houseFilter) {
@@ -4945,7 +4945,7 @@ app.get('/api/admin/missing-images', async (req, res) => {
             lotNumber: lot.lot || lot.lotNumber || null,
             address: lot.address || '',
             catalogueUrl: cat.url,
-            auctionDate: cat.auction_date || null,
+            auctionDate: cat.created_at || null,
           });
           houseCounts[cat.house] = (houseCounts[cat.house] || 0) + 1;
         }
