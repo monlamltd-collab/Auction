@@ -43,6 +43,9 @@ for (const key of RECOMMENDED_ENV) {
 
 function escHtml(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 
+// URL normalisation — single source of truth for comparing / deduplicating URLs
+const normaliseUrl = u => (u || '').trim().replace(/\/+$/, '').toLowerCase();
+
 // ── Stripe feature flag: defaults to false (free-first), set STRIPE_ENABLED=true to reinstate payments ──
 const STRIPE_ENABLED = process.env.STRIPE_ENABLED === 'true';
 const stripe = STRIPE_ENABLED && process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
@@ -78,7 +81,7 @@ function safeCompare(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string') return false;
   const bufA = Buffer.from(a);
   const bufB = Buffer.from(b);
-  if (bufA.length !== bufB.length) return timingSafeEqual(Buffer.from(a.padEnd(64)), Buffer.from(b.padEnd(64))) && false;
+  if (bufA.length !== bufB.length) return false;
   return timingSafeEqual(bufA, bufB);
 }
 
@@ -252,7 +255,7 @@ const HEADERS = {
 };
 const MAX_PAGES = 40;
 const MAX_PUPPETEER_PAGES = 15;
-const MAX_LOTS_PER_SCRAPE = Infinity;
+const MAX_LOTS_PER_SCRAPE = 5000;
 const MAX_AUCTIONS_PER_HOUSE = 2;
 const TIMEOUT = 25000;
 // Houses where catalogue pages are JS-rendered — need Puppeteer for image backfill
@@ -1246,11 +1249,13 @@ function rateLimit(windowMs, maxHits) {
     next();
   };
 }
-// Clean up stale buckets every 5 minutes
+// Clean up stale rate-limit buckets every 10 minutes (5-min TTL)
 setInterval(() => {
-  const cutoff = Date.now() - 600000;
-  for (const [k, v] of _rlBuckets) { if (v.start < cutoff) _rlBuckets.delete(k); }
-}, 300000);
+  const now = Date.now();
+  for (const [key, bucket] of _rlBuckets) {
+    if (now - bucket.start > 300000) _rlBuckets.delete(key); // 5 min TTL
+  }
+}, 600000);
 
 // ═══════════════════════════════════════════════════════════════
 // URL VALIDATION — prevent SSRF via user-supplied URLs
@@ -2706,7 +2711,7 @@ async function getAuctionCalendar() {
       // Deduplicate: keep one entry per house+date+url (prefer catalogue_ready=true)
       const seen = new Map();
       for (const row of data) {
-        const key = `${(row.house || '').toLowerCase()}|${row.date}|${(row.url || '').trim().replace(/\/+$/, '').toLowerCase()}`;
+        const key = `${(row.house || '').toLowerCase()}|${row.date}|${normaliseUrl(row.url)}`;
         const existing = seen.get(key);
         if (!existing || (row.catalogue_ready && !existing.catalogue_ready)) {
           seen.set(key, row);
@@ -2819,7 +2824,7 @@ app.post('/api/admin/dedup-calendar', async (req, res) => {
 
     const groups = new Map();
     for (const row of (data || [])) {
-      const key = `${(row.house || '').toLowerCase()}|${row.date}|${(row.url || '').trim().replace(/\/+$/, '').toLowerCase()}`;
+      const key = `${(row.house || '').toLowerCase()}|${row.date}|${normaliseUrl(row.url)}`;
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(row);
     }
@@ -3031,7 +3036,7 @@ app.post('/api/analyse', async (req, res) => {
   }
 
   // ── Check cache ──
-  const normalisedUrl = url.trim().replace(/\/+$/, '').toLowerCase();
+  const normalisedUrl = normaliseUrl(url);
   const { data: cached } = await supabase
     .from('cached_analyses')
     .select('*')
@@ -3958,7 +3963,7 @@ app.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
       // Phase 1: Within-house dedup by URL (keep lot with richer data)
       const byUrl = new Map();
       for (const lot of houseLots) {
-        const url = (lot.url || '').trim().replace(/\/+$/, '').toLowerCase();
+        const url = normaliseUrl(lot.url);
         if (url.length > 5) {
           const existing = byUrl.get(url);
           if (existing) {
@@ -4004,17 +4009,17 @@ app.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
     try {
       const { data: calRows } = await supabase.from('auction_calendar').select('url, date').gte('date', new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10));
       if (calRows) for (const a of calRows) {
-        const nu = (a.url || '').trim().replace(/\/+$/, '').toLowerCase();
+        const nu = normaliseUrl(a.url);
         if (nu && a.date && (!urlDateMap[nu] || a.date < urlDateMap[nu])) urlDateMap[nu] = a.date;
       }
     } catch { /* fallback below */ }
     // Fallback calendar overlay
     for (const a of FALLBACK_CALENDAR) {
-      const nu = a.url.trim().replace(/\/+$/, '').toLowerCase();
+      const nu = normaliseUrl(a.url);
       if (!urlDateMap[nu] || a.date < urlDateMap[nu]) urlDateMap[nu] = a.date;
     }
     for (const lot of lots) {
-      const su = (lot._sourceUrl || '').trim().replace(/\/+$/, '').toLowerCase();
+      const su = normaliseUrl(lot._sourceUrl);
       lot._auctionDate = urlDateMap[su] || null;
     }
 
@@ -4163,8 +4168,6 @@ app.get('/api/cache-status', async (req, res) => {
       .from('cached_analyses')
       .select('house, url, total_lots, title_splits, top_picks, under_100k, avg_yield, dev_potential, vacant_count, created_at, expires_at, scraped_with, extracted_with, last_scraped_at')
       .order('house');
-
-    const normaliseUrl = u => (u || '').trim().replace(/\/+$/, '').toLowerCase();
 
     const allAuctions = await getCalendarAuctions();
     const ready = allAuctions.filter(a => a.catalogueReady);
@@ -4533,10 +4536,10 @@ app.post('/api/analyse-new', async (req, res) => {
     const { data: cached } = await supabase
       .from('cached_analyses')
       .select('url');
-    const cachedUrls = new Set((cached || []).map(c => (c.url || '').trim().replace(/\/+$/, '').toLowerCase()));
+    const cachedUrls = new Set((cached || []).map(c => normaliseUrl(c.url)));
 
     // Filter to only uncached
-    const uncached = ready.filter(a => !cachedUrls.has((a.url || '').trim().replace(/\/+$/, '').toLowerCase()));
+    const uncached = ready.filter(a => !cachedUrls.has(normaliseUrl(a.url)));
 
     // Dedup by house
     const byHouse = new Map();
@@ -4609,11 +4612,15 @@ app.get('/terms', (req, res) => {
 // DIAGNOSTIC ENDPOINT (temporary — remove after debugging)
 // ═══════════════════════════════════════════════════════════════
 app.get('/api/diag', (req, res) => {
+  const adminToken = req.headers['x-admin-secret'] || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(adminToken, process.env.ADMIN_SECRET)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
   res.json({
     uptime: Math.round(process.uptime()),
     autoRunning: _autoAnalysisRunning,
     creditExhausted,
-    fcKey: FIRECRAWL_API_KEY ? `set (${FIRECRAWL_API_KEY.length} chars)` : 'NOT SET',
+    fcKey: FIRECRAWL_API_KEY ? 'configured' : 'NOT SET',
     fcCreditsUsed,
     fcCreditExhausted,
     fcTemporarilyDown,
@@ -4632,6 +4639,10 @@ app.get('/api/diag', (req, res) => {
 // TENURE DIAGNOSTIC (temporary — remove after tenure coverage hits 90%+)
 // ═══════════════════════════════════════════════════════════════
 app.get('/api/diag/tenure', async (req, res) => {
+  const adminToken = req.headers['x-admin-secret'] || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(adminToken, process.env.ADMIN_SECRET)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
   try {
     const { data: cached } = await supabase
       .from('cached_analyses')
@@ -10962,7 +10973,7 @@ async function _doAutoAnalyseAll() {
   // entries — never delete cache for a URL that also has an upcoming auction.
   try {
     const today = new Date().toISOString().slice(0, 10);
-    const normalise = u => (u || '').trim().replace(/\/+$/, '').toLowerCase();
+    const normalise = normaliseUrl;
 
     // Get URLs from past calendar entries (exclude always_on — they don't expire)
     const { data: pastCalendar } = await supabase
@@ -11051,10 +11062,10 @@ async function _doAutoAnalyseAll() {
       .select('house_slug, url')
       .or(`date.gte.${lookbackStr},status.eq.always_on`);
     const calendarSlugs = new Set((existingCalendar || []).map(r => r.house_slug).filter(Boolean));
-    const calendarUrls = new Set((existingCalendar || []).map(r => (r.url || '').trim().replace(/\/+$/, '').toLowerCase()));
+    const calendarUrls = new Set((existingCalendar || []).map(r => normaliseUrl(r.url)));
     let autoInserted = 0;
     for (const [slug, rootUrl] of Object.entries(HOUSE_ROOTS)) {
-      const normUrl = rootUrl.trim().replace(/\/+$/, '').toLowerCase();
+      const normUrl = normaliseUrl(rootUrl);
       // Skip if this house already has an active (upcoming/always_on) calendar entry
       if (calendarSlugs.has(slug) || calendarUrls.has(normUrl)) continue;
       // Auto-insert as always-on catalogue with sentinel date (won't be purged)
@@ -11124,7 +11135,7 @@ async function _doAutoAnalyseAll() {
 
   for (const auction of ready) {
     try {
-      const normalisedUrl = auction.url.trim().replace(/\/+$/, '').toLowerCase();
+      const normalisedUrl = normaliseUrl(auction.url);
 
       // Check if we already have a fresh cache
       const { data: cached } = await supabase
@@ -11217,7 +11228,11 @@ async function _doAutoAnalyseAll() {
       }
 
       console.log(`AUTO: Analysing ${auction.house} — ${auction.url}`);
-      await autoAnalyseOne(auction.url);
+      const HOUSE_TIMEOUT_MS = 90000; // 90 seconds per house
+      await Promise.race([
+        autoAnalyseOne(auction.url),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('House scrape timeout (90s)')), HOUSE_TIMEOUT_MS))
+      ]);
       analysed++;
 
       // Pause between analyses to be kind to servers and our resources
@@ -11436,8 +11451,8 @@ If you cannot find a catalogue URL, return: {"newUrl": null, "confidence": "none
 
     // Validate the new URL is different and looks plausible
     const newUrl = result.newUrl.trim();
-    const normOld = oldUrl.trim().replace(/\/+$/, '').toLowerCase();
-    const normNew = newUrl.replace(/\/+$/, '').toLowerCase();
+    const normOld = normaliseUrl(oldUrl);
+    const normNew = normaliseUrl(newUrl);
     if (normOld === normNew) {
       console.log(`HEAL: AI returned the same URL for ${slug} — no change needed`);
       _healingState.set(slug, { lastAttempt: Date.now(), attempts, cooldownUntil: Date.now() + cooldownMs });
@@ -11602,7 +11617,7 @@ No catalogues? Return {"catalogues": []}`, { tier: 'capable', maxTokens: 1500, t
       // Upsert discovered catalogues into Supabase calendar
       for (const cat of catalogues) {
         if (!cat.url) continue;
-        const normUrl = cat.url.trim().replace(/\/+$/, '').toLowerCase();
+        const normUrl = normaliseUrl(cat.url);
 
         // Check if this URL is already in the calendar
         const { data: existing } = await supabase
@@ -11690,7 +11705,7 @@ async function autoAnalyseOne(url) {
 
   const rewritten = rewriteUrl(url, house);
   const scrapeUrl = rewritten.baseUrl;
-  const normalisedUrl = url.trim().replace(/\/+$/, '').toLowerCase();
+  const normalisedUrl = normaliseUrl(url);
 
   // HTML change detection — scrape first page and hash it
   // Uses Firecrawl for JS-rendered houses so the hash reflects actual rendered content,

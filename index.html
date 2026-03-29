@@ -76,7 +76,7 @@ a{color:var(--red);text-decoration:none}a:hover{text-decoration:underline}
 .hero h1 em{font-style:normal;color:var(--red)}
 .hero-sub{color:var(--text2);max-width:540px;margin:0 auto 16px;font-size:clamp(.82rem,1.6vw,.92rem);line-height:1.6;animation:fadeUp .7s ease .35s both}
 .hero-ctas{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:12px;animation:fadeUp .7s ease .5s both}
-.cta-primary{display:inline-flex;align-items:center;gap:8px;padding:12px 28px;border-radius:var(--radius);font-size:.9rem;font-weight:700;font-family:inherit;color:var(--white);background:linear-gradient(135deg,var(--green),#1a8a52);border:none;cursor:pointer;text-decoration:none!important;transition:all .2s;box-shadow:0 4px 16px rgba(46,125,50,.25)}
+.cta-primary{display:inline-flex;align-items:center;gap:8px;padding:12px 28px;border-radius:var(--radius);font-size:.9rem;font-weight:700;font-family:inherit;color:var(--white);background:linear-gradient(135deg,var(--green),var(--green2));border:none;cursor:pointer;text-decoration:none!important;transition:all .2s;box-shadow:0 4px 16px rgba(46,125,50,.25)}
 .cta-primary:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(46,125,50,.35);text-decoration:none!important}
 .cta-secondary{display:inline-flex;align-items:center;gap:6px;padding:13px 28px;border-radius:var(--radius);font-size:.95rem;font-weight:600;font-family:inherit;color:var(--green);background:var(--white);border:2px solid rgba(46,125,50,.25);cursor:pointer;text-decoration:none!important;transition:all .2s;box-shadow:0 1px 4px rgba(0,0,0,.04)}
 .cta-secondary:hover{background:var(--green-light);border-color:var(--green);text-decoration:none!important}
@@ -384,7 +384,7 @@ footer .logo-f span{color:var(--green)}
 .step.highlight{background:linear-gradient(180deg,#f0faf4,var(--white));border:1px solid rgba(46,125,50,0.2);box-shadow:0 4px 20px rgba(46,125,50,.08)}
 .step.highlight .step-content p{font-weight:500}
 .step-num{flex-shrink:0;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:.9rem;font-weight:700;background:var(--cream);color:var(--text2);margin-bottom:10px;box-shadow:0 2px 8px rgba(0,0,0,.06)}
-.step-num.green{background:linear-gradient(135deg,var(--green),#1a8a52);color:var(--white);box-shadow:0 4px 12px rgba(46,125,50,.25)}
+.step-num.green{background:linear-gradient(135deg,var(--green),var(--green2));color:var(--white);box-shadow:0 4px 12px rgba(46,125,50,.25)}
 .step-icon{font-size:1.6rem;margin-bottom:8px}
 .step-content h3{font-family:var(--font-main);font-size:1rem;font-weight:700;color:var(--navy);margin-bottom:6px}
 .step-content p{font-size:.85rem;color:var(--text2);line-height:1.6;font-weight:400}
@@ -1224,10 +1224,10 @@ let _filterTimer=null;
 function localFilter(){ clearTimeout(_filterTimer);_filterTimer=setTimeout(()=>renderLots(),150); }
 
 // ── Grid / List view toggle ──
-let _viewMode=localStorage.getItem('bm_view')||'grid';
+let _viewMode='grid';try{_viewMode=localStorage.getItem('bm_view')||'grid'}catch(e){}
 function setView(mode){
   _viewMode=mode;
-  localStorage.setItem('bm_view',mode);
+  try{localStorage.setItem('bm_view',mode)}catch(e){}
   const grid=$('lotsGrid');
   if(grid){
     grid.classList.toggle('list-view',mode==='list');
@@ -1935,6 +1935,7 @@ initAuth();
 
 $('signupModal').addEventListener('click', e => { if (e.target === $('signupModal')) $('signupModal').classList.remove('show'); });
 $('paywallModal').addEventListener('click', e => { if (e.target === $('paywallModal')) $('paywallModal').classList.remove('show'); });
+document.addEventListener('keydown', e => { if(e.key==='Escape'){$('signupModal').classList.remove('show');$('paywallModal').classList.remove('show')} });
 
 // ═══════════════════════════════
 // STRIPE / PAYWALL
@@ -3762,7 +3763,7 @@ function submitEmailCapture(e) {
 
     const panel = document.createElement('div');
     panel.id = 'debugPanel';
-    panel.style.cssText = 'position:fixed;bottom:80px;right:20px;z-index:9999;width:340px;background:var(--white);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.15);padding:16px;font-family:"DM Sans",sans-serif';
+    panel.style.cssText = 'position:fixed;bottom:80px;right:20px;z-index:9999;width:340px;background:var(--white);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.15);padding:16px;font-family:var(--font-main)';
 
     const header = document.createElement('div');
     header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:10px';
