@@ -2778,7 +2778,16 @@ function card(l){
   let detailPills = [];
   if (l.propType) detailPills.push(l.propType);
   if (l.beds != null) detailPills.push(l.beds + ' bed');
-  if (l.tenure) detailPills.push(l.tenure);
+  if (l.tenure) {
+    let tenureLabel = l.tenure;
+    if (l.tenure === 'Leasehold' && l.leaseLength) {
+      tenureLabel += ' (' + l.leaseLength + 'yr)';
+    }
+    detailPills.push(tenureLabel);
+  }
+  if (l.daysSinceAuction != null && l.status === 'unsold') {
+    detailPills.push('Unsold ' + l.daysSinceAuction + 'd ago');
+  }
 
   // Signal chips (max 3 + overflow)
   const chipsHtml = getSignalChips(l);
@@ -3084,9 +3093,9 @@ function renderDealStackResults(idx, r, showHold) {
 function dlCSV(){fetch('/api/track/event', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action:'csv_export'})}).catch(function(){});
 if(!window._userTier){$('signupModal').classList.add('show');return;}
   const exportLots = window._filteredLots || LOTS;
-  const rows=[['Rank','Lot','Score','Deal','TitleSplit','Units','Address','Guide','Affordability','Type','Beds','Tenure','Condition','Sqft','StreetAvg','BelowMkt%','EstYield%','EstRent/mo','Opps','Risks','URL']];
+  const rows=[['Rank','Lot','Score','Deal','TitleSplit','Units','Address','Guide','Affordability','Type','Beds','Tenure','LeaseYrs','Condition','Sqft','StreetAvg','BelowMkt%','EstYield%','EstRent/mo','DaysSinceAuction','Opps','Risks','URL']];
   exportLots.forEach((l,i)=>{
-    rows.push([i+1,l.lot,l.score,l.dealType,l.titleSplit?'YES':'',l.units||'',l.address,l.price||'TBA',l._affTag||'',l.propType,l.beds??'',l.tenure,l.condition,l.sqft||'',l.streetAvg||'',l.belowMarket||'',l.estGrossYield||'',l.estMonthlyRent||'',(l.opps||[]).join(' | '),(l.risks||[]).join(' | '),l.url])});
+    rows.push([i+1,l.lot,l.score,l.dealType,l.titleSplit?'YES':'',l.units||'',l.address,l.price||'TBA',l._affTag||'',l.propType,l.beds??'',l.tenure,l.leaseLength||'',l.condition,l.sqft||'',l.streetAvg||'',l.belowMarket||'',l.estGrossYield||'',l.estMonthlyRent||'',l.daysSinceAuction??'',(l.opps||[]).join(' | '),(l.risks||[]).join(' | '),l.url])});
   dl(rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n'),'auction_analysis.csv','text/csv');
 }
 function dlJSON(){if(!window._userTier){$('signupModal').classList.add('show');return;}const exportLots=window._filteredLots||LOTS;dl(JSON.stringify(exportLots,null,2),'auction_analysis.json','application/json')}
@@ -3316,7 +3325,7 @@ function expandCard(lot) {
     if (isPremium()) {
       const gyDisplay = gy ? gy.toFixed(1) + '%' : 'N/A';
       const nyDisplay = gy ? (gy * 0.867).toFixed(1) + '%' : 'N/A';
-      const mrDisplay = mr ? '\u00a3' + mr.toLocaleString() : 'N/A';
+      const mrDisplay = mr ? '\u00a3' + mr.toLocaleString() + (lot._rentEstimated ? ' (est.)' : '') : 'N/A';
       let ratingLabel, ratingBg, ratingColor, verdict;
       if (!gy) { ratingLabel = 'N/A'; ratingBg = '#e9ecef'; ratingColor = '#6b7c8d'; verdict = ''; }
       else if (gy >= 7) { ratingLabel = 'Good'; ratingBg = '#e8f5ee'; ratingColor = 'var(--signal-pos)'; verdict = 'Strong rental yield \u2014 above average for this area'; }

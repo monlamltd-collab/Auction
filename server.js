@@ -3363,19 +3363,9 @@ app.post('/api/analyse', async (req, res) => {
       sseWrite(res, 'enrich', { postcodes: done, total });
     });
 
-    // ── Address backfill from individual lot pages (runs after enrichLots resolves URLs) ──
-    const missingAddr = analysed.filter(l => l.url && (!l.address || l.address.trim().length < 5)).length;
-    if (missingAddr > 0) {
-      console.log(`Address backfill: ${missingAddr} lots missing address, fetching lot pages...`);
-      await backfillAddressFromLotPages(analysed);
-    }
-
-    // ── Tenure backfill from individual lot pages ──
-    const missingTenure = analysed.filter(l => l.url && !l.tenure).length;
-    if (missingTenure > 0) {
-      console.log(`Tenure backfill: ${missingTenure} lots missing tenure, fetching lot pages...`);
-      await backfillTenureFromLotPages(analysed);
-    }
+    // ── Unified lot-page enrichment: single fetch per lot extracts all missing data ──
+    // (address, image, tenure, leaseLength, condition, beds, propType)
+    await enrichLotsFromLotPages(analysed);
 
     // ── Cache results ──
     const displayName = getHouseDisplayName(house, url);
@@ -4155,6 +4145,39 @@ app.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
       // 5. Freehold opp tag for residential if not already present
       if (lot.tenure === 'Freehold' && ['house', 'bungalow'].includes(lot.propType)) {
         if (lot.opps && !lot.opps.includes('Freehold')) lot.opps.push('Freehold');
+      }
+
+      // 6. Days since auction failed (for unsold lots)
+      if (lot.status === 'unsold' && lot._auctionDate) {
+        const auctionMs = new Date(lot._auctionDate).getTime();
+        if (!isNaN(auctionMs)) {
+          lot.daysSinceAuction = Math.floor((Date.now() - auctionMs) / 86400000);
+        }
+      }
+    }
+
+    // 7. High-turnover block warning — flag addresses where same building has many sales
+    const streetCounts = {};
+    for (const lot of cleanLots) {
+      if (!lot.streetSalesCount) continue;
+      // Group by building/block — use first line of address (e.g. "123 High Street")
+      const addr = (lot.address || '').split(',')[0].trim().toLowerCase();
+      if (!addr) continue;
+      // Extract building name/number pattern
+      const buildingMatch = addr.match(/^(.+?)(?:\s+flat\s+\d+|\s+apartment\s+\d+)?$/i);
+      const building = buildingMatch ? buildingMatch[1] : addr;
+      if (!streetCounts[building]) streetCounts[building] = { count: 0, lots: [] };
+      streetCounts[building].count += lot.streetSalesCount;
+      streetCounts[building].lots.push(lot);
+    }
+    for (const [building, data] of Object.entries(streetCounts)) {
+      if (data.count > 8) {
+        for (const lot of data.lots) {
+          if (!lot.risks) lot.risks = [];
+          if (!lot.risks.some(r => /high.?turnover/i.test(r))) {
+            lot.risks.push(`High-turnover block (${data.count} sales nearby)`);
+          }
+        }
       }
     }
 
@@ -7584,7 +7607,7 @@ const DOM_EXTRACTORS = {
         }
         // Fallback: use title + address combo or just title
         if (!address && title) address = title;
-        // Don't skip lots with missing address — backfillAddressFromLotPages will fill them later
+        // Don't skip lots with missing address — enrichLotsFromLotPages will fill them later
 
         // Combine title and address if they differ
         let fullAddress = address || '';
@@ -9353,101 +9376,101 @@ async function fetchLotPage(url) {
   return null;
 }
 
-// Deep image backfill — fetch individual lot pages for lots still missing images
-// Used when catalogue page has junk/placeholder images that get stripped
+// Deep image backfill — standalone version for image-only passes (cache refresh, etc.)
 async function backfillImagesFromLotPages(lots, concurrency = 5) {
   const missing = lots.filter(l => l.url && !l.imageUrl && /^https?:\/\//i.test(l.url));
   if (missing.length === 0) return 0;
-
-  // Cap at 50 lot pages per catalogue run to respect rate limits
-  const MAX_LOT_PAGES = 50;
-  const capped = missing.slice(0, MAX_LOT_PAGES);
-
+  const capped = missing.slice(0, 50);
   const junk = /logo|icon|nav|sprite|\.svg|placeholder|no-image|modal\.png|_NYC\.|_LCC\.|_BMDC\.|council|utilit|cardwell|badge|spacer|pixel|facebook|twitter|1x1|gavel|backdrop|generic[_-]?image|coming[_-]?soon/i;
-
   let filled = 0, fcUsed = 0;
-  // Process in batches to limit concurrency
   for (let i = 0; i < capped.length; i += concurrency) {
-    // 500ms delay between batches to respect rate limits
     if (i > 0) await new Promise(r => setTimeout(r, 500));
     const batch = capped.slice(i, i + concurrency);
     await Promise.allSettled(batch.map(async (lot) => {
       try {
         const result = await fetchLotPage(lot.url);
-        if (!result) return null;
+        if (!result) return;
         if (result.source === 'firecrawl') fcUsed++;
-        const html = result.html;
-        // Find first non-junk property image (new regex per call to avoid shared lastIndex)
         const imgRe = /<img[^>]+(?:src|data-src|data-lazy-src|data-original)="([^"]+)"/gi;
         let m;
-        while ((m = imgRe.exec(html)) !== null) {
+        while ((m = imgRe.exec(result.html)) !== null) {
           const src = m[1];
           if (src && src.length > 20 && !src.startsWith('data:') && !junk.test(src)) {
-            // Resolve relative URL
             let imgUrl = src;
             if (!/^https?:\/\//i.test(imgUrl)) {
               try { imgUrl = new URL(imgUrl, result.url || lot.url).href; } catch { continue; }
             }
-            lot.imageUrl = imgUrl;
-            filled++;
-            return imgUrl;
+            lot.imageUrl = imgUrl; filled++;
+            break;
           }
         }
-        return null;
-      } catch { return null; }
+      } catch { /* skip */ }
     }));
   }
-  if (filled > 0) console.log(`Deep image backfill (lot pages): ${filled}/${missing.length} lots got images${fcUsed > 0 ? ` (${fcUsed} via Firecrawl)` : ''}`);
+  if (filled > 0) console.log(`Image backfill (lot pages): ${filled}/${missing.length}${fcUsed > 0 ? ` (${fcUsed} via Firecrawl)` : ''}`);
   return filled;
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ADDRESS BACKFILL — fetch individual lot pages for lots missing address
+// UNIFIED LOT-PAGE ENRICHMENT — single pass extracts ALL missing data
+// Replaces separate address/tenure/image/condition backfill functions.
+// One fetch per lot page → extracts address, image, tenure, lease length,
+// condition, beds, propType in a single pass. No wasted credits.
 // ═══════════════════════════════════════════════════════════════
-async function backfillAddressFromLotPages(lots, concurrency = 5) {
-  const missing = lots.filter(l => l.url && (!l.address || l.address.trim().length < 5) && /^https?:\/\//i.test(l.url));
-  if (missing.length === 0) return 0;
+async function enrichLotsFromLotPages(lots, concurrency = 5) {
+  // Target any lot with a URL that's missing ANY enrichment field
+  const targets = lots.filter(l => {
+    if (!l.url || !/^https?:\/\//i.test(l.url)) return false;
+    return !l.address || l.address.trim().length < 5
+      || !l.imageUrl
+      || !l.tenure
+      || !l.condition
+      || !l.beds
+      || !l.propType || l.propType === 'other' || l.propType === 'unknown'
+      || (l.tenure === 'Leasehold' && !l.leaseLength);
+  });
+  if (targets.length === 0) return 0;
 
-  const junk = /logo|icon|nav|sprite|\.svg|placeholder|no-image|badge|spacer|pixel|facebook|twitter|1x1|gavel|backdrop|generic[_-]?image|coming[_-]?soon/i;
-  let filled = 0, fcUsed = 0;
-  for (let i = 0; i < missing.length; i += concurrency) {
+  const MAX_LOT_PAGES = 100;
+  const capped = targets.slice(0, MAX_LOT_PAGES);
+
+  const junk = /logo|icon|nav|sprite|\.svg|placeholder|no-image|modal\.png|_NYC\.|_LCC\.|_BMDC\.|council|utilit|cardwell|badge|spacer|pixel|facebook|twitter|1x1|gavel|backdrop|generic[_-]?image|coming[_-]?soon/i;
+
+  let fcUsed = 0;
+  const stats = { address: 0, image: 0, tenure: 0, condition: 0, beds: 0, leaseLength: 0, propType: 0 };
+
+  for (let i = 0; i < capped.length; i += concurrency) {
     if (i > 0) await new Promise(r => setTimeout(r, 500));
-    const batch = missing.slice(i, i + concurrency);
+    const batch = capped.slice(i, i + concurrency);
     await Promise.allSettled(batch.map(async (lot) => {
       try {
         const result = await fetchLotPage(lot.url);
         if (!result) return;
         if (result.source === 'firecrawl') fcUsed++;
         const html = result.html;
+        const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').toLowerCase();
 
-        // Extract address from common patterns: <h1>, <h2>, og:title, title tag
-        let address = '';
-        // Try og:title first (most reliable for property pages)
-        const ogMatch = html.match(/<meta[^>]+property="og:title"[^>]+content="([^"]+)"/i) ||
-                         html.match(/<meta[^>]+content="([^"]+)"[^>]+property="og:title"/i);
-        if (ogMatch) address = ogMatch[1].trim();
-        // Fallback: first h1 with substantial text
-        if (!address) {
-          const h1Match = html.match(/<h1[^>]*>([^<]{10,})<\/h1>/i);
-          if (h1Match) address = h1Match[1].trim();
-        }
-        // Fallback: title tag (strip site name suffix)
-        if (!address) {
-          const titleMatch = html.match(/<title>([^<]+)<\/title>/i);
-          if (titleMatch) {
-            address = titleMatch[1].replace(/\s*[-|].*$/, '').trim();
+        // ── Address ──
+        if (!lot.address || lot.address.trim().length < 5) {
+          let address = '';
+          const ogMatch = html.match(/<meta[^>]+property="og:title"[^>]+content="([^"]+)"/i) ||
+                           html.match(/<meta[^>]+content="([^"]+)"[^>]+property="og:title"/i);
+          if (ogMatch) address = ogMatch[1].trim();
+          if (!address) {
+            const h1Match = html.match(/<h1[^>]*>([^<]{10,})<\/h1>/i);
+            if (h1Match) address = h1Match[1].trim();
           }
-        }
-        // Clean up HTML entities and excess whitespace
-        if (address) {
-          address = address.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#?\w+;/g, ' ').replace(/\s+/g, ' ').trim();
-        }
-        if (address && address.length >= 5) {
-          lot.address = address;
-          filled++;
+          if (!address) {
+            const titleMatch = html.match(/<title>([^<]+)<\/title>/i);
+            if (titleMatch) address = titleMatch[1].replace(/\s*[-|].*$/, '').trim();
+          }
+          if (address) {
+            address = address.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#?\w+;/g, ' ').replace(/\s+/g, ' ').trim();
+          }
+          if (address && address.length >= 5) { lot.address = address; stats.address++; }
         }
 
-        // Also backfill image if missing
+        // ── Image ──
         if (!lot.imageUrl) {
           const imgRe = /<img[^>]+(?:src|data-src|data-lazy-src|data-original)="([^"]+)"/gi;
           let m;
@@ -9458,48 +9481,91 @@ async function backfillAddressFromLotPages(lots, concurrency = 5) {
               if (!/^https?:\/\//i.test(imgUrl)) {
                 try { imgUrl = new URL(imgUrl, result.url || lot.url).href; } catch { continue; }
               }
-              lot.imageUrl = imgUrl;
+              lot.imageUrl = imgUrl; stats.image++;
               break;
             }
           }
         }
-      } catch { /* timeout or network error — skip */ }
-    }));
-  }
-  if (filled > 0) console.log(`Address backfill (lot pages): ${filled}/${missing.length} lots got addresses${fcUsed > 0 ? ` (${fcUsed} via Firecrawl)` : ''}`);
-  return filled;
-}
 
-// ═══════════════════════════════════════════════════════════════
-// TENURE BACKFILL — fetch individual lot pages for lots missing tenure
-// ═══════════════════════════════════════════════════════════════
-async function backfillTenureFromLotPages(lots, concurrency = 5) {
-  const missing = lots.filter(l => l.url && !l.tenure && /^https?:\/\//i.test(l.url));
-  if (missing.length === 0) return 0;
-
-  let filled = 0, fcUsed = 0;
-  for (let i = 0; i < missing.length; i += concurrency) {
-    const batch = missing.slice(i, i + concurrency);
-    await Promise.allSettled(batch.map(async (lot) => {
-      try {
-        const result = await fetchLotPage(lot.url);
-        if (!result) return;
-        if (result.source === 'firecrawl') fcUsed++;
-        const text = result.html.replace(/<[^>]+>/g, ' ').toLowerCase();
-        if (/share of freehold|share\s+of\s+the\s+freehold/.test(text)) { lot.tenure = 'Share of Freehold'; filled++; }
-        else if (/flying freehold/.test(text)) { lot.tenure = 'Freehold'; filled++; }
-        else if (/\bfreehold\b/.test(text) && !/leasehold/.test(text)) { lot.tenure = 'Freehold'; filled++; }
-        else if (/\bleasehold\b|long\s+lease|lease\s+remaining|\byears?\s+(?:remaining|unexpired|left)\b|\b\d+\s*(?:year|yr)\s*lease\b/.test(text)) { lot.tenure = 'Leasehold'; filled++; }
-        // Apply freehold scoring bonus if it was missed during initial analyseLot()
-        if (lot.tenure === 'Freehold' && ['house', 'bungalow'].includes(lot.propType) && !(lot.opps || []).includes('Freehold')) {
-          lot.score = (lot.score || 0) + 0.5;
-          lot.opps = lot.opps || []; lot.opps.push('Freehold');
+        // ── Tenure ──
+        if (!lot.tenure) {
+          if (/share of freehold|share\s+of\s+the\s+freehold/.test(text)) { lot.tenure = 'Share of Freehold'; stats.tenure++; }
+          else if (/flying freehold/.test(text)) { lot.tenure = 'Freehold'; stats.tenure++; }
+          else if (/\bfreehold\b/.test(text) && !/leasehold/.test(text)) { lot.tenure = 'Freehold'; stats.tenure++; }
+          else if (/\bleasehold\b|long\s+lease|lease\s+remaining|\byears?\s+(?:remaining|unexpired|left)\b|\b\d+\s*(?:year|yr)\s*lease\b/.test(text)) { lot.tenure = 'Leasehold'; stats.tenure++; }
+          // Freehold scoring bonus
+          if (lot.tenure === 'Freehold' && ['house', 'bungalow'].includes(lot.propType) && !(lot.opps || []).includes('Freehold')) {
+            lot.score = (lot.score || 0) + 0.5;
+            lot.opps = lot.opps || []; lot.opps.push('Freehold');
+            lot.scoreBreakdown = lot.scoreBreakdown || [];
+            lot.scoreBreakdown.push({ signal: 'Freehold house', pts: 0.5 });
+          }
         }
+
+        // ── Lease length ──
+        if (lot.tenure === 'Leasehold' && !lot.leaseLength) {
+          const leaseMatch = text.match(/\b(\d{2,4})\s*(?:year|yr)s?\s*(?:remaining|unexpired|left|lease)\b/) ||
+                             text.match(/lease\s*(?:length|term|remaining)?\s*:?\s*(\d{2,4})\s*(?:year|yr)s?\b/) ||
+                             text.match(/\b(\d{2,4})\s*(?:year|yr)\s*lease\b/);
+          if (leaseMatch) {
+            const years = parseInt(leaseMatch[1], 10);
+            if (years >= 1 && years <= 999) { lot.leaseLength = years; stats.leaseLength++; }
+          }
+        }
+
+        // ── Condition ──
+        if (!lot.condition) {
+          if (/\b(?:derelict|uninhabitable|severe(?:ly)?\s+dilapidated|structurally?\s+(?:unsound|unsafe)|condemned)\b/.test(text)) {
+            lot.condition = 'derelict'; stats.condition++;
+          } else if (/\b(?:poor\s+condition|very\s+poor|badly?\s+(?:damaged|deteriorated)|significant(?:ly)?\s+(?:dated|tired)|extensive\s+(?:refurb|renovation|works?\s+required))\b/.test(text)) {
+            lot.condition = 'poor'; stats.condition++;
+          } else if (/\b(?:need(?:s|ing)\s+(?:modernis|refurb|renovation|updating|improvement)|in\s+need\s+of\s+(?:modernis|refurb|renovation)|(?:requires?|requiring)\s+(?:modernis|refurb|renovation|updating)|(?:tired|dated|worn)\s+(?:condition|decor|throughout))\b/.test(text)) {
+            lot.condition = 'needs modernisation'; stats.condition++;
+          } else if (/\b(?:good\s+(?:condition|order|decorative)|well\s+(?:maintained|presented|kept)|recently\s+(?:refurb|renovated|decorated|updated))\b/.test(text)) {
+            lot.condition = 'good'; stats.condition++;
+          }
+          // Condition scoring
+          if (lot.condition === 'needs modernisation' && !(lot.opps || []).includes('Needs modernisation')) {
+            lot.score = (lot.score || 0) + 2.0;
+            lot.opps = lot.opps || []; lot.opps.push('Needs modernisation');
+            lot.scoreBreakdown = lot.scoreBreakdown || [];
+            lot.scoreBreakdown.push({ signal: 'Needs modernisation', pts: 2.0 });
+          } else if ((lot.condition === 'poor' || lot.condition === 'derelict') && !(lot.opps || []).includes('Poor condition')) {
+            lot.score = (lot.score || 0) + 2.5;
+            lot.opps = lot.opps || []; lot.opps.push('Poor condition');
+            lot.scoreBreakdown = lot.scoreBreakdown || [];
+            lot.scoreBreakdown.push({ signal: 'Poor/derelict condition', pts: 2.5 });
+          }
+        }
+
+        // ── Beds ──
+        if (!lot.beds) {
+          const bedMatch = text.match(/\b(\d{1,2})\s*(?:bed(?:room)?s?|double\s+bed(?:room)?s?)\b/);
+          if (bedMatch) {
+            const n = parseInt(bedMatch[1], 10);
+            if (n >= 1 && n <= 20) { lot.beds = n; stats.beds++; }
+          }
+        }
+
+        // ── Property type ──
+        if (!lot.propType || lot.propType === 'other' || lot.propType === 'unknown') {
+          if (/\b(?:flat|apartment|maisonette|studio\s+flat|penthouse)\b/.test(text)) { lot.propType = 'flat'; stats.propType++; }
+          else if (/\b(?:terraced|semi[- ]detached|detached\s+house|end[- ]terrace|mid[- ]terrace|town\s*house|cottage|villa|lodge)\b/.test(text)) { lot.propType = 'house'; stats.propType++; }
+          else if (/\bbungalow\b/.test(text)) { lot.propType = 'bungalow'; stats.propType++; }
+          else if (/\b(?:land|plot|garage|parking\s+space|storage\s+unit)\b/.test(text)) { lot.propType = 'land'; stats.propType++; }
+          else if (/\b(?:shop|retail|office|warehouse|industrial|commercial|pub|hotel|restaurant)\b/.test(text)) { lot.propType = 'commercial'; stats.propType++; }
+        }
+
       } catch { /* timeout or network error — skip */ }
     }));
   }
-  if (filled > 0) console.log(`Tenure backfill (lot pages): ${filled}/${missing.length} lots got tenure${fcUsed > 0 ? ` (${fcUsed} via Firecrawl)` : ''}`);
-  return filled;
+
+  const total = Object.values(stats).reduce((a, b) => a + b, 0);
+  if (total > 0) {
+    const parts = Object.entries(stats).filter(([, v]) => v > 0).map(([k, v]) => `${k}:${v}`).join(' ');
+    console.log(`Lot-page enrichment: ${capped.length} pages fetched, ${total} fields filled — ${parts}${fcUsed > 0 ? ` (${fcUsed} via Firecrawl)` : ''}`);
+  }
+  return total;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -12091,23 +12157,10 @@ async function autoAnalyseOne(url) {
   const lots = rawLots.map(lot => analyseLot(lot)).sort((a, b) => b.score - a.score);
   await enrichLots(lots, house, url);
 
-  // Address backfill: fetch individual lot pages for lots missing address
-  const lotsMissingAddr = lots.filter(l => l.url && (!l.address || l.address.trim().length < 5)).length;
-  if (lotsMissingAddr > 0) {
-    await backfillAddressFromLotPages(lots);
-  }
+  // Unified lot-page enrichment: single fetch per lot extracts all missing data
+  // (address, image, tenure, leaseLength, condition, beds, propType)
+  await enrichLotsFromLotPages(lots);
 
-  // Tenure backfill: fetch individual lot pages for lots missing tenure
-  const lotsMissingTenure = lots.filter(l => l.url && !l.tenure).length;
-  if (lotsMissingTenure > 0) {
-    await backfillTenureFromLotPages(lots);
-  }
-
-  // Deep backfill: fetch individual lot pages for lots still missing images
-  const lotsMissingImg = lots.filter(l => l.url && !l.imageUrl).length;
-  if (lotsMissingImg > 0) {
-    await backfillImagesFromLotPages(lots);
-  }
   // Rendered page backfill for JS-rendered sites — try both engines for best coverage
   const stillNoImg = lots.filter(l => !l.imageUrl).length;
   if (stillNoImg > 0 && PUPPETEER_IMAGE_HOUSES.has(house)) {
