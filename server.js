@@ -10974,6 +10974,7 @@ async function _doAutoAnalyseAll() {
   try {
     const today = new Date().toISOString().slice(0, 10);
     const normalise = normaliseUrl;
+    const BATCH = 50;
 
     // Get URLs from past calendar entries (exclude always_on — they don't expire)
     const { data: pastCalendar } = await supabase
@@ -10994,7 +10995,6 @@ async function _doAutoAnalyseAll() {
       const purgeable = [...new Set(pastCalendar.map(r => normalise(r.url)).filter(Boolean))]
         .filter(u => !upcomingUrls.has(u));
 
-      const BATCH = 50;
       let purged = 0;
       for (let i = 0; i < purgeable.length; i += BATCH) {
         const batch = purgeable.slice(i, i + BATCH);
@@ -11059,10 +11059,61 @@ async function _doAutoAnalyseAll() {
     const lookbackStr = lookback7.toISOString().slice(0, 10);
     const { data: existingCalendar } = await supabase
       .from('auction_calendar')
-      .select('house_slug, url')
+      .select('id, house_slug, url, status')
       .or(`date.gte.${lookbackStr},status.eq.always_on`);
     const calendarSlugs = new Set((existingCalendar || []).map(r => r.house_slug).filter(Boolean));
     const calendarUrls = new Set((existingCalendar || []).map(r => normaliseUrl(r.url)));
+
+    // ── Deduplicate: remove duplicate always_on entries per house_slug ──
+    // Keep the first entry per slug, delete the rest
+    const alwaysOnBySlug = new Map();
+    for (const row of (existingCalendar || [])) {
+      if (row.status !== 'always_on' || !row.house_slug) continue;
+      if (!alwaysOnBySlug.has(row.house_slug)) {
+        alwaysOnBySlug.set(row.house_slug, []);
+      }
+      alwaysOnBySlug.get(row.house_slug).push(row.id);
+    }
+    let dedupDeleted = 0;
+    for (const [slug, ids] of alwaysOnBySlug) {
+      if (ids.length <= 1) continue;
+      // Keep the first, delete the rest
+      const toDelete = ids.slice(1);
+      const { error } = await supabase.from('auction_calendar').delete().in('id', toDelete);
+      if (!error) dedupDeleted += toDelete.length;
+    }
+    if (dedupDeleted > 0) {
+      console.log(`AUTO-CALENDAR: Deduplicated ${dedupDeleted} duplicate always_on entries`);
+    }
+
+    // ── Deduplicate: remove duplicate entries with same normalised URL ──
+    // Regardless of status, keep one entry per URL (prefer always_on, then earliest date)
+    const byUrl = new Map();
+    for (const row of (existingCalendar || [])) {
+      const norm = normaliseUrl(row.url);
+      if (!norm) continue;
+      if (!byUrl.has(norm)) {
+        byUrl.set(norm, []);
+      }
+      byUrl.get(norm).push(row);
+    }
+    let urlDedupDeleted = 0;
+    for (const [, rows] of byUrl) {
+      if (rows.length <= 1) continue;
+      // Prefer always_on entries, then keep first
+      rows.sort((a, b) => {
+        if (a.status === 'always_on' && b.status !== 'always_on') return -1;
+        if (b.status === 'always_on' && a.status !== 'always_on') return 1;
+        return 0;
+      });
+      const toDelete = rows.slice(1).map(r => r.id);
+      const { error } = await supabase.from('auction_calendar').delete().in('id', toDelete);
+      if (!error) urlDedupDeleted += toDelete.length;
+    }
+    if (urlDedupDeleted > 0) {
+      console.log(`AUTO-CALENDAR: Deduplicated ${urlDedupDeleted} duplicate URL entries`);
+    }
+
     let autoInserted = 0;
     for (const [slug, rootUrl] of Object.entries(HOUSE_ROOTS)) {
       const normUrl = normaliseUrl(rootUrl);
@@ -11089,7 +11140,6 @@ async function _doAutoAnalyseAll() {
       }
     }
     console.log(`AUTO-CALENDAR: Step 0.5 complete — ${autoInserted} new always-on entries inserted, ${calendarSlugs.size} active slugs found, ${Object.keys(HOUSE_ROOTS).length} total houses`);
-
 
     // Migrate any existing auto-inserted entries (date=today, title='Current Catalogue')
     // that were created by the old logic — convert them to always_on
@@ -12499,7 +12549,20 @@ async function getCalendarAuctions() {
     const dated = (data || []).filter(r => r.status !== 'always_on').length;
     console.log(`getCalendarAuctions: Supabase returned ${(data || []).length} rows (${alwaysOn} always_on, ${dated} dated), error=${error ? error.message : 'none'}`);
     if (!error && data && data.length > 0) {
-      return data.map(row => ({
+      // Deduplicate by normalised URL — keep earliest date per URL
+      const seen = new Map();
+      for (const row of data) {
+        const norm = normaliseUrl(row.url);
+        if (!norm) continue;
+        if (!seen.has(norm) || (row.date && (!seen.get(norm).date || row.date < seen.get(norm).date))) {
+          seen.set(norm, row);
+        }
+      }
+      const deduped = [...seen.values()];
+      if (deduped.length < data.length) {
+        console.log(`getCalendarAuctions: Deduplicated ${data.length} → ${deduped.length} rows by URL`);
+      }
+      return deduped.map(row => ({
         house: row.house,
         url: row.url,
         date: row.date,
