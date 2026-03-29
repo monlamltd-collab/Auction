@@ -4119,7 +4119,9 @@ app.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
 
     // Directory data: free for all, but AI analysis layer requires signup
     // Anonymous users see address/price/image/house but not scores/opps/risks/dealType
-    const isSignedIn = !!user;
+    const adminToken = req.headers['x-admin-secret'] || '';
+    const isAdmin = process.env.ADMIN_SECRET && safeCompare(adminToken, process.env.ADMIN_SECRET);
+    const isSignedIn = !!user || isAdmin;
     if (!isSignedIn) {
       for (const lot of cleanLots) {
         lot.score = null;
