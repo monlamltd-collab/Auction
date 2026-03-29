@@ -11041,15 +11041,21 @@ async function _doAutoAnalyseAll() {
   //   - Show separately in the admin UI from dated auctions
   //   - Still get scraped by autoAnalyseOne like any other catalogue-ready entry
   try {
+    // Only count ACTIVE entries (upcoming dates or always_on) — stale past entries
+    // don't count, otherwise houses with only expired entries never get always_on added
+    const lookback7 = new Date();
+    lookback7.setDate(lookback7.getDate() - 7);
+    const lookbackStr = lookback7.toISOString().slice(0, 10);
     const { data: existingCalendar } = await supabase
       .from('auction_calendar')
-      .select('house_slug, url');
+      .select('house_slug, url')
+      .or(`date.gte.${lookbackStr},status.eq.always_on`);
     const calendarSlugs = new Set((existingCalendar || []).map(r => r.house_slug).filter(Boolean));
     const calendarUrls = new Set((existingCalendar || []).map(r => (r.url || '').trim().replace(/\/+$/, '').toLowerCase()));
     let autoInserted = 0;
     for (const [slug, rootUrl] of Object.entries(HOUSE_ROOTS)) {
       const normUrl = rootUrl.trim().replace(/\/+$/, '').toLowerCase();
-      // Skip if this house already has any calendar entry
+      // Skip if this house already has an active (upcoming/always_on) calendar entry
       if (calendarSlugs.has(slug) || calendarUrls.has(normUrl)) continue;
       // Auto-insert as always-on catalogue with sentinel date (won't be purged)
       const { error } = await supabase.from('auction_calendar').insert({
