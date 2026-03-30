@@ -1128,10 +1128,10 @@ const HOUSE_ROOTS = {
   johnpye:                'https://www.johnpyeproperty.co.uk/Listing',
   // ── Batch 7: Tier 1 expansion (March 2026) ──
   symondsandsampson:      'https://auctions.symondsandsampson.co.uk/',
-  stags:                  'https://www.stags.co.uk/pages/auction-properties',
+  stags:                  'https://www.stags.co.uk/properties/sales/tag/auction',
   lsh:                    'https://propertyauctions.lsh.co.uk/',
   carterjonas:            'https://www.carterjonas.co.uk/property-auctions',
-  gth:                    'https://www.gth.net/auctions/property-and-land-auctions/online-timed-auctions',
+  gth:                    'https://www.gth.net/properties/sales/tag-auction',
   halls:                  'https://www.hallsgb.com/residential/property-and-land-auctions/',
   walkersingleton:        'https://onlinesales.walkersingleton.co.uk/',
   driversnorris:          'https://www.iamsold.co.uk/estate-agent/drivers/',
@@ -1158,7 +1158,7 @@ const HOUSE_ROOTS = {
   // ── Batch 8: Comprehensive UK coverage (March 2026) ──
   // National / Online
   propertysolvers:        'https://auctions.propertysolvers.co.uk/properties',
-  pugh:                   'https://www.pugh-auctions.com/auctions/',
+  pugh:                   'https://www.pugh-auctions.com/property-search?include-sold=off',
   markjenkinson:          'https://www.btgeddisonspropertyauctions.com/properties/',
   regionalauctioneers:    'https://www.regionalpropertyauctioneers.co.uk/properties',
   // South East
@@ -9210,6 +9210,8 @@ DOM_EXTRACTORS['foxandsons'] = DOM_EXTRACTORS.barnardmarcus;
 DOM_EXTRACTORS['driversnorris'] = DOM_EXTRACTORS.iamsold;
 // Mark Jenkinson merged into BTG Eddisons (sdl)
 DOM_EXTRACTORS['markjenkinson'] = DOM_EXTRACTORS.sdl;
+// Carter Jonas uses Bamboo Auctions platform (same as hunters)
+DOM_EXTRACTORS['carterjonas'] = DOM_EXTRACTORS.hunters;
 // Wire up Auction House UK branches to the shared auctionhouseuk extractor
 for (const slug of ['auctionhousescotland', 'austingray', 'auctionhouseeastanglia', 'auctionhousenorthwest', 'auctionhousenortheast', 'auctionhousewales', 'auctionhousebirmingham', 'auctionhousekent', 'auctionhousedevon', 'auctionhouseeastmidlands', 'auctionhousewestmidlands', 'auctionhouseessex', 'auctionhousemanchester', 'auctionhousesouthyorkshire', 'auctionhousewestyorkshire', 'auctionhouseteesvalley', 'auctionhousehull', 'auctionhousecumbria', 'auctionhouselincolnshire', 'auctionhouseuklondon', 'auctionhousebedsandbucks', 'auctionhousenorthamptonshire', 'auctionhouseoxfordshire', 'auctionhouseleicestershire', 'auctionhousemidlands', 'auctionhousecoventry', 'auctionhousenottsandderby', 'auctionhousechesterfield', 'auctionhousestaffordshire', 'auctionhousenorthwales', 'auctionhousesouthwest', 'auctionhousenorthernireland', 'auctionhousenational']) {
   DOM_EXTRACTORS[slug] = DOM_EXTRACTORS.auctionhouseuk;
