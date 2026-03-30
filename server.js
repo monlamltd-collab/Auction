@@ -1127,8 +1127,8 @@ const HOUSE_ROOTS = {
   strakers:               'https://www.strakers.co.uk/property-auctions/',
   johnpye:                'https://www.johnpyeproperty.co.uk/Listing',
   // ── Batch 7: Tier 1 expansion (March 2026) ──
-  symondsandsampson:      'https://auctions.symondsandsampson.co.uk/',
-  stags:                  'https://www.stags.co.uk/properties/sales/tag/auction',
+  symondsandsampson:      'https://auctions.symondsandsampson.co.uk/events/property-auction/symonds-and-sampson-property-auctions?eventdate=upcoming',
+  stags:                  'https://www.stags.co.uk/pages/auction-properties',
   lsh:                    'https://propertyauctions.lsh.co.uk/',
   carterjonas:            'https://www.carterjonas.co.uk/property-auctions',
   gth:                    'https://www.gth.net/properties/sales/tag-auction',
@@ -3227,7 +3227,8 @@ app.post('/api/analyse', async (req, res) => {
         } else {
           // ── Generic extraction with auto-pagination ──
           console.log(`Loading ${scrapeUrl} for ${house}`);
-          const firstResult = await scrapeRenderedPage(scrapeUrl, house);
+          const analyseOpts = rewritten.waitFor ? { waitFor: rewritten.waitFor } : {};
+          const firstResult = await scrapeRenderedPage(scrapeUrl, house, analyseOpts);
 
           const domLots = extractWithJSDOM(firstResult.html, house, scrapeUrl, firstResult.images);
           if (domLots && domLots.length >= 3) {
@@ -5751,6 +5752,37 @@ async function rewriteUrl(url, house) {
   }
   if (house === 'auctionhousemanchester') {
     return { baseUrl: 'https://www.auctionhouse.co.uk/manchester/auction/search-results', isApi: false, paginateAs: null, preferPuppeteer: true };
+  }
+
+  // Symonds & Sampson: WebDadi two-tier — events page lists auctions, each links to lot listings
+  // The event detail pages serve lot data in static HTML (FeaturedGrid cards)
+  if (house === 'symondsandsampson') {
+    // Auto-discover the nearest upcoming event page with lots
+    try {
+      const eventsUrl = HOUSE_ROOTS.symondsandsampson || url;
+      const resp = await fetch(eventsUrl, { headers: HEADERS, redirect: 'follow' });
+      if (resp.ok) {
+        const html = await resp.text();
+        const eventLinks = [...html.matchAll(/href="(\/event\/property-auction-[^"]+)"/gi)];
+        if (eventLinks.length > 0) {
+          const origin = new URL(eventsUrl).origin;
+          const eventUrl = origin + eventLinks[0][1];
+          console.log(`Symonds: auto-discovered event page ${eventUrl}`);
+          return { baseUrl: eventUrl, isApi: false, paginateAs: null, preferPuppeteer: true };
+        }
+      }
+    } catch (e) { console.log('Symonds discovery failed:', e.message); }
+    return { baseUrl: url, isApi: false, paginateAs: null, preferPuppeteer: true };
+  }
+
+  // Stags / GTH / Clee Tompkinson: Homeflow SPA — needs JS rendering + extended wait for SPA hydration
+  if (house === 'stags' || house === 'gth' || house === 'cleetompkinson') {
+    return { baseUrl: url, isApi: false, paginateAs: null, preferPuppeteer: true, waitFor: 8000 };
+  }
+
+  // Robin Jessop: StackProtect reCAPTCHA v3 blocks all requests — Puppeteer may solve the challenge
+  if (house === 'robinjessop') {
+    return { baseUrl: url, isApi: false, paginateAs: null, preferPuppeteer: true, waitFor: 8000 };
   }
 
   // Hunters: Bamboo Auctions React SPA, needs Puppeteer
@@ -9253,6 +9285,109 @@ const DOM_EXTRACTORS = {
     })()
   `,
 
+  // ─── SYMONDS & SAMPSON ─────────────────────────────────────
+  // WebDadi platform — event detail pages serve lots in FeaturedGrid cards
+  // Each card: a.FeaturedGrid__item with data-bg image, h3 address, nativecurrencyvalue price
+  symondsandsampson: `
+    (() => {
+      const lots = [];
+      const cards = document.querySelectorAll('.FeaturedGrid__item-container, .FeaturedGrid__item');
+      let lotNum = 0;
+      for (const card of cards) {
+        const link = card.tagName === 'A' ? card : card.querySelector('a.FeaturedGrid__item, a[href*="/property/"]');
+        if (!link) continue;
+        const href = link.getAttribute('href') || '';
+        if (!href.includes('/property/') || href.includes('property-for-sale') || href.includes('property-to-rent')) continue;
+        lotNum++;
+        // Address from first h3 inside FeaturedProperty__description
+        const descDiv = link.querySelector('.FeaturedProperty__description');
+        const h3s = descDiv ? descDiv.querySelectorAll('h3') : link.querySelectorAll('h3');
+        let address = '';
+        if (h3s.length > 0) {
+          address = h3s[0].textContent.trim();
+        }
+        if (!address) continue;
+        // Price from .nativecurrencyvalue
+        let price = null;
+        const priceEl = link.querySelector('.nativecurrencyvalue');
+        if (priceEl) {
+          const pm = priceEl.textContent.replace(/[^0-9]/g, '');
+          if (pm) price = parseInt(pm);
+        }
+        // Image from data-bg on .FeaturedProperty__featured-image
+        let imageUrl = '';
+        const imgDiv = link.querySelector('.FeaturedProperty__featured-image, [data-bg]');
+        if (imgDiv) imageUrl = imgDiv.getAttribute('data-bg') || '';
+        if (!imageUrl) {
+          const img = link.querySelector('img[src*="cdn.webdadi.net"]');
+          if (img) imageUrl = img.getAttribute('src') || '';
+        }
+        // Property type from URL path
+        const bullets = [];
+        const typeMatch = href.match(/\\/(house|flat|land|bungalow|detached|semi-detached|terraced|cottage|studio|other|barn|garage|maisonette|commercial)[\\/]/i);
+        if (typeMatch) bullets.push(typeMatch[1].charAt(0).toUpperCase() + typeMatch[1].slice(1));
+        const bedMatch = href.match(/(\\d+)-bedroom/i);
+        if (bedMatch) bullets.push(bedMatch[1] + ' bedrooms');
+        lots.push({ lot: lotNum, address, price, url: href, imageUrl: imageUrl || undefined, bullets });
+      }
+      return lots;
+    })()
+  `,
+
+  // ─── STAGS / GTH (HOMEFLOW SPA) ───────────────────────────
+  // Homeflow platform renders property cards after JS hydration
+  // Cards: .property-card or li with .list-address + .list-price
+  stags: `
+    (() => {
+      const lots = [];
+      const seen = new Set();
+      // Try multiple Homeflow card selectors
+      const cards = document.querySelectorAll('.property-results-list li, .property-card, [class*="property"] li');
+      let lotNum = 0;
+      for (const card of cards) {
+        // Address
+        const addrEl = card.querySelector('.list-address, h3 a, .property-title, .address');
+        if (!addrEl) continue;
+        const address = addrEl.textContent.trim();
+        if (!address || address.length < 5) continue;
+        if (seen.has(address)) continue;
+        seen.add(address);
+        lotNum++;
+        // Price
+        let price = null;
+        const priceEl = card.querySelector('.list-price, .price, [class*="price"]');
+        if (priceEl) {
+          const pm = priceEl.textContent.replace(/[^0-9]/g, '');
+          if (pm && pm.length >= 4) price = parseInt(pm);
+        }
+        // URL
+        let url = '';
+        const link = addrEl.tagName === 'A' ? addrEl : (card.querySelector('a[href*="/properties/"]') || card.querySelector('a[href]'));
+        if (link) url = link.getAttribute('href') || '';
+        // Image
+        let imageUrl = '';
+        const img = card.querySelector('img[src*="homeflow-assets"], img[src*="cdn"], img[data-src]');
+        if (img) imageUrl = img.getAttribute('src') || img.getAttribute('data-src') || '';
+        const bgEl = card.querySelector('[style*="background"]');
+        if (!imageUrl && bgEl) {
+          const bgMatch = (bgEl.getAttribute('style') || '').match(/url\\(['"]?([^'"\\)]+)/);
+          if (bgMatch) imageUrl = bgMatch[1];
+        }
+        // Bullets from property type badges or text
+        const bullets = [];
+        const typeEl = card.querySelector('.property-type, .type');
+        if (typeEl) bullets.push(typeEl.textContent.trim());
+        const bedEl = card.querySelector('.beds, .bedrooms, [class*="bed"]');
+        if (bedEl) {
+          const bm = bedEl.textContent.match(/(\\d+)/);
+          if (bm) bullets.push(bm[1] + ' bedrooms');
+        }
+        lots.push({ lot: lotNum, address, price, url, imageUrl: imageUrl || undefined, bullets });
+      }
+      return lots;
+    })()
+  `,
+
 };
 
 // ── SHONKI BROTHERS ──
@@ -9343,6 +9478,10 @@ DOM_EXTRACTORS['driversnorris'] = DOM_EXTRACTORS.iamsold;
 DOM_EXTRACTORS['markjenkinson'] = DOM_EXTRACTORS.sdl;
 // Carter Jonas uses Bamboo Auctions platform (same as hunters)
 DOM_EXTRACTORS['carterjonas'] = DOM_EXTRACTORS.hunters;
+// GTH (Greenslade Taylor Hunt) uses Homeflow SPA platform (same as stags)
+DOM_EXTRACTORS['gth'] = DOM_EXTRACTORS.stags;
+// Clee Tompkinson Francis also uses Homeflow (same tag/auction URL pattern)
+DOM_EXTRACTORS['cleetompkinson'] = DOM_EXTRACTORS.stags;
 
 // ─── PROPERTY SOLVERS ──────────────────────────────────────
 // PropertyHive WordPress plugin, single page (no pagination), ~111 lots
@@ -12476,7 +12615,8 @@ async function autoAnalyseOne(url) {
 
     } else {
       // ── Generic auto-paginating extraction ──
-      const firstResult = await scrapeRenderedPage(scrapeUrl, house);
+      const scrapeOpts = rewritten.waitFor ? { waitFor: rewritten.waitFor } : {};
+      const firstResult = await scrapeRenderedPage(scrapeUrl, house, scrapeOpts);
       const domLots = extractWithJSDOM(firstResult.html, house, scrapeUrl, firstResult.images);
       if (domLots && domLots.length >= 3) {
         rawLots.push(...domLots);
@@ -12492,7 +12632,7 @@ async function autoAnalyseOne(url) {
             if (rawLots.length >= MAX_LOTS_PER_SCRAPE) { console.log(`AUTO: ${house}: lot cap reached at ${rawLots.length}`); break; }
             const pageUrl = buildPageUrl(scrapeUrl, p, house);
             try {
-              const pageResult = await scrapeRenderedPage(pageUrl, house);
+              const pageResult = await scrapeRenderedPage(pageUrl, house, scrapeOpts);
               const pageLots = extractWithJSDOM(pageResult.html, house, pageUrl, pageResult.images);
               if (pageLots && pageLots.length > 0) {
                 rawLots.push(...pageLots);
