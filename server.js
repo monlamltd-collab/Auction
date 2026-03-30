@@ -44,7 +44,7 @@ for (const key of RECOMMENDED_ENV) {
 function escHtml(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 
 // URL normalisation — single source of truth for comparing / deduplicating URLs
-const normaliseUrl = u => (u || '').trim().replace(/\/+$/, '').toLowerCase();
+const normaliseUrl = u => (u || '').trim().replace(/\/+$/, '').replace(/^http:\/\//i, 'https://').replace(/^(https:\/\/)www\./i, '$1').toLowerCase();
 
 // ── Stripe feature flag: defaults to false (free-first), set STRIPE_ENABLED=true to reinstate payments ──
 const STRIPE_ENABLED = process.env.STRIPE_ENABLED === 'true';
@@ -3031,10 +3031,10 @@ app.post('/api/analyse', async (req, res) => {
 
   if (cached) {
     console.log(`Cache hit for ${normalisedUrl}`);
-    // Handle both old cached entries (slug like 'savills') and new ones (display name like 'Savills')
+    // cached.house should be a slug; fallback handles legacy display-name entries
     const cachedSlug = HOUSE_DISPLAY_NAMES[cached.house]
       ? cached.house  // cached.house is already a slug
-      : Object.entries(HOUSE_DISPLAY_NAMES).find(([k, v]) => v === cached.house)?.[0] || 'unknown';
+      : Object.entries(HOUSE_DISPLAY_NAMES).find(([k, v]) => v === cached.house)?.[0] || cached.house;
     const cachedDisplayName = HOUSE_DISPLAY_NAMES[cachedSlug] || cached.house;
     const isPremium = userTier === 'premium';
     const gatedLots = isPremium ? cached.lots : stripAIFields(cached.lots || []);
@@ -3409,7 +3409,7 @@ app.post('/api/analyse', async (req, res) => {
 
     await supabase.from('cached_analyses').upsert({
       url: normalisedUrl,
-      house: displayName,
+      house: house,
       total_lots: analysed.length,
       title_splits: analysed.filter(l => l.titleSplit).length,
       top_picks: analysed.filter(l => l.score >= 3).length,
@@ -4419,7 +4419,7 @@ app.post('/api/admin/rescrape', async (req, res) => {
     const { data: deleted } = await supabase
       .from('cached_analyses')
       .delete()
-      .eq('house', HOUSE_DISPLAY_NAMES[house] || house)
+      .eq('house', house)
       .select('url');
     const cleared = deleted ? deleted.length : 0;
 
@@ -5198,6 +5198,27 @@ function detectAuctionHouse(url) {
   if (u.includes('auctionhouse.co.uk/westmidlands')) return 'auctionhousewestmidlands';
   if (u.includes('auctionhouse.co.uk/essex')) return 'auctionhouseessex';
   if (u.includes('auctionhouse.co.uk/manchester')) return 'auctionhousemanchester';
+  // ── Auction House UK regional branches (must come BEFORE generic catch-all) ──
+  if (u.includes('auctionhouse.co.uk/southyorkshire')) return 'auctionhousesouthyorkshire';
+  if (u.includes('auctionhouse.co.uk/westyorkshire')) return 'auctionhousewestyorkshire';
+  if (u.includes('auctionhouse.co.uk/teesvalley')) return 'auctionhouseteesvalley';
+  if (u.includes('auctionhouse.co.uk/hullandeastyorkshire')) return 'auctionhousehull';
+  if (u.includes('auctionhouse.co.uk/cumbria')) return 'auctionhousecumbria';
+  if (u.includes('auctionhouse.co.uk/lincolnshire')) return 'auctionhouselincolnshire';
+  if (u.includes('auctionhouse.co.uk/london')) return 'auctionhouseuklondon';
+  if (u.includes('auctionhouse.co.uk/bedsandbucks')) return 'auctionhousebedsandbucks';
+  if (u.includes('auctionhouse.co.uk/northamptonshire')) return 'auctionhousenorthamptonshire';
+  if (u.includes('auctionhouse.co.uk/oxfordshire')) return 'auctionhouseoxfordshire';
+  if (u.includes('auctionhouse.co.uk/leicestershire')) return 'auctionhouseleicestershire';
+  if (u.includes('auctionhouse.co.uk/midlands')) return 'auctionhousemidlands';
+  if (u.includes('auctionhouse.co.uk/coventryandwarwickshire')) return 'auctionhousecoventry';
+  if (u.includes('auctionhouse.co.uk/nottsandderby')) return 'auctionhousenottsandderby';
+  if (u.includes('auctionhouse.co.uk/chesterfieldandnorthderbyshire')) return 'auctionhousechesterfield';
+  if (u.includes('auctionhouse.co.uk/staffordshire')) return 'auctionhousestaffordshire';
+  if (u.includes('auctionhouse.co.uk/northwales')) return 'auctionhousenorthwales';
+  if (u.includes('auctionhouse.co.uk/southwest')) return 'auctionhousesouthwest';
+  if (u.includes('auctionhouse.co.uk/northernireland')) return 'auctionhousenorthernireland';
+  if (u.includes('auctionhouse.co.uk/national')) return 'auctionhousenational';
   if (u.includes('auctionhouse.co.uk') || u.includes('auctionhouse.uk.net')) return 'auctionhouse';
   if (u.includes('cliveemson')) return 'cliveemson';
   if (u.includes('strettons')) return 'strettons';
@@ -5275,7 +5296,7 @@ function detectAuctionHouse(url) {
   if (u.includes('lot9.eigonlineauctions')) return 'lot9';
   if (u.includes('auction-north.eigonlineauctions')) return 'auctionnorth';
   if (u.includes('bowensonandwatson.eigonlineauctions')) return 'bowensonandwatson';
-  if (u.includes('sheldonbosleyknight')) return 'sheldonbosley';
+  if (u.includes('sheldonbosleyknight') || u.includes('sbkauctions')) return 'sheldonbosley';
   if (u.includes('nationalpropertyauctions.eigonlineauctions')) return 'nationalpropertyauctions';
   // ── Batch 7: Tier 1 expansion ──
   if (u.includes('auctions.symondsandsampson')) return 'symondsandsampson';
@@ -5338,27 +5359,7 @@ function detectAuctionHouse(url) {
   if (u.includes('wrightmarshall.co.uk')) return 'wrightmarshall';
   if (u.includes('hackneyandleigh.co.uk')) return 'hackneyandleigh';
   if (u.includes('onlinepropertyauctionsscotland.co.uk')) return 'onlinepropertyauctionsscotland';
-  // ── Auction House UK regional catch-all ──
-  if (u.includes('auctionhouse.co.uk/southyorkshire')) return 'auctionhousesouthyorkshire';
-  if (u.includes('auctionhouse.co.uk/westyorkshire')) return 'auctionhousewestyorkshire';
-  if (u.includes('auctionhouse.co.uk/teesvalley')) return 'auctionhouseteesvalley';
-  if (u.includes('auctionhouse.co.uk/hullandeastyorkshire')) return 'auctionhousehull';
-  if (u.includes('auctionhouse.co.uk/cumbria')) return 'auctionhousecumbria';
-  if (u.includes('auctionhouse.co.uk/lincolnshire')) return 'auctionhouselincolnshire';
-  if (u.includes('auctionhouse.co.uk/london')) return 'auctionhouseuklondon';
-  if (u.includes('auctionhouse.co.uk/bedsandbucks')) return 'auctionhousebedsandbucks';
-  if (u.includes('auctionhouse.co.uk/northamptonshire')) return 'auctionhousenorthamptonshire';
-  if (u.includes('auctionhouse.co.uk/oxfordshire')) return 'auctionhouseoxfordshire';
-  if (u.includes('auctionhouse.co.uk/leicestershire')) return 'auctionhouseleicestershire';
-  if (u.includes('auctionhouse.co.uk/midlands')) return 'auctionhousemidlands';
-  if (u.includes('auctionhouse.co.uk/coventryandwarwickshire')) return 'auctionhousecoventry';
-  if (u.includes('auctionhouse.co.uk/nottsandderby')) return 'auctionhousenottsandderby';
-  if (u.includes('auctionhouse.co.uk/chesterfieldandnorthderbyshire')) return 'auctionhousechesterfield';
-  if (u.includes('auctionhouse.co.uk/staffordshire')) return 'auctionhousestaffordshire';
-  if (u.includes('auctionhouse.co.uk/northwales')) return 'auctionhousenorthwales';
-  if (u.includes('auctionhouse.co.uk/southwest')) return 'auctionhousesouthwest';
-  if (u.includes('auctionhouse.co.uk/northernireland')) return 'auctionhousenorthernireland';
-  if (u.includes('auctionhouse.co.uk/national')) return 'auctionhousenational';
+  // (Auction House UK branch patterns moved above generic catch-all)
   // ── EIG platform catch-all ──
   if (u.includes('.eigonlineauctions.com') || u.includes('eigpropertyauctions')) return 'eigplatform';
   // ── Bamboo Auctions catch-all ──
@@ -6918,7 +6919,8 @@ const DOM_EXTRACTORS = {
         const loc = card.querySelector('.lot-item__location, [class*="location"]');
         if (loc && loc.textContent.trim()) bullets.push(loc.textContent.trim());
         const statusEl = card.querySelector('.lot-info__status, [class*="status"]');
-        if (statusEl && statusEl.textContent.match(/sold|unsold|withdrawn/i)) bullets.push('SOLD/STC');
+        if (statusEl && statusEl.textContent.match(/sold|unsold|withdrawn/i)) continue;
+        if (text.match(/\\bSOLD\\b|\\bSALE.?AGREED\\b|\\bSTC\\b|\\bWithdrawn\\b|\\bCompleted\\b/i)) continue;
         lots.push({ lot: num, address, price, url, bullets, imageUrl: imageUrl || undefined });
       }
       return lots;
@@ -7075,9 +7077,8 @@ const DOM_EXTRACTORS = {
           const t = el.textContent.trim();
           if (t.length > 10 && t.length < 200 && !t.match(/^Lot|^Guide|^£/i)) bullets.push(t);
         });
-        if (text.match(/\\bSOLD\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) {
-          if (!bullets.some(b => b.match(/SOLD|STC|WITHDRAWN/i))) bullets.push('SOLD/STC');
-        }
+        // Skip sold/completed lots
+        if (text.match(/\\bSOLD\\b|\\bSTC\\b|\\bWithdrawn\\b|\\bCompleted\\b/i)) continue;
         // Image: Clive Emson grid-view cards have data-mainpic (filename) and data-auc (auction number)
         // Full URL pattern: https://www.cliveemson.co.uk/auc{data-auc}/pics/{data-mainpic}
         let imageUrl = '';
@@ -8056,10 +8057,13 @@ const DOM_EXTRACTORS = {
         });
         // Ribbon badge
         const ribbon = card.querySelector('[data-ribbon]');
-        if (ribbon) bullets.push(ribbon.getAttribute('data-ribbon'));
-        if (text.match(/\\bSOLD\\b|\\bSALE.?AGREED\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) {
-          if (!bullets.some(b => b.match(/SOLD|STC|WITHDRAWN|SALE AGREED/i))) bullets.push('SOLD/STC');
+        if (ribbon) {
+          const ribbonText = ribbon.getAttribute('data-ribbon') || '';
+          if (/sold|completed|exchanged/i.test(ribbonText)) continue;
+          bullets.push(ribbonText);
         }
+        // Skip sold/completed lots — EIG /search includes historical
+        if (text.match(/\\bSOLD\\b|\\bSALE.?AGREED\\b|\\bSTC\\b|\\bWithdrawn\\b|\\bCompleted\\b|\\bExchanged\\b/i)) continue;
         lots.push({ lot: lotIndex++, address, price, url, bullets, imageUrl: imageUrl || undefined });
       }
       return lots;
@@ -8278,7 +8282,10 @@ const DOM_EXTRACTORS = {
         if (img) imageUrl = img.getAttribute('src') || '';
         const bullets = [];
         const _ft = card.textContent || '';
-        if (_ft.match(/\\bSOLD\\b|\\bSALE.?AGREED\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) bullets.push('SOLD/STC');
+        // Skip sold/completed lots entirely — EIG /search includes historical
+        if (_ft.match(/\\bSOLD\\b|\\bSALE.?AGREED\\b|\\bSTC\\b|\\bWithdrawn\\b|\\bCompleted\\b|\\bExchanged\\b/i)) continue;
+        const ribbon = card.querySelector('[data-ribbon]');
+        if (ribbon && /sold|completed|exchanged/i.test(ribbon.getAttribute('data-ribbon') || '')) continue;
         lots.push({ lot: lotIndex++, address, price, url, bullets, imageUrl: imageUrl || undefined });
       }
       return lots;
@@ -8511,7 +8518,14 @@ const DOM_EXTRACTORS = {
         }
         lots.push({ lot: lotNum, address, price, url, bullets, imageUrl: imageUrl || undefined });
       }
-      return lots;
+      // Deduplicate by address (Elementor repeaters duplicate cards)
+      const seen = new Set();
+      return lots.filter(l => {
+        const key = l.address.toLowerCase().replace(/\\s+/g, ' ');
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
     })()
   `,
 
@@ -8571,8 +8585,11 @@ const DOM_EXTRACTORS = {
         if (img) imageUrl = img.getAttribute('src') || img.dataset.src || '';
         const bullets = [];
         const ribbon = card.querySelector('[data-ribbon]');
-        if (ribbon) { const r = ribbon.getAttribute('data-ribbon'); if (r) bullets.push(r); }
-        else if (text.match(/\\bSOLD\\b|\\bSALE.?AGREED\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) bullets.push('SOLD/STC');
+        if (ribbon) {
+          const r = ribbon.getAttribute('data-ribbon') || '';
+          if (/sold|completed|exchanged/i.test(r)) continue;
+          if (r) bullets.push(r);
+        } else if (text.match(/\\bSOLD\\b|\\bSALE.?AGREED\\b|\\bSTC\\b|\\bWithdrawn\\b|\\bCompleted\\b|\\bExchanged\\b/i)) continue;
         lots.push({ lot: num, address: address.substring(0, 200), price, url, bullets, imageUrl: imageUrl || undefined });
       }
       return lots;
@@ -8605,8 +8622,11 @@ const DOM_EXTRACTORS = {
         let imageUrl = '';
         const img = card.querySelector('img.lot-image, img[loading="lazy"]');
         if (img) imageUrl = img.getAttribute('src') || img.dataset.src || '';
+        // Skip sold/completed lots — search results include historical
+        if (text.match(/\\bSOLD\\b|\\bSALE.?AGREED\\b|\\bSTC\\b|\\bWithdrawn\\b|\\bCompleted\\b|\\bExchanged\\b/i)) continue;
+        const ribbon = card.querySelector('.lot-tag, .ribbon, [data-ribbon]');
+        if (ribbon && /sold|completed|exchanged/i.test(ribbon.textContent || ribbon.getAttribute('data-ribbon') || '')) continue;
         const bullets = [];
-        if (text.match(/\\bSOLD\\b|\\bSALE.?AGREED\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) bullets.push('SOLD/STC');
         lots.push({ lot: num, address: address.substring(0, 200), price, url, bullets, imageUrl: imageUrl || undefined });
       }
       return lots;
@@ -8645,7 +8665,7 @@ const DOM_EXTRACTORS = {
         const tagline = card.querySelector('.property-card__additional-meta__tagline');
         if (tagline) bullets.push(tagline.textContent.trim().substring(0, 200));
         const soldFlag = card.querySelector('.property-card__sold-flag');
-        if (soldFlag || text.match(/\\bSOLD\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) bullets.push('SOLD/STC');
+        if (soldFlag || text.match(/\\bSOLD\\b|\\bSTC\\b|\\bWithdrawn\\b|\\bCompleted\\b/i)) continue;
         lots.push({ lot: lotNum, address: address.substring(0, 200), price, url, bullets, imageUrl: imageUrl || undefined });
       }
       return lots;
@@ -12660,7 +12680,7 @@ async function autoAnalyseOne(url) {
 
   await supabase.from('cached_analyses').upsert({
     url: normalisedUrl,
-    house: HOUSE_DISPLAY_NAMES[house] || house,
+    house: house,
     total_lots: newTotalLots,
     title_splits: newTitleSplits,
     top_picks: newTopPicks,
