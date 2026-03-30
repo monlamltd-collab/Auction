@@ -344,34 +344,36 @@ function analyseLot(raw) {
 
   // ── SCORING ──
   let s = 0;
-  if (L.condition === 'needs work') { s += 2; L.opps.push('Needs modernisation'); }
-  if (L.condition === 'poor') { s += 2.5; L.opps.push('Poor condition'); }
-  if (executor) { s += 1.5; L.opps.push('Executor/probate'); }
-  if (receivership) { s += 2; L.opps.push('Receivership'); }
-  if (devP) { s += 2; L.opps.push('Development potential'); }
-  if (extP) { s += 1.5; L.opps.push('Extension/HMO potential'); }
-  if (L.vacant && ['house', 'bungalow', 'flat', 'land'].includes(L.propType)) { s += 1; L.opps.push('Vacant'); }
-  if (L.tenure === 'Freehold' && ['house', 'bungalow'].includes(L.propType)) { s += 0.5; L.opps.push('Freehold'); }
-  if (L.sqft && L.price) { const p = L.price / L.sqft; if (p < 200) { s += 2; L.opps.push(`£${Math.round(p)}/sqft`); } else if (p < 300) { s += 1; L.opps.push(`£${Math.round(p)}/sqft`); } }
+  const sb = []; // scoreBreakdown: tracks each signal's contribution
+  if (L.condition === 'needs work') { s += 2; sb.push({ signal: 'Needs modernisation', pts: 2 }); L.opps.push('Needs modernisation'); }
+  if (L.condition === 'poor') { s += 2.5; sb.push({ signal: 'Poor condition', pts: 2.5 }); L.opps.push('Poor condition'); }
+  if (executor) { s += 1.5; sb.push({ signal: 'Executor/probate', pts: 1.5 }); L.opps.push('Executor/probate'); }
+  if (receivership) { s += 2; sb.push({ signal: 'Receivership', pts: 2 }); L.opps.push('Receivership'); }
+  if (devP) { s += 2; sb.push({ signal: 'Development potential', pts: 2 }); L.opps.push('Development potential'); }
+  if (extP) { s += 1.5; sb.push({ signal: 'Extension/HMO potential', pts: 1.5 }); L.opps.push('Extension/HMO potential'); }
+  if (L.vacant && ['house', 'bungalow', 'flat', 'land'].includes(L.propType)) { s += 1; sb.push({ signal: 'Vacant', pts: 1 }); L.opps.push('Vacant'); }
+  if (L.tenure === 'Freehold' && ['house', 'bungalow'].includes(L.propType)) { s += 0.5; sb.push({ signal: 'Freehold', pts: 0.5 }); L.opps.push('Freehold'); }
+  if (L.sqft && L.price) { const p = L.price / L.sqft; if (p < 200) { s += 2; sb.push({ signal: `£${Math.round(p)}/sqft`, pts: 2 }); L.opps.push(`£${Math.round(p)}/sqft`); } else if (p < 300) { s += 1; sb.push({ signal: `£${Math.round(p)}/sqft`, pts: 1 }); L.opps.push(`£${Math.round(p)}/sqft`); } }
 
   // Yield
   const rm = t.match(/(?:let\s+at|rent\s+of|income\s+of|producing)\s+£?([\d,]+)\s*(?:p\.?a|per\s*annum)/);
   if (rm && L.price) { const rent = parseInt(rm[1].replace(/,/g, '')); const gy = (rent / L.price) * 100;
-    if (gy > 8) { s += 2.5; L.opps.push(`${gy.toFixed(1)}% GIY`); } else if (gy > 6) { s += 1.5; L.opps.push(`${gy.toFixed(1)}% GIY`); } }
+    if (gy > 8) { s += 2.5; sb.push({ signal: `${gy.toFixed(1)}% GIY`, pts: 2.5 }); L.opps.push(`${gy.toFixed(1)}% GIY`); } else if (gy > 6) { s += 1.5; sb.push({ signal: `${gy.toFixed(1)}% GIY`, pts: 1.5 }); L.opps.push(`${gy.toFixed(1)}% GIY`); } }
 
-  if (/(?:4|5|6)\s*week\s*completion|six week/.test(t)) { s += 0.5; L.opps.push('Quick completion'); }
-  if (/by order of/.test(t) && !executor && !receivership) { s += 0.5; L.opps.push('Motivated seller'); }
-  if (L.titleSplit) { s += 1; L.opps.push(`Title split (${L.units} units)`); }
+  if (/(?:4|5|6)\s*week\s*completion|six week/.test(t)) { s += 0.5; sb.push({ signal: 'Quick completion', pts: 0.5 }); L.opps.push('Quick completion'); }
+  if (/by order of/.test(t) && !executor && !receivership) { s += 0.5; sb.push({ signal: 'Motivated seller', pts: 0.5 }); L.opps.push('Motivated seller'); }
+  if (L.titleSplit) { s += 1; sb.push({ signal: `Title split (${L.units} units)`, pts: 1 }); L.opps.push(`Title split (${L.units} units)`); }
 
   // Risks
-  if (/sitting tenant/.test(t)) { s -= 2; L.risks.push('Sitting tenant'); }
-  if (/knotweed/.test(t)) { s -= 2; L.risks.push('Knotweed'); }
-  if (/flying freehold/.test(t)) { s -= 1; L.risks.push('Flying freehold'); }
-  if (/non[- ]?standard|timber frame|prefab|prc/.test(t)) { s -= 1; L.risks.push('Non-std construction'); }
-  if (/flood risk|flood zone/.test(t)) { s -= 1; L.risks.push('Flood risk'); }
-  if (/asbestos|contamination/.test(t)) { s -= 1; L.risks.push('Contamination'); }
+  if (/sitting tenant/.test(t)) { s -= 2; sb.push({ signal: 'Sitting tenant', pts: -2 }); L.risks.push('Sitting tenant'); }
+  if (/knotweed/.test(t)) { s -= 2; sb.push({ signal: 'Knotweed', pts: -2 }); L.risks.push('Knotweed'); }
+  if (/flying freehold/.test(t)) { s -= 1; sb.push({ signal: 'Flying freehold', pts: -1 }); L.risks.push('Flying freehold'); }
+  if (/non[- ]?standard|timber frame|prefab|prc/.test(t)) { s -= 1; sb.push({ signal: 'Non-std construction', pts: -1 }); L.risks.push('Non-std construction'); }
+  if (/flood risk|flood zone/.test(t)) { s -= 1; sb.push({ signal: 'Flood risk', pts: -1 }); L.risks.push('Flood risk'); }
+  if (/asbestos|contamination/.test(t)) { s -= 1; sb.push({ signal: 'Contamination', pts: -1 }); L.risks.push('Contamination'); }
   if (/grade ii|listed/.test(t)) L.risks.push('Listed building');
   if (!L.price) L.risks.push('Guide TBA');
+  L.scoreBreakdown = sb;
 
   // Deal type
   if (devP) L.dealType = 'Development';
@@ -381,6 +383,6 @@ function analyseLot(raw) {
   else if (executor || receivership) L.dealType = 'Motivated';
   else L.dealType = 'Standard';
 
-  L.score = Math.round(s * 10) / 10;
+  L.score = Math.max(0, Math.min(10, Math.round(s * 10) / 10));
   return L;
 }

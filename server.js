@@ -8322,8 +8322,26 @@ const DOM_EXTRACTORS = {
       const lots = [];
       // Strategy 1: lot-panel cards (grid/list view)
       let cards = document.querySelectorAll('.lot-panel');
-      if (cards.length === 0) cards = document.querySelectorAll('a[href*="/lot/details/"]');
       if (cards.length === 0) cards = document.querySelectorAll('[data-lot-item-toggle]');
+      // Strategy 2: find lot links, dedupe by href, walk up to parent container
+      if (cards.length === 0) {
+        const links = document.querySelectorAll('a[href*="/lot/details/"]');
+        const seen = new Set();
+        const containers = [];
+        for (const a of links) {
+          const href = a.getAttribute('href');
+          if (!href || seen.has(href)) continue;
+          seen.add(href);
+          // Walk up to find the lot container — try grandparent or great-grandparent
+          let container = a.parentElement;
+          // Keep walking up while container has little text (probably just wraps the link)
+          for (let i = 0; i < 3 && container && container.textContent.length < 50; i++) {
+            container = container.parentElement;
+          }
+          if (container) containers.push(container);
+        }
+        cards = containers;
+      }
       for (const card of cards) {
         const text = card.textContent || '';
         if (text.length < 10) continue;
@@ -8335,7 +8353,8 @@ const DOM_EXTRACTORS = {
         let address = '';
         const addrEl = card.querySelector('h3.list-address') || card.querySelector('h4.grid-address')
           || card.querySelector('.lot-address') || card.querySelector('[data-address-searchable]')
-          || card.querySelector('h4.lot-data-heading');
+          || card.querySelector('h4.lot-data-heading')
+          || card.querySelector('h3') || card.querySelector('h4');
         if (addrEl) address = addrEl.textContent.trim().replace(/\\u00a0/g, ' ');
         if (!address) {
           const lines = text.split('\\n').map(s => s.trim()).filter(s => s.length > 5 && s.length < 200);
@@ -9589,6 +9608,7 @@ async function enrichLotsFromLotPages(lots, concurrency = 5) {
             lot.opps = lot.opps || []; lot.opps.push('Freehold');
             lot.scoreBreakdown = lot.scoreBreakdown || [];
             lot.scoreBreakdown.push({ signal: 'Freehold house', pts: 0.5 });
+            lot.score = Math.max(0, Math.min(10, Math.round(lot.score * 10) / 10));
           }
         }
 
@@ -9620,11 +9640,13 @@ async function enrichLotsFromLotPages(lots, concurrency = 5) {
             lot.opps = lot.opps || []; lot.opps.push('Needs modernisation');
             lot.scoreBreakdown = lot.scoreBreakdown || [];
             lot.scoreBreakdown.push({ signal: 'Needs modernisation', pts: 2.0 });
+            lot.score = Math.max(0, Math.min(10, Math.round(lot.score * 10) / 10));
           } else if ((lot.condition === 'poor' || lot.condition === 'derelict') && !(lot.opps || []).includes('Poor condition')) {
             lot.score = (lot.score || 0) + 2.5;
             lot.opps = lot.opps || []; lot.opps.push('Poor condition');
             lot.scoreBreakdown = lot.scoreBreakdown || [];
             lot.scoreBreakdown.push({ signal: 'Poor/derelict condition', pts: 2.5 });
+            lot.score = Math.max(0, Math.min(10, Math.round(lot.score * 10) / 10));
           }
         }
 
