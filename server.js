@@ -1032,8 +1032,8 @@ const HOUSE_ROOTS = {
   bradleyhall:        'https://auction.bradleyhall.co.uk/',
   connectuk:          'https://connectukgroup.co.uk/auctions/',
   auctionestates:     'https://www.auctionestates.co.uk/view-properties',
-  landwood:           'https://www.landwoodpropertyauctions.com/',
-  loveitts:           'https://www.loveitts.co.uk/auction/',
+  landwood:           'https://www.landwoodpropertyauctions.com/future-auctions?showall=true',
+  loveitts:           'https://www.eigpropertyauctions.co.uk/live-stream/auction/loveitts',
   hunters:            'https://hunters.bambooauctions.com',
   probateauction:     'https://probate.auction/auctions/',
   // ── New houses ──
