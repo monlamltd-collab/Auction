@@ -1157,7 +1157,7 @@ const HOUSE_ROOTS = {
   brggibsondublin:        'https://brggibsondublinauctions.eigonlineauctions.com/search',
   // ── Batch 8: Comprehensive UK coverage (March 2026) ──
   // National / Online
-  propertysolvers:        'https://auctions.propertysolvers.co.uk/properties',
+  propertysolvers:        'https://auctions.propertysolvers.co.uk/auction-property-for-sale/',
   pugh:                   'https://www.pugh-auctions.com/property-search?include-sold=off',
   markjenkinson:          'https://www.btgeddisonspropertyauctions.com/properties/',
   regionalauctioneers:    'https://www.regionalpropertyauctioneers.co.uk/properties',
@@ -3111,13 +3111,12 @@ app.post('/api/analyse', async (req, res) => {
       log.info('pdf_detected', { url, house });
       rawLots = await extractLotsFromPdf(url);
     } else if (rewritten.paginateAs === 'allsop_api') {
-      // Allsop API: paginate through JSON endpoint
+      // Allsop API: parse JSON directly (no Gemini needed)
       pages = await scrapeAllsopApi(rewritten.baseUrl);
       sseWrite(res, 'scrape', { pages: pages.length });
       if (pages.length > 0) {
         sseWrite(res, 'phase', { step: 'extracting' });
-        rawLots = await extractLotsWithAI(pages, house, onExtract, scrapeUrl);
-        enrichAllsopLots(rawLots, pages);
+        rawLots = extractAllsopLotsFromJson(pages);
       }
     } else if (rewritten.preferPuppeteer) {
       // JS-rendered sites: use Firecrawl+JSDOM (primary) or Puppeteer (fallback)
@@ -3191,6 +3190,39 @@ app.post('/api/analyse', async (req, res) => {
             }
           }
           console.log(`SDL total: ${rawLots.length} lots via DOM extraction`);
+
+        } else if (rewritten.paginateAs === 'pugh_pages') {
+          // Pugh: server-rendered Laravel — plain HTTP + JSDOM (no Firecrawl needed)
+          console.log(`Loading paginated Pugh catalogue (plain HTTP)...`);
+          const pughHtml1 = await fetchPage(scrapeUrl);
+          const pughPage1Lots = extractWithJSDOM(pughHtml1, house, scrapeUrl);
+          if (pughPage1Lots && pughPage1Lots.length > 0) rawLots.push(...pughPage1Lots);
+          console.log(`Pugh Page 1: ${pughPage1Lots ? pughPage1Lots.length : 0} lots`);
+
+          // Detect total pages from first page HTML
+          const pughTotalPages = detectTotalPages(pughHtml1, scrapeUrl, house);
+          const pughMaxPages = Math.min(pughTotalPages, 65);
+          console.log(`Pugh: detected ${pughTotalPages} pages, loading up to ${pughMaxPages}`);
+
+          for (let p = 2; p <= pughMaxPages; p++) {
+            const pageUrl = buildPageUrl(scrapeUrl, p, house);
+            try {
+              const pageHtml = await fetchPage(pageUrl);
+              const pageLots = extractWithJSDOM(pageHtml, house, pageUrl);
+              if (pageLots && pageLots.length > 0) {
+                rawLots.push(...pageLots);
+                if (p % 10 === 0) console.log(`Pugh Page ${p}: ${pageLots.length} lots (total so far: ${rawLots.length})`);
+              } else {
+                console.log(`Pugh Page ${p}: 0 lots — stopping pagination`);
+                break;
+              }
+              await new Promise(r => setTimeout(r, 200));
+            } catch (e) {
+              console.log(`Pugh Page ${p} failed: ${e.message}`);
+              break;
+            }
+          }
+          console.log(`Pugh total: ${rawLots.length} lots via DOM extraction`);
 
         } else {
           // ── Generic extraction with auto-pagination ──
@@ -5147,7 +5179,7 @@ function detectAuctionHouse(url) {
   if (u.includes('savills')) return 'savills';
   if (u.includes('allsop')) return 'allsop';
   if (u.includes('btgeddisonspropertyauctions') || u.includes('btgeddisons')) return 'sdl';
-  if (u.includes('pugh-auctions')) return 'sdl'; // Pugh merged into BTG Eddisons/SDL
+  if (u.includes('pugh-auctions')) return 'pugh';
   if (u.includes('sdlauctions')) return 'sdl';
   if (u.includes('networkauctions')) return 'network';
   if (u.includes('bondwolfe')) return 'bondwolfe';
@@ -5190,7 +5222,7 @@ function detectAuctionHouse(url) {
   if (u.includes('hunters.com') || u.includes('bambooauctions.com')) return 'hunters';
   if (u.includes('probate.auction') || u.includes('timedauctions.probate.auction')) return 'probateauction';
   if (u.includes('auctionhouselondon')) return 'auctionhouselondon';
-  if (u.includes('pughauctions') || u.includes('pugh')) return 'sdl';
+  if (u.includes('pughauctions') || u.includes('pugh')) return 'pugh';
   // ── New houses ──
   if (u.includes('suttonkersh')) return 'suttonkersh';
   if (u.includes('countrywidepropertyauctions')) return 'countrywide';
@@ -5537,6 +5569,13 @@ async function rewriteUrl(url, house) {
     }
   }
 
+  if (house === 'pugh') {
+    // Pugh: server-rendered Laravel, paginated with ?page=N, 20 lots/page
+    // Use preferPuppeteer path so DOM extractor is tried first (avoids Gemini waste)
+    // scrapeRenderedPage will fall back to plain HTTP since it's server-rendered
+    return { baseUrl: url, isApi: false, paginateAs: 'pugh_pages', preferPuppeteer: true };
+  }
+
   if (house === 'bondwolfe') {
     // Bond Wolfe: /auctions/properties/ or /auction/3448/ → JS-rendered, needs Puppeteer
     if (u.includes('/auction/') || u.includes('/auctions/properties')) {
@@ -5783,6 +5822,75 @@ async function scrapeAllsopApi(baseUrl) {
   return pages;
 }
 
+// Parse Allsop JSON API pages directly into lot objects (bypasses Gemini entirely)
+function extractAllsopLotsFromJson(pages) {
+  const lots = [];
+  const seen = new Set();
+  for (const p of pages) {
+    try {
+      const json = JSON.parse(p.html);
+      const results = json?.data?.results || json?.results || [];
+      for (const item of results) {
+        const ref = item.reference || '';
+        if (seen.has(ref) && ref) continue;
+        if (ref) seen.add(ref);
+
+        // Address — prefer full_address, fall back to allsop_address or address1+postcode
+        const address = (item.full_address || item.allsop_address ||
+          [item.address1, item.address2, item.address3, item.county, item.postcode].filter(Boolean).join(', ')
+        ).trim();
+        if (!address || address.length < 3) continue;
+
+        // Lot number
+        const lotNum = parseInt(item.lot_number) || lots.length + 1;
+
+        // Price — parse guide_price_text or guide_price
+        let price = null;
+        const priceText = item.guide_price_text || item.guide_price || '';
+        const pm = String(priceText).replace(/,/g, '').match(/(\d+)/);
+        if (pm) price = parseInt(pm[1]);
+
+        // URL
+        const slug = (address.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')).substring(0, 60);
+        const url = ref ? `https://www.allsop.co.uk/lot-overview/${slug}/${ref}`
+                       : `https://www.allsop.co.uk/find-a-property/`;
+
+        // Image — S3 bucket pattern
+        let imageUrl = '';
+        const imgId = item.featured_image_file_id || item.image_file_id;
+        if (imgId) {
+          imageUrl = `https://as-prod-bau-object-storage.s3.eu-west-2.amazonaws.com/image_cache/${imgId}---auto--.jpg`;
+        }
+
+        // Bullets
+        const bullets = [];
+        if (item.property_tenure) bullets.push(item.property_tenure);
+        if (item.yield) bullets.push(`Yield: ${item.yield}%`);
+        if (item.lot_type) bullets.push(item.lot_type);
+        if (item.status && item.status !== 'available') bullets.push(item.status.toUpperCase());
+        if (item.auction_date) bullets.push(`Auction: ${item.auction_date}`);
+
+        lots.push({
+          lot: lotNum,
+          address,
+          price,
+          url,
+          imageUrl: imageUrl || undefined,
+          bullets,
+          reference: ref,
+          allsopPropertyId: item.allsop_property_id || item.property_id,
+          propType: item.property_type || undefined,
+          tenure: item.property_tenure || undefined,
+        });
+      }
+    } catch (e) {
+      console.log(`Allsop JSON parse error on page ${p.page}: ${e.message}`);
+    }
+  }
+  console.log(`Allsop direct JSON extraction: ${lots.length} lots from ${pages.length} pages`);
+  return lots;
+}
+
 // Enrich Allsop lots with reference and image data from raw API JSON
 function enrichAllsopLots(lots, pages) {
   // Parse all API results from raw JSON pages
@@ -5894,6 +6002,7 @@ function buildPageUrl(baseUrl, page, house) {
     case 'savills': return `${clean}/page-${page}`;
     case 'allsop': return `${clean}?page=${page}`;
     case 'sdl': return clean.includes('?') ? `${clean}&page=${page}` : `${clean}?page=${page}`;
+    case 'pugh': return clean.includes('?') ? `${clean}&page=${page}` : `${clean}?page=${page}`;
     case 'network': return `${clean}?page=${page}`;
     case 'bondwolfe': return clean.includes('?') ? `${clean}&page=${page}` : `${clean}?page=${page}`;
     case 'barnardmarcus': return clean.includes('?') ? `${clean}&page=${page}` : `${clean}?page=${page}`;
@@ -9212,6 +9321,121 @@ DOM_EXTRACTORS['driversnorris'] = DOM_EXTRACTORS.iamsold;
 DOM_EXTRACTORS['markjenkinson'] = DOM_EXTRACTORS.sdl;
 // Carter Jonas uses Bamboo Auctions platform (same as hunters)
 DOM_EXTRACTORS['carterjonas'] = DOM_EXTRACTORS.hunters;
+
+// ─── PROPERTY SOLVERS ──────────────────────────────────────
+// PropertyHive WordPress plugin, single page (no pagination), ~111 lots
+DOM_EXTRACTORS['propertysolvers'] = `
+  (() => {
+    const lots = [];
+    const seen = new Set();
+    // PropertyHive: lot cards inside .phive-results container
+    const cards = document.querySelectorAll('.phive-results .row.property, .property-results .row.property, .propertyhive-property');
+    let idx = 1;
+    for (const card of cards) {
+      // Address from h3 link inside details
+      const addrLink = card.querySelector('.phive-details-inner h3 a, .details h3 a, h3 a');
+      const address = addrLink ? addrLink.textContent.trim() : '';
+      if (!address || address.length < 5) { idx++; continue; }
+      // Lot detail URL
+      const url = addrLink ? addrLink.getAttribute('href') || '' : '';
+      if (seen.has(url)) continue;
+      seen.add(url);
+      // Price — strip qualifier spans, extract £ amount
+      const priceEl = card.querySelector('.phive-details-inner .price, .details .price, .price');
+      let price = null;
+      if (priceEl) {
+        const priceText = priceEl.textContent.replace(/\\s+/g, ' ').trim();
+        const pm = priceText.match(/£([\\d,]+)/);
+        if (pm) price = parseInt(pm[1].replace(/,/g, ''));
+      }
+      // Image from thumbnail
+      const img = card.querySelector('.phive-thumb img, .thumbnail img, img[src]');
+      let imageUrl = '';
+      if (img) {
+        imageUrl = img.getAttribute('src') || img.getAttribute('data-src') || '';
+      }
+      // Bullets from CSS class metadata
+      const bullets = [];
+      const classList = card.className || '';
+      if (/tenure-freehold/i.test(classList)) bullets.push('Freehold');
+      if (/tenure-leasehold/i.test(classList)) bullets.push('Leasehold');
+      if (/sale_by-unconditional/i.test(classList)) bullets.push('Unconditional');
+      if (/sale_by-conditional/i.test(classList)) bullets.push('Conditional');
+      if (/availability-sold/i.test(classList) || card.textContent.match(/\\bSOLD\\b|\\bSTC\\b/i)) bullets.push('SOLD/STC');
+      lots.push({ lot: idx, address, price, url, imageUrl: imageUrl || undefined, bullets });
+      idx++;
+    }
+    return lots;
+  })()
+`;
+// ─── PUGH AUCTIONS ─────────────────────────────────────────
+// Server-rendered Laravel, Tailwind CSS. ~1,193 lots across 60 pages.
+// Part of BTG/SDL family but has own frontend with different selectors.
+DOM_EXTRACTORS['pugh'] = `
+  (() => {
+    const lots = [];
+    const seen = new Set();
+    // Pugh: property cards in grid layout
+    const cards = document.querySelectorAll('div.grid > div.h-full.mb-8, div.grid > div.h-full, .property-card, div[class*="property"]');
+    let idx = 1;
+    for (const card of cards) {
+      const text = card.textContent || '';
+      // Address from bold link inside card
+      const addrLink = card.querySelector('div.text-white.uppercase.text-lg.font-bold a.block, div.uppercase a, h3 a, h2 a, a[href*="/property/"]');
+      let address = addrLink ? addrLink.textContent.trim() : '';
+      // Fallback: first link with substantial text
+      if (!address) {
+        const links = card.querySelectorAll('a');
+        for (const lnk of links) {
+          const t = lnk.textContent.trim();
+          if (t.length > 10 && !t.match(/^(View|More|See|Back|Next|Previous)/i)) { address = t; break; }
+        }
+      }
+      if (!address || address.length < 5) { idx++; continue; }
+      // Lot URL
+      let url = '';
+      if (addrLink) url = addrLink.getAttribute('href') || '';
+      if (!url) {
+        const anyLink = card.querySelector('a[href*="/property/"]');
+        if (anyLink) url = anyLink.getAttribute('href') || '';
+      }
+      if (seen.has(url) && url) { idx++; continue; }
+      if (url) seen.add(url);
+      // Lot number from text
+      const lotMatch = text.match(/Lot\\s*(?:No\\.?)?\\s*(\\d+)/i);
+      const lotNum = lotMatch ? parseInt(lotMatch[1]) : idx;
+      // Price from bold span
+      let price = null;
+      const priceEl = card.querySelector('p.text-secondary span.text-xl, span.text-xl, .price');
+      if (priceEl) {
+        const pm = priceEl.textContent.match(/£([\\d,]+)/);
+        if (pm) price = parseInt(pm[1].replace(/,/g, ''));
+      }
+      if (!price) {
+        const pm = text.match(/(?:Guide|Price)[^£]*£([\\d,]+)/i) || text.match(/£([\\d,]+)/);
+        if (pm) price = parseInt(pm[1].replace(/,/g, ''));
+      }
+      // Image — BTG Eddisons CDN or local
+      let imageUrl = '';
+      const img = card.querySelector('img[src]');
+      if (img) {
+        const s = img.getAttribute('src') || img.getAttribute('data-src') || '';
+        if (s && s.length > 10 && !/logo|icon|placeholder|\\.svg/i.test(s)) imageUrl = s;
+      }
+      // Bullets — auction type, status
+      const bullets = [];
+      if (/\\bWithdrawn\\b|\\bSOLD\\b|\\bSTC\\b|\\bSale Agreed\\b/i.test(text)) bullets.push('SOLD/STC');
+      if (/Timed\\s*Auction/i.test(text)) bullets.push('Timed Auction');
+      if (/Live\\s*(Stream)?\\s*Auction/i.test(text)) bullets.push('Live Auction');
+      const dateMatch = text.match(/(\\d{1,2}(?:st|nd|rd|th)?\\s+\\w+\\s+\\d{4})/i);
+      if (dateMatch) bullets.push(dateMatch[1]);
+      lots.push({ lot: lotNum, address, price, url, imageUrl: imageUrl || undefined, bullets });
+      idx++;
+    }
+    return lots;
+  })()
+`;
+
 // Wire up Auction House UK branches to the shared auctionhouseuk extractor
 for (const slug of ['auctionhousescotland', 'austingray', 'auctionhouseeastanglia', 'auctionhousenorthwest', 'auctionhousenortheast', 'auctionhousewales', 'auctionhousebirmingham', 'auctionhousekent', 'auctionhousedevon', 'auctionhouseeastmidlands', 'auctionhousewestmidlands', 'auctionhouseessex', 'auctionhousemanchester', 'auctionhousesouthyorkshire', 'auctionhousewestyorkshire', 'auctionhouseteesvalley', 'auctionhousehull', 'auctionhousecumbria', 'auctionhouselincolnshire', 'auctionhouseuklondon', 'auctionhousebedsandbucks', 'auctionhousenorthamptonshire', 'auctionhouseoxfordshire', 'auctionhouseleicestershire', 'auctionhousemidlands', 'auctionhousecoventry', 'auctionhousenottsandderby', 'auctionhousechesterfield', 'auctionhousestaffordshire', 'auctionhousenorthwales', 'auctionhousesouthwest', 'auctionhousenorthernireland', 'auctionhousenational']) {
   DOM_EXTRACTORS[slug] = DOM_EXTRACTORS.auctionhouseuk;
@@ -12137,11 +12361,8 @@ async function autoAnalyseOne(url) {
 
   if (rewritten.paginateAs === 'allsop_api') {
     const pages = await scrapeAllsopApi(rewritten.baseUrl);
-    if (pages.length > 0 && !creditExhausted) {
-      rawLots = await extractLotsWithAI(pages, house, null, scrapeUrl);
-      enrichAllsopLots(rawLots, pages);
-    } else if (pages.length > 0) {
-      console.log(`AUTO: ${house}: Gemini exhausted — skipping Allsop AI extraction`);
+    if (pages.length > 0) {
+      rawLots = extractAllsopLotsFromJson(pages);
     }
 
   } else if (rewritten.preferPuppeteer) {
@@ -12202,6 +12423,34 @@ async function autoAnalyseOne(url) {
         } catch (e) { console.log(`AUTO: SDL Page ${p} failed: ${e.message}`); break; }
       }
       console.log(`AUTO: SDL total: ${rawLots.length} lots`);
+
+    } else if (rewritten.paginateAs === 'pugh_pages') {
+      // Pugh: server-rendered — plain HTTP + JSDOM (saves Firecrawl credits)
+      console.log(`AUTO: Loading paginated Pugh catalogue (plain HTTP)...`);
+      const pughHtml1 = await fetchPage(scrapeUrl);
+      const pughPage1Lots = extractWithJSDOM(pughHtml1, house, scrapeUrl);
+      if (pughPage1Lots && pughPage1Lots.length > 0) rawLots.push(...pughPage1Lots);
+      console.log(`AUTO: Pugh Page 1: ${pughPage1Lots ? pughPage1Lots.length : 0} lots`);
+
+      const pughTotalPages = detectTotalPages(pughHtml1, scrapeUrl, house);
+      const pughMaxPages = Math.min(pughTotalPages, 65);
+      for (let p = 2; p <= pughMaxPages; p++) {
+        if (rawLots.length >= MAX_LOTS_PER_SCRAPE) { console.log(`AUTO: Pugh lot cap at ${rawLots.length}`); break; }
+        const pageUrl = buildPageUrl(scrapeUrl, p, house);
+        try {
+          const pageHtml = await fetchPage(pageUrl);
+          const pageLots = extractWithJSDOM(pageHtml, house, pageUrl);
+          if (pageLots && pageLots.length > 0) {
+            rawLots.push(...pageLots);
+            if (p % 10 === 0) console.log(`AUTO: Pugh Page ${p}: ${pageLots.length} lots (total: ${rawLots.length})`);
+          } else {
+            console.log(`AUTO: Pugh Page ${p}: 0 lots — stopping`);
+            break;
+          }
+          await new Promise(r => setTimeout(r, 200));
+        } catch (e) { console.log(`AUTO: Pugh Page ${p} failed: ${e.message}`); break; }
+      }
+      console.log(`AUTO: Pugh total: ${rawLots.length} lots`);
 
     } else {
       // ── Generic auto-paginating extraction ──
