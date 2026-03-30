@@ -9376,7 +9376,7 @@ DOM_EXTRACTORS['pugh'] = `
     const lots = [];
     const seen = new Set();
     // Pugh: property cards in grid layout
-    const cards = document.querySelectorAll('div.grid > div.h-full.mb-8, div.grid > div.h-full, .property-card, div[class*="property"]');
+    const cards = document.querySelectorAll('div.grid > div.h-full.mb-8, div.grid > div.h-full');
     let idx = 1;
     for (const card of cards) {
       const text = card.textContent || '';
@@ -9396,7 +9396,7 @@ DOM_EXTRACTORS['pugh'] = `
       let url = '';
       if (addrLink) url = addrLink.getAttribute('href') || '';
       if (!url) {
-        const anyLink = card.querySelector('a[href*="/property/"]');
+        const anyLink = card.querySelector('a[href*="/property/"], a[href*="pugh-auctions.com/property"]');
         if (anyLink) url = anyLink.getAttribute('href') || '';
       }
       if (seen.has(url) && url) { idx++; continue; }
