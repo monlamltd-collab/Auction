@@ -742,7 +742,7 @@ async function scrapeRenderedPage(url, house, options = {}) {
           else req.continue();
         });
         await page.goto(url, { waitUntil: 'networkidle2', timeout: 45000 });
-        await new Promise(r => setTimeout(r, 3000));
+        await new Promise(r => setTimeout(r, options.waitFor || 3000));
         await page.evaluate(async () => {
           for (let i = 0; i < 15; i++) { window.scrollBy(0, window.innerHeight); await new Promise(r => setTimeout(r, 500)); }
           window.scrollTo(0, 0);
@@ -3227,7 +3227,9 @@ app.post('/api/analyse', async (req, res) => {
         } else {
           // ── Generic extraction with auto-pagination ──
           console.log(`Loading ${scrapeUrl} for ${house}`);
-          const analyseOpts = rewritten.waitFor ? { waitFor: rewritten.waitFor } : {};
+          const analyseOpts = {};
+          if (rewritten.waitFor) analyseOpts.waitFor = rewritten.waitFor;
+          if (rewritten.actions) analyseOpts.actions = rewritten.actions;
           const firstResult = await scrapeRenderedPage(scrapeUrl, house, analyseOpts);
 
           const domLots = extractWithJSDOM(firstResult.html, house, scrapeUrl, firstResult.images);
@@ -4765,6 +4767,13 @@ app.get('/api/diag/tenure', async (req, res) => {
 // BRIDGEMATCH LITE
 // ═══════════════════════════════════════════════════════════════
 app.get('/check', (req, res) => {
+  if (process.env.UMAMI_WEBSITE_ID) {
+    try {
+      let html = readFileSync(join(__dirname, 'bridgematch-lite.html'), 'utf-8');
+      html = html.replace('data-website-id=""', `data-website-id="${process.env.UMAMI_WEBSITE_ID}"`);
+      return res.type('html').send(html);
+    } catch (e) { /* fall through to sendFile */ }
+  }
   res.sendFile(join(__dirname, 'bridgematch-lite.html'));
 });
 
@@ -5758,31 +5767,100 @@ async function rewriteUrl(url, house) {
   // The event detail pages serve lot data in static HTML (FeaturedGrid cards)
   if (house === 'symondsandsampson') {
     // Auto-discover the nearest upcoming event page with lots
+    const eventsUrl = HOUSE_ROOTS.symondsandsampson || url;
+    const origin = new URL(eventsUrl).origin;
+    // Broader regex: match /event/ or /events/ links containing "auction" or "property"
+    const eventPatterns = [
+      /href="(\/event\/[^"]*auction[^"]*)"/gi,
+      /href="(\/events\/[^"]*auction[^"]*)"/gi,
+      /href="(\/event\/property[^"]*)"/gi,
+    ];
+    // Try plain HTTP first (WebDadi events pages are usually server-rendered)
+    let discoveredUrl = null;
     try {
-      const eventsUrl = HOUSE_ROOTS.symondsandsampson || url;
       const resp = await fetch(eventsUrl, { headers: HEADERS, redirect: 'follow' });
       if (resp.ok) {
         const html = await resp.text();
-        const eventLinks = [...html.matchAll(/href="(\/event\/property-auction-[^"]+)"/gi)];
-        if (eventLinks.length > 0) {
-          const origin = new URL(eventsUrl).origin;
-          const eventUrl = origin + eventLinks[0][1];
-          console.log(`Symonds: auto-discovered event page ${eventUrl}`);
-          return { baseUrl: eventUrl, isApi: false, paginateAs: null, preferPuppeteer: true };
+        for (const pattern of eventPatterns) {
+          const matches = [...html.matchAll(pattern)];
+          if (matches.length > 0) {
+            discoveredUrl = origin + matches[0][1];
+            break;
+          }
+        }
+        // Also check for FeaturedGrid on the events page itself (lots may be directly on this page)
+        if (!discoveredUrl && html.includes('FeaturedGrid')) {
+          console.log('Symonds: events page itself contains FeaturedGrid — using directly');
+          return { baseUrl: eventsUrl, isApi: false, paginateAs: null, preferPuppeteer: true };
         }
       }
-    } catch (e) { console.log('Symonds discovery failed:', e.message); }
+    } catch (e) { console.log('Symonds plain HTTP discovery failed:', e.message); }
+    // Fallback: try Firecrawl-based discovery (in case events page needs JS rendering)
+    if (!discoveredUrl && FIRECRAWL_API_KEY && !fcCreditExhausted) {
+      try {
+        const fcResult = await scrapeWithFirecrawl(eventsUrl, { formats: ['rawHtml'], waitFor: 5000 });
+        if (fcResult.html) {
+          for (const pattern of eventPatterns) {
+            const matches = [...fcResult.html.matchAll(pattern)];
+            if (matches.length > 0) {
+              discoveredUrl = origin + matches[0][1];
+              break;
+            }
+          }
+          if (!discoveredUrl && fcResult.html.includes('FeaturedGrid')) {
+            console.log('Symonds: Firecrawl events page contains FeaturedGrid — using directly');
+            return { baseUrl: eventsUrl, isApi: false, paginateAs: null, preferPuppeteer: true };
+          }
+        }
+      } catch (e) { console.log('Symonds Firecrawl discovery failed:', e.message); }
+    }
+    if (discoveredUrl) {
+      console.log(`Symonds: auto-discovered event page ${discoveredUrl}`);
+      return { baseUrl: discoveredUrl, isApi: false, paginateAs: null, preferPuppeteer: true };
+    }
+    console.log('Symonds: no event page discovered, using root URL');
     return { baseUrl: url, isApi: false, paginateAs: null, preferPuppeteer: true };
   }
 
   // Stags / GTH / Clee Tompkinson: Homeflow SPA — needs JS rendering + extended wait for SPA hydration
+  // Homeflow loads property cards via AJAX after page load. Standard scroll+wait actions aren't enough.
+  // Custom actions: long initial wait for SPA hydration, then poll for property cards, then scroll for images.
   if (house === 'stags' || house === 'gth' || house === 'cleetompkinson') {
-    return { baseUrl: url, isApi: false, paginateAs: null, preferPuppeteer: true, waitFor: 8000 };
+    const homeflowActions = [
+      { type: 'wait', milliseconds: 5000 },
+      // Trigger any deferred search by scrolling into view — Homeflow often lazy-inits on scroll
+      { type: 'scroll', direction: 'down' },
+      { type: 'wait', milliseconds: 3000 },
+      // Poll for property cards to appear (Homeflow AJAX may take a while)
+      { type: 'executeJavascript', script: `
+        await new Promise(resolve => {
+          let attempts = 0;
+          const check = () => {
+            const cards = document.querySelectorAll('.property-results-list li, .property-card, [class*="PropertyCard"], [class*="property-result"]');
+            if (cards.length > 0 || attempts++ > 20) return resolve();
+            setTimeout(check, 500);
+          };
+          check();
+        });
+      ` },
+      { type: 'scroll', direction: 'down' },
+      { type: 'wait', milliseconds: 1500 },
+      { type: 'scroll', direction: 'down' },
+      { type: 'wait', milliseconds: 1500 },
+      // Force lazy-loaded images
+      { type: 'executeJavascript', script: `document.querySelectorAll('img[data-src], img[data-lazy-src], img[data-original]').forEach(img => { const src = img.getAttribute('data-src') || img.getAttribute('data-lazy-src') || img.getAttribute('data-original'); if (src && !img.getAttribute('src')?.startsWith('http')) img.setAttribute('src', src); });` },
+      { type: 'scroll', direction: 'up' },
+      { type: 'scroll', direction: 'up' },
+      { type: 'scroll', direction: 'up' },
+    ];
+    return { baseUrl: url, isApi: false, paginateAs: null, preferPuppeteer: true, waitFor: 12000, actions: homeflowActions };
   }
 
-  // Robin Jessop: StackProtect reCAPTCHA v3 blocks all requests — Puppeteer may solve the challenge
+  // Robin Jessop: StackProtect reCAPTCHA v3 blocks all automated requests.
+  // Firecrawl and Puppeteer both fail. Skip to save credits — revisit if StackProtect is removed.
   if (house === 'robinjessop') {
-    return { baseUrl: url, isApi: false, paginateAs: null, preferPuppeteer: true, waitFor: 8000 };
+    console.log(`${house}: skipped — StackProtect reCAPTCHA blocks all automated scraping`);
+    return { baseUrl: url, isApi: false, paginateAs: null, preferPuppeteer: true, waitFor: 8000, blocked: true };
   }
 
   // Hunters: Bamboo Auctions React SPA, needs Puppeteer
@@ -12470,6 +12548,10 @@ async function autoAnalyseOne(url) {
   }
 
   const rewritten = await rewriteUrl(url, house);
+  if (rewritten.blocked) {
+    console.log(`AUTO: Skipping ${house} — marked as blocked (anti-bot protection)`);
+    return [];
+  }
   const scrapeUrl = rewritten.baseUrl;
   const normalisedUrl = normaliseUrl(url);
 
@@ -12615,7 +12697,9 @@ async function autoAnalyseOne(url) {
 
     } else {
       // ── Generic auto-paginating extraction ──
-      const scrapeOpts = rewritten.waitFor ? { waitFor: rewritten.waitFor } : {};
+      const scrapeOpts = {};
+      if (rewritten.waitFor) scrapeOpts.waitFor = rewritten.waitFor;
+      if (rewritten.actions) scrapeOpts.actions = rewritten.actions;
       const firstResult = await scrapeRenderedPage(scrapeUrl, house, scrapeOpts);
       const domLots = extractWithJSDOM(firstResult.html, house, scrapeUrl, firstResult.images);
       if (domLots && domLots.length >= 3) {
@@ -13233,6 +13317,10 @@ app.get('*', (req, res) => {
     html = html.replace("window.__SUPABASE_URL__ || ''", JSON.stringify(SUPABASE_URL || ''));
     html = html.replace("window.__SUPABASE_ANON_KEY__ || ''", JSON.stringify(SUPABASE_ANON_KEY || ''));
     html = html.replace("window.__AUTH_ENABLED__ || false", AUTH_ENABLED ? 'true' : 'false');
+    // Inject Umami website ID from env so the HTML doesn't need hardcoded IDs
+    if (process.env.UMAMI_WEBSITE_ID) {
+      html = html.replace('data-website-id=""', `data-website-id="${process.env.UMAMI_WEBSITE_ID}"`);
+    }
     res.type('html').send(html);
   } catch (e) {
     log.error('Failed to inject config into index.html', { error: e.message });
