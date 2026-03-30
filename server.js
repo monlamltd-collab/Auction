@@ -1134,7 +1134,7 @@ const HOUSE_ROOTS = {
   gth:                    'https://www.gth.net/auctions/property-and-land-auctions/online-timed-auctions',
   halls:                  'https://www.hallsgb.com/residential/property-and-land-auctions/',
   walkersingleton:        'https://onlinesales.walkersingleton.co.uk/',
-  driversnorris:          'https://www.drivers.co.uk/forthcoming-auctions.html',
+  driversnorris:          'https://www.iamsold.co.uk/estate-agent/drivers/',
   shonkibros:             'https://www.shonkibros.com/auctions/latest-auctions/view',
   robinjessop:            'https://www.robinjessop.co.uk/auctions',
   // ── Batch 7: Tier 2 expansion ──
@@ -1159,7 +1159,7 @@ const HOUSE_ROOTS = {
   // National / Online
   propertysolvers:        'https://auctions.propertysolvers.co.uk/properties',
   pugh:                   'https://www.pugh-auctions.com/auctions/',
-  markjenkinson:          'https://www.markjenkinson.co.uk/auction/',
+  markjenkinson:          'https://www.btgeddisonspropertyauctions.com/properties/',
   regionalauctioneers:    'https://www.regionalpropertyauctioneers.co.uk/properties',
   // South East
   clarkegammon:           'https://www.clarkegammon.co.uk/auction/',
@@ -5245,6 +5245,94 @@ function detectAuctionHouse(url) {
   if (u.includes('bowensonandwatson.eigonlineauctions')) return 'bowensonandwatson';
   if (u.includes('sheldonbosleyknight')) return 'sheldonbosley';
   if (u.includes('nationalpropertyauctions.eigonlineauctions')) return 'nationalpropertyauctions';
+  // ── Batch 7: Tier 1 expansion ──
+  if (u.includes('auctions.symondsandsampson')) return 'symondsandsampson';
+  if (u.includes('stags.co.uk')) return 'stags';
+  if (u.includes('propertyauctions.lsh.co.uk')) return 'lsh';
+  if (u.includes('carterjonas.co.uk')) return 'carterjonas';
+  if (u.includes('gth.net')) return 'gth';
+  if (u.includes('hallsgb.com')) return 'halls';
+  if (u.includes('walkersingleton')) return 'walkersingleton';
+  if (u.includes('drivers.co.uk')) return 'driversnorris';
+  if (u.includes('shonkibros.com')) return 'shonkibros';
+  if (u.includes('robinjessop.co.uk')) return 'robinjessop';
+  // ── Batch 7: Tier 2 expansion ──
+  if (u.includes('ctf-uk.com')) return 'cleetompkinson';
+  if (u.includes('mccartneys.co.uk')) return 'mccartneys';
+  if (u.includes('bramleys.com')) return 'bramleys';
+  if (u.includes('cooperandtanner.co.uk')) return 'cooperandtanner';
+  if (u.includes('brutonknowles.co.uk')) return 'brutonknowles';
+  if (u.includes('fishergerman.co.uk')) return 'fisherGerman';
+  if (u.includes('woolleyandwallis.co.uk')) return 'woolleyandwallis';
+  if (u.includes('hobbsparker.co.uk')) return 'hobbsparker';
+  if (u.includes('arnoldskeys.com')) return 'arnoldskeys';
+  if (u.includes('twgaze.co.uk')) return 'twgaze';
+  if (u.includes('hairandson.co.uk')) return 'hairandson';
+  if (u.includes('phillipsland.com')) return 'phillipssmithanddunn';
+  if (u.includes('webbers.co.uk')) return 'webbers';
+  // ── Batch 7: EIG additions ──
+  if (u.includes('ahlondon.eigonlineauctions')) return 'ahlondon';
+  if (u.includes('star-property-online.eigonlineauctions')) return 'starpropertyonline';
+  if (u.includes('brggibsondublinauctions.eigonlineauctions')) return 'brggibsondublin';
+  // ── Batch 8: Comprehensive UK coverage ──
+  if (u.includes('propertysolvers.co.uk')) return 'propertysolvers';
+  if (u.includes('markjenkinson.co.uk')) return 'markjenkinson';
+  if (u.includes('regionalpropertyauctioneers.co.uk')) return 'regionalauctioneers';
+  if (u.includes('clarkegammon.co.uk')) return 'clarkegammon';
+  if (u.includes('nesbits.co.uk')) return 'nesbits';
+  if (u.includes('pearsons.com')) return 'pearsons';
+  if (u.includes('foxgrant.com')) return 'foxgrant';
+  if (u.includes('lextons.com')) return 'lextons';
+  if (u.includes('bradleys-estate-agents.co.uk')) return 'bradleysdevon';
+  if (u.includes('taylerandfletcher.co.uk')) return 'taylerandfletcher';
+  if (u.includes('luscombemaye.com')) return 'luscombemaye';
+  if (u.includes('lodgeandthomas.com')) return 'lodgeandthomas';
+  if (u.includes('bondoxboroughphillips.co.uk')) return 'bondoxboroughphillips';
+  if (u.includes('charlesdarrow.co.uk')) return 'charlesdarrow';
+  if (u.includes('aldreds.co.uk')) return 'aldreds';
+  if (u.includes('humberts.com')) return 'humberts';
+  if (u.includes('allwalesauction.com')) return 'allwalesauction';
+  if (u.includes('evansbros.co.uk')) return 'evansbros';
+  if (u.includes('herbertrthomasandco.co.uk')) return 'herbertrthomasandco';
+  if (u.includes('johnfrancis.co.uk')) return 'johnfrancis';
+  if (u.includes('morrismarshall.co.uk')) return 'morrismarshall';
+  if (u.includes('andrewgrant.com')) return 'andrewgrant';
+  if (u.includes('gherbertbanks.co.uk')) return 'gherbertbanks';
+  if (u.includes('hawkesford.co.uk')) return 'hawkesford';
+  if (u.includes('howkinsandharrison.co.uk')) return 'howkinsandharrison';
+  if (u.includes('scargillmann.co.uk')) return 'scargillmann';
+  if (u.includes('mellerbraggins.com')) return 'mellerbraggins';
+  if (u.includes('smithandsons.net')) return 'smithandsons';
+  if (u.includes('wrightmarshall.co.uk')) return 'wrightmarshall';
+  if (u.includes('hackneyandleigh.co.uk')) return 'hackneyandleigh';
+  if (u.includes('onlinepropertyauctionsscotland.co.uk')) return 'onlinepropertyauctionsscotland';
+  // ── Auction House UK regional catch-all ──
+  if (u.includes('auctionhouse.co.uk/southyorkshire')) return 'auctionhousesouthyorkshire';
+  if (u.includes('auctionhouse.co.uk/westyorkshire')) return 'auctionhousewestyorkshire';
+  if (u.includes('auctionhouse.co.uk/teesvalley')) return 'auctionhouseteesvalley';
+  if (u.includes('auctionhouse.co.uk/hullandeastyorkshire')) return 'auctionhousehull';
+  if (u.includes('auctionhouse.co.uk/cumbria')) return 'auctionhousecumbria';
+  if (u.includes('auctionhouse.co.uk/lincolnshire')) return 'auctionhouselincolnshire';
+  if (u.includes('auctionhouse.co.uk/london')) return 'auctionhouseuklondon';
+  if (u.includes('auctionhouse.co.uk/bedsandbucks')) return 'auctionhousebedsandbucks';
+  if (u.includes('auctionhouse.co.uk/northamptonshire')) return 'auctionhousenorthamptonshire';
+  if (u.includes('auctionhouse.co.uk/oxfordshire')) return 'auctionhouseoxfordshire';
+  if (u.includes('auctionhouse.co.uk/leicestershire')) return 'auctionhouseleicestershire';
+  if (u.includes('auctionhouse.co.uk/midlands')) return 'auctionhousemidlands';
+  if (u.includes('auctionhouse.co.uk/coventryandwarwickshire')) return 'auctionhousecoventry';
+  if (u.includes('auctionhouse.co.uk/nottsandderby')) return 'auctionhousenottsandderby';
+  if (u.includes('auctionhouse.co.uk/chesterfieldandnorthderbyshire')) return 'auctionhousechesterfield';
+  if (u.includes('auctionhouse.co.uk/staffordshire')) return 'auctionhousestaffordshire';
+  if (u.includes('auctionhouse.co.uk/northwales')) return 'auctionhousenorthwales';
+  if (u.includes('auctionhouse.co.uk/southwest')) return 'auctionhousesouthwest';
+  if (u.includes('auctionhouse.co.uk/northernireland')) return 'auctionhousenorthernireland';
+  if (u.includes('auctionhouse.co.uk/national')) return 'auctionhousenational';
+  // ── EIG platform catch-all ──
+  if (u.includes('.eigonlineauctions.com') || u.includes('eigpropertyauctions')) return 'eigplatform';
+  // ── Bamboo Auctions catch-all ──
+  if (u.includes('bambooauctions.com')) return 'hunters';
+  // ── Auctionworks catch-all ──
+  if (u.includes('auctionworks.co.uk')) return 'sarahmains';
   return 'unknown';
 }
 
@@ -9111,13 +9199,17 @@ DOM_EXTRACTORS['bagshaws'] = `
 `;
 
 // Wire up EIG house aliases to the shared eigplatform extractor
-for (const slug of ['astleys', 'henrysykes', 'clarkesimpson', 'brownco', 'cheffinstimed', 'romanway', 'hammerprice', 'sarahmains', 'sageandco', 'auctiontrade', 'brggibson', 'higginsdrysdale', 'martinpole', 'jonespeckover', 'thepropertyauctionhouse', 'propertyauctionagent', 'lot9', 'auctionnorth', 'bowensonandwatson', 'sheldonbosley', 'nationalpropertyauctions']) {
+for (const slug of ['astleys', 'henrysykes', 'clarkesimpson', 'brownco', 'cheffinstimed', 'romanway', 'hammerprice', 'sarahmains', 'sageandco', 'auctiontrade', 'brggibson', 'higginsdrysdale', 'martinpole', 'jonespeckover', 'thepropertyauctionhouse', 'propertyauctionagent', 'lot9', 'auctionnorth', 'bowensonandwatson', 'sheldonbosley', 'nationalpropertyauctions', 'ahlondon', 'starpropertyonline', 'brggibsondublin', 'lsh']) {
   DOM_EXTRACTORS[slug] = DOM_EXTRACTORS.eigplatform;
 }
 // Wire up Bamboo Auctions platform houses to the shared hunters extractor
 DOM_EXTRACTORS['lsk'] = DOM_EXTRACTORS.hunters;
 // Wire up Sequence/Connells platform houses to the shared barnardmarcus extractor
 DOM_EXTRACTORS['foxandsons'] = DOM_EXTRACTORS.barnardmarcus;
+// Wire up iamsold platform houses
+DOM_EXTRACTORS['driversnorris'] = DOM_EXTRACTORS.iamsold;
+// Mark Jenkinson merged into BTG Eddisons (sdl)
+DOM_EXTRACTORS['markjenkinson'] = DOM_EXTRACTORS.sdl;
 // Wire up Auction House UK branches to the shared auctionhouseuk extractor
 for (const slug of ['auctionhousescotland', 'austingray', 'auctionhouseeastanglia', 'auctionhousenorthwest', 'auctionhousenortheast', 'auctionhousewales', 'auctionhousebirmingham', 'auctionhousekent', 'auctionhousedevon', 'auctionhouseeastmidlands', 'auctionhousewestmidlands', 'auctionhouseessex', 'auctionhousemanchester', 'auctionhousesouthyorkshire', 'auctionhousewestyorkshire', 'auctionhouseteesvalley', 'auctionhousehull', 'auctionhousecumbria', 'auctionhouselincolnshire', 'auctionhouseuklondon', 'auctionhousebedsandbucks', 'auctionhousenorthamptonshire', 'auctionhouseoxfordshire', 'auctionhouseleicestershire', 'auctionhousemidlands', 'auctionhousecoventry', 'auctionhousenottsandderby', 'auctionhousechesterfield', 'auctionhousestaffordshire', 'auctionhousenorthwales', 'auctionhousesouthwest', 'auctionhousenorthernireland', 'auctionhousenational']) {
   DOM_EXTRACTORS[slug] = DOM_EXTRACTORS.auctionhouseuk;
@@ -9130,7 +9222,7 @@ const UNIVERSAL_DOM_EXTRACTOR = `
     const seen = new Set();
     
     // Strategy 1: Find all links to individual property/lot pages
-    const propLinks = document.querySelectorAll('a[href*="/property/"], a[href*="/lot/"], a[href*="property-details"], a[href*="/properties/"]');
+    const propLinks = document.querySelectorAll('a[href*="/property/"], a[href*="/lot/"], a[href*="property-details"], a[href*="/properties/"], a[href*="/auction/"], a[href*="/catalogue/"], a[href*="/sale/"], a[href*="lot-overview"], a[href*="/listing/"], a[href*="/auctions/lot"]');
     const linkSet = new Set();
     
     for (const link of propLinks) {
