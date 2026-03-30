@@ -2812,9 +2812,10 @@ function card(l){
       '<div class="card-row1"><span class="card-lot-info">' + catLabel + '</span><span class="card-price">' + esc(priceText) + '</span></div>' +
       '<div class="card-address">' + esc(l.address || 'Address not available') + '</div>' +
       '<div class="card-details">' + detailPills.map(d => '<span class="detail-pill">' + esc(d) + '</span>').join('') + '</div>' +
-      (l.epcRating || (l.floodZone && l.floodZone !== '1') ? '<div style="display:flex;gap:5px;margin-top:4px;flex-wrap:wrap">' +
-        (l.epcRating ? '<span class="detail-pill" style="color:' + (/[AB]/.test(l.epcRating) ? 'var(--signal-pos)' : /[CD]/.test(l.epcRating) ? 'var(--accent-warn)' : 'var(--accent-danger)') + ';font-weight:600">EPC ' + esc(l.epcRating) + '</span>' : '') +
+      (l.epcRating || (l.floodZone && l.floodZone !== '1') || l._yieldEstimateWarning ? '<div style="display:flex;gap:5px;margin-top:4px;flex-wrap:wrap">' +
+        (l.epcRating ? '<span class="detail-pill" style="color:' + (/[AB]/.test(l.epcRating) ? 'var(--signal-pos)' : /[CD]/.test(l.epcRating) ? 'var(--accent-warn)' : 'var(--accent-danger)') + ';font-weight:600">EPC ' + esc(l.epcRating) + (/[FG]/i.test(l.epcRating) ? ' — Unlettable' : '') + '</span>' : '') +
         ((l.floodZone === '2' || l.floodZone === '3') ? '<span class="detail-pill" style="color:' + (l.floodZone === '3' ? 'var(--accent-danger)' : 'var(--accent-warn)') + ';font-weight:600">FZ' + esc(l.floodZone) + '</span>' : '') +
+        (l._yieldEstimateWarning ? '<span class="detail-pill" style="color:var(--accent-warn);font-weight:600" title="Yield over 30% — likely unrealistic. Verify actual achievable rent before relying on this figure.">Yield unverified</span>' : '') +
       '</div>' : '') +
       (chipsHtml ? '<div class="card-chips">' + chipsHtml + '</div>' : '') +
     '</div>' +
@@ -3336,9 +3337,13 @@ function expandCard(lot) {
       else if (gy >= 7) { ratingLabel = 'Good'; ratingBg = '#e8f5ee'; ratingColor = 'var(--signal-pos)'; verdict = 'Strong rental yield \u2014 above average for this area'; }
       else if (gy >= 5) { ratingLabel = 'Fair'; ratingBg = '#fef3e2'; ratingColor = 'var(--accent-warn)'; verdict = 'Moderate yield \u2014 typical for the area'; }
       else { ratingLabel = 'Poor'; ratingBg = '#fdf0ee'; ratingColor = 'var(--accent-danger)'; verdict = 'Below-average yield \u2014 consider capital growth potential instead'; }
+      const yieldWarning = lot._yieldEstimateWarning
+        ? '<div style="padding:6px 10px;border-radius:6px;font-size:.78rem;background:#fef3e2;color:var(--accent-warn);font-weight:500;margin-bottom:8px">Yield over 30% — likely unrealistic. Very low guide prices produce inflated yield estimates. Verify actual achievable rent independently before relying on this figure.</div>'
+        : '';
       return '<details class="premium-feature">' +
         '<summary>Yield Analysis</summary>' +
         '<div class="pf-content">' +
+          yieldWarning +
           '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span>Gross Yield</span><span style="font-weight:600">' + gyDisplay + '</span></div>' +
           '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span>Net Yield</span><span style="font-weight:600">' + nyDisplay + '</span></div>' +
           '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span>Monthly Rent</span><span style="font-weight:600">' + mrDisplay + '</span></div>' +
@@ -3472,7 +3477,9 @@ function expandCard(lot) {
               'color:' + (/[AB]/.test(lot.epcRating) ? 'var(--signal-pos)' : /[CD]/.test(lot.epcRating) ? 'var(--accent-warn)' : 'var(--accent-danger)') + '">' +
               'EPC: ' + esc(lot.epcRating) + (lot.epcScore ? ' (' + lot.epcScore + ')' : '') +
               (lot.epcDate ? '<span style="font-weight:400;font-size:.75rem;margin-left:6px;opacity:.7">(assessed ' + esc(lot.epcDate) + ')</span>' : '') +
-            '</div>'
+            '</div>' +
+            (/[FG]/i.test(lot.epcRating) ? '<div style="padding:4px 10px;border-radius:6px;font-size:.78rem;background:#fdf0ee;color:var(--accent-danger);font-weight:500">MEES: Cannot legally let — EPC upgrade required</div>' : '') +
+            (/^E$/i.test(lot.epcRating) ? '<div style="padding:4px 10px;border-radius:6px;font-size:.78rem;background:#fef3e2;color:var(--accent-warn);font-weight:500">MEES: At risk — EPC C target coming</div>' : '')
             : '<div style="padding:6px 12px;border-radius:6px;font-size:.85rem;color:var(--text-muted,#6b7c8d);background:var(--surface2,#f0f2f5)">EPC: \u2014</div>') +
           // Flood Zone badge
           (lot.floodZone
