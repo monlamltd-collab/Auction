@@ -2462,10 +2462,39 @@ async function loadIntelligence() {
   const { cached, missing } = data;
   _intelLoaded = true;
 
+  // Robust house→slug resolver: handles slugs, display names, and partial matches
+  const _slugCache = {};
+  function resolveSlug(house) {
+    if (_slugCache[house]) return _slugCache[house];
+    // Direct slug match
+    if (KNOWN_HOUSES[house]) { _slugCache[house] = house; return house; }
+    // Exact display name match
+    const exact = Object.entries(KNOWN_HOUSES).find(([k, v]) => v === house);
+    if (exact) { _slugCache[house] = exact[0]; return exact[0]; }
+    // Normalised match (strip spaces, punctuation, lowercase)
+    const norm = house.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const normMatch = Object.entries(KNOWN_HOUSES).find(([k, v]) => {
+      return k.toLowerCase().replace(/[^a-z0-9]/g, '') === norm
+        || v.toLowerCase().replace(/[^a-z0-9]/g, '') === norm;
+    });
+    if (normMatch) { _slugCache[house] = normMatch[0]; return normMatch[0]; }
+    // Partial: "Auction House Birmingham" → look for slug containing key words
+    const words = house.toLowerCase().split(/\s+/).filter(w => w.length > 2 && !['the','and','&','of'].includes(w));
+    if (words.length >= 2) {
+      const partial = Object.entries(KNOWN_HOUSES).find(([k, v]) => {
+        const kl = k.toLowerCase(), vl = v.toLowerCase();
+        return words.every(w => kl.includes(w) || vl.includes(w));
+      });
+      if (partial) { _slugCache[house] = partial[0]; return partial[0]; }
+    }
+    _slugCache[house] = '';
+    return '';
+  }
+
   // Build per-house performance map from cached data
   const housePerf = {};
   for (const c of (cached || [])) {
-    const slug = KNOWN_HOUSES[c.house] ? c.house : Object.entries(KNOWN_HOUSES).find(([k, v]) => v === c.house)?.[0] || '';
+    const slug = resolveSlug(c.house);
     const platform = EXTRACTOR_TYPE[slug] || 'unknown';
     if (!housePerf[slug]) {
       housePerf[slug] = {
@@ -2482,7 +2511,7 @@ async function loadIntelligence() {
 
   // Add missing houses (no cached data)
   for (const m of (missing || [])) {
-    const slug = KNOWN_HOUSES[m.house] ? m.house : Object.entries(KNOWN_HOUSES).find(([k, v]) => v === m.house)?.[0] || '';
+    const slug = resolveSlug(m.house);
     if (slug && !housePerf[slug]) {
       const platform = EXTRACTOR_TYPE[slug] || 'unknown';
       housePerf[slug] = {
