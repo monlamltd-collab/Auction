@@ -1006,7 +1006,7 @@ const HOUSE_EXTRACTION_HINTS = {
 // Each house's root/listing page where upcoming auction catalogue links can be found.
 // Used by /api/discover-catalogues to auto-detect new auction URLs when they change.
 const HOUSE_ROOTS = {
-  savills:            'https://auctions.savills.co.uk/upcoming-auctions',
+  savills:            'https://auctions.savills.co.uk/upcoming-auctions', // Auto-discovers actual catalogue via rewriteUrl
   allsop:             'https://www.allsop.co.uk/auctions/residential-auctions/',
   sdl:                'https://www.btgeddisonspropertyauctions.com/properties/',
   network:            'https://www.networkauctions.co.uk/auctions/next-auction/',
@@ -1028,10 +1028,10 @@ const HOUSE_ROOTS = {
   paulfosh:           'https://paulfosh.eigonlineauctions.com/search',
   cottons:            'https://www.cottons.co.uk/auction-archive/',
   dedmangray:         'https://www.dedmangray.co.uk/auction/',
-  barnettross:        'https://www.barnettross.co.uk/lotlist.php?a=&countryid=1',
+  barnettross:        'https://www.barnettross.co.uk/current.php',
   bradleyhall:        'https://auction.bradleyhall.co.uk/',
   connectuk:          'https://connectukgroup.co.uk/auctions/',
-  auctionestates:     'https://www.auctionestates.co.uk/',
+  auctionestates:     'https://www.auctionestates.co.uk/view-properties',
   landwood:           'https://www.landwoodpropertyauctions.com/',
   loveitts:           'https://www.loveitts.co.uk/auction/',
   hunters:            'https://hunters.bambooauctions.com',
@@ -1135,7 +1135,7 @@ const HOUSE_ROOTS = {
   halls:                  'https://www.hallsgb.com/residential/property-and-land-auctions/',
   walkersingleton:        'https://onlinesales.walkersingleton.co.uk/',
   driversnorris:          'https://www.drivers.co.uk/forthcoming-auctions.html',
-  shonkibros:             'https://www.shonkibros.com/',
+  shonkibros:             'https://www.shonkibros.com/auctions/latest-auctions/view',
   robinjessop:            'https://www.robinjessop.co.uk/auctions',
   // ── Batch 7: Tier 2 expansion ──
   cleetompkinson:         'https://www.ctf-uk.com/properties/sales/tag-auction',
@@ -2066,39 +2066,24 @@ const FALLBACK_CALENDAR = [
     // ── SAVILLS ──
     {
       house: 'Savills', houseSlug: 'savills', logo: '🏛️',
-      date: '2026-03-17',
-      title: '17 March 2026', lots: null,
-      url: 'https://auctions.savills.co.uk/auctions/17-march-2026-219',
+      date: '2026-03-31', title: '31 March 2026', lots: null,
+      url: 'https://auctions.savills.co.uk/auctions/31-march-2026-220',
       location: 'Online', type: 'Residential & Commercial', status: 'upcoming',
       catalogueReady: true,
     },
     {
       house: 'Savills', houseSlug: 'savills', logo: '🏛️',
-      date: '2026-03-17', title: '17 March 2026', lots: null,
-      url: 'https://auctions.savills.co.uk/upcoming-auctions',
-      location: 'Online', type: 'Residential & Commercial', status: 'upcoming',
-      catalogueReady: false,
-    },
-    {
-      house: 'Savills', houseSlug: 'savills', logo: '🏛️',
-      date: '2026-03-31', title: '31 March 2026', lots: null,
-      url: 'https://auctions.savills.co.uk/upcoming-auctions',
-      location: 'Online', type: 'Residential & Commercial', status: 'upcoming',
-      catalogueReady: false,
-    },
-    {
-      house: 'Savills', houseSlug: 'savills', logo: '🏛️',
       date: '2026-04-21', title: '21 April 2026', lots: null,
-      url: 'https://auctions.savills.co.uk/upcoming-auctions',
+      url: 'https://auctions.savills.co.uk/auctions/21-april-2026-221',
       location: 'Online', type: 'Residential & Commercial', status: 'upcoming',
-      catalogueReady: false,
+      catalogueReady: true,
     },
     {
       house: 'Savills', houseSlug: 'savills', logo: '🏛️',
       date: '2026-05-06', title: '6 May 2026', lots: null,
-      url: 'https://auctions.savills.co.uk/upcoming-auctions',
+      url: 'https://auctions.savills.co.uk/auctions/6-may-2026-222',
       location: 'Online', type: 'Residential & Commercial', status: 'upcoming',
-      catalogueReady: false,
+      catalogueReady: true,
     },
     // ── ALLSOP ──
     {
@@ -3088,7 +3073,7 @@ app.post('/api/analyse', async (req, res) => {
 
   try {
     const house = detectAuctionHouse(url);
-    const rewritten = rewriteUrl(url, house);
+    const rewritten = await rewriteUrl(url, house);
     const scrapeUrl = rewritten.baseUrl;
     const displayNameEarly = getHouseDisplayName(house, url);
 
@@ -5403,17 +5388,28 @@ function getHouseDisplayName(slug, url) {
 // ═══════════════════════════════════════════════════════════════
 // URL REWRITING (map user-friendly URLs to data endpoints)
 // ═══════════════════════════════════════════════════════════════
-function rewriteUrl(url, house) {
+async function rewriteUrl(url, house) {
   const u = url.toLowerCase();
 
   if (house === 'savills') {
     // Savills: auctions.savills.co.uk/auctions/{slug} — server-rendered, paginated
-    // Rewrite to specific auction page. DOM extractor handles extraction.
-    // If user pastes auctions.savills.co.uk or upcoming-auctions, keep as-is for now
     if (u.includes('auctions.savills.co.uk/auctions/')) {
       return { baseUrl: url, isApi: false, paginateAs: 'savills_pages', preferPuppeteer: true };
     }
-    // Generic savills URL — try the latest auction
+    // Generic URL (e.g. /upcoming-auctions) — auto-discover the nearest catalogue
+    try {
+      const resp = await fetch(url, { headers: HEADERS, redirect: 'follow' });
+      if (resp.ok) {
+        const html = await resp.text();
+        // Find links to specific auction catalogue pages
+        const catalogueLinks = [...html.matchAll(/href="(https:\/\/auctions\.savills\.co\.uk\/auctions\/[^"]+)"/gi)];
+        if (catalogueLinks.length > 0) {
+          const catalogueUrl = catalogueLinks[0][1];
+          console.log(`Savills: auto-discovered catalogue ${catalogueUrl} from ${url}`);
+          return { baseUrl: catalogueUrl, isApi: false, paginateAs: 'savills_pages', preferPuppeteer: true };
+        }
+      }
+    } catch (e) { console.log('Savills discovery failed:', e.message); }
     return { baseUrl: url, isApi: false, paginateAs: null, preferPuppeteer: true };
   }
 
@@ -6731,35 +6727,58 @@ const DOM_EXTRACTORS = {
   `,
 
   // ─── AUCTION HOUSE LONDON ─────────────────────────────────
+  // Lot numbers are empty on this site — deduplicate by href, assign positional numbers
   auctionhouselondon: `
     (() => {
       const lots = [];
-      const cards = document.querySelectorAll('a[href*="/lot/"]');
+      const links = document.querySelectorAll('a[href*="/lot/"]');
       const seen = new Set();
-      for (const card of cards) {
-        const text = card.textContent;
-        const lotMatch = text.match(/LOT\\s+(\\d+)/i);
-        if (!lotMatch) continue;
-        const num = parseInt(lotMatch[1]);
-        if (seen.has(num)) continue;
-        seen.add(num);
-        const href = card.getAttribute('href') || '';
+      let idx = 1;
+      for (const link of links) {
+        const href = link.getAttribute('href') || '';
+        if (!href || seen.has(href)) continue;
+        seen.add(href);
+        const text = link.textContent || '';
+        // Price from "Guide Price: £210,000+"
         const priceMatch = text.match(/£([\\d,]+)/);
         const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
-        let address = text.replace(/LOT\\s+\\d+/i, '').replace(/Guide Price[^£]*£[\\d,]+\\+?/i, '').replace(/£[\\d,]+\\+?/g, '').trim();
-        address = address.split('\\n').map(s=>s.trim()).filter(s=>s.length>5)[0] || '';
-        const bullets = [];
-        const desc = text.split('\\n').map(s=>s.trim()).filter(s=>s.length>10 && !s.match(/^LOT|^Guide|^£/i));
-        if (desc.length > 0) bullets.push(desc[0]);
-        // Image from card or parent
-        let imageUrl = '';
-        let imgContainer = card;
-        for (let d = 0; d < 3 && imgContainer; d++) { imgContainer = imgContainer.parentElement; if (!imgContainer) break; const img = imgContainer.querySelector('img[src]'); if (img) { const s = img.getAttribute('src') || img.dataset.src || ''; if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) { imageUrl = s; break; } } }
-        if (!imageUrl) { const cardImg = card.querySelector('img[src]'); if (cardImg) { const s = cardImg.getAttribute('src') || ''; if (s.length > 10 && !s.includes('logo')) imageUrl = s; } }
-        if (text.match(/\\bSOLD\\b|\\bSALE.?AGREED\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) {
-          if (!bullets.some(b => b.match(/SOLD|STC|WITHDRAWN|SALE AGREED/i))) bullets.push('SOLD/STC');
+        // Address: find the semibold heading div, or parse from text
+        const addrEl = link.querySelector('[class*="font-semibold"]');
+        let address = addrEl ? addrEl.textContent.trim() : '';
+        if (!address) {
+          // Fallback: strip LOT/price/badges from text, take first substantial line
+          address = text.replace(/LOT\\s*\\d*/gi, '').replace(/Guide Price[^£]*£[\\d,]+\\+?/gi, '').replace(/£[\\d,]+\\+?/g, '');
+          address = address.split('\\n').map(s=>s.trim()).filter(s=>s.length>5 && !s.match(/^(Flat|Leasehold|Freehold|Sold|SOLD|STC|View)$/i))[0] || '';
         }
-        lots.push({ lot: num, address, price, url: href, bullets, imageUrl: imageUrl || undefined });
+        if (!address || address.length < 5) continue;
+        // Image
+        let imageUrl = '';
+        const img = link.querySelector('img[src]');
+        if (img) {
+          const s = img.getAttribute('src') || '';
+          if (s.length > 10 && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg')) imageUrl = s;
+        }
+        if (!imageUrl) {
+          const parent = link.closest('[class*="mb-30"], [class*="w-full"]') || link.parentElement;
+          if (parent) { const pi = parent.querySelector('img[src*="eigpropertyauctions"], img[src*="property"]'); if (pi) imageUrl = pi.getAttribute('src') || ''; }
+        }
+        // Description bullets
+        const bullets = [];
+        const descEl = link.querySelector('[class*="leading-normal"], [class*="text-15"]');
+        if (descEl) { const d = descEl.textContent.trim(); if (d.length > 10) bullets.push(d); }
+        // Sold/STC detection
+        if (text.match(/\\bSOLD\\b|\\bSALE.?AGREED\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) {
+          bullets.push('SOLD/STC');
+        }
+        // Property type & tenure from badge spans
+        const badges = link.querySelectorAll('span');
+        let propType, tenure;
+        for (const b of badges) {
+          const bt = b.textContent.trim();
+          if (/^(Flat|House|Bungalow|Land|Commercial|Maisonette)$/i.test(bt)) propType = bt;
+          if (/^(Freehold|Leasehold|Share of Freehold)$/i.test(bt)) tenure = bt;
+        }
+        lots.push({ lot: idx++, address, price, url: href, bullets, imageUrl: imageUrl || undefined, propType, tenure });
       }
       return lots;
     })()
@@ -7501,41 +7520,39 @@ const DOM_EXTRACTORS = {
   `,
 
   // ── AUCTION ESTATES ──
+  // Site has no lot numbers — assign by position. Catalogue at /view-properties.
   auctionestates: `
     (() => {
       const lots = [];
-      const seen = new Set();
-      const cards = document.querySelectorAll('[class*="lot"], [class*="property"], .search-result, article, [class*="card"]');
+      const cards = document.querySelectorAll('.result-container');
+      let idx = 1;
       for (const card of cards) {
         const text = card.textContent || '';
-        const lotMatch = text.match(/Lot\\s+(\\d+)/i);
-        if (!lotMatch) continue;
-        const num = parseInt(lotMatch[1]);
-        if (seen.has(num)) continue;
-        seen.add(num);
-        const link = card.querySelector('a[href]');
-        const url = link ? link.getAttribute('href') : '';
-        const priceMatch = text.match(/(?:Guide|Price)[^£]*£([\\d,]+)/i) || text.match(/£([\\d,]+)/);
-        const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
         let address = '';
-        const heading = card.querySelector('h2, h3, h4, .address, .title');
+        const heading = card.querySelector('.property-title, h1, h2, h3');
         if (heading) address = heading.textContent.trim();
-        if (!address) continue;
+        if (!address || address.length < 5) continue;
+        const priceEl = card.querySelector('.property-guide-price');
+        const priceMatch = (priceEl ? priceEl.textContent : text).match(/£([\\d,]+)/);
+        const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
+        const link = card.querySelector('a[href*="/property/"]');
+        const url = link ? link.getAttribute('href') : '';
+        let imageUrl = '';
+        const img = card.querySelector('img.result-property-image, img[src]');
+        if (img) {
+          const s = img.getAttribute('src') || img.dataset.src || '';
+          if (s && !s.includes('logo') && !s.includes('icon') && s.length > 10) imageUrl = s;
+        }
         const bullets = [];
         card.querySelectorAll('li').forEach(li => {
           const t = li.textContent.trim();
           if (t.length > 5 && t.length < 200) bullets.push(t);
         });
-        let imageUrl = '';
-        const cardImg = card.querySelector('img[src]');
-        if (cardImg) {
-          const s = cardImg.getAttribute('src') || cardImg.dataset.src || '';
-          if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) imageUrl = s;
+        const flash = card.querySelector('.property-flash');
+        if (flash && /\\bSOLD\\b|\\bWithdrawn\\b/i.test(flash.textContent)) {
+          bullets.push(flash.textContent.trim());
         }
-        if (text.match(/\\bSOLD\\b|\\bSALE.?AGREED\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) {
-          if (!bullets.some(b => b.match(/SOLD|STC|WITHDRAWN|SALE AGREED/i))) bullets.push('SOLD/STC');
-        }
-        lots.push({ lot: num, address, price, url, bullets, imageUrl: imageUrl || undefined });
+        lots.push({ lot: idx++, address, price, url, bullets, imageUrl: imageUrl || undefined });
       }
       return lots;
     })()
@@ -9000,6 +9017,80 @@ const DOM_EXTRACTORS = {
 
 };
 
+// ── SHONKI BROTHERS ──
+// Own site hosts lots from EIG backend. Cards at /auctions/latest-auctions/view
+DOM_EXTRACTORS['shonkibros'] = `
+  (() => {
+    const lots = [];
+    const cards = document.querySelectorAll('.auction-image-container, .flat-item');
+    let idx = 1;
+    for (const card of cards) {
+      const text = card.textContent || '';
+      const lotMatch = text.match(/Lot\\s*(?:number)?[:\\s]*(\\d+)/i);
+      const num = lotMatch ? parseInt(lotMatch[1]) : idx;
+      const heading = card.querySelector('h5 a strong, h5 a, h4 a, h3 a');
+      const address = heading ? heading.textContent.trim() : '';
+      if (!address || address.length < 5) { idx++; continue; }
+      const priceEl = card.querySelector('.price, span.price');
+      const priceMatch = (priceEl ? priceEl.textContent : text).match(/£([\\d,]+)/);
+      const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
+      const link = card.querySelector('a[href*="/auctions/lot/"], a[href*="/lot/details/"]');
+      const url = link ? link.getAttribute('href') : '';
+      let imageUrl = '';
+      const img = card.querySelector('img[src]');
+      if (img) {
+        const s = img.getAttribute('src') || '';
+        if (s && s.length > 10 && !s.includes('logo') && !s.includes('icon')) imageUrl = s;
+      }
+      lots.push({ lot: num, address, price, url, imageUrl: imageUrl || undefined });
+      idx++;
+    }
+    return lots;
+  })()
+`;
+
+// ── BAGSHAWS ──
+// Ancient table-based layout. Images in one row, text in next row, 4 lots per row pair.
+DOM_EXTRACTORS['bagshaws'] = `
+  (() => {
+    const lots = [];
+    // Find all links to barnardmarcusauctions containing "Lot NNN"
+    const lotLinks = document.querySelectorAll('a[href*="barnardmarcusauctions"], a[href*="/auctions/"]');
+    const seen = new Set();
+    for (const link of lotLinks) {
+      const strong = link.querySelector('strong') || link;
+      const lotMatch = (strong.textContent || '').match(/Lot\\s+(\\d+)/i);
+      if (!lotMatch) continue;
+      const num = parseInt(lotMatch[1]);
+      if (seen.has(num)) continue;
+      seen.add(num);
+      const url = link.getAttribute('href') || '';
+      // The parent <td> contains address and price as text nodes
+      const td = link.closest('td');
+      if (!td) continue;
+      const tdText = td.textContent || '';
+      // Address: everything between "Lot NNN" and "Guide:"
+      const addrMatch = tdText.match(/Lot\\s+\\d+\\s*(.+?)\\s*Guide/is);
+      const address = addrMatch ? addrMatch[1].replace(/\\s+/g, ' ').trim() : '';
+      if (!address || address.length < 5) continue;
+      const priceMatch = tdText.match(/£([\\d,]+)/);
+      const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
+      // Image: find img in same row or previous row linking to same lot URL
+      let imageUrl = '';
+      const table = td.closest('table');
+      if (table && url) {
+        const imgLink = table.querySelector('a[href="' + url.replace(/"/g, '') + '"] img');
+        if (imgLink) {
+          const s = imgLink.getAttribute('src') || '';
+          if (s && s.length > 5) imageUrl = s;
+        }
+      }
+      lots.push({ lot: num, address, price, url, imageUrl: imageUrl || undefined });
+    }
+    return lots;
+  })()
+`;
+
 // Wire up EIG house aliases to the shared eigplatform extractor
 for (const slug of ['astleys', 'henrysykes', 'clarkesimpson', 'brownco', 'cheffinstimed', 'romanway', 'hammerprice', 'sarahmains', 'sageandco', 'auctiontrade', 'brggibson', 'higginsdrysdale', 'martinpole', 'jonespeckover', 'thepropertyauctionhouse', 'propertyauctionagent', 'lot9', 'auctionnorth', 'bowensonandwatson', 'sheldonbosley', 'nationalpropertyauctions']) {
   DOM_EXTRACTORS[slug] = DOM_EXTRACTORS.eigplatform;
@@ -9008,7 +9099,6 @@ for (const slug of ['astleys', 'henrysykes', 'clarkesimpson', 'brownco', 'cheffi
 DOM_EXTRACTORS['lsk'] = DOM_EXTRACTORS.hunters;
 // Wire up Sequence/Connells platform houses to the shared barnardmarcus extractor
 DOM_EXTRACTORS['foxandsons'] = DOM_EXTRACTORS.barnardmarcus;
-DOM_EXTRACTORS['bagshaws'] = DOM_EXTRACTORS.barnardmarcus;
 // Wire up Auction House UK branches to the shared auctionhouseuk extractor
 for (const slug of ['auctionhousescotland', 'austingray', 'auctionhouseeastanglia', 'auctionhousenorthwest', 'auctionhousenortheast', 'auctionhousewales', 'auctionhousebirmingham', 'auctionhousekent', 'auctionhousedevon', 'auctionhouseeastmidlands', 'auctionhousewestmidlands', 'auctionhouseessex', 'auctionhousemanchester', 'auctionhousesouthyorkshire', 'auctionhousewestyorkshire', 'auctionhouseteesvalley', 'auctionhousehull', 'auctionhousecumbria', 'auctionhouselincolnshire', 'auctionhouseuklondon', 'auctionhousebedsandbucks', 'auctionhousenorthamptonshire', 'auctionhouseoxfordshire', 'auctionhouseleicestershire', 'auctionhousemidlands', 'auctionhousecoventry', 'auctionhousenottsandderby', 'auctionhousechesterfield', 'auctionhousestaffordshire', 'auctionhousenorthwales', 'auctionhousesouthwest', 'auctionhousenorthernireland', 'auctionhousenational']) {
   DOM_EXTRACTORS[slug] = DOM_EXTRACTORS.auctionhouseuk;
@@ -11321,7 +11411,7 @@ async function _doAutoAnalyseAll() {
           const missingAllsopImages = cachedLots.filter(l => !l.imageUrl).length;
           if (brokenUrls > 0 || missingAllsopImages > 0) {
             try {
-              const rewritten = rewriteUrl(auction.url, 'allsop');
+              const rewritten = await rewriteUrl(auction.url, 'allsop');
               if (rewritten?.isApi) {
                 const pages = await scrapeAllsopApi(rewritten.baseUrl);
                 if (pages.length > 0) {
@@ -11878,7 +11968,7 @@ async function autoAnalyseOne(url) {
     return;
   }
 
-  const rewritten = rewriteUrl(url, house);
+  const rewritten = await rewriteUrl(url, house);
   const scrapeUrl = rewritten.baseUrl;
   const normalisedUrl = normaliseUrl(url);
 
