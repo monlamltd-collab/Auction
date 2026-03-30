@@ -5835,40 +5835,43 @@ function extractAllsopLotsFromJson(pages) {
         if (seen.has(ref) && ref) continue;
         if (ref) seen.add(ref);
 
-        // Address — prefer full_address, fall back to allsop_address or address1+postcode
-        const address = (item.full_address || item.allsop_address ||
+        // Address — allsop_address is most complete, fall back to address1+postcode
+        const address = (item.allsop_address ||
           [item.address1, item.address2, item.address3, item.county, item.postcode].filter(Boolean).join(', ')
         ).trim();
         if (!address || address.length < 3) continue;
 
-        // Lot number
-        const lotNum = parseInt(item.lot_number) || lots.length + 1;
+        // Lot number — API doesn't provide lot numbers, use positional
+        const lotNum = lots.length + 1;
 
-        // Price — parse guide_price_text or guide_price
+        // Price — numeric string like "19117000.00" or null
         let price = null;
-        const priceText = item.guide_price_text || item.guide_price || '';
+        const priceText = item.price || item.price_description || '';
         const pm = String(priceText).replace(/,/g, '').match(/(\d+)/);
         if (pm) price = parseInt(pm[1]);
 
-        // URL
+        // URL — construct from reference
         const slug = (address.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')).substring(0, 60);
         const url = ref ? `https://www.allsop.co.uk/lot-overview/${slug}/${ref}`
                        : `https://www.allsop.co.uk/find-a-property/`;
 
         // Image — S3 bucket pattern
         let imageUrl = '';
-        const imgId = item.featured_image_file_id || item.image_file_id;
+        const imgId = item.image_file_id;
         if (imgId) {
           imageUrl = `https://as-prod-bau-object-storage.s3.eu-west-2.amazonaws.com/image_cache/${imgId}---auto--.jpg`;
         }
 
-        // Bullets
+        // Bullets — property types, status, byline
         const bullets = [];
-        if (item.property_tenure) bullets.push(item.property_tenure);
-        if (item.yield) bullets.push(`Yield: ${item.yield}%`);
-        if (item.lot_type) bullets.push(item.lot_type);
-        if (item.status && item.status !== 'available') bullets.push(item.status.toUpperCase());
-        if (item.auction_date) bullets.push(`Auction: ${item.auction_date}`);
+        if (item.property_types && item.property_types.length > 0) {
+          bullets.push(item.property_types.join(', '));
+        }
+        if (item.sales_status && item.sales_status !== 'For Sale') {
+          bullets.push(item.sales_status.toUpperCase());
+        }
+        if (item.price_description) bullets.push(item.price_description);
+        if (item.department) bullets.push(item.department === 'RES' ? 'Residential' : item.department === 'COM' ? 'Commercial' : item.department);
 
         lots.push({
           lot: lotNum,
@@ -5879,8 +5882,7 @@ function extractAllsopLotsFromJson(pages) {
           bullets,
           reference: ref,
           allsopPropertyId: item.allsop_property_id || item.property_id,
-          propType: item.property_type || undefined,
-          tenure: item.property_tenure || undefined,
+          propType: (item.property_types || [])[0] || undefined,
         });
       }
     } catch (e) {
