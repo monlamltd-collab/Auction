@@ -6543,7 +6543,7 @@ const DOM_EXTRACTORS = {
         const carouselImgs = li.querySelectorAll('.lot-image-list img[src], .lot-image img[src]');
         for (const img of carouselImgs) {
           const s = img.getAttribute('src') || img.dataset.src || '';
-          if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) {
+          if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && !/floor[\\s_-]?plan|floorplan|site[\\s_-]?plan|epc/i.test(s) && s.length > 10) {
             imageUrl = s;
             break;
           }
@@ -6553,7 +6553,7 @@ const DOM_EXTRACTORS = {
           const anyImg = li.querySelector('img[src]');
           if (anyImg) {
             const s = anyImg.getAttribute('src') || anyImg.dataset.src || '';
-            if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && s.length > 10) imageUrl = s;
+            if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && !/floor[\\s_-]?plan|floorplan|site[\\s_-]?plan|epc/i.test(s) && s.length > 10) imageUrl = s;
           }
         }
         lots.push({ lot: lotNum, address, price, url, bullets, imageUrl: imageUrl || undefined });
@@ -6770,7 +6770,7 @@ const DOM_EXTRACTORS = {
         // Image — first real property image
         let imageUrl = '';
         const imgs = card.querySelectorAll('img[src]');
-        const imgJunk = /logo|icon|\\.svg|placeholder|modal\\.png|_NYC\\.|_LCC\\.|_BMDC\\.|council|utilit|cardwell|download_\\(|captcha/i;
+        const imgJunk = /logo|icon|\\.svg|placeholder|modal\\.png|_NYC\\.|_LCC\\.|_BMDC\\.|council|utilit|cardwell|download_\\(|captcha|floor[\\s_-]?plan|floorplan|site[\\s_-]?plan|epc[\\s_-]?chart|map[\\s_-]?view/i;
         for (const img of imgs) {
           const s = img.getAttribute('src') || '';
           if (s && s.length > 10 && !imgJunk.test(s)) {

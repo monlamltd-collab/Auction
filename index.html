@@ -7,6 +7,8 @@
 <meta name="description" content="Auction Brain scores every UK auction lot for investment potential and checks 68+ bridging lenders in one click. Browse free.">
 <link rel="canonical" href="https://auctions.bridgematch.co.uk">
 <link rel="icon" href="/public/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://wsrv.nl" crossorigin>
+<link rel="dns-prefetch" href="https://wsrv.nl">
 <meta property="og:title" content="Auction Brain — Find & Finance UK Auction Deals">
 <meta property="og:description" content="Auction Brain scores every UK auction lot for investment potential and checks 68+ bridging lenders in one click. Browse free.">
 <meta property="og:type" content="website">
@@ -3185,6 +3187,8 @@ function getCardImageBadges(lot) {
 function isValidImageUrl(url) {
   if (!url || typeof url !== 'string') return false;
   if (!/^https:\/\//i.test(url)) return false;
+  // Reject floor plans, logos, icons, maps, and other non-property images
+  if (/floor[\s_-]?plan|floorplan|site[\s_-]?plan|epc[\s_-]?chart|logo|icon|\.svg|placeholder|map[\s_-]?view/i.test(url)) return false;
   if (/\.(jpe?g|png|webp)(\?.*)?$/i.test(url)) return true;
   if (/cloudinary\.com|imgix\.net|cdn\.sanity\.io|amazonaws\.com|cloudfront\.net|googleusercontent\.com|wp-content\/uploads|supabase\.co\/storage|i\.imgur\.com|eigpropertyauctions\.co\.uk|auction|property|lot|catalogue|catalog/i.test(url)) return true;
   return false;
