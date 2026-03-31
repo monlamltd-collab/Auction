@@ -5206,7 +5206,7 @@ app.get('/api/admin/system-health', async (req, res) => {
       for (const row of cached) {
         const slug = row.house;
         if (!houseMap[slug]) {
-          houseMap[slug] = { slug, displayName: HOUSE_DISPLAY_NAMES[slug] || slug, lotCount: 0, imageCoverage: 0, status: 'active', lastScraped: null, _imgCount: 0, _lotCount: 0 };
+          houseMap[slug] = { slug, displayName: HOUSE_DISPLAY_NAMES[slug] || slug, lotCount: 0, imageCoverage: 0, bedCoverage: 0, status: 'active', lastScraped: null, _imgCount: 0, _lotCount: 0, _bedCount: 0 };
         }
         const h = houseMap[slug];
         const lots = Array.isArray(row.lots) ? row.lots : [];
@@ -5216,6 +5216,7 @@ app.get('/api/admin/system-health', async (req, res) => {
           h._lotCount++;
           totalLotsForImg++;
           if (lot.imageUrl) { h._imgCount++; totalImages++; }
+          if (lot.beds != null) { h._bedCount++; }
         }
         if (row.created_at && (!h.lastScraped || row.created_at > h.lastScraped)) {
           h.lastScraped = row.created_at;
@@ -5234,7 +5235,9 @@ app.get('/api/admin/system-health', async (req, res) => {
       if (skill && skill.status === 'broken') h.status = 'broken';
       if (skill && skill.last_scraped) h.lastScraped = skill.last_scraped;
       h.imageCoverage = h._lotCount > 0 ? Math.round(h._imgCount / h._lotCount * 100) : 0;
+      h.bedCoverage = h._lotCount > 0 ? Math.round(h._bedCount / h._lotCount * 100) : 0;
       delete h._imgCount;
+      delete h._bedCount;
       delete h._lotCount;
       return h;
     });
@@ -5249,6 +5252,8 @@ app.get('/api/admin/system-health', async (req, res) => {
       staleHouses,
       totalLots,
       avgImageCoverage: totalLotsForImg > 0 ? Math.round(totalImages / totalLotsForImg * 100) : 0,
+      avgBedCoverage: totalLots > 0 ? Math.round(houses.reduce((s, h) => s + (h.bedCoverage * h.lotCount / 100), 0) / totalLots * 100) : 0,
+      lowBedCoverageHouses: houses.filter(h => h.lotCount > 5 && h.bedCoverage < 50).map(h => ({ slug: h.slug, lots: h.lotCount, bedCoverage: h.bedCoverage + '%' })),
     };
 
     // 4. Pipeline health
@@ -6578,8 +6583,9 @@ For each lot, return a JSON object with these fields:
 - price: number or null (guide price in pounds, null if TBA/not stated)
 - url: string (detail page URL if found, empty string if not)
 - tenure: string or null — one of "Freehold", "Leasehold", "Share of Freehold", or null. Look for: freehold, leasehold, share of freehold, flying freehold, long leasehold, years remaining/unexpired. If not explicitly stated, infer from context (e.g. "125 year lease" = Leasehold, ground rent mentioned = Leasehold). Only return null if there is genuinely no indication.
+- beds: number or null — number of bedrooms. Extract from descriptions like "3 bed", "three bedroom", "studio" (=0). For multi-unit properties, total beds across all units. null if not stated.
 - status: string — one of "available", "sold", "unsold", "stc", "withdrawn". Default "available" if not stated. "unsold" means the auction took place but the lot did not sell (no bids met the reserve). Look for: SOLD, STC, Sale Agreed, Withdrawn, Under Offer, Prior to Auction, UNSOLD, Not Sold, Passed, No Sale.
-- bullets: array of strings (key features/description points - bedrooms, condition, sq ft, special circumstances etc)
+- bullets: array of strings (key features/description points - condition, sq ft, special circumstances etc)
 
 Return ONLY a JSON array of lot objects, no other text. If a page has no lots, return an empty array.
 
@@ -6587,8 +6593,9 @@ Important:
 - Extract the COMPLETE address including postcode
 - Guide prices may be shown as "Guide Price £X" or "Guide £X" or just "£X"
 - Tenure is a PRIORITY field — always look for it in the description, legal pack summary, and property details
+- Beds is a PRIORITY field — always look for bedroom count in the title, description, or property details. "2/3 bed" should return 3 (maximum). "Studio" = 0.
 - Status field: check for sold/STC/withdrawn markers, badges, labels, or overlays on the lot listing. "Unsold" or "Not Sold" or "Passed" means the auction happened but the lot didn't sell — these are distinct from "available" (not yet auctioned).
-- Bullet points include things like: property type, bedrooms, condition, sq ft, vacant/tenanted, executor sale, development potential, completion terms
+- Bullet points include things like: property type, condition, sq ft, vacant/tenanted, executor sale, development potential, completion terms
 - Include ALL lots, even commercial ones or land
 
 ${strippedBatch.map(p => `=== PAGE ${p.page} ===\n${p.content}`).join('\n\n')}
@@ -6682,8 +6689,9 @@ For each lot, return a JSON object with these fields:
 - price: number or null (guide price in pounds, null if TBA/not stated)
 - url: string (empty string — PDFs don't have lot URLs)
 - tenure: string or null — one of "Freehold", "Leasehold", "Share of Freehold", or null. Look for: freehold, leasehold, share of freehold, flying freehold, long leasehold, years remaining/unexpired. If not explicitly stated, infer from context (e.g. "125 year lease" = Leasehold, ground rent mentioned = Leasehold). Only return null if there is genuinely no indication.
+- beds: number or null — number of bedrooms. Extract from descriptions like "3 bed", "three bedroom", "studio" (=0). For multi-unit properties, total beds across all units. null if not stated.
 - status: string — one of "available", "sold", "unsold", "stc", "withdrawn". Default "available" if not stated. "unsold" means the auction took place but the lot did not sell (no bids met the reserve). Look for: UNSOLD, Not Sold, Passed, No Sale.
-- bullets: array of strings (key features/description points - bedrooms, condition, sq ft, special circumstances etc)
+- bullets: array of strings (key features/description points - condition, sq ft, special circumstances etc)
 
 Return ONLY a JSON array of lot objects, no other text.
 
@@ -6691,7 +6699,8 @@ Important:
 - Extract the COMPLETE address including postcode
 - Guide prices may be shown as "Guide Price £X" or "Guide £X" or just "£X"
 - Tenure is a PRIORITY field — always look for it in the description, legal pack summary, and property details
-- Bullet points include things like: property type, bedrooms, condition, sq ft, vacant/tenanted, executor sale, development potential, completion terms
+- Beds is a PRIORITY field — always look for bedroom count in the title, description, or property details. "2/3 bed" should return 3 (maximum). "Studio" = 0.
+- Bullet points include things like: property type, condition, sq ft, vacant/tenanted, executor sale, development potential, completion terms
 - Include ALL lots, even commercial ones or land
 - Do NOT include terms & conditions, legal text, or non-lot pages
 
@@ -10768,7 +10777,9 @@ async function enrichLotsFromLotPages(lots, concurrency = 5) {
   });
   if (targets.length === 0) return 0;
 
-  const MAX_LOT_PAGES = 100;
+  const MAX_LOT_PAGES = 200;
+  // Prioritise lots missing beds (high-value enrichment) ahead of other gaps
+  targets.sort((a, b) => (!a.beds ? 0 : 1) - (!b.beds ? 0 : 1));
   const capped = targets.slice(0, MAX_LOT_PAGES);
 
   const junk = /logo|icon|nav|sprite|\.svg|placeholder|no-image|modal\.png|_NYC\.|_LCC\.|_BMDC\.|council|utilit|cardwell|badge|spacer|pixel|facebook|twitter|1x1|gavel|backdrop|generic[_-]?image|coming[_-]?soon/i;
@@ -10893,10 +10904,18 @@ async function enrichLotsFromLotPages(lots, concurrency = 5) {
 
         // ── Beds ──
         if (!lot.beds) {
-          const bedMatch = text.match(/\b(\d{1,2})\s*(?:bed(?:room)?s?|double\s+bed(?:room)?s?)\b/);
-          if (bedMatch) {
-            const n = parseInt(bedMatch[1], 10);
+          // Try "2/3 bed" variant format first (take higher), then standard patterns
+          const variantMatch = text.match(/\b(\d{1,2})\s*\/\s*(\d{1,2})\s*[-\s]?bed/i);
+          const standardMatch = text.match(/\b(\d{1,2})\s*(?:[-\s])?(?:bed(?:room)?s?|double\s+bed(?:room)?s?)\b/i);
+          const studioMatch = /\bstudio\s*(?:flat|apartment)?\b/i.test(text);
+          if (variantMatch) {
+            const n = Math.max(parseInt(variantMatch[1], 10), parseInt(variantMatch[2], 10));
             if (n >= 1 && n <= 20) { lot.beds = n; stats.beds++; }
+          } else if (standardMatch) {
+            const n = parseInt(standardMatch[1], 10);
+            if (n >= 1 && n <= 20) { lot.beds = n; stats.beds++; }
+          } else if (studioMatch) {
+            lot.beds = 0; stats.beds++;
           }
         }
 
@@ -10916,7 +10935,8 @@ async function enrichLotsFromLotPages(lots, concurrency = 5) {
   const total = Object.values(stats).reduce((a, b) => a + b, 0);
   if (total > 0) {
     const parts = Object.entries(stats).filter(([, v]) => v > 0).map(([k, v]) => `${k}:${v}`).join(' ');
-    console.log(`Lot-page enrichment: ${capped.length} pages fetched, ${total} fields filled — ${parts}${fcUsed > 0 ? ` (${fcUsed} via Firecrawl)` : ''}`);
+    const bedCoverage = lots.filter(l => l.beds != null).length;
+    console.log(`Lot-page enrichment: ${capped.length} pages fetched, ${total} fields filled — ${parts}${fcUsed > 0 ? ` (${fcUsed} via Firecrawl)` : ''} | beds coverage: ${bedCoverage}/${lots.length} (${Math.round(bedCoverage/lots.length*100)}%)`);
   }
   return total;
 }
@@ -11166,12 +11186,19 @@ function analyseLot(raw) {
   else if (/\binvestment\b/.test(t)) L.propType = 'commercial'; // Pure investment = commercial
   else L.propType = 'other';
 
-  const bm = t.match(/(\w+)\s*[-\s]?bed/);
-  if (bm) {
-    const v = bm[1].toLowerCase(); L.beds = W2N[v] || (v.match(/^\d+$/) ? +v : null);
-    // Cap residential bed count at 10 — higher counts are student blocks/HMOs/hotels
-    if (L.beds > 10 && ['house', 'flat', 'bungalow'].includes(L.propType)) L.beds = null;
+  // Beds — prefer structured field from Gemini, then fall back to regex
+  if (raw.beds != null && typeof raw.beds === 'number' && raw.beds >= 0 && raw.beds <= 20) {
+    L.beds = raw.beds;
+  } else {
+    const bm = t.match(/(\d{1,2})\s*\/\s*(\d{1,2})\s*[-\s]?bed/) || t.match(/(\w+)\s*[-\s]?bed/);
+    if (bm) {
+      // "2/3 bed" → take the higher number; "three bed" → word-to-number
+      const v = (bm[2] || bm[1]).toLowerCase();
+      L.beds = W2N[v] || (v.match(/^\d+$/) ? +v : null);
+    }
   }
+  // Cap residential bed count at 10 — higher counts are student blocks/HMOs/hotels
+  if (L.beds > 10 && ['house', 'flat', 'bungalow'].includes(L.propType)) L.beds = null;
   if (/studio/.test(t) && L.beds === null) L.beds = 0;
 
   // Tenure — prefer structured field from Gemini, then fall back to regex
@@ -12031,8 +12058,11 @@ function matchEPCToLot(epcRecords, lotAddress) {
     if (!/^[A-G]$/.test(rating)) continue;
     if (score < 1 || score > 100) continue;
 
+    // Extract bedroom count from EPC record
+    const epcBeds = parseInt(rec['number-habitable-rooms'] || rec.numberHabitableRooms || rec['number-heated-rooms'] || rec.numberHeatedRooms || '0', 10);
+
     if (!bestMatch || date > bestDate) {
-      bestMatch = { epcRating: rating, epcScore: score, epcDate: date };
+      bestMatch = { epcRating: rating, epcScore: score, epcDate: date, epcBeds: (epcBeds >= 1 && epcBeds <= 20) ? epcBeds : null };
       bestDate = date;
     }
   }
@@ -12259,6 +12289,11 @@ async function enrichLots(lots, house, sourceUrl, onProgress) {
               lot.epcRating = epcMatch.epcRating;
               lot.epcScore = epcMatch.epcScore;
               lot.epcDate = epcMatch.epcDate;
+              // Fill beds from EPC if not already extracted
+              if (!lot.beds && epcMatch.epcBeds) {
+                lot.beds = epcMatch.epcBeds;
+                lot._bedsSource = 'epc';
+              }
             }
           }
 
@@ -12288,7 +12323,9 @@ async function enrichLots(lots, house, sourceUrl, onProgress) {
 
     const epcCount = lots.filter(l => l.epcRating).length;
     const floodCount = lots.filter(l => l.floodZone).length;
-    console.log(`EPC/Flood enrichment done: ${epcCount} lots with EPC, ${floodCount} lots with flood zone`);
+    const bedsCount = lots.filter(l => l.beds != null).length;
+    const bedsFromEpc = lots.filter(l => l._bedsSource === 'epc').length;
+    console.log(`EPC/Flood enrichment done: ${epcCount} lots with EPC, ${floodCount} lots with flood zone, beds: ${bedsCount}/${lots.length} (${Math.round(bedsCount/lots.length*100)}%${bedsFromEpc ? ', ' + bedsFromEpc + ' from EPC' : ''})`);
   } catch (enrichErr) {
     console.warn(`EPC/Flood enrichment failed (non-fatal): ${enrichErr.message}`);
   }

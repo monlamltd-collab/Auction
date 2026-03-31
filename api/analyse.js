@@ -195,7 +195,8 @@ For each lot, return a JSON object with these fields:
 - price: number or null (guide price in pounds, null if TBA/not stated)
 - url: string (detail page URL if found, empty string if not)
 - tenure: string or null — one of "Freehold", "Leasehold", "Share of Freehold", or null. Look for: freehold, leasehold, share of freehold, flying freehold, long leasehold, years remaining/unexpired. If not explicitly stated, infer from context (e.g. "125 year lease" = Leasehold, ground rent mentioned = Leasehold). Only return null if there is genuinely no indication.
-- bullets: array of strings (key features/description points - bedrooms, condition, sq ft, special circumstances etc)
+- beds: number or null — number of bedrooms. Extract from descriptions like "3 bed", "three bedroom", "studio" (=0). For multi-unit properties, total beds across all units. null if not stated.
+- bullets: array of strings (key features/description points - condition, sq ft, special circumstances etc)
 
 Return ONLY a JSON array of lot objects, no other text. If a page has no lots, return an empty array.
 
@@ -203,7 +204,8 @@ Important:
 - Extract the COMPLETE address including postcode
 - Guide prices may be shown as "Guide Price £X" or "Guide £X" or just "£X"
 - Tenure is a PRIORITY field — always look for it in the description, legal pack summary, and property details
-- Bullet points include things like: property type, bedrooms, condition, sq ft, vacant/tenanted, executor sale, development potential, completion terms
+- Beds is a PRIORITY field — always look for bedroom count in the title, description, or property details. "2/3 bed" should return 3 (maximum). "Studio" = 0.
+- Bullet points include things like: property type, condition, sq ft, vacant/tenanted, executor sale, development potential, completion terms
 - Include ALL lots, even commercial ones or land
 
 ${strippedBatch.map(p => `=== PAGE ${p.page} ===\n${p.content}`).join('\n\n')}
@@ -288,9 +290,13 @@ function analyseLot(raw) {
   else if (/garage|parking|lock.?up/.test(t)) L.propType = 'garage';
   else L.propType = 'other';
 
-  // Bedrooms
-  const bm = t.match(/(\w+)\s*[-\s]?bed/);
-  if (bm) { const v = bm[1].toLowerCase(); L.beds = W2N[v] || (v.match(/^\d+$/) ? +v : null); }
+  // Bedrooms — prefer structured field from Gemini, then fall back to regex
+  if (raw.beds != null && typeof raw.beds === 'number' && raw.beds >= 0 && raw.beds <= 20) {
+    L.beds = raw.beds;
+  } else {
+    const bm = t.match(/(\d{1,2})\s*\/\s*(\d{1,2})\s*[-\s]?bed/) || t.match(/(\w+)\s*[-\s]?bed/);
+    if (bm) { const v = (bm[2] || bm[1]).toLowerCase(); L.beds = W2N[v] || (v.match(/^\d+$/) ? +v : null); }
+  }
   if (/studio/.test(t) && L.beds === null) L.beds = 0;
 
   // Tenure — prefer structured field from Gemini, then fall back to regex
