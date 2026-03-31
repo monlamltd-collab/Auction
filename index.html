@@ -432,6 +432,20 @@ footer .logo-f span{color:var(--green)}
 .bottom-cta .cta-primary{font-size:.9rem;padding:12px 28px;position:relative}
 .view-results .bottom-cta{display:none}
 
+/* ── Budget calculator modal ── */
+.budget-calc-modal .modal{max-width:480px}
+.bc-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+.bc-grid label{font-size:.78rem;color:var(--text2);display:block;margin-bottom:3px}
+.bc-grid input,.bc-grid select{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:.88rem;font-family:var(--font-main);box-sizing:border-box}
+.bc-grid .bc-full{grid-column:span 2}
+.bc-results{background:var(--surface2);border-radius:10px;padding:14px 16px;margin-top:12px}
+.bc-row{display:flex;justify-content:space-between;padding:4px 0;font-size:.84rem}
+.bc-row.bc-total{border-top:2px solid var(--border);margin-top:8px;padding-top:8px;font-weight:700;font-size:.95rem}
+.bc-row .bc-label{color:var(--text2)}
+.bc-row .bc-val{font-weight:600;color:var(--text)}
+.bc-row.bc-total .bc-val{color:var(--accent)}
+.bc-verdict{margin-top:12px;padding:10px 12px;border-radius:8px;font-size:.82rem;font-weight:500}
+
 /* ── EMAIL CAPTURE ── */
 .email-capture{text-align:center;padding:44px 24px;margin:0 -24px;background:var(--surface2);border-top:1px solid var(--border);border-bottom:1px solid var(--border);position:relative}
 .email-capture h2{font-family:var(--font-main);font-size:clamp(1.1rem,2.5vw,1.4rem);font-weight:700;color:var(--navy);margin-bottom:6px}
@@ -501,6 +515,9 @@ footer .logo-f span{color:var(--green)}
 .score-popup-total{border-top:1px solid var(--border);margin-top:6px;padding-top:6px;font-weight:700;display:flex;justify-content:space-between}
 .score-popup-cat{font-size:.72rem;color:var(--text3);margin-bottom:4px}
 .score-popup .close-x{background:none;border:none;font-size:1rem;cursor:pointer;color:var(--text3);padding:0 0 0 8px;line-height:1}
+/* ── Score hover tooltip (lightweight preview) ── */
+.score-tip{position:absolute;bottom:calc(100% + 6px);right:0;z-index:49;background:#1a2a3a;color:#fff;border-radius:8px;padding:6px 10px;font-size:.72rem;line-height:1.4;white-space:nowrap;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,.15);animation:fadeInUp .12s ease;max-width:180px}
+.score-tip::after{content:'';position:absolute;top:100%;right:12px;border:5px solid transparent;border-top-color:#1a2a3a}
 .card-image-placeholder{height:100%;background:linear-gradient(135deg,#eef2f7 0%,#e4eaf2 50%,#dde5ef 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}
 .card-image-placeholder svg{width:48px;height:48px;fill:#c0cad6;opacity:.7}
 .card-image-placeholder .ph-label{font-size:.72rem;color:#a0aab4;font-weight:500;letter-spacing:.03em}
@@ -870,6 +887,7 @@ footer .logo-f span{color:var(--green)}
     <p class="hero-sub">AI scores every lot across 168 UK auction houses. Check bridging finance from <span class="lender-count-dynamic">68</span> lenders in one click. Completely free — sign in to unlock AI features.</p>
     <div class="hero-ctas">
       <a href="#filterBar" class="cta-primary" onclick="event.preventDefault();document.getElementById('filterBar').scrollIntoView({behavior:'smooth'})">Browse Auction Deals →</a>
+      <button class="cta-secondary" onclick="$('budgetCalcModal').classList.add('show')">Budget Calculator</button>
     </div>
     <div class="trust-line">
       <span><span class="t-icon">✓</span> Free to browse</span>
@@ -944,6 +962,50 @@ footer .logo-f span{color:var(--green)}
         </div>
       </div>
       <button onclick="$('paywallModal').classList.remove('show')" class="btn-main" style="width:100%;padding:12px">Got it</button>
+    </div>
+  </div>
+
+  <!-- ═══════ BUDGET CALCULATOR MODAL ═══════ -->
+  <div class="modal-bg budget-calc-modal" id="budgetCalcModal" role="dialog" aria-modal="true">
+    <div class="modal">
+      <h2 style="font-size:1.3rem;margin-bottom:4px">Budget Calculator</h2>
+      <p style="color:var(--text2);font-size:.82rem;margin-bottom:14px">Work out the real cost of buying at auction — not just the hammer price.</p>
+      <div class="bc-grid">
+        <div>
+          <label for="bcPrice">Purchase price</label>
+          <input type="number" id="bcPrice" placeholder="e.g. 150000" oninput="calcBudget()">
+        </div>
+        <div>
+          <label for="bcRegion">Region</label>
+          <select id="bcRegion" onchange="calcBudget()">
+            <option value="england">England</option>
+            <option value="scotland">Scotland</option>
+            <option value="wales">Wales</option>
+          </select>
+        </div>
+        <div>
+          <label for="bcWorks">Refurb / works cost</label>
+          <input type="number" id="bcWorks" placeholder="e.g. 30000" oninput="calcBudget()">
+        </div>
+        <div>
+          <label for="bcSurvey">Survey cost</label>
+          <input type="number" id="bcSurvey" placeholder="500" value="500" oninput="calcBudget()">
+        </div>
+        <div>
+          <label for="bcLegal">Legal / solicitor fees</label>
+          <input type="number" id="bcLegal" placeholder="1500" value="1500" oninput="calcBudget()">
+        </div>
+        <div>
+          <label for="bcBuyerPrem">Buyer's premium</label>
+          <input type="number" id="bcBuyerPrem" placeholder="1200" value="1200" oninput="calcBudget()">
+        </div>
+        <div class="bc-full">
+          <label for="bcCash">Your total cash available</label>
+          <input type="number" id="bcCash" placeholder="e.g. 80000" oninput="calcBudget()">
+        </div>
+      </div>
+      <div id="bcResults"></div>
+      <button onclick="$('budgetCalcModal').classList.remove('show')" class="btn-main" style="width:100%;padding:12px;margin-top:12px">Close</button>
     </div>
   </div>
 
@@ -2363,7 +2425,51 @@ initAuth();
 
 $('signupModal').addEventListener('click', e => { if (e.target === $('signupModal')) $('signupModal').classList.remove('show'); });
 $('paywallModal').addEventListener('click', e => { if (e.target === $('paywallModal')) $('paywallModal').classList.remove('show'); });
-document.addEventListener('keydown', e => { if(e.key==='Escape'){$('signupModal').classList.remove('show');$('paywallModal').classList.remove('show')} });
+document.addEventListener('keydown', e => { if(e.key==='Escape'){$('signupModal').classList.remove('show');$('paywallModal').classList.remove('show');$('budgetCalcModal').classList.remove('show')} });
+$('budgetCalcModal').addEventListener('click', e => { if (e.target === $('budgetCalcModal')) $('budgetCalcModal').classList.remove('show'); });
+
+// ── Budget calculator ──
+function fmtCurrency(v) { var prefix = v < 0 ? '-\u00a3' : '\u00a3'; return prefix + Math.abs(Math.round(v)).toLocaleString(); }
+function calcBudget() {
+  const price = parseInt($('bcPrice').value) || 0;
+  const region = $('bcRegion').value;
+  const works = parseInt($('bcWorks').value) || 0;
+  const survey = parseInt($('bcSurvey').value) || 0;
+  const legal = parseInt($('bcLegal').value) || 0;
+  const buyerPrem = parseInt($('bcBuyerPrem').value) || 0;
+  const cash = parseInt($('bcCash').value) || 0;
+  if (!price) { $('bcResults').innerHTML = ''; return; }
+  const sdlt = calcSDLT(price, region);
+  const deposit = Math.round(price * 0.1);
+  const totalCost = price + sdlt + works + survey + legal + buyerPrem;
+  const dayOneCash = deposit + sdlt + buyerPrem + survey + legal;
+  let html = '<div class="bc-results">' +
+    '<div style="font-weight:600;font-size:.88rem;margin-bottom:8px;color:var(--text)">Cost breakdown</div>' +
+    '<div class="bc-row"><span class="bc-label">Purchase price</span><span class="bc-val">' + fmtCurrency(price) + '</span></div>' +
+    '<div class="bc-row"><span class="bc-label">SDLT / stamp duty</span><span class="bc-val">' + fmtCurrency(sdlt) + '</span></div>' +
+    '<div class="bc-row"><span class="bc-label">Refurb / works</span><span class="bc-val">' + fmtCurrency(works) + '</span></div>' +
+    '<div class="bc-row"><span class="bc-label">Survey</span><span class="bc-val">' + fmtCurrency(survey) + '</span></div>' +
+    '<div class="bc-row"><span class="bc-label">Solicitor fees</span><span class="bc-val">' + fmtCurrency(legal) + '</span></div>' +
+    '<div class="bc-row"><span class="bc-label">Buyer\'s premium</span><span class="bc-val">' + fmtCurrency(buyerPrem) + '</span></div>' +
+    '<div class="bc-row bc-total"><span class="bc-label">Total real cost</span><span class="bc-val">' + fmtCurrency(totalCost) + '</span></div>' +
+    '</div>' +
+    '<div class="bc-results" style="margin-top:8px">' +
+    '<div style="font-weight:600;font-size:.88rem;margin-bottom:8px;color:var(--text)">Cash you need</div>' +
+    '<div class="bc-row"><span class="bc-label">10% deposit (auction day)</span><span class="bc-val">' + fmtCurrency(deposit) + '</span></div>' +
+    '<div class="bc-row"><span class="bc-label">Day-one cash needed</span><span class="bc-val" style="color:var(--accent)">' + fmtCurrency(dayOneCash) + '</span></div>' +
+    '<div style="font-size:.75rem;color:var(--text3);margin-top:4px">Deposit + SDLT + buyer\'s premium + survey + legal</div>' +
+    '</div>';
+  if (cash > 0) {
+    const surplus = cash - dayOneCash;
+    const verdictColor = surplus >= 0 ? 'var(--signal-pos)' : 'var(--accent-danger)';
+    const verdictBg = surplus >= 0 ? '#e8f5ee' : '#fdf0ee';
+    const verdictText = surplus >= 0
+      ? 'You have ' + fmtCurrency(surplus) + ' spare after day-one costs. ' + (works > 0 && surplus >= works ? 'Enough to cover your refurb budget.' : works > 0 ? 'You may need bridging finance to cover the remaining ' + fmtCurrency(works - Math.max(0, surplus)) + ' of works.' : '')
+      : 'You are ' + fmtCurrency(Math.abs(surplus)) + ' short of day-one costs. Consider a lower purchase price or arranging bridging finance.';
+    html += '<div class="bc-verdict" style="background:' + verdictBg + ';color:' + verdictColor + '">' + verdictText + '</div>';
+  }
+  $('bcResults').innerHTML = html;
+}
 
 // ═══════════════════════════════
 // STRIPE / PAYWALL
@@ -2688,6 +2794,16 @@ async function runSmartSearch(query) {
   if (!window._userTier || window._userTier === 'anon') {
     $('signupModal').classList.add('show');
     return;
+  }
+
+  // Pre-confirmation: show remaining credits before consuming one
+  if (window._aiSearchLimit && window._aiSearchLimit !== 'unlimited') {
+    const used = window._aiSearchesUsed || 0;
+    const remaining = Math.max(0, window._aiSearchLimit - used);
+    if (remaining <= 5) {
+      const proceed = confirm('This will use 1 of your ' + remaining + ' remaining AI search' + (remaining !== 1 ? 'es' : '') + ' today.\n\nContinue?');
+      if (!proceed) return;
+    }
   }
 
   // Clean slate — abort previous, clear all state, reset filters
@@ -3610,7 +3726,7 @@ function getCardImageBadges(lot) {
     const clampedScore = Math.max(0, Math.min(10, rawScore));
     const sc = clampedScore >= 3 ? 'high' : clampedScore >= 1 ? 'mid' : 'low';
     const sign = clampedScore > 0 ? '+' : '';
-    html += '<div class="card-badge badge-score ' + sc + '" style="cursor:pointer;position:relative" onclick="event.stopPropagation();toggleScorePopup(this,' + lot._idx + ')" data-tip="Investment score (0-10) based on AI signals. Click for breakdown.">' + sign + clampedScore + '</div>';
+    html += '<div class="card-badge badge-score ' + sc + '" style="cursor:pointer;position:relative" onclick="event.stopPropagation();toggleScorePopup(this,' + lot._idx + ')" onmouseenter="showScoreTip(this,' + lot._idx + ')" onmouseleave="hideScoreTip(this)">' + sign + clampedScore + '</div>';
   }
   if (lot.vacant) html += '<div class="badge-vacant">Vacant possession</div>';
   // Urgency / ended badge
@@ -3641,8 +3757,31 @@ function getStatusOverlay(lot) {
   return '<div class="lot-status-overlay lot-status-' + lot.status + '"></div>';
 }
 
+// ── Score hover tooltip (lightweight preview) ──
+function showScoreTip(badgeEl, idx) {
+  if (badgeEl.querySelector('.score-popup') || badgeEl.querySelector('.score-tip')) return;
+  const lot = LOTS[idx]; if (!lot) return;
+  const sb = lot.scoreBreakdown || [];
+  const total = lot.score ?? 0;
+  const top = sb.length ? sb.reduce((a, b) => Math.abs(b.pts) > Math.abs(a.pts) ? b : a) : null;
+  let text = (total > 0 ? '+' : '') + total + '/10';
+  if (top) text += ' · ' + (top.pts > 0 ? '+' : '') + top.pts + ' ' + top.signal;
+  if (sb.length > 1) text += ' +' + (sb.length - 1) + ' more';
+  text += '\nClick for full breakdown';
+  const tip = document.createElement('div');
+  tip.className = 'score-tip';
+  tip.textContent = text;
+  tip.style.whiteSpace = 'pre-line';
+  badgeEl.appendChild(tip);
+}
+function hideScoreTip(badgeEl) {
+  const tip = badgeEl.querySelector('.score-tip');
+  if (tip) tip.remove();
+}
+
 // ── Score breakdown popup ──
 function toggleScorePopup(badgeEl, idx) {
+  hideScoreTip(badgeEl);
   // Close any existing popup
   const existing = document.querySelector('.score-popup');
   if (existing) { existing.remove(); return; }
@@ -3977,7 +4116,45 @@ function expandCard(lot) {
       compSection +
     '</div>' +
     // ── Lot description bullets ──
-    (bulletsHtml ? '<ul class="exp-bullets">' + bulletsHtml + '</ul>' : '');
+    (bulletsHtml ? '<ul class="exp-bullets">' + bulletsHtml + '</ul>' : '') +
+    // ── What happens next (auction process guide) ──
+    '<details class="whn-section" style="margin-top:12px;border:1px solid var(--border);border-radius:10px;background:var(--white)">' +
+      '<summary style="padding:12px 16px;font-weight:600;font-size:.88rem;cursor:pointer;color:var(--text);list-style:none;display:flex;align-items:center;gap:8px">' +
+        '<span style="font-size:1.1rem">&#x1f4cb;</span> What happens next — auction buying guide' +
+        '<span style="margin-left:auto;font-size:.75rem;color:var(--text3);font-weight:400">Expand</span>' +
+      '</summary>' +
+      '<div style="padding:0 16px 16px;font-size:.82rem;color:var(--text2);line-height:1.7">' +
+        '<div style="display:grid;gap:12px">' +
+          '<div style="padding:10px 12px;background:var(--surface2);border-radius:8px">' +
+            '<div style="font-weight:600;color:var(--text);margin-bottom:4px">1. Get the legal pack</div>' +
+            '<div>Download the legal pack from the auction house website (usually free). It contains title deeds, local authority searches, property information forms, and any special conditions. <strong>Have a solicitor review it before you bid</strong> — budget ~' + String.fromCharCode(163) + '500-' + String.fromCharCode(163) + '1,000 for this.</div>' +
+          '</div>' +
+          '<div style="padding:10px 12px;background:var(--surface2);border-radius:8px">' +
+            '<div style="font-weight:600;color:var(--text);margin-bottom:4px">2. Arrange a survey</div>' +
+            '<div>Book a building survey or at minimum a HomeBuyer report before auction day. Budget ~' + String.fromCharCode(163) + '400-' + String.fromCharCode(163) + '700. For heavily distressed properties, consider a full structural survey (~' + String.fromCharCode(163) + '800-' + String.fromCharCode(163) + '1,500). Some auction houses allow viewings — always attend if possible.</div>' +
+          '</div>' +
+          '<div style="padding:10px 12px;background:var(--surface2);border-radius:8px">' +
+            '<div style="font-weight:600;color:var(--text);margin-bottom:4px">3. Arrange finance</div>' +
+            '<div>If using bridging finance, get a Decision in Principle (DIP) before auction. Use the Finance Check above to see which lenders will fund this deal. Most bridging lenders can complete in 5-10 working days. You typically need 10% deposit on the day + funds for completion within 28 days (or as stated in special conditions).</div>' +
+          '</div>' +
+          '<div style="padding:10px 12px;background:var(--surface2);border-radius:8px">' +
+            '<div style="font-weight:600;color:var(--text);margin-bottom:4px">4. Register to bid</div>' +
+            '<div>Register with the auction house before the sale. You will need: photo ID (passport/driving licence), proof of address, proof of funds (bank statement or DIP letter), and your solicitor\'s details. Most houses now allow online bidding — register early as verification can take 24-48 hours.</div>' +
+          '</div>' +
+          '<div style="padding:10px 12px;background:var(--surface2);border-radius:8px">' +
+            '<div style="font-weight:600;color:var(--text);margin-bottom:4px">5. Set your maximum bid</div>' +
+            '<div>Use the Deal Stacking Calculator above to work out your numbers. Set a firm maximum and <strong>do not exceed it</strong>. Remember to factor in: SDLT, legal fees (~' + String.fromCharCode(163) + '1,500), survey, bridging costs, and refurb. The guide price is often just a starting point — final prices frequently exceed it.</div>' +
+          '</div>' +
+          '<div style="padding:10px 12px;background:var(--surface2);border-radius:8px">' +
+            '<div style="font-weight:600;color:var(--text);margin-bottom:4px">6. After the hammer falls</div>' +
+            '<div>If you win: you pay 10% deposit immediately (plus buyer\'s premium if applicable, usually ~' + String.fromCharCode(163) + '1,200). Exchange happens at the fall of the hammer — this is legally binding. Completion is typically 28 days (check special conditions). Your solicitor handles the conveyancing from here.</div>' +
+          '</div>' +
+        '</div>' +
+        '<div style="margin-top:12px;padding:8px 12px;background:#fef3e2;border-radius:8px;color:var(--accent-warn);font-weight:500;font-size:.78rem">' +
+          'Remember: at auction, the fall of the hammer creates a binding contract. Always do your due diligence before bidding, not after.' +
+        '</div>' +
+      '</div>' +
+    '</details>';
 
   // Insert after the card
   cardEl.after(panel);
