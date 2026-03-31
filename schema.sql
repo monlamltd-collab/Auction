@@ -152,3 +152,36 @@ CREATE INDEX IF NOT EXISTS idx_ai_usage_created ON ai_usage(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_ai_usage_provider ON ai_usage(provider, created_at DESC);
 ALTER TABLE ai_usage ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Service role full access" ON ai_usage FOR ALL USING (true) WITH CHECK (true);
+
+-- 11. SAVED SEARCHES
+CREATE TABLE IF NOT EXISTS saved_searches (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  filters JSONB NOT NULL DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_saved_searches_user ON saved_searches(user_id);
+ALTER TABLE saved_searches ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Service role full access" ON saved_searches FOR ALL USING (true) WITH CHECK (true);
+
+-- 12. UNSOLD LOT ALERTS
+CREATE TABLE IF NOT EXISTS unsold_alerts (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  filters JSONB NOT NULL DEFAULT '{}',
+  frequency TEXT NOT NULL DEFAULT 'daily',
+  active BOOLEAN DEFAULT TRUE,
+  last_sent_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id)
+);
+CREATE INDEX idx_unsold_alerts_active ON unsold_alerts(active, last_sent_at);
+ALTER TABLE unsold_alerts ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Service role full access" ON unsold_alerts FOR ALL USING (true) WITH CHECK (true);
+
+-- 13. ONBOARDING FIELDS ON USERS
+ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_complete BOOLEAN DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS experience_level TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS budget_max INTEGER;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS interests TEXT[] DEFAULT '{}';

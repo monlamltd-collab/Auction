@@ -1407,7 +1407,7 @@ app.get('/api/auth/me', async (req, res) => {
   try {
     const { data } = await supabase
       .from('users')
-      .select('id, email, name, tier, analyses_count, tier_expires_at, stripe_subscription_id, consent_auction_alerts, consent_partner_marketing')
+      .select('id, email, name, tier, analyses_count, tier_expires_at, stripe_subscription_id, consent_auction_alerts, consent_partner_marketing, onboarding_complete, experience_level, budget_max, interests')
       .eq('id', user.id)
       .single();
     const safe = data || user;
@@ -1417,6 +1417,267 @@ app.get('/api/auth/me', async (req, res) => {
   } catch (err) {
     const { stripe_subscription_id, stripe_customer_id, ...publicFields } = user;
     res.json({ ...publicFields, hasSubscription: !!stripe_subscription_id, stripeEnabled: STRIPE_ENABLED });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// API: ONBOARDING
+// ═══════════════════════════════════════════════════════════════
+app.post('/api/auth/onboarding', async (req, res) => {
+  const user = await validateUserFromReq(req);
+  if (!user) return res.status(401).json({ error: 'Authentication required' });
+
+  const { experience_level, budget_max, interests } = req.body || {};
+  const updates = { onboarding_complete: true };
+  if (typeof experience_level === 'string') updates.experience_level = experience_level;
+  if (typeof budget_max === 'number' && budget_max > 0) updates.budget_max = budget_max;
+  if (Array.isArray(interests)) updates.interests = interests.slice(0, 10);
+
+  try {
+    await supabase.from('users').update(updates).eq('id', user.id);
+    res.json({ ok: true });
+  } catch (err) {
+    log.error('Onboarding save error', { error: err.message, userId: user.id });
+    res.status(500).json({ error: 'Failed to save onboarding' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// API: SAVED SEARCHES
+// ═══════════════════════════════════════════════════════════════
+app.get('/api/searches', async (req, res) => {
+  const user = await validateUserFromReq(req);
+  if (!user) return res.status(401).json({ error: 'Authentication required' });
+
+  try {
+    const { data, error } = await supabase
+      .from('saved_searches')
+      .select('id, name, filters, created_at')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(20);
+    if (error) throw error;
+    res.json({ searches: data || [] });
+  } catch (err) {
+    log.error('Load saved searches error', { error: err.message, userId: user.id });
+    res.status(500).json({ error: 'Failed to load saved searches' });
+  }
+});
+
+app.post('/api/searches', async (req, res) => {
+  const user = await validateUserFromReq(req);
+  if (!user) return res.status(401).json({ error: 'Authentication required' });
+
+  const { name, filters } = req.body || {};
+  if (!name || typeof name !== 'string' || name.length > 100) return res.status(400).json({ error: 'Name required (max 100 chars)' });
+  if (!filters || typeof filters !== 'object') return res.status(400).json({ error: 'Filters required' });
+
+  try {
+    // Cap at 10 saved searches per user
+    const { count } = await supabase.from('saved_searches').select('id', { count: 'exact', head: true }).eq('user_id', user.id);
+    if (count >= 10) return res.status(400).json({ error: 'Maximum 10 saved searches. Delete one first.' });
+
+    const { data, error } = await supabase
+      .from('saved_searches')
+      .insert({ user_id: user.id, name: name.trim(), filters })
+      .select('id, name, filters, created_at')
+      .single();
+    if (error) throw error;
+    res.json({ search: data });
+  } catch (err) {
+    log.error('Save search error', { error: err.message, userId: user.id });
+    res.status(500).json({ error: 'Failed to save search' });
+  }
+});
+
+app.delete('/api/searches/:id', async (req, res) => {
+  const user = await validateUserFromReq(req);
+  if (!user) return res.status(401).json({ error: 'Authentication required' });
+
+  try {
+    const { error } = await supabase
+      .from('saved_searches')
+      .delete()
+      .eq('id', req.params.id)
+      .eq('user_id', user.id);
+    if (error) throw error;
+    res.json({ ok: true });
+  } catch (err) {
+    log.error('Delete search error', { error: err.message, userId: user.id });
+    res.status(500).json({ error: 'Failed to delete search' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// API: UNSOLD LOT ALERTS
+// ═══════════════════════════════════════════════════════════════
+app.get('/api/alerts/unsold', async (req, res) => {
+  const user = await validateUserFromReq(req);
+  if (!user) return res.status(401).json({ error: 'Authentication required' });
+
+  try {
+    const { data } = await supabase
+      .from('unsold_alerts')
+      .select('id, filters, frequency, active, created_at')
+      .eq('user_id', user.id)
+      .single();
+    res.json({ alert: data || null });
+  } catch (err) {
+    res.json({ alert: null });
+  }
+});
+
+app.post('/api/alerts/unsold', async (req, res) => {
+  const user = await validateUserFromReq(req);
+  if (!user) return res.status(401).json({ error: 'Authentication required' });
+
+  const { filters, frequency, active } = req.body || {};
+  const freq = ['daily', 'weekly'].includes(frequency) ? frequency : 'daily';
+
+  try {
+    const { data, error } = await supabase
+      .from('unsold_alerts')
+      .upsert({
+        user_id: user.id,
+        filters: filters || {},
+        frequency: freq,
+        active: active !== false,
+      }, { onConflict: 'user_id' })
+      .select('id, filters, frequency, active, created_at')
+      .single();
+    if (error) throw error;
+    res.json({ alert: data });
+  } catch (err) {
+    log.error('Unsold alert save error', { error: err.message, userId: user.id });
+    res.status(500).json({ error: 'Failed to save alert' });
+  }
+});
+
+// ── CRON: Send unsold lot alert emails ──
+app.post('/api/cron/unsold-alerts', async (req, res) => {
+  const secret = req.headers['x-admin-secret'] || req.body?.secret;
+  if (!safeCompare(secret || '', process.env.ADMIN_SECRET || '')) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+
+  const resendKey = process.env.RESEND_API_KEY;
+  if (!resendKey) return res.json({ sent: 0, error: 'RESEND_API_KEY not configured' });
+
+  try {
+    // Get all active alerts that haven't been sent in the last 23 hours (daily) or 6.5 days (weekly)
+    const { data: alerts } = await supabase
+      .from('unsold_alerts')
+      .select('id, user_id, filters, frequency')
+      .eq('active', true);
+
+    if (!alerts || alerts.length === 0) return res.json({ sent: 0 });
+
+    const now = new Date();
+    let sent = 0;
+
+    for (const alert of alerts) {
+      // Check frequency gate
+      if (alert.last_sent_at) {
+        const lastSent = new Date(alert.last_sent_at);
+        const hoursSince = (now - lastSent) / 3600000;
+        if (alert.frequency === 'daily' && hoursSince < 23) continue;
+        if (alert.frequency === 'weekly' && hoursSince < 156) continue;
+      }
+
+      // Get user email
+      const { data: user } = await supabase.from('users').select('email, name').eq('id', alert.user_id).single();
+      if (!user?.email) continue;
+
+      // Get all cached lots and find unsold ones
+      const { data: caches } = await supabase
+        .from('cached_analyses')
+        .select('lots, house')
+        .gt('expires_at', now.toISOString());
+
+      if (!caches) continue;
+
+      const todayStr = now.toISOString().slice(0, 10);
+      let unsoldLots = [];
+      for (const cache of caches) {
+        const lots = typeof cache.lots === 'string' ? JSON.parse(cache.lots) : cache.lots;
+        if (!Array.isArray(lots)) continue;
+        for (const lot of lots) {
+          if (lot.status === 'unsold' || (lot._auctionDate && lot._auctionDate < todayStr && (!lot.status || lot.status === 'available'))) {
+            lot._house = lot._house || cache.house;
+            unsoldLots.push(lot);
+          }
+        }
+      }
+
+      // Apply user's saved filters (price, type, location)
+      const f = alert.filters || {};
+      if (f.minPrice) unsoldLots = unsoldLots.filter(l => l.price >= f.minPrice);
+      if (f.maxPrice) unsoldLots = unsoldLots.filter(l => l.price <= f.maxPrice);
+      if (f.propType) unsoldLots = unsoldLots.filter(l => l.propType === f.propType);
+      if (f.location) unsoldLots = unsoldLots.filter(l => (l.address || '').toLowerCase().includes(f.location.toLowerCase()));
+
+      // Sort by days since auction (most recent first)
+      unsoldLots.sort((a, b) => {
+        const da = a._auctionDate || '0000', db = b._auctionDate || '0000';
+        return db.localeCompare(da);
+      });
+
+      // Cap at 20 for the email
+      const topLots = unsoldLots.slice(0, 20);
+      if (topLots.length === 0) continue;
+
+      // Build email
+      const firstName = escHtml((user.name || '').split(' ')[0] || 'there');
+      const lotRows = topLots.map(l => {
+        const daysSince = l._auctionDate ? Math.floor((now - new Date(l._auctionDate)) / 86400000) : '?';
+        const price = l.price ? '£' + l.price.toLocaleString() : 'POA';
+        return `<tr>
+          <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:13px">${escHtml(l.address || 'Address unknown')}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:13px;white-space:nowrap">${price}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:13px;text-align:center">${daysSince}d</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:13px">${escHtml(l._house || '')}</td>
+        </tr>`;
+      }).join('');
+
+      const emailHtml = `
+        <div style="font-family:'DM Sans',Helvetica,Arial,sans-serif;max-width:620px;margin:0 auto;color:#1a1714">
+          <div style="background:linear-gradient(135deg,#1a3a5c,#2a5a8c);padding:24px;border-radius:12px 12px 0 0;text-align:center">
+            <span style="font-family:Georgia,serif;font-size:20px;font-weight:700;color:#fff">Auction <span style="color:#8bc34a">Brain</span></span>
+            <div style="color:rgba(255,255,255,.7);font-size:13px;margin-top:4px">Unsold Lot Alert</div>
+          </div>
+          <div style="background:#fff;padding:24px;border:1px solid #e4dfd6;border-top:none;border-radius:0 0 12px 12px">
+            <p style="margin:0 0 16px;line-height:1.6;color:#5c564d">Hi ${firstName}, there are <strong>${unsoldLots.length} unsold lots</strong> matching your filters — vendors may accept below-guide offers.</p>
+            <table style="width:100%;border-collapse:collapse;margin-bottom:20px">
+              <tr style="background:#f5f5f5"><th style="padding:8px 12px;text-align:left;font-size:12px;color:#666">Address</th><th style="padding:8px 12px;text-align:left;font-size:12px;color:#666">Guide</th><th style="padding:8px 12px;text-align:center;font-size:12px;color:#666">Unsold</th><th style="padding:8px 12px;text-align:left;font-size:12px;color:#666">House</th></tr>
+              ${lotRows}
+            </table>
+            ${unsoldLots.length > 20 ? `<p style="font-size:13px;color:#888;margin:0 0 16px">+ ${unsoldLots.length - 20} more — <a href="https://auctions.bridgematch.co.uk/?status=unsold" style="color:#2e7d32">view all on Auction Brain</a></p>` : ''}
+            <div style="text-align:center;margin:20px 0">
+              <a href="https://auctions.bridgematch.co.uk/?status=unsold" style="display:inline-block;background:#2e7d32;color:#fff;font-weight:700;font-size:14px;padding:12px 28px;border-radius:10px;text-decoration:none">View Unsold Lots →</a>
+            </div>
+            <p style="font-size:11px;color:#aaa;text-align:center;margin:16px 0 0">You're receiving this because you subscribed to unsold lot alerts. <a href="https://auctions.bridgematch.co.uk/" style="color:#888">Manage preferences</a></p>
+          </div>
+        </div>`;
+
+      await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: 'Auction Brain <hello@bridgematch.co.uk>',
+          to: [user.email],
+          subject: `${unsoldLots.length} unsold auction lots — vendors may accept offers`,
+          html: emailHtml,
+        }),
+      });
+
+      await supabase.from('unsold_alerts').update({ last_sent_at: now.toISOString() }).eq('id', alert.id);
+      sent++;
+    }
+
+    res.json({ sent, total: alerts.length });
+  } catch (err) {
+    log.error('Unsold alerts cron error', { error: err.message });
+    res.status(500).json({ error: 'Cron failed', message: err.message });
   }
 });
 
@@ -6519,6 +6780,19 @@ function normaliseLotStatuses(lots) {
     else if (/stc|agreed|under.?offer/i.test(s)) lot.status = 'stc';
     else if (/withdrawn|postponed/i.test(s)) lot.status = 'withdrawn';
     else if (s !== 'sold' && s !== 'stc' && s !== 'withdrawn' && s !== 'unsold') lot.status = 'available';
+
+    // ── Lease length from bullets (fallback when lot page enrichment misses it) ──
+    if (lot.tenure === 'Leasehold' && !lot.leaseLength) {
+      const bulletStr = (lot.bullets || []).join(' ').toLowerCase();
+      const lm = bulletStr.match(/\b(\d{2,4})\s*(?:year|yr)s?\s*(?:remaining|unexpired|left|lease)\b/) ||
+                 bulletStr.match(/lease\s*(?:length|term|remaining)?\s*:?\s*(\d{2,4})\s*(?:year|yr)s?\b/) ||
+                 bulletStr.match(/\b(\d{2,4})\s*(?:year|yr)\s*lease\b/) ||
+                 bulletStr.match(/(?:term|length)\s*(?:of)?\s*(\d{2,4})\s*(?:year|yr)s?\b/);
+      if (lm) {
+        const years = parseInt(lm[1], 10);
+        if (years >= 1 && years <= 999) lot.leaseLength = years;
+      }
+    }
   }
   return lots;
 }
@@ -10570,10 +10844,23 @@ async function enrichLotsFromLotPages(lots, concurrency = 5) {
         if (lot.tenure === 'Leasehold' && !lot.leaseLength) {
           const leaseMatch = text.match(/\b(\d{2,4})\s*(?:year|yr)s?\s*(?:remaining|unexpired|left|lease)\b/) ||
                              text.match(/lease\s*(?:length|term|remaining)?\s*:?\s*(\d{2,4})\s*(?:year|yr)s?\b/) ||
-                             text.match(/\b(\d{2,4})\s*(?:year|yr)\s*lease\b/);
+                             text.match(/\b(\d{2,4})\s*(?:year|yr)\s*lease\b/) ||
+                             text.match(/(?:approx(?:imately)?|circa|c\.?)\s*(\d{2,4})\s*(?:year|yr)s?\s*(?:remaining|unexpired|left)?\b/) ||
+                             text.match(/(?:term|length)\s*(?:of)?\s*(\d{2,4})\s*(?:year|yr)s?\b/) ||
+                             text.match(/(\d{2,4})\s*(?:year|yr)s?\s*(?:from|commencing|starting)\s*\d{4}/);
           if (leaseMatch) {
             const years = parseInt(leaseMatch[1], 10);
             if (years >= 1 && years <= 999) { lot.leaseLength = years; stats.leaseLength++; }
+          }
+          // Try "999 year lease from 2005" → compute remaining
+          if (!lot.leaseLength) {
+            const fromMatch = text.match(/(\d{2,4})\s*(?:year|yr)s?\s*(?:from|commencing|starting|dated)\s*(\d{4})/);
+            if (fromMatch) {
+              const total = parseInt(fromMatch[1], 10);
+              const startYear = parseInt(fromMatch[2], 10);
+              const remaining = total - (new Date().getFullYear() - startYear);
+              if (remaining >= 1 && remaining <= 999) { lot.leaseLength = remaining; stats.leaseLength++; }
+            }
           }
         }
 

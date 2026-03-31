@@ -788,6 +788,48 @@ footer .logo-f span{color:var(--green)}
 @media(max-width:440px){
   #signupModal .modal{max-width:calc(100vw - 32px) !important;min-width:0;margin:16px;padding:20px 16px;width:calc(100vw - 32px)}
 }
+
+/* ── TIER 3: Unsold lots toggle ── */
+.unsold-toggle{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:20px;border:1px solid var(--border);background:var(--white);color:var(--text3);cursor:pointer;font-family:inherit;font-size:.82rem;font-weight:600;transition:all .15s}
+.unsold-toggle:hover{background:#f3f0ff;color:#8e44ad;border-color:#8e44ad}
+.unsold-toggle.active{background:#f3f0ff;color:#8e44ad;border-color:#8e44ad}
+.unsold-toggle .ut-count{background:#8e44ad;color:#fff;font-size:.68rem;padding:1px 6px;border-radius:10px;font-weight:700}
+
+/* ── TIER 3: Saved searches ── */
+.saved-search-bar{display:flex;gap:6px;align-items:center;padding:0 18px 10px;flex-wrap:wrap}
+.ss-chip{display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:16px;border:1px solid var(--border);background:var(--white);font-size:.75rem;color:var(--text2);cursor:pointer;font-family:inherit;transition:all .15s;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ss-chip:hover{border-color:var(--green);color:var(--green)}
+.ss-chip .ss-del{margin-left:2px;color:var(--text4);font-size:.7rem}
+.ss-chip .ss-del:hover{color:var(--accent-danger)}
+.ss-save-btn{display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:16px;border:1px dashed var(--border);background:transparent;font-size:.75rem;color:var(--text3);cursor:pointer;font-family:inherit;transition:all .15s}
+.ss-save-btn:hover{border-color:var(--green);color:var(--green)}
+
+/* ── TIER 3: Unsold alert banner ── */
+.unsold-alert-bar{background:linear-gradient(135deg,#f3f0ff,#ede8ff);border:1px solid #d4c8f0;border-radius:var(--radius-sm);padding:10px 16px;margin:8px 0;display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:.82rem}
+.unsold-alert-bar .ua-text{color:#5b3d99;font-weight:500}
+.unsold-alert-bar .ua-btn{padding:6px 14px;border-radius:20px;border:none;background:#8e44ad;color:#fff;font-size:.78rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap}
+.unsold-alert-bar .ua-btn:hover{background:#7d3c98}
+.unsold-alert-bar .ua-btn.subscribed{background:var(--white);color:#8e44ad;border:1px solid #8e44ad}
+
+/* ── TIER 3: Onboarding modal ── */
+#onboardingModal .modal{max-width:440px}
+.ob-step{display:none}
+.ob-step.active{display:block}
+.ob-options{display:flex;flex-direction:column;gap:8px;margin:16px 0}
+.ob-opt{padding:12px 16px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--white);cursor:pointer;font-size:.88rem;font-family:inherit;text-align:left;transition:all .15s;color:var(--text)}
+.ob-opt:hover{border-color:var(--green);background:var(--green-light)}
+.ob-opt.selected{border-color:var(--green);background:var(--green-light);font-weight:600}
+.ob-opt .ob-opt-sub{font-size:.75rem;color:var(--text3);font-weight:400;margin-top:2px}
+.ob-interests{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}
+.ob-int{padding:8px 14px;border-radius:20px;border:1px solid var(--border);background:var(--white);cursor:pointer;font-size:.82rem;font-family:inherit;transition:all .15s;color:var(--text2)}
+.ob-int:hover{border-color:var(--green);color:var(--green)}
+.ob-int.selected{border-color:var(--green);background:var(--green-light);color:var(--green);font-weight:600}
+.ob-progress{display:flex;gap:6px;justify-content:center;margin-bottom:16px}
+.ob-dot{width:8px;height:8px;border-radius:50%;background:var(--border)}
+.ob-dot.active{background:var(--green)}
+
+/* ── Short lease warning ── */
+.lease-warn{color:var(--accent-danger) !important;font-weight:600 !important}
 </style>
 <!-- Umami Cloud Analytics - privacy-respecting, no cookies -->
 <!-- data-website-id injected server-side from UMAMI_WEBSITE_ID env var -->
@@ -905,6 +947,52 @@ footer .logo-f span{color:var(--green)}
     </div>
   </div>
 
+  <!-- ═══════ ONBOARDING MODAL ═══════ -->
+  <div class="modal-bg" id="onboardingModal" role="dialog" aria-modal="true">
+    <div class="modal" style="max-width:440px">
+      <div class="ob-progress" id="obProgress"><span class="ob-dot active"></span><span class="ob-dot"></span><span class="ob-dot"></span></div>
+      <!-- Step 1: Experience -->
+      <div class="ob-step active" id="obStep1">
+        <h2 style="font-size:1.3rem;margin-bottom:4px">Welcome to Auction Brain</h2>
+        <p style="color:var(--text2);font-size:.88rem;margin-bottom:4px">Let's set things up so we show you the most useful stuff first.</p>
+        <p style="font-size:.82rem;font-weight:600;color:var(--text)">How much auction experience do you have?</p>
+        <div class="ob-options" id="obExpOptions">
+          <button class="ob-opt" data-val="first_time" onclick="obSelect('exp',this)">Never bought at auction<div class="ob-opt-sub">I'll explain everything as we go</div></button>
+          <button class="ob-opt" data-val="1_to_3" onclick="obSelect('exp',this)">Bought 1–3 properties<div class="ob-opt-sub">You know the basics, I'll skip the obvious</div></button>
+          <button class="ob-opt" data-val="experienced" onclick="obSelect('exp',this)">4+ properties or professional<div class="ob-opt-sub">Power user — just the data, no hand-holding</div></button>
+        </div>
+      </div>
+      <!-- Step 2: Budget -->
+      <div class="ob-step" id="obStep2">
+        <h2 style="font-size:1.3rem;margin-bottom:4px">What's your budget?</h2>
+        <p style="color:var(--text2);font-size:.85rem;margin-bottom:4px">We'll highlight lots in your range. You can change this anytime.</p>
+        <div class="ob-options" id="obBudgetOptions">
+          <button class="ob-opt" data-val="100000" onclick="obSelect('budget',this)">Up to £100k<div class="ob-opt-sub">First-time investor or cash buyer</div></button>
+          <button class="ob-opt" data-val="250000" onclick="obSelect('budget',this)">Up to £250k<div class="ob-opt-sub">Most auction stock falls here</div></button>
+          <button class="ob-opt" data-val="500000" onclick="obSelect('budget',this)">Up to £500k<div class="ob-opt-sub">Larger projects and portfolios</div></button>
+          <button class="ob-opt" data-val="999999999" onclick="obSelect('budget',this)">No limit<div class="ob-opt-sub">Show me everything</div></button>
+        </div>
+      </div>
+      <!-- Step 3: Interests -->
+      <div class="ob-step" id="obStep3">
+        <h2 style="font-size:1.3rem;margin-bottom:4px">What are you looking for?</h2>
+        <p style="color:var(--text2);font-size:.85rem">Pick any that apply — we'll tailor your feed.</p>
+        <div class="ob-interests" id="obInterests">
+          <button class="ob-int" data-val="btl" onclick="obToggleInt(this)">Buy-to-let</button>
+          <button class="ob-int" data-val="flip" onclick="obToggleInt(this)">Flip / refurb</button>
+          <button class="ob-int" data-val="development" onclick="obToggleInt(this)">Development</button>
+          <button class="ob-int" data-val="hmo" onclick="obToggleInt(this)">HMO</button>
+          <button class="ob-int" data-val="commercial" onclick="obToggleInt(this)">Commercial</button>
+          <button class="ob-int" data-val="land" onclick="obToggleInt(this)">Land</button>
+          <button class="ob-int" data-val="unsold" onclick="obToggleInt(this)">Unsold bargains</button>
+          <button class="ob-int" data-val="title_split" onclick="obToggleInt(this)">Title splits</button>
+        </div>
+        <button class="btn-main" style="width:100%;padding:12px;margin-top:16px" onclick="obFinish()">Let's go →</button>
+        <button style="display:block;margin:8px auto 0;background:none;border:none;color:var(--text3);font-size:.78rem;cursor:pointer;font-family:inherit" onclick="obSkip()">Skip for now</button>
+      </div>
+    </div>
+  </div>
+
   <!-- USER BAR (legacy, hidden — replaced by nav dropdown) -->
   <div id="userBar" class="user-bar" style="display:none">
     <span id="userEmail"></span>
@@ -964,6 +1052,7 @@ footer .logo-f span{color:var(--green)}
         <option value="price_asc">Price (low → high)</option>
         <option value="price_desc">Price (high → low)</option>
         <option value="yield">Yield (high → low)</option>
+        <option value="days_unsold">Days unsold (longest first)</option>
       </select>
       <div class="more-filters-dd" id="moreFiltersDD">
         <button class="more-filters-btn" id="moreFiltersBtn" onclick="toggleMoreFilters(event)">More filters <span class="mf-dot" id="mfDot" style="display:none"></span></button>
@@ -1014,6 +1103,14 @@ footer .logo-f span{color:var(--green)}
           <button class="mf-clear" onclick="clearAllFilters()">Clear all filters</button>
         </div>
       </div>
+    </div>
+    <!-- Quick toggles + saved searches row -->
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 18px;border-bottom:1px solid var(--border)">
+      <button class="unsold-toggle" id="unsoldToggle" onclick="toggleUnsoldView()">Unsold lots <span class="ut-count" id="unsoldCount">0</span></button>
+      <button class="unsold-toggle" id="favToggle" onclick="toggleFavView()" style="border-color:var(--accent-danger)">♥ Favourites</button>
+      <div style="width:1px;height:20px;background:var(--border);margin:0 4px;flex-shrink:0"></div>
+      <div class="saved-search-bar" id="savedSearchBar" style="display:none;padding:0;flex:1;min-width:0"></div>
+      <button class="ss-save-btn" id="ssSaveBtn" onclick="saveCurrentSearch()" title="Save current filters">+ Save search</button>
     </div>
     <div class="advanced" id="advancedPanel">
       <div style="font-size:.75rem;color:#6b7c8d;padding:0 0 8px;line-height:1.4;">Set your bridging finance parameters below. Lots will show a funding badge indicating how many lenders would finance the deal and at what terms.</div>
@@ -1232,17 +1329,17 @@ function resetSearchState(){
   const _sc=document.querySelector('.search-counter'); if(_sc) _sc.remove();
 }
 
-function clearAllFilters(){
+function clearAllFilters(silent){
   const resets={fDeal:'',fType:'',fCondition:'',fTenure:'',fLocation:'',fAfford:'all',fSoldTop:'all',fSort:'score',fBeds:'',fPostcode:'',fMinPrice:'',fMaxPrice:'',fExcludePOA:''};
   for(const[id,val] of Object.entries(resets)){const el=$(id);if(el)el.value=val}
-  if($('fShowPast')) { $('fShowPast').checked=false; onShowPastChange(); }
+  if($('fShowPast')) { $('fShowPast').checked=false; if(!silent) onShowPastChange(); }
   _selectedHouses.clear();
   updateHouseBtn();
   updatePriceBtn();
   $('smartQuery').value='';
   updateMoreDot();
   if(SMART_RESULTS){ LOTS=ALL_LOTS; SMART_RESULTS=null; $('resultsTitle').textContent=ALL_LOTS.length.toLocaleString()+' auction lots'; }
-  renderLots();
+  if(!silent) renderLots();
 }
 
 // ── LOCAL FILTER (instant text filtering) ──
@@ -1320,6 +1417,304 @@ function toggleFav(idx, event) {
     }
   }
 }
+
+// ═══════════════════════════════
+// UNSOLD LOT VIEW TOGGLE (Item 9)
+// ═══════════════════════════════
+let _unsoldViewActive = false;
+let _favViewActive = false;
+let _preUnsoldSort = '';
+let _preUnsoldStatus = '';
+let _preUnsoldShowPast = false;
+
+function toggleUnsoldView() {
+  _unsoldViewActive = !_unsoldViewActive;
+  if (_favViewActive) { _favViewActive = false; $('favToggle').classList.remove('active'); }
+  const btn = $('unsoldToggle');
+  btn.classList.toggle('active', _unsoldViewActive);
+
+  if (_unsoldViewActive) {
+    // Save current filter state
+    _preUnsoldSort = $('fSort').value;
+    _preUnsoldStatus = $('fSoldTop').value;
+    _preUnsoldShowPast = $('fShowPast')?.checked || false;
+    // Apply unsold view
+    $('fSoldTop').value = 'unsold';
+    $('fSort').value = 'days_unsold';
+    if ($('fShowPast')) $('fShowPast').checked = true;
+    // Show unsold alert bar
+    showUnsoldAlertBar();
+  } else {
+    // Restore previous state
+    $('fSoldTop').value = _preUnsoldStatus || 'all';
+    $('fSort').value = _preUnsoldSort || 'date_asc';
+    if ($('fShowPast')) $('fShowPast').checked = _preUnsoldShowPast;
+    hideUnsoldAlertBar();
+  }
+  renderLots();
+}
+
+function toggleFavView() {
+  _favViewActive = !_favViewActive;
+  if (_unsoldViewActive) { _unsoldViewActive = false; $('unsoldToggle').classList.remove('active'); hideUnsoldAlertBar(); }
+  $('favToggle').classList.toggle('active', _favViewActive);
+  renderLots();
+}
+
+// Inject fav filter into renderLots — hook into existing filter chain
+const _origRenderLots = typeof renderLots !== 'undefined' ? renderLots : null;
+
+function showUnsoldAlertBar() {
+  let bar = $('unsoldAlertBar');
+  if (bar) { bar.style.display = ''; return; }
+  bar = document.createElement('div');
+  bar.className = 'unsold-alert-bar';
+  bar.id = 'unsoldAlertBar';
+  bar.innerHTML = '<span class="ua-text">Get emailed when lots fail to sell — vendors often accept lower offers after auction.</span>' +
+    '<button class="ua-btn" id="unsoldAlertBtn" onclick="toggleUnsoldAlert()">' + (_unsoldAlertActive ? '✓ Subscribed' : 'Alert me') + '</button>';
+  const statsRow = $('statsRow');
+  if (statsRow) statsRow.parentNode.insertBefore(bar, statsRow.nextSibling);
+}
+
+function hideUnsoldAlertBar() {
+  const bar = $('unsoldAlertBar');
+  if (bar) bar.style.display = 'none';
+}
+
+// ═══════════════════════════════
+// UNSOLD LOT ALERTS (Item 12)
+// ═══════════════════════════════
+let _unsoldAlertActive = false;
+
+async function loadUnsoldAlertStatus() {
+  if (!currentSession) return;
+  try {
+    const r = await fetch('/api/alerts/unsold', { headers: getAuthHeaders() });
+    const d = await r.json();
+    _unsoldAlertActive = !!(d.alert && d.alert.active);
+    const btn = $('unsoldAlertBtn');
+    if (btn) { btn.textContent = _unsoldAlertActive ? '✓ Subscribed' : 'Alert me'; btn.classList.toggle('subscribed', _unsoldAlertActive); }
+  } catch {}
+}
+
+async function toggleUnsoldAlert() {
+  if (!currentSession) { requireSignup(); return; }
+  try {
+    const newState = !_unsoldAlertActive;
+    // Gather current filter state as the alert filters
+    const filters = {};
+    const minP = +$('fMinPrice').value; if (minP) filters.minPrice = minP;
+    const maxP = +$('fMaxPrice').value; if (maxP) filters.maxPrice = maxP;
+    const ft = $('fType').value; if (ft) filters.propType = ft;
+    const floc = $('fLocation').value; if (floc) filters.location = floc;
+
+    await fetch('/api/alerts/unsold', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ filters, frequency: 'daily', active: newState })
+    });
+    _unsoldAlertActive = newState;
+    const btn = $('unsoldAlertBtn');
+    if (btn) { btn.textContent = newState ? '✓ Subscribed' : 'Alert me'; btn.classList.toggle('subscribed', newState); }
+  } catch (e) {
+    console.warn('Unsold alert toggle failed:', e);
+  }
+}
+
+// ═══════════════════════════════
+// SAVED SEARCHES (Item 13)
+// ═══════════════════════════════
+let _savedSearches = [];
+
+async function loadSavedSearches() {
+  if (!currentSession) { $('savedSearchBar').style.display = 'none'; return; }
+  try {
+    const r = await fetch('/api/searches', { headers: getAuthHeaders() });
+    const d = await r.json();
+    _savedSearches = d.searches || [];
+    renderSavedSearchChips();
+  } catch {}
+}
+
+function renderSavedSearchChips() {
+  const bar = $('savedSearchBar');
+  if (!bar) return;
+  if (_savedSearches.length === 0) { bar.style.display = 'none'; return; }
+  bar.style.display = '';
+  bar.innerHTML = _savedSearches.map(s =>
+    '<button class="ss-chip" onclick="applySavedSearch(\'' + s.id + '\')" title="Load: ' + esc(s.name) + '">' +
+    esc(s.name) +
+    '<span class="ss-del" onclick="event.stopPropagation();deleteSavedSearch(\'' + s.id + '\')" title="Delete">✕</span>' +
+    '</button>'
+  ).join('');
+}
+
+function getCurrentFilters() {
+  return {
+    minPrice: $('fMinPrice').value || '',
+    maxPrice: $('fMaxPrice').value || '',
+    beds: $('fBeds').value || '',
+    type: $('fType').value || '',
+    location: $('fLocation').value || '',
+    status: $('fSoldTop').value || '',
+    sort: $('fSort').value || '',
+    deal: $('fDeal')?.value || '',
+    tenure: $('fTenure')?.value || '',
+    postcode: $('fPostcode')?.value || '',
+    condition: $('fCondition')?.value || '',
+    excludePOA: $('fExcludePOA')?.value || '',
+    query: $('smartQuery')?.value || ''
+  };
+}
+
+function applyFilters(f) {
+  if (!f) return;
+  if (f.minPrice) $('fMinPrice').value = f.minPrice;
+  if (f.maxPrice) $('fMaxPrice').value = f.maxPrice;
+  if (f.beds) $('fBeds').value = f.beds;
+  if (f.type) $('fType').value = f.type;
+  if (f.location) $('fLocation').value = f.location;
+  if (f.status) $('fSoldTop').value = f.status;
+  if (f.sort) $('fSort').value = f.sort;
+  if (f.deal && $('fDeal')) $('fDeal').value = f.deal;
+  if (f.tenure && $('fTenure')) $('fTenure').value = f.tenure;
+  if (f.postcode && $('fPostcode')) $('fPostcode').value = f.postcode;
+  if (f.condition && $('fCondition')) $('fCondition').value = f.condition;
+  if (f.excludePOA && $('fExcludePOA')) $('fExcludePOA').value = f.excludePOA;
+  if (f.query && $('smartQuery')) $('smartQuery').value = f.query;
+  updatePriceBtn();
+  updateMoreDot();
+  renderLots();
+}
+
+async function saveCurrentSearch() {
+  if (!currentSession) { requireSignup(); return; }
+  const filters = getCurrentFilters();
+  // Check if any filters are actually set
+  const hasFilter = Object.values(filters).some(v => v && v !== 'all' && v !== 'date_asc' && v !== 'score');
+  const name = prompt('Name this search' + (hasFilter ? '' : ' (no filters set)') + ':', '');
+  if (!name || !name.trim()) return;
+
+  try {
+    const r = await fetch('/api/searches', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ name: name.trim(), filters })
+    });
+    const d = await r.json();
+    if (d.error) { alert(d.error); return; }
+    if (d.search) _savedSearches.unshift(d.search);
+    renderSavedSearchChips();
+  } catch (e) {
+    console.warn('Save search failed:', e);
+  }
+}
+
+function applySavedSearch(id) {
+  const s = _savedSearches.find(x => x.id === id);
+  if (!s) return;
+  // Reset unsold/fav views
+  if (_unsoldViewActive) { _unsoldViewActive = false; $('unsoldToggle').classList.remove('active'); hideUnsoldAlertBar(); }
+  if (_favViewActive) { _favViewActive = false; $('favToggle').classList.remove('active'); }
+  clearAllFilters(true);
+  applyFilters(s.filters);
+}
+
+async function deleteSavedSearch(id) {
+  try {
+    await fetch('/api/searches/' + id, { method: 'DELETE', headers: getAuthHeaders() });
+    _savedSearches = _savedSearches.filter(s => s.id !== id);
+    renderSavedSearchChips();
+  } catch {}
+}
+
+// ═══════════════════════════════
+// ONBOARDING FLOW (Item 10)
+// ═══════════════════════════════
+let _obData = { experience: '', budget: 0, interests: [] };
+
+function obSelect(type, btn) {
+  const parent = btn.parentElement;
+  parent.querySelectorAll('.ob-opt').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  if (type === 'exp') {
+    _obData.experience = btn.dataset.val;
+    // Auto-advance after short delay
+    setTimeout(() => obNext(2), 300);
+  } else if (type === 'budget') {
+    _obData.budget = parseInt(btn.dataset.val) || 0;
+    setTimeout(() => obNext(3), 300);
+  }
+}
+
+function obToggleInt(btn) {
+  btn.classList.toggle('selected');
+  _obData.interests = Array.from($('obInterests').querySelectorAll('.selected')).map(b => b.dataset.val);
+}
+
+function obNext(step) {
+  // Update progress dots
+  $('obProgress').querySelectorAll('.ob-dot').forEach((d, i) => d.classList.toggle('active', i < step));
+  // Show/hide steps
+  for (let i = 1; i <= 3; i++) {
+    const el = $('obStep' + i);
+    if (el) el.classList.toggle('active', i === step);
+  }
+}
+
+async function obFinish() {
+  $('onboardingModal').classList.remove('show');
+  localStorage.setItem('bm_onboarding_done', '1');
+
+  // Apply preferences to filters
+  if (_obData.budget && _obData.budget < 999999999) {
+    $('fMaxPrice').value = _obData.budget;
+    updatePriceBtn();
+  }
+
+  // Save to server
+  if (currentSession) {
+    try {
+      await fetch('/api/auth/onboarding', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          experience_level: _obData.experience,
+          budget_max: _obData.budget || null,
+          interests: _obData.interests
+        })
+      });
+    } catch {}
+  }
+
+  renderLots();
+}
+
+function obSkip() {
+  $('onboardingModal').classList.remove('show');
+  localStorage.setItem('bm_onboarding_done', '1');
+  if (currentSession) {
+    fetch('/api/auth/onboarding', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ experience_level: null, budget_max: null, interests: [] })
+    }).catch(() => {});
+  }
+}
+
+function maybeShowOnboarding() {
+  // Show onboarding wizard on first sign-in
+  if (localStorage.getItem('bm_onboarding_done')) return;
+  if (!currentSession) return;
+  setTimeout(() => {
+    $('onboardingModal').classList.add('show');
+  }, 800);
+}
+
+// Close onboarding on backdrop click
+document.addEventListener('click', e => {
+  if (e.target === $('onboardingModal')) { obSkip(); }
+});
 
 // Price popover toggle
 function togglePricePopover(e){
@@ -1872,6 +2267,13 @@ function onSignIn(session) {
 
   // Check Pro status
   updateProStatus();
+
+  // Load saved searches and alert status
+  loadSavedSearches();
+  loadUnsoldAlertStatus();
+
+  // Show onboarding for first-time users
+  maybeShowOnboarding();
 }
 
 function onSignOut() {
@@ -2571,6 +2973,11 @@ function renderLots(){
   else if(fsold==='stc') lots=lots.filter(l=>l.status==='stc');
   else if(fsold==='withdrawn') lots=lots.filter(l=>l.status==='withdrawn');
   // fsold==='everything' → no filter, show all including sold
+  // Favourites view filter
+  if(typeof _favViewActive!=='undefined'&&_favViewActive){
+    const favKeys=getFavourites();
+    lots=lots.filter(l=>favKeys.indexOf(getFavKey(l))!==-1);
+  }
   if(fs) lots=lots.filter(l=>(l.address||'').toLowerCase().includes(fs)||(l.bullets||[]).join(' ').toLowerCase().includes(fs)||(l.opps||[]).join(' ').toLowerCase().includes(fs)||(l.risks||[]).join(' ').toLowerCase().includes(fs)||(l.dealType||'').toLowerCase().includes(fs)||(l.propType||'').toLowerCase().includes(fs)||(l._house||'').toLowerCase().includes(fs)||(l.tenure||'').toLowerCase().includes(fs));
 
   // House filter
@@ -2619,6 +3026,7 @@ function renderLots(){
   else if(sortVal==='price_asc') lots.sort((a,b)=>((a.price||Infinity)-(b.price||Infinity)));
   else if(sortVal==='price_desc') lots.sort((a,b)=>((b.price||0)-(a.price||0)));
   else if(sortVal==='yield') lots.sort((a,b)=>((b.estGrossYield||0)-(a.estGrossYield||0)));
+  else if(sortVal==='days_unsold') lots.sort((a,b)=>((b.daysSinceAuction||0)-(a.daysSinceAuction||0)));
 
   // Store filtered lots for export functions
   window._filteredLots = lots;
@@ -2632,7 +3040,9 @@ function renderLots(){
     <div class="stat-card"><div class="v p">${lots.filter(l=>l.vacant).length}</div><div class="l">Vacant</div></div>
     <div class="stat-card"><div class="v y">${LOTS.filter(l=>l.price).length}</div><div class="l">Priced</div></div>`;
   const unsoldCount=LOTS.filter(l=>l.status==='unsold').length;
-  if(unsoldCount) statsHtml+=`<div class="stat-card"><div class="v" style="color:var(--violet,#8e44ad)">${unsoldCount}</div><div class="l">Unsold</div></div>`;
+  if(unsoldCount) statsHtml+=`<div class="stat-card" style="cursor:pointer" onclick="toggleUnsoldView()"><div class="v" style="color:var(--violet,#8e44ad)">${unsoldCount}</div><div class="l">Unsold</div></div>`;
+  // Update unsold toggle count
+  const ucEl=$('unsoldCount');if(ucEl) ucEl.textContent=unsoldCount;
   if(fp.cash&&aff){
     const cOk=lots.filter(l=>l._affTag==='in_budget').length;
     const cStr=lots.filter(l=>l._affTag==='stretch_refurb'||l._affTag==='stretch_split').length;
@@ -2807,10 +3217,14 @@ function card(l){
   else detailPills.push({text: 'Beds: ?', tip: 'Bedroom count not listed — check the legal pack or listing for details', gap: true});
   if (l.tenure) {
     let tenureLabel = l.tenure;
+    let tenureTip = l.tenure === 'Freehold' ? 'Freehold — you own the building and land outright' : 'Leasehold — you own the property for a fixed term. Under 80 years = expensive to extend';
+    let tenureWarn = false;
     if (l.tenure === 'Leasehold' && l.leaseLength) {
       tenureLabel += ' (' + l.leaseLength + 'yr)';
+      if (l.leaseLength < 80) { tenureWarn = true; tenureTip = 'SHORT LEASE (' + l.leaseLength + 'yr) — Under 80 years. Lease extension is expensive and may need marriage value payment. Many lenders won\'t fund below 70yr. Factor £10k–£50k+ extension cost.'; }
+      else if (l.leaseLength < 125) { tenureTip = 'Leasehold (' + l.leaseLength + 'yr) — Acceptable length for most lenders but will need extending within your ownership. Budget for extension.'; }
     }
-    detailPills.push({text: tenureLabel, tip: l.tenure === 'Freehold' ? 'Freehold — you own the building and land outright' : 'Leasehold — you own the property for a fixed term. Under 80 years = expensive to extend'});
+    detailPills.push({text: tenureLabel, tip: tenureTip, gap: tenureWarn, warn: tenureWarn});
   } else {
     detailPills.push({text: 'Tenure: ?', tip: 'Tenure not listed — critical for finance. Check the legal pack', gap: true});
   }
@@ -2837,7 +3251,7 @@ function card(l){
     '<div class="card-body">' +
       '<div class="card-row1"><span class="card-lot-info">' + catLabel + '</span><span class="card-price">' + esc(priceText) + '</span></div>' +
       '<div class="card-address">' + esc(l.address || 'Address not available') + '</div>' +
-      '<div class="card-details">' + detailPills.map(d => '<span class="detail-pill' + (d.gap ? ' epd-gap-pill' : '') + '" data-tip="' + esc(d.tip) + '"' + (d.gap ? ' style="color:var(--accent-warn);border:1px dashed var(--accent-warn)"' : '') + '>' + esc(d.text) + '</span>').join('') + '</div>' +
+      '<div class="card-details">' + detailPills.map(d => '<span class="detail-pill' + (d.gap ? ' epd-gap-pill' : '') + (d.warn ? ' lease-warn' : '') + '" data-tip="' + esc(d.tip) + '"' + (d.warn ? ' style="color:var(--accent-danger);border:1px dashed var(--accent-danger)"' : d.gap ? ' style="color:var(--accent-warn);border:1px dashed var(--accent-warn)"' : '') + '>' + esc(d.text) + '</span>').join('') + '</div>' +
       (l.epcRating || (l.floodZone && l.floodZone !== '1') || l._yieldEstimateWarning ? '<div style="display:flex;gap:5px;margin-top:4px;flex-wrap:wrap">' +
         (l.epcRating ? '<span class="detail-pill" style="color:' + (/[AB]/.test(l.epcRating) ? 'var(--signal-pos)' : /[CD]/.test(l.epcRating) ? 'var(--accent-warn)' : 'var(--accent-danger)') + ';font-weight:600" data-tip="Energy Performance Certificate. A-B = efficient, C-D = average, E-G = poor. F/G cannot be legally let to tenants (MEES regulations).">EPC ' + esc(l.epcRating) + (/[FG]/i.test(l.epcRating) ? ' — Unlettable' : '') + '</span>' : '') +
         ((l.floodZone === '2' || l.floodZone === '3') ? '<span class="detail-pill" style="color:' + (l.floodZone === '3' ? 'var(--accent-danger)' : 'var(--accent-warn)') + ';font-weight:600" data-tip="' + (l.floodZone === '3' ? 'Flood Zone 3 = high probability of flooding. Insurance difficult/expensive. Some lenders won\'t fund.' : 'Flood Zone 2 = medium probability. Most lenders will fund but may affect valuation.') + '">FZ' + esc(l.floodZone) + '</span>' : '') +
@@ -3740,10 +4154,21 @@ function syncFiltersToURL(){
 }
 restoreFiltersFromURL();
 
-// Read showPast URL param on page load
+// Read showPast and status URL params on page load
 (function(){
   const p=new URLSearchParams(window.location.search);
   if(p.get('showPast')==='true'&&$('fShowPast')) $('fShowPast').checked=true;
+  // Support ?status=unsold from alert emails
+  const statusParam=p.get('status');
+  if(statusParam&&$('fSoldTop')){
+    $('fSoldTop').value=statusParam;
+    if(statusParam==='unsold'){
+      if($('fShowPast')) $('fShowPast').checked=true;
+      $('fSort').value='days_unsold';
+      _unsoldViewActive=true;
+      $('unsoldToggle')?.classList.add('active');
+    }
+  }
 })();
 
 // Init
