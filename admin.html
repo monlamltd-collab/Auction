@@ -1250,7 +1250,7 @@ async function loadCacheStatus() {
         <td class="mono text-muted">-</td>
         <td class="mono">${h.topPicks}</td>
         <td class="mono ${h.avgYield ? 'text-green' : 'text-muted'}">${yieldStr}</td>
-        <td>${getPipelineHtml(h.name, h.scrapedWith, h.extractedWith)}</td>
+        <td>${getPipelineHtml(h.name, h.scrapedWith, h.extractedWith, h.aiTier)}</td>
         <td class="mono">${timeAgo(h.newestScrape)}</td>
         <td class="mono">${nextAuctionStr}</td>
         <td class="mono ${isStale ? 'text-amber' : ''}">${isStale ? 'expired' : timeUntil(h.latestExpiry)}</td>
@@ -1270,7 +1270,7 @@ async function loadCacheStatus() {
             <td class="mono text-muted">-</td>
             <td class="mono">${e.top_picks || 0}</td>
             <td class="mono">${e.avg_yield ? e.avg_yield + '%' : '-'}</td>
-            <td>${getPipelineHtml(h.name, e.scraped_with, e.extracted_with)}</td>
+            <td>${getPipelineHtml(h.name, e.scraped_with, e.extracted_with, e.ai_tier)}</td>
             <td class="mono">${timeAgo(e.last_scraped_at || e.created_at)}</td>
             <td></td>
             <td class="mono ${eExpired ? 'text-amber' : ''}">${eExpired ? 'expired' : timeUntil(e.expires_at)}</td>
@@ -1687,22 +1687,35 @@ const EXTRACTOR_TYPE = {
   cheffins:'static', cheffinstimed:'static', fssproperty:'static',
   iamsold:'static', wilsons:'static', strakers:'static', bidx1:'static',
 };
-function getPipelineHtml(house, engine, extractedWith) {
+function getPipelineHtml(house, engine, extractedWith, aiTier) {
   // Fetch tag
   const fetchTag = engine === 'firecrawl' ? '<span class="pipe-tag pipe-fc">Firecrawl</span>'
     : engine === 'puppeteer' ? '<span class="pipe-tag pipe-pupp">Puppeteer</span>'
     : '<span class="pipe-tag pipe-http">HTTP</span>';
 
-  // Extractor tag — use actual data if available, otherwise infer from house
+  // Extractor tag — use actual DB value first, then infer from house map
   let extractTag;
   if (extractedWith === 'gemini') {
-    extractTag = '<span class="pipe-tag pipe-gemini">Gemini AI</span>';
-  } else {
+    const tierLabel = aiTier === 'capable' ? 'Gemini Pro' : 'Gemini Flash';
+    extractTag = '<span class="pipe-tag pipe-gemini">' + tierLabel + '</span>';
+  } else if (extractedWith === 'api') {
+    extractTag = '<span class="pipe-tag pipe-dom">JSON API</span>';
+  } else if (extractedWith === 'dom-house') {
+    // House-specific DOM extractor — resolve platform from map
     const slug = Object.entries(KNOWN_HOUSES).find(([k, v]) => v === house)?.[0] || '';
     const ext = EXTRACTOR_TYPE[slug];
     if (ext === 'eig') extractTag = '<span class="pipe-tag pipe-eig">EIG DOM</span>';
     else if (ext === 'ahuk') extractTag = '<span class="pipe-tag pipe-eig">AHUK DOM</span>';
-    else if (ext === 'api') extractTag = '<span class="pipe-tag pipe-dom">API</span>';
+    else extractTag = '<span class="pipe-tag pipe-dom">DOM</span>';
+  } else if (extractedWith === 'dom-generic') {
+    extractTag = '<span class="pipe-tag pipe-dom" style="opacity:.7">Generic DOM</span>';
+  } else {
+    // Legacy or unknown — fall back to EXTRACTOR_TYPE map
+    const slug = Object.entries(KNOWN_HOUSES).find(([k, v]) => v === house)?.[0] || '';
+    const ext = EXTRACTOR_TYPE[slug];
+    if (ext === 'eig') extractTag = '<span class="pipe-tag pipe-eig">EIG DOM</span>';
+    else if (ext === 'ahuk') extractTag = '<span class="pipe-tag pipe-eig">AHUK DOM</span>';
+    else if (ext === 'api') extractTag = '<span class="pipe-tag pipe-dom">JSON API</span>';
     else if (ext === 'pdf') extractTag = '<span class="pipe-tag pipe-gemini">PDF+AI</span>';
     else if (ext) extractTag = '<span class="pipe-tag pipe-dom">DOM</span>';
     else extractTag = '<span class="pipe-tag pipe-gemini">AI Fallback</span>';

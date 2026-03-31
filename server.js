@@ -411,7 +411,7 @@ function extractWithJSDOM(html, house, baseUrl, firecrawlImages) {
       if (Array.isArray(result) && result.length > 0) {
         console.log(`JSDOM extractor for ${house}: found ${result.length} lots`);
         lots = result;
-        _lastExtractorUsed = 'dom';
+        _lastExtractorUsed = 'dom-house';
       }
     } catch (err) {
       log.warn('JSDOM extractor error', { house, error: err.message });
@@ -426,6 +426,7 @@ function extractWithJSDOM(html, house, baseUrl, firecrawlImages) {
       if (Array.isArray(result) && result.length > 0) {
         console.log(`JSDOM universal extractor for ${house}: found ${result.length} lots`);
         lots = result;
+        _lastExtractorUsed = 'dom-generic';
       }
     } catch (err) {
       log.warn('JSDOM universal extractor error', { house, error: err.message });
@@ -684,7 +685,8 @@ function extractWithJSDOM(html, house, baseUrl, firecrawlImages) {
 
 // Track which scraping engine and extractor were last used (for cache metadata)
 let _lastScrapeEngine = 'http';
-let _lastExtractorUsed = 'dom';
+let _lastExtractorUsed = 'dom-house';
+let _lastAITier = null; // 'fast' or 'capable' — set by extractLotsWithAI()
 
 async function scrapeRenderedPage(url, house, options = {}) {
   // Tier 1: Firecrawl (if available and not skipped/exhausted)
@@ -3266,7 +3268,7 @@ app.post('/api/analyse', async (req, res) => {
               console.log(`${house}: capping ${rawLots.length} lots to ${MAX_LOTS_PER_SCRAPE}`);
               rawLots = rawLots.slice(0, MAX_LOTS_PER_SCRAPE);
             }
-            _lastExtractorUsed = 'dom';
+            _lastExtractorUsed = DOM_EXTRACTORS[house] ? 'dom-house' : 'dom-generic';
             console.log(`${house} total: ${rawLots.length} lots via DOM extraction (no Claude needed)`);
           } else {
             // Fall back to Claude extraction
@@ -3426,6 +3428,7 @@ app.post('/api/analyse', async (req, res) => {
       last_scraped_at: new Date().toISOString(),
       scraped_with: _lastScrapeEngine,
     extracted_with: _lastExtractorUsed,
+    ai_tier: _lastAITier,
     }, { onConflict: 'url' });
 
     // Mark preset cache entries as partially stale (only the changed catalogue needs re-searching)
@@ -4045,7 +4048,9 @@ app.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
     }
     for (const lot of lots) {
       const su = normaliseUrl(lot._sourceUrl);
-      lot._auctionDate = urlDateMap[su] || null;
+      const rawDate = urlDateMap[su] || null;
+      // Sanitize sentinel dates (2099-12-31 = always-on catalogue) — show as null to frontend
+      lot._auctionDate = (rawDate && rawDate > '2098-01-01') ? null : rawDate;
     }
 
     // ── Server-side future-only filtering (7-day grace period) ──
@@ -4267,7 +4272,7 @@ app.get('/api/cache-status', async (req, res) => {
   try {
     const { data: cached } = await supabase
       .from('cached_analyses')
-      .select('house, url, total_lots, title_splits, top_picks, under_100k, avg_yield, dev_potential, vacant_count, created_at, expires_at, scraped_with, extracted_with, last_scraped_at')
+      .select('house, url, total_lots, title_splits, top_picks, under_100k, avg_yield, dev_potential, vacant_count, created_at, expires_at, scraped_with, extracted_with, ai_tier, last_scraped_at')
       .order('house');
 
     const allAuctions = await getCalendarAuctions();
@@ -5950,6 +5955,7 @@ async function scrapeAllsopApi(baseUrl) {
 
 // Parse Allsop JSON API pages directly into lot objects (bypasses Gemini entirely)
 function extractAllsopLotsFromJson(pages) {
+  _lastExtractorUsed = 'api';
   const lots = [];
   const seen = new Set();
   for (const p of pages) {
@@ -6282,6 +6288,8 @@ async function scrapeWithPuppeteer(url, house) {
 // ═══════════════════════════════════════════════════════════════
 async function extractLotsWithAI(pages, house, onProgress, catalogueUrl) {
   _lastExtractorUsed = 'gemini';
+  const extractionTier = house === 'unknown' ? 'capable' : 'fast';
+  _lastAITier = extractionTier;
   const allLots = [];
   const seenLots = new Set();
   const batchSize = 3;
@@ -6297,7 +6305,6 @@ async function extractLotsWithAI(pages, house, onProgress, catalogueUrl) {
     }));
     const totalStrippedLen = strippedBatch.reduce((sum, p) => sum + p.content.length, 0);
     const mdCount = strippedBatch.filter(p => p.usedMarkdown).length;
-    const extractionTier = house === 'unknown' ? 'capable' : 'fast';
     const hint = HOUSE_EXTRACTION_HINTS[house];
     console.log(`Batch ${Math.floor(i/batchSize)+1}: ${strippedBatch.length} page(s), ${totalStrippedLen} chars${mdCount > 0 ? ` (${mdCount} from markdown)` : ' after stripping'}, tier: ${extractionTier}`);
     const prompt = `You are extracting property auction lot data from a UK auction house catalogue (${house}).
@@ -10855,14 +10862,21 @@ function analyseLot(raw) {
   const L = { ...raw, score: 0, opps: [], risks: [], dealType: 'Standard', propType: '', beds: null,
     tenure: '', condition: '', vacant: null, sqft: null, titleSplit: false, units: 0 };
 
-  if (/\bflt\b|flat|apartment|maisonette/.test(t)) L.propType = 'flat';
+  // PropType inference — order matters: specific residential types first, then commercial/land
+  // Development sites with bed counts are residential, not land
+  const hasBeds = /\d+\s*[-\s]?bed|\bone\s+bed|\btwo\s+bed|\bthree\s+bed|\bstudio/.test(t);
+  const hasResidentialSignal = /\bflats?\b|\bhouse\b|\bcottage\b|\bbungalow\b|\bapartments?\b|\bmaisonette\b/.test(t);
+  if (/semi[- ]?detached|terraced?|terrace house|detached house|town\s?house|end of terrace|mid[- ]terrace/.test(t)) L.propType = 'house';
   else if (/bungalow/.test(t)) L.propType = 'bungalow';
-  else if (/semi[- ]?detached|terraced?|terrace house|detached house|town\s?house|end of terrace|mid[- ]terrace/.test(t)) L.propType = 'house';
+  else if (/\bflt\b|\bflats?\b|\bapartments?\b|\bmaisonette\b/.test(t) && !/\bblock\b.*\bflats?\b|development\s+site|building\s+plot|planning\s+permission\s+for/.test(t)) L.propType = 'flat';
   else if (/\bdetached\b|period\s+property|residential\s+property|chalet|cottage|lodge|villa|mansion/.test(t)) L.propType = 'house';
   else if (/\bhouse\b/.test(t)) L.propType = 'house';
-  else if (/shop|office|commercial|retail|industrial|warehouse|investment|ground rent/.test(t)) L.propType = 'commercial';
-  else if (/\bland\b|plot|site|church|hall|chapel/.test(t)) L.propType = 'land';
-  else if (/garage|parking|lock.?up/.test(t)) L.propType = 'garage';
+  else if (/\bshop\b|\boffice\b|\bcommercial\b|\bretail\b|\bindustrial\b|\bwarehouse\b|\bground rent\b/.test(t) && !hasResidentialSignal && !hasBeds) L.propType = 'commercial';
+  else if (hasBeds && !hasResidentialSignal) L.propType = 'house'; // Bed count without type = residential
+  else if (/\bland\b|\bplot\b|\bsite\b|\bchurch\b|\bhall\b|\bchapel\b/.test(t) && !hasBeds) L.propType = 'land';
+  else if (/\bgarage\b|\bparking\b|lock.?up/.test(t)) L.propType = 'garage';
+  else if (/\binvestment\b/.test(t) && hasBeds) L.propType = 'house'; // Residential investment
+  else if (/\binvestment\b/.test(t)) L.propType = 'commercial'; // Pure investment = commercial
   else L.propType = 'other';
 
   const bm = t.match(/(\w+)\s*[-\s]?bed/);
@@ -10893,8 +10907,8 @@ function analyseLot(raw) {
   else if (/good order|good decorative|well maintained|recently refurbished/.test(t)) L.condition = 'good';
   else if (/derelict|dilapidated|fire damage/.test(t)) L.condition = 'poor';
 
-  if (/vacant possession|\bvp\b|vacant property/.test(t)) L.vacant = true;
-  else if (/tenant|let to|tenanted|occupied|sitting tenant/.test(t)) L.vacant = false;
+  if (/vacant possession|\bvp\b|vacant property|\bvacant\b|with vacant|sold with vacant/.test(t)) L.vacant = true;
+  else if (/tenant|let to|tenanted|occupied|sitting tenant|subject to tenancy|assured shorthold/.test(t)) L.vacant = false;
 
   const executor = /executor|probate|estate of|personal representative/.test(t);
   const receivership = /receiver|receivership|administrator|liquidator|lpa receiver/.test(t);
@@ -11138,19 +11152,26 @@ const VOA_RENTS = {
 // Rent inflation factors — VOA baseline values are from mid-2024, apply uplifts for 2026 market
 const RENT_UPLIFT = { bristol: 1.25, bath: 1.20, london: 1.10, _default: 1.10 };
 
-function estimateMonthlyRent(address, beds) {
+function estimateMonthlyRent(address, beds, units) {
   const a = (address || '').toLowerCase();
+  // Multi-unit: estimate per-unit rent then multiply
+  // For blocks, derive per-unit bed count from total beds / units, or default to 2
+  const perUnitBeds = (units && units >= 2)
+    ? (beds != null && beds <= 10 ? Math.max(1, Math.round(beds / units)) : 2)
+    : (beds ?? 2);
+  const unitCount = (units && units >= 2) ? units : 1;
+  const clampedBeds = Math.min(Math.max(perUnitBeds, 0), 4);
   // Try specific towns/cities first, then regions
   for (const [key, rents] of Object.entries(VOA_RENTS)) {
     if (key === '_default') continue;
     if (a.includes(key)) {
-      const base = rents[Math.min(Math.max(beds ?? 2, 0), 4)];
+      const base = rents[clampedBeds];
       const uplift = RENT_UPLIFT[key] || RENT_UPLIFT._default;
-      return Math.round(base * uplift);
+      return Math.round(base * uplift * unitCount);
     }
   }
-  const base = VOA_RENTS._default[Math.min(Math.max(beds ?? 2, 0), 4)];
-  return Math.round(base * RENT_UPLIFT._default);
+  const base = VOA_RENTS._default[clampedBeds];
+  return Math.round(base * RENT_UPLIFT._default * unitCount);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -11775,14 +11796,25 @@ async function enrichLots(lots, house, sourceUrl, onProgress) {
       type: s.propertyType,
     }));
 
-    // Calculate street average (last 3 years) — type-aware where possible
+    // Calculate street average (last 3 years) — type-aware with IQR outlier exclusion
     const allSales = sales.filter(s => s.price > 0);
     // Try type-matched comps first (flat vs flat, house vs house)
     const typeMap = { flat: /flat|maisonette/i, house: /terraced|semi|detached/i, bungalow: /bungalow/i };
     const typePattern = typeMap[lot.propType];
     const typedSales = typePattern ? allSales.filter(s => typePattern.test(s.propertyType || '')) : [];
     // Use typed comps if we have 2+, otherwise fall back to all sales
-    const relevantSales = typedSales.length >= 2 ? typedSales : allSales;
+    let relevantSales = typedSales.length >= 2 ? typedSales : allSales;
+    // IQR-based outlier exclusion (only with 4+ comps to have meaningful quartiles)
+    if (relevantSales.length >= 4) {
+      const prices = relevantSales.map(s => s.price).sort((a, b) => a - b);
+      const q1 = prices[Math.floor(prices.length * 0.25)];
+      const q3 = prices[Math.floor(prices.length * 0.75)];
+      const iqr = q3 - q1;
+      const lower = q1 - 1.5 * iqr;
+      const upper = q3 + 1.5 * iqr;
+      const filtered = relevantSales.filter(s => s.price >= lower && s.price <= upper);
+      if (filtered.length >= 2) relevantSales = filtered; // Only apply if we keep enough comps
+    }
     if (relevantSales.length > 0) {
       const avg = Math.round(relevantSales.reduce((s, x) => s + x.price, 0) / relevantSales.length);
       lot.streetAvg = avg;
@@ -11817,8 +11849,9 @@ async function enrichLots(lots, house, sourceUrl, onProgress) {
 
     // Rental yield estimate — only for property types that generate rental income
     const yieldEligible = ['house', 'bungalow', 'flat', 'commercial'].includes(lot.propType);
-    const monthlyRent = yieldEligible ? estimateMonthlyRent(lot.address, lot.beds) : 0;
+    const monthlyRent = yieldEligible ? estimateMonthlyRent(lot.address, lot.beds, lot.units) : 0;
     lot.estMonthlyRent = monthlyRent || null;
+    lot._rentMultiUnit = lot.units >= 2; // Flag multi-unit rent estimates for frontend
     lot.estAnnualRent = monthlyRent ? monthlyRent * 12 : null;
     if (lot.price && lot.price > 0 && lot.estAnnualRent) {
       lot.estGrossYield = Math.round((lot.estAnnualRent / lot.price) * 1000) / 10;
@@ -13330,6 +13363,7 @@ async function autoAnalyseOne(url) {
     last_scraped_at: new Date().toISOString(),
     scraped_with: _lastScrapeEngine,
     extracted_with: _lastExtractorUsed,
+    ai_tier: _lastAITier,
   }, { onConflict: 'url' });
 
   // Mark preset cache entries as partially stale (only the changed catalogue needs re-searching)

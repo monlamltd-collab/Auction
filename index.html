@@ -603,6 +603,29 @@ footer .logo-f span{color:var(--green)}
 .fw-empty{font-family:var(--font-main);font-size:12px;color:#6b7c8d;text-align:center;padding:16px 0}
 .fw-error{font-family:var(--font-main);font-size:12px;color:var(--red);text-align:center;padding:16px 0}
 
+/* ── TOOLTIP SYSTEM ── */
+[data-tip]{position:relative;cursor:help}
+[data-tip]:hover::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#1a2a3a;color:#fff;font-size:11px;font-family:var(--font-main);font-weight:400;line-height:1.4;padding:6px 10px;border-radius:6px;white-space:normal;width:max-content;max-width:220px;z-index:100;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,.15);animation:fadeInUp .12s ease}
+[data-tip]:hover::before{content:'';position:absolute;bottom:calc(100% + 2px);left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:#1a2a3a;z-index:101;pointer-events:none}
+
+/* ── PROPERTY DETAILS STRIP (expanded panel) ── */
+.exp-prop-details{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.exp-prop-detail{display:flex;flex-direction:column;background:var(--surface2,#f0f2f5);border-radius:8px;padding:6px 12px;min-width:80px}
+.exp-prop-detail .epd-label{font-size:10px;text-transform:uppercase;color:var(--text-muted,#6b7c8d);font-family:var(--font-main);letter-spacing:.03em}
+.exp-prop-detail .epd-value{font-size:13px;font-weight:600;color:var(--text,#1a2a3a);font-family:var(--font-main)}
+.exp-prop-detail.epd-gap .epd-value{color:var(--accent-warn,#e67e22);font-weight:500}
+
+/* ── LENDER SUMMARY STRIP ── */
+.lender-summary{display:flex;align-items:center;gap:10px;margin-top:12px;padding:10px 14px;background:linear-gradient(135deg,#f0f7ff,#e8f5ee);border-radius:8px;border:1px solid rgba(46,125,50,.15)}
+.lender-summary .ls-count{font-family:var(--font-main);font-weight:700;font-size:20px;color:var(--green)}
+.lender-summary .ls-text{font-family:var(--font-main);font-size:12px;color:var(--text2,#4a5568);line-height:1.3}
+.lender-summary .ls-text strong{color:var(--text,#1a2a3a)}
+.lender-summary .ls-loading{font-family:var(--font-main);font-size:12px;color:var(--text-muted);animation:fwPulse 1.2s ease infinite}
+
+/* ── DATA GAP WARNING ── */
+.data-gap-bar{display:flex;align-items:center;gap:6px;margin-top:8px;padding:6px 10px;background:#fef3e2;border-radius:6px;font-family:var(--font-main);font-size:11px;color:var(--accent-warn,#e67e22)}
+.data-gap-bar .dgb-icon{flex-shrink:0}
+
 /* ── SECTION HEADERS (grid) ── */
 .section-divider{grid-column:1/-1;display:flex;align-items:center;gap:10px;padding:8px 0 4px;font-size:.78rem;color:var(--text3);font-family:var(--font-main);font-weight:600}
 .section-divider::before,.section-divider::after{content:'';flex:1;height:1px;background:var(--border)}
@@ -2777,19 +2800,22 @@ function card(l){
   if (l.priceText) priceText = l.priceText;
   else if (l.price) priceText = 'Guide £' + l.price.toLocaleString();
 
-  // Property details pills
+  // Property details pills (with tooltips and data gap warnings)
   let detailPills = [];
-  if (l.propType) detailPills.push(l.propType);
-  if (l.beds != null) detailPills.push(l.beds + ' bed');
+  if (l.propType) detailPills.push({text: l.propType, tip: 'Property type — affects lender eligibility and valuation approach'});
+  if (l.beds != null) detailPills.push({text: l.beds + ' bed', tip: 'Number of bedrooms — key driver for rental yield estimates'});
+  else detailPills.push({text: 'Beds: ?', tip: 'Bedroom count not listed — check the legal pack or listing for details', gap: true});
   if (l.tenure) {
     let tenureLabel = l.tenure;
     if (l.tenure === 'Leasehold' && l.leaseLength) {
       tenureLabel += ' (' + l.leaseLength + 'yr)';
     }
-    detailPills.push(tenureLabel);
+    detailPills.push({text: tenureLabel, tip: l.tenure === 'Freehold' ? 'Freehold — you own the building and land outright' : 'Leasehold — you own the property for a fixed term. Under 80 years = expensive to extend'});
+  } else {
+    detailPills.push({text: 'Tenure: ?', tip: 'Tenure not listed — critical for finance. Check the legal pack', gap: true});
   }
   if (l.daysSinceAuction != null && l.status === 'unsold') {
-    detailPills.push('Unsold ' + l.daysSinceAuction + 'd ago');
+    detailPills.push({text: 'Unsold ' + l.daysSinceAuction + 'd ago', tip: 'Failed to sell at auction — vendor may accept lower offers. Longer unsold = more motivated seller'});
   }
 
   // Signal chips (max 3 + overflow)
@@ -2811,11 +2837,11 @@ function card(l){
     '<div class="card-body">' +
       '<div class="card-row1"><span class="card-lot-info">' + catLabel + '</span><span class="card-price">' + esc(priceText) + '</span></div>' +
       '<div class="card-address">' + esc(l.address || 'Address not available') + '</div>' +
-      '<div class="card-details">' + detailPills.map(d => '<span class="detail-pill">' + esc(d) + '</span>').join('') + '</div>' +
+      '<div class="card-details">' + detailPills.map(d => '<span class="detail-pill' + (d.gap ? ' epd-gap-pill' : '') + '" data-tip="' + esc(d.tip) + '"' + (d.gap ? ' style="color:var(--accent-warn);border:1px dashed var(--accent-warn)"' : '') + '>' + esc(d.text) + '</span>').join('') + '</div>' +
       (l.epcRating || (l.floodZone && l.floodZone !== '1') || l._yieldEstimateWarning ? '<div style="display:flex;gap:5px;margin-top:4px;flex-wrap:wrap">' +
-        (l.epcRating ? '<span class="detail-pill" style="color:' + (/[AB]/.test(l.epcRating) ? 'var(--signal-pos)' : /[CD]/.test(l.epcRating) ? 'var(--accent-warn)' : 'var(--accent-danger)') + ';font-weight:600">EPC ' + esc(l.epcRating) + (/[FG]/i.test(l.epcRating) ? ' — Unlettable' : '') + '</span>' : '') +
-        ((l.floodZone === '2' || l.floodZone === '3') ? '<span class="detail-pill" style="color:' + (l.floodZone === '3' ? 'var(--accent-danger)' : 'var(--accent-warn)') + ';font-weight:600">FZ' + esc(l.floodZone) + '</span>' : '') +
-        (l._yieldEstimateWarning ? '<span class="detail-pill" style="color:var(--accent-warn);font-weight:600" title="Yield over 30% — likely unrealistic. Verify actual achievable rent before relying on this figure.">Yield unverified</span>' : '') +
+        (l.epcRating ? '<span class="detail-pill" style="color:' + (/[AB]/.test(l.epcRating) ? 'var(--signal-pos)' : /[CD]/.test(l.epcRating) ? 'var(--accent-warn)' : 'var(--accent-danger)') + ';font-weight:600" data-tip="Energy Performance Certificate. A-B = efficient, C-D = average, E-G = poor. F/G cannot be legally let to tenants (MEES regulations).">EPC ' + esc(l.epcRating) + (/[FG]/i.test(l.epcRating) ? ' — Unlettable' : '') + '</span>' : '') +
+        ((l.floodZone === '2' || l.floodZone === '3') ? '<span class="detail-pill" style="color:' + (l.floodZone === '3' ? 'var(--accent-danger)' : 'var(--accent-warn)') + ';font-weight:600" data-tip="' + (l.floodZone === '3' ? 'Flood Zone 3 = high probability of flooding. Insurance difficult/expensive. Some lenders won\'t fund.' : 'Flood Zone 2 = medium probability. Most lenders will fund but may affect valuation.') + '">FZ' + esc(l.floodZone) + '</span>' : '') +
+        (l._yieldEstimateWarning ? '<span class="detail-pill" style="color:var(--accent-warn);font-weight:600" data-tip="Yield over 30% — likely unrealistic. Very low guide prices produce inflated yield estimates. Verify actual achievable rent independently.">Yield unverified</span>' : '') +
       '</div>' : '') +
       (chipsHtml ? '<div class="card-chips">' + chipsHtml + '</div>' : '') +
     '</div>' +
@@ -3170,7 +3196,7 @@ function getCardImageBadges(lot) {
     const clampedScore = Math.max(0, Math.min(10, rawScore));
     const sc = clampedScore >= 3 ? 'high' : clampedScore >= 1 ? 'mid' : 'low';
     const sign = clampedScore > 0 ? '+' : '';
-    html += '<div class="card-badge badge-score ' + sc + '" style="cursor:pointer;position:relative" onclick="event.stopPropagation();toggleScorePopup(this,' + lot._idx + ')" title="Click for score breakdown">' + sign + clampedScore + '</div>';
+    html += '<div class="card-badge badge-score ' + sc + '" style="cursor:pointer;position:relative" onclick="event.stopPropagation();toggleScorePopup(this,' + lot._idx + ')" data-tip="Investment score (0-10) based on AI signals. Click for breakdown.">' + sign + clampedScore + '</div>';
   }
   if (lot.vacant) html += '<div class="badge-vacant">Vacant possession</div>';
   // Urgency / ended badge
@@ -3472,24 +3498,45 @@ function expandCard(lot) {
         '<div class="exp-enrichment" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:8px">' +
           // EPC Rating badge
           (lot.epcRating
-            ? '<div style="padding:6px 12px;border-radius:6px;font-size:.85rem;font-weight:600;' +
+            ? '<div data-tip="Energy Performance Certificate: A (most efficient) to G (least). F/G cannot be legally let under MEES regulations." style="padding:6px 12px;border-radius:6px;font-size:.85rem;font-weight:600;' +
               'background:' + (/[AB]/.test(lot.epcRating) ? '#e8f5ee' : /[CD]/.test(lot.epcRating) ? '#fef3e2' : '#fdf0ee') + ';' +
               'color:' + (/[AB]/.test(lot.epcRating) ? 'var(--signal-pos)' : /[CD]/.test(lot.epcRating) ? 'var(--accent-warn)' : 'var(--accent-danger)') + '">' +
               'EPC: ' + esc(lot.epcRating) + (lot.epcScore ? ' (' + lot.epcScore + ')' : '') +
               (lot.epcDate ? '<span style="font-weight:400;font-size:.75rem;margin-left:6px;opacity:.7">(assessed ' + esc(lot.epcDate) + ')</span>' : '') +
             '</div>' +
-            (/[FG]/i.test(lot.epcRating) ? '<div style="padding:4px 10px;border-radius:6px;font-size:.78rem;background:#fdf0ee;color:var(--accent-danger);font-weight:500">MEES: Cannot legally let — EPC upgrade required</div>' : '') +
-            (/^E$/i.test(lot.epcRating) ? '<div style="padding:4px 10px;border-radius:6px;font-size:.78rem;background:#fef3e2;color:var(--accent-warn);font-weight:500">MEES: At risk — EPC C target coming</div>' : '')
-            : '<div style="padding:6px 12px;border-radius:6px;font-size:.85rem;color:var(--text-muted,#6b7c8d);background:var(--surface2,#f0f2f5)">EPC: \u2014</div>') +
+            (/[FG]/i.test(lot.epcRating) ? '<div data-tip="Minimum Energy Efficiency Standards — landlords cannot legally let properties rated F or G without an exemption." style="padding:4px 10px;border-radius:6px;font-size:.78rem;background:#fdf0ee;color:var(--accent-danger);font-weight:500">MEES: Cannot legally let — EPC upgrade required</div>' : '') +
+            (/^E$/i.test(lot.epcRating) ? '<div data-tip="Government plans to raise MEES minimum to EPC C. Budget for energy upgrades." style="padding:4px 10px;border-radius:6px;font-size:.78rem;background:#fef3e2;color:var(--accent-warn);font-weight:500">MEES: At risk — EPC C target coming</div>' : '')
+            : '<div data-tip="EPC rating not found — may not have been assessed or data unavailable. Check listing or request from vendor." style="padding:6px 12px;border-radius:6px;font-size:.85rem;color:var(--text-muted,#6b7c8d);background:var(--surface2,#f0f2f5)">EPC: \u2014</div>') +
           // Flood Zone badge
           (lot.floodZone
-            ? '<div style="padding:6px 12px;border-radius:6px;font-size:.85rem;font-weight:600;' +
+            ? '<div data-tip="' + (lot.floodZone === '3' ? 'High probability of flooding. Insurance difficult/expensive. Some lenders won\'t fund.' : lot.floodZone === '2' ? 'Medium probability of flooding. Most lenders will fund but may affect valuation.' : 'Low probability of flooding. No finance or insurance concerns.') + '" style="padding:6px 12px;border-radius:6px;font-size:.85rem;font-weight:600;' +
               'background:' + (lot.floodZone === '3' ? '#fdf0ee' : lot.floodZone === '2' ? '#fef3e2' : '#e8f5ee') + ';' +
               'color:' + (lot.floodZone === '3' ? 'var(--accent-danger)' : lot.floodZone === '2' ? 'var(--accent-warn)' : 'var(--accent)') + '">' +
               'Flood Zone ' + esc(lot.floodZone) + ' \u2014 ' + (lot.floodZone === '3' ? 'High Risk' : lot.floodZone === '2' ? 'Medium Risk' : 'Low Risk') +
             '</div>'
-            : '<div style="padding:6px 12px;border-radius:6px;font-size:.85rem;color:var(--text-muted,#6b7c8d);background:var(--surface2,#f0f2f5)">Flood Zone: \u2014</div>') +
+            : '<div data-tip="Flood zone not checked — data may be unavailable for this postcode." style="padding:6px 12px;border-radius:6px;font-size:.85rem;color:var(--text-muted,#6b7c8d);background:var(--surface2,#f0f2f5)">Flood Zone: \u2014</div>') +
         '</div>' +
+        // ── Property Details Strip (with data gap warnings) ──
+        '<div class="exp-prop-details">' +
+          '<div class="exp-prop-detail" data-tip="Property classification — affects lender eligibility and valuation method"><div class="epd-label">Type</div><div class="epd-value">' + esc(lot.propType || 'Unknown') + '</div></div>' +
+          '<div class="exp-prop-detail' + (lot.beds == null ? ' epd-gap' : '') + '" data-tip="' + (lot.beds != null ? 'Number of bedrooms — key driver for rental yield estimates' : 'Bedroom count not listed — check the legal pack or listing') + '"><div class="epd-label">Beds</div><div class="epd-value">' + (lot.beds != null ? lot.beds : '?') + '</div></div>' +
+          '<div class="exp-prop-detail' + (!lot.tenure ? ' epd-gap' : '') + '" data-tip="' + (!lot.tenure ? 'Tenure not listed — critical for finance. Check legal pack' : lot.tenure === 'Freehold' ? 'You own the building and land outright' : 'You own for a fixed term. Under 80yrs = expensive to extend') + '"><div class="epd-label">Tenure</div><div class="epd-value">' + esc(lot.tenure ? (lot.tenure + (lot.tenure === 'Leasehold' && lot.leaseLength ? ' (' + lot.leaseLength + 'yr)' : '')) : '?') + '</div></div>' +
+          '<div class="exp-prop-detail' + (!lot.condition ? ' epd-gap' : '') + '" data-tip="' + (lot.condition ? 'Assessed condition based on listing description' : 'Condition not stated — assume needs inspection. Budget for survey costs') + '"><div class="epd-label">Condition</div><div class="epd-value">' + esc(lot.condition ? lot.condition.charAt(0).toUpperCase() + lot.condition.slice(1) : '?') + '</div></div>' +
+          '<div class="exp-prop-detail" data-tip="' + (lot.vacant === true ? 'Vacant possession confirmed — no sitting tenants. Easier to finance and renovate' : lot.vacant === false ? 'Property is tenanted — may affect finance options and refurb timeline' : 'Occupancy not stated — check legal pack for vacant possession details') + '"><div class="epd-label">Vacant</div><div class="epd-value">' + (lot.vacant === true ? 'Yes' : lot.vacant === false ? 'No (tenanted)' : '<span style="color:var(--accent-warn)">?</span>') + '</div></div>' +
+          (lot.sqft ? '<div class="exp-prop-detail" data-tip="Internal floor area — used to calculate price per sqft for comparisons"><div class="epd-label">Size</div><div class="epd-value">' + lot.sqft.toLocaleString() + ' sqft</div></div>' : '') +
+        '</div>' +
+        // ── Data gap warning bar ──
+        (function() {
+          var gaps = [];
+          if (lot.beds == null) gaps.push('beds');
+          if (!lot.tenure) gaps.push('tenure');
+          if (!lot.condition) gaps.push('condition');
+          if (lot.vacant == null) gaps.push('occupancy');
+          if (gaps.length >= 2) return '<div class="data-gap-bar"><span class="dgb-icon">\u26a0</span> Missing: ' + gaps.join(', ') + ' \u2014 check the legal pack before bidding</div>';
+          return '';
+        })() +
+        // ── Lender Summary (auto-fetched from BridgeMatch) ──
+        (lot.price ? '<div class="lender-summary" id="lender-summary-' + lot._idx + '"><span class="ls-loading">Checking lenders...</span></div>' : '') +
       '</div>' +
       '<div class="exp-right">' +
         (signalsHtml ? '<div class="exp-signals">' + signalsHtml + '</div>' : '') +
@@ -3525,6 +3572,11 @@ function expandCard(lot) {
   // Auto-run finance check if lot has a price
   if (lot.price) {
     setTimeout(() => triggerFinanceCheck(lot._idx), 200);
+  }
+
+  // Auto-fetch lender summary for the header strip
+  if (lot.price) {
+    fetchLenderSummary(lot);
   }
 }
 
@@ -3585,6 +3637,63 @@ function triggerFinanceCheck(idx) {
       resultsEl.innerHTML = '<div class="fw-error">Unable to check finance — try again later</div>';
     }
   }, 400);
+}
+
+// Lender summary cache (avoid re-fetching for same lot)
+const _lenderSummaryCache = {};
+async function fetchLenderSummary(lot) {
+  const el = document.getElementById('lender-summary-' + lot._idx);
+  if (!el) return;
+
+  const cacheKey = lot.price + '_' + (lot.propType || 'house');
+  if (_lenderSummaryCache[cacheKey]) {
+    renderLenderSummary(el, _lenderSummaryCache[cacheKey], lot);
+    return;
+  }
+
+  const loanAmount = Math.round(lot.price * 0.70); // default 70% LTV
+  const propType = (lot.propType || 'house').toLowerCase();
+  const apiType = /flat|apartment|maisonette/.test(propType) ? 'flat' : /commercial|mixed/.test(propType) ? 'commercial' : /land/.test(propType) ? 'land' : 'house';
+
+  try {
+    const r = await fetch('https://www.bridgematch.co.uk/api/filter', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ loan_amount: loanAmount, market_value: lot.price, property_type: apiType, transaction_type: 'purchase', charge_position: '1st', loan_term_months: 12 })
+    });
+    if (!r.ok) throw new Error('API error');
+    const data = await r.json();
+    _lenderSummaryCache[cacheKey] = data;
+    renderLenderSummary(el, data, lot);
+  } catch (e) {
+    el.innerHTML = '<span style="font-size:12px;color:var(--text-muted)">Lender data unavailable</span>';
+  }
+}
+
+function renderLenderSummary(el, data, lot) {
+  const count = data.summary?.eligible || data.eligible?.length || 0;
+  const lenders = data.eligible || [];
+  const bestRate = lenders.length ? lenders.reduce((min, l) => {
+    const rate = parseFloat((l.interest_rate_band || '').match(/[\d.]+/)?.[0] || 999);
+    return rate < min ? rate : min;
+  }, 999) : null;
+  const maxLtv = lenders.length ? lenders.reduce((max, l) => {
+    const ltv = parseFloat(l.max_gross_ltv || 0);
+    return ltv > max ? ltv : max;
+  }, 0) : null;
+
+  if (count === 0) {
+    el.innerHTML = '<span style="font-size:12px;color:var(--accent-warn)">No bridging lenders match at 70% LTV — try adjusting in the Finance Check below</span>';
+    return;
+  }
+
+  el.innerHTML =
+    '<div class="ls-count">' + count + '</div>' +
+    '<div class="ls-text">' +
+      '<strong>bridging lender' + (count !== 1 ? 's' : '') + ' match</strong> at 70% LTV' +
+      (bestRate && bestRate < 999 ? ' · best rate <strong>' + bestRate.toFixed(2) + '%</strong>/mo' : '') +
+      (maxLtv && maxLtv > 0 ? ' · up to <strong>' + maxLtv + '%</strong> LTV' : '') +
+    '</div>';
 }
 
 function bridgeMatchLot(idx, event) {
