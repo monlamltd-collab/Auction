@@ -401,7 +401,7 @@ async function sendEmailReport(auditData, codeFixes, runtimeFixes) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'Auction Health Bot <hello@bridgematch.co.uk>',
+        from: 'Auction Health Bot <hello@auctionbrain.co.uk>',
         to: [EMAIL_TO],
         subject,
         html,

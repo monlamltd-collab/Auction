@@ -1639,31 +1639,22 @@ app.post('/api/cron/unsold-alerts', async (req, res) => {
         </tr>`;
       }).join('');
 
-      const emailHtml = `
-        <div style="font-family:'DM Sans',Helvetica,Arial,sans-serif;max-width:620px;margin:0 auto;color:#1a1714">
-          <div style="background:linear-gradient(135deg,#1a3a5c,#2a5a8c);padding:24px;border-radius:12px 12px 0 0;text-align:center">
-            <span style="font-family:Georgia,serif;font-size:20px;font-weight:700;color:#fff">Auction <span style="color:#8bc34a">Brain</span></span>
-            <div style="color:rgba(255,255,255,.7);font-size:13px;margin-top:4px">Unsold Lot Alert</div>
-          </div>
-          <div style="background:#fff;padding:24px;border:1px solid #e4dfd6;border-top:none;border-radius:0 0 12px 12px">
-            <p style="margin:0 0 16px;line-height:1.6;color:#5c564d">Hi ${firstName}, there are <strong>${unsoldLots.length} unsold lots</strong> matching your filters — vendors may accept below-guide offers.</p>
+      const emailHtml = abEmailWrap(`
+            <h1 style="font-size:24px;color:#1A1A18;margin:0 0 16px;line-height:1.3;">Unsold Lot Alert</h1>
+            <p style="font-size:16px;color:#6B6B65;line-height:1.6;margin:0 0 20px;">Hi ${firstName}, there are <strong>${unsoldLots.length} unsold lots</strong> matching your filters — vendors may accept below-guide offers.</p>
             <table style="width:100%;border-collapse:collapse;margin-bottom:20px">
               <tr style="background:#f5f5f5"><th style="padding:8px 12px;text-align:left;font-size:12px;color:#666">Address</th><th style="padding:8px 12px;text-align:left;font-size:12px;color:#666">Guide</th><th style="padding:8px 12px;text-align:center;font-size:12px;color:#666">Unsold</th><th style="padding:8px 12px;text-align:left;font-size:12px;color:#666">House</th></tr>
               ${lotRows}
             </table>
-            ${unsoldLots.length > 20 ? `<p style="font-size:13px;color:#888;margin:0 0 16px">+ ${unsoldLots.length - 20} more — <a href="https://auctions.bridgematch.co.uk/?status=unsold" style="color:#2e7d32">view all on Auction Brain</a></p>` : ''}
-            <div style="text-align:center;margin:20px 0">
-              <a href="https://auctions.bridgematch.co.uk/?status=unsold" style="display:inline-block;background:#2e7d32;color:#fff;font-weight:700;font-size:14px;padding:12px 28px;border-radius:10px;text-decoration:none">View Unsold Lots →</a>
-            </div>
-            <p style="font-size:11px;color:#aaa;text-align:center;margin:16px 0 0">You're receiving this because you subscribed to unsold lot alerts. <a href="https://auctions.bridgematch.co.uk/" style="color:#888">Manage preferences</a></p>
-          </div>
-        </div>`;
+            ${unsoldLots.length > 20 ? `<p style="font-size:13px;color:#888;margin:0 0 16px">+ ${unsoldLots.length - 20} more — <a href="https://auctions.bridgematch.co.uk/?status=unsold" style="color:#C0392B">view all on AuctionBrain</a></p>` : ''}
+            ${abCtaButton('View Unsold Lots &rarr;', 'https://auctions.bridgematch.co.uk/?status=unsold')}
+            <p style="font-size:11px;color:#6B6B65;text-align:center;margin:16px 0 0">You're receiving this because you subscribed to unsold lot alerts. <a href="https://auctions.bridgematch.co.uk/" style="color:#C0392B">Manage preferences</a></p>`);
 
       await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from: 'Auction Brain <hello@bridgematch.co.uk>',
+          from: 'AuctionBrain <hello@auctionbrain.co.uk>',
           to: [user.email],
           subject: `${unsoldLots.length} unsold auction lots — vendors may accept offers`,
           html: emailHtml,
@@ -1903,10 +1894,10 @@ app.post('/api/stripe/webhook', async (req, res) => {
               method: 'POST',
               headers: { 'Authorization': `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                from: 'BridgeMatch <hello@bridgematch.co.uk>',
+                from: 'AuctionBrain <hello@auctionbrain.co.uk>',
                 to: [failedUser.email],
-                subject: 'Payment failed — your BridgeMatch Pro subscription',
-                html: `<p>Hi ${escHtml((failedUser.name || '').split(' ')[0] || 'there')},</p><p>We couldn't process your latest payment for BridgeMatch Pro. Please update your payment method to keep your subscription active.</p><p><a href="https://auctions.bridgematch.co.uk/?manage=billing">Update payment method</a></p><p>— The BridgeMatch team</p>`,
+                subject: 'Payment failed — your AuctionBrain Pro subscription',
+                html: `<p>Hi ${escHtml((failedUser.name || '').split(' ')[0] || 'there')},</p><p>We couldn't process your latest payment for AuctionBrain Pro. Please update your payment method to keep your subscription active.</p><p><a href="https://auctions.bridgematch.co.uk/?manage=billing">Update payment method</a></p><p>— The AuctionBrain team</p>`,
               }),
             }).catch(e => log.warn('Payment failed email send error', { error: e.message }));
           }
@@ -2084,7 +2075,7 @@ app.post('/api/leads', rateLimit(60000, 10), async (req, res) => {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from: 'BridgeMatch <hello@bridgematch.co.uk>',
+          from: 'AuctionBrain <hello@auctionbrain.co.uk>',
           to: ['hello@bridgematch.co.uk'],
           subject: `🏠 New lead: ${safeName} — ${escHtml(propertyPrice || 'price TBC')}`,
           html,
@@ -2100,48 +2091,105 @@ app.post('/api/leads', rateLimit(60000, 10), async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// WELCOME EMAIL (via Resend)
+// WELCOME EMAIL (via Resend) — uses Landing page style + drip sequence
 // ═══════════════════════════════════════════════════════════════
+
+// Shared email helpers (match AuctionBrain-Landing style exactly)
+function abEmailWrap(body) {
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#F5F1EA;font-family:'Helvetica Neue',Arial,sans-serif;">
+  <div style="max-width:560px;margin:0 auto;padding:40px 24px;">
+    <div style="margin-bottom:32px;">
+      <span style="font-size:22px;font-weight:700;color:#1A1A18;">Auction</span><span style="font-size:22px;font-weight:500;color:#C0392B;font-family:'Courier New',monospace;">Brain</span>
+    </div>
+    ${body}
+    <hr style="border:none;border-top:1px solid #E8E4DC;margin:32px 0 16px;">
+    <p style="font-size:12px;color:#6B6B65;margin:0;">
+      AuctionBrain &middot; Powered by BridgeMatch<br>
+      <a href="https://www.auctionbrain.co.uk" style="color:#C0392B;">www.auctionbrain.co.uk</a>
+    </p>
+  </div>
+</body>
+</html>`;
+}
+
+function abTipCard(num, title, text) {
+  return `<div style="background:#FFFFFF;border:1px solid #E8E4DC;border-radius:6px;padding:20px;margin:0 0 12px;">
+  <span style="font-family:'Courier New',monospace;font-size:20px;color:#C0392B;font-weight:500;">${num}</span>
+  <strong style="color:#1A1A18;display:block;margin:8px 0 4px;">${title}</strong>
+  <span style="color:#6B6B65;font-size:14px;">${text}</span>
+</div>`;
+}
+
+function abCtaButton(text, url = 'https://auctions.bridgematch.co.uk') {
+  return `<a href="${url}" style="display:inline-block;background:#C0392B;color:#FFFFFF;font-size:16px;font-weight:600;padding:14px 28px;border-radius:4px;text-decoration:none;">${text}</a>`;
+}
+
 async function sendWelcomeEmail(email, name) {
   const resendKey = process.env.RESEND_API_KEY;
   if (!resendKey) return;
-  const firstName = escHtml((name || '').split(' ')[0] || 'there');
-  const html = `
-    <div style="font-family:'DM Sans',Helvetica,Arial,sans-serif;max-width:560px;margin:0 auto;color:#1a1714">
-      <div style="background:linear-gradient(135deg,#1a3a5c,#2a5a8c);padding:32px 24px;border-radius:12px 12px 0 0;text-align:center">
-        <span style="font-family:Georgia,serif;font-size:24px;font-weight:700;color:#fff">Auction <span style="color:#8bc34a">Brain</span></span>
-      </div>
-      <div style="background:#ffffff;padding:32px 24px;border:1px solid #e4dfd6;border-top:none;border-radius:0 0 12px 12px">
-        <h1 style="font-size:20px;margin:0 0 16px;color:#1a2332">Welcome, ${firstName}!</h1>
-        <p style="line-height:1.7;color:#5c564d;margin:0 0 16px">You're in — and you've got <strong>14 days of Pro access</strong> on us. Here's what you can do:</p>
-        <ul style="line-height:1.8;color:#5c564d;margin:0 0 20px;padding-left:20px">
-          <li><strong>Unlimited AI searches</strong> — natural language search across every catalogue</li>
-          <li><strong>Browse 2,000+ auction lots</strong> — every major UK auction house in one place</li>
-          <li><strong>AI investment scores</strong> — opportunity/risk flags on every lot</li>
-          <li><strong>BridgeMatch finance check</strong> — see which of 60+ bridging lenders would fund any lot</li>
-        </ul>
-        <p style="line-height:1.7;color:#5c564d;margin:0 0 20px">After your trial, you'll still get 10 free AI searches per day. Upgrade to Pro (£9.99/month) for unlimited.</p>
-        <div style="text-align:center;margin:24px 0">
-          <a href="https://auctions.bridgematch.co.uk/" style="display:inline-block;background:#2e7d32;color:#fff;font-weight:700;font-size:15px;padding:14px 32px;border-radius:10px;text-decoration:none">Browse Auction Deals →</a>
-        </div>
-        <p style="font-size:13px;color:#8a847a;margin:20px 0 0;text-align:center">Questions? Just reply to this email.</p>
-      </div>
-    </div>
-  `;
+
+  // 1) Add contact to Resend audience (same audience as Landing page)
+  try {
+    const audRes = await fetch('https://api.resend.com/audiences', {
+      headers: { 'Authorization': `Bearer ${resendKey}` },
+    });
+    const audData = await audRes.json();
+    const audienceId = audData?.data?.[0]?.id;
+    if (audienceId) {
+      await fetch(`https://api.resend.com/audiences/${audienceId}/contacts`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+    }
+  } catch (e) {
+    log.warn('Resend audience add failed', { email, error: e.message });
+  }
+
+  // 2) Send welcome email (Landing page style — drip step 0)
+  const html = abEmailWrap(`
+    <h1 style="font-size:24px;color:#1A1A18;margin:0 0 16px;line-height:1.3;">You're in.</h1>
+    <p style="font-size:16px;color:#6B6B65;line-height:1.6;margin:0 0 20px;">
+      AuctionBrain searches 168 UK auction houses so you don't have to. Every lot is scored for investment potential, with flood zone, EPC, and bridging finance data baked in.
+    </p>
+    <p style="font-size:16px;color:#6B6B65;line-height:1.6;margin:0 0 24px;">
+      Here are 3 things to try first:
+    </p>
+    ${abTipCard('01', 'Search your area', 'Type a postcode or town. See every lot within range across all auction houses.')}
+    ${abTipCard('02', 'Filter for unsold lots', "These didn't meet reserve — prime for post-auction negotiation at 10-20% below guide.")}
+    ${abTipCard('03', 'Check the flood zone', "Flood zone 3 = most lenders won't touch it. We flag it so you don't find out after exchange.")}
+    ${abCtaButton('Browse auction lots &rarr;')}
+    <p style="font-size:14px;color:#6B6B65;line-height:1.6;margin:24px 0 0;">
+      We'll send you a few tips over the next week to help you get the most out of it. No spam.
+    </p>`);
+
   try {
     await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        from: 'Auction Brain <hello@bridgematch.co.uk>',
+        from: 'AuctionBrain <hello@auctionbrain.co.uk>',
         to: [email],
-        subject: `Welcome to Auction Brain — your unfair advantage at auction`,
+        subject: "You're in — here's how to find auction deals",
         html,
       }),
     });
     log.info('Welcome email sent', { email });
   } catch (e) {
     log.warn('Welcome email failed', { email, error: e.message });
+  }
+
+  // 3) Register in email_signups + drip_log so Landing page drip cron sends follow-ups
+  if (supabase) {
+    await supabase.from('email_signups').insert({ email, source: 'tool' }).then(({ error }) => {
+      if (error && error.code !== '23505') log.warn('email_signups insert failed', { error: error.message });
+    });
+    await supabase.from('drip_log').insert({ email, step: 0 }).then(({ error }) => {
+      if (error && error.code !== '23505') log.warn('drip_log insert failed', { error: error.message });
+    });
   }
 }
 
