@@ -675,6 +675,72 @@ function extractWithJSDOM(html, house, baseUrl, firecrawlImages) {
     }
   }
 
+  // Image dedup guard — if the same image appears on >50% of lots, it's likely a
+  // banner/hero/catalogue image, not a per-lot photo. Strip it from all lots.
+  if (lots.length >= 3) {
+    const imgCounts = {};
+    for (const lot of lots) {
+      if (lot.imageUrl) imgCounts[lot.imageUrl] = (imgCounts[lot.imageUrl] || 0) + 1;
+    }
+    for (const [img, count] of Object.entries(imgCounts)) {
+      if (count > lots.length * 0.5) {
+        console.log(`[IMG] ${house}: stripped duplicate image appearing on ${count}/${lots.length} lots: ${img.substring(0, 80)}`);
+        for (const lot of lots) {
+          if (lot.imageUrl === img) lot.imageUrl = null;
+        }
+      }
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // UNIVERSAL LOT VALIDATION HARNESS — applies to ALL houses
+  // Guards against page chrome leaking in as fake lots, junk
+  // bullets, and other extraction artefacts.
+  // ══════════════��════════════════════════════════════════════════
+
+  const preHarnessCount = lots.length;
+
+  // Guard 1: Address sanity — strip lots whose address looks like nav/chrome text
+  const chromeAddressPattern = /^(Home|Contact|About|Search|Properties|Menu|Login|Register|Sign.?[Ii]n|Sign.?[Uu]p|Cookie|Privacy|Terms|FAQ|Help|Back|Next|Previous|View.?All|Show.?More|Load.?More|See.?All|Read.?More|Click.?Here|Subscribe|Newsletter|Disclaimer|Sitemap|Copyright|©)$/i;
+  lots = lots.filter(lot => {
+    if (chromeAddressPattern.test((lot.address || '').trim())) return false;
+    return true;
+  });
+
+  // Guard 2: Duplicate address detection — if >3 lots share the exact same address,
+  // something is wrong (likely the same element scraped repeatedly)
+  const addrCounts = {};
+  for (const lot of lots) {
+    const norm = (lot.address || '').toLowerCase().trim();
+    if (norm) addrCounts[norm] = (addrCounts[norm] || 0) + 1;
+  }
+  for (const [addr, count] of Object.entries(addrCounts)) {
+    if (count > 3) {
+      console.log(`[HARNESS] ${house}: stripped ${count} lots with duplicate address: "${addr.substring(0, 60)}"`);
+      let kept = 0;
+      lots = lots.filter(lot => {
+        if ((lot.address || '').toLowerCase().trim() === addr) {
+          kept++;
+          return kept <= 1; // keep only the first one
+        }
+        return true;
+      });
+    }
+  }
+
+  // Guard 3: Bullet sanitisation — strip bullets that look like page chrome across all houses
+  const junkBulletPattern = /^(Home|Contact|About|Search|Menu|Login|Register|Cookie|Privacy|Terms|FAQ|Help|©|Tel:|Email:|Fax:|Follow.?Us|Share|Print|Save|View|Click|Subscribe|Newsletter|All.?Rights|Powered.?By|Sitemap|Disclaimer)/i;
+  for (const lot of lots) {
+    if (lot.bullets && Array.isArray(lot.bullets)) {
+      lot.bullets = lot.bullets.filter(b => !junkBulletPattern.test((b || '').trim()));
+    }
+  }
+
+  const stripped = preHarnessCount - lots.length;
+  if (stripped > 0) {
+    console.log(`[HARNESS] ${house}: removed ${stripped} invalid lots (${preHarnessCount} → ${lots.length})`);
+  }
+
   // Final image coverage logging
   const lotsWithImages = lots.filter(l => l.imageUrl).length;
   console.log(`[IMG] ${house}: ${lotsWithImages}/${lots.length} lots have images after extraction + Firecrawl merge`);
@@ -923,6 +989,22 @@ async function backfillImagesWithFirecrawl(catalogueUrl, lots, house) {
           updated++;
         }
       }
+    }
+    // Image dedup guard — same as extractWithJSDOM harness
+    if (lots.length >= 3) {
+      const imgCounts = {};
+      for (const lot of lots) {
+        if (lot.imageUrl) imgCounts[lot.imageUrl] = (imgCounts[lot.imageUrl] || 0) + 1;
+      }
+      for (const [img, count] of Object.entries(imgCounts)) {
+        if (count > lots.length * 0.5) {
+          console.log(`[IMG-BACKFILL] ${house}: stripped duplicate image on ${count}/${lots.length} lots: ${img.substring(0, 80)}`);
+          for (const lot of lots) {
+            if (lot.imageUrl === img) { lot.imageUrl = null; updated--; }
+          }
+        }
+      }
+      if (updated < 0) updated = 0;
     }
     dom.window.close();
     console.log(`Firecrawl image backfill for ${house}: ${updated}/${lots.length} lots got images`);
@@ -8757,18 +8839,26 @@ const DOM_EXTRACTORS = {
 
   // ─── SUTTON KERSH ───────────────────────────────────────────
   // suttonkersh.co.uk — Liverpool. Static HTML gallery.
-  // Cards are .galleryProperty with .info h1 a (address) and h2 a (price).
+  // Cards are .propertyBox.auctionBox with .info h1 a (address) and h2 a (price).
+  // Must validate cards have a lot link to filter out page chrome.
   suttonkersh: `
     (() => {
       const lots = [];
       const cards = document.querySelectorAll('.propertyBox.auctionBox');
       for (const card of cards) {
         const text = card.textContent || '';
+        // URL from detail link — MUST exist to confirm this is a real lot
+        let url = '';
+        const link = card.querySelector('a[href*="/properties/lot/"]');
+        if (link) url = link.getAttribute('href') || '';
+        if (!url) continue;
         // Address from h1 > a inside .info
         let address = '';
         const addrEl = card.querySelector('.info h1 a, h1 a');
         if (addrEl) address = addrEl.textContent.replace(/\\n/g, ', ').trim();
         if (!address || address.length < 5) continue;
+        // Skip if address looks like nav/chrome text
+        if (address.match(/^(Home|Contact|About|Search|Properties|Menu|Login|Register)$/i)) continue;
         // Price from h2 > a inside .info — "Sold for £63,000" or "Available at £X"
         let price = null;
         const priceEl = card.querySelector('.info h2 a, h2 a');
@@ -8776,10 +8866,6 @@ const DOM_EXTRACTORS = {
           const pm = priceEl.textContent.match(/£([\\d,]+)/);
           if (pm) price = parseInt(pm[1].replace(/,/g, ''));
         }
-        // URL from detail link
-        let url = '';
-        const link = card.querySelector('a[href*="/properties/lot/"]');
-        if (link) url = link.getAttribute('href') || '';
         // Lot number
         let lotNum = lots.length + 1;
         const lotMatch = text.match(/Lot[:\\s]+(\\d+)/i);
@@ -8788,14 +8874,21 @@ const DOM_EXTRACTORS = {
         let imageUrl = '';
         const img = card.querySelector('.img_container img:not(.sold), img[src*="image_crop"]');
         if (img) imageUrl = img.getAttribute('src') || '';
-        // Bullets — status, property type
+        // Bullets — status, property type (strict filtering)
         const bullets = [];
         if (text.match(/\\bSOLD\\b|\\bSALE.?AGREED\\b|\\bSTC\\b|\\bWithdrawn\\b/i)) bullets.push('SOLD/STC');
-        // Property type from p after lot number
+        if (text.match(/\\bPostponed\\b/i)) bullets.push('Postponed');
+        // Property type from p tags — only keep lines that look like property descriptions
         const infoPs = card.querySelectorAll('.info p');
         for (const p of infoPs) {
           const pt = p.textContent.trim();
-          if (pt.length > 3 && pt.length < 80 && !pt.match(/Lot:|Guide/i)) bullets.push(pt);
+          if (pt.length < 4 || pt.length > 80) continue;
+          // Skip lines that are clearly not property type/description
+          if (pt.match(/Lot[:\\s]|Guide|Save|View|Click|Search|Contact|Share|Print|©|Cookie|Privacy|Tel:|Email:|Fax:/i)) continue;
+          // Only keep if it looks like a property descriptor
+          if (pt.match(/residential|commercial|land|investment|vacant|freehold|leasehold|semi|terrace|detach|flat|house|bungalow|garage|shop|office|warehouse|industrial|mixed.use|development|site/i)) {
+            bullets.push(pt);
+          }
         }
         lots.push({ lot: lotNum, address, price, url, bullets, imageUrl: imageUrl || undefined });
       }
@@ -9136,10 +9229,11 @@ const DOM_EXTRACTORS = {
   `,
 
   // ── DAWSONS (dawsonsproperty.co.uk) ──
-  // Bootstrap layout with div.homes-content for each lot
+  // Bootstrap layout with div.homes-content for each lot, images in sibling col within same .row
   dawsons: `
     (() => {
       const lots = [];
+      const usedImages = new Set();
       const contentBlocks = document.querySelectorAll('.homes-content');
       for (const block of contentBlocks) {
         const text = block.textContent || '';
@@ -9158,11 +9252,29 @@ const DOM_EXTRACTORS = {
         const link = block.querySelector('a[href*="/auction/"]');
         if (link) url = link.getAttribute('href') || '';
         let imageUrl = '';
-        // Images are in sibling col or in modal carousel
-        const parent = block.closest('.row') || block.parentElement;
-        if (parent) {
-          const img = parent.querySelector('img.d-block, img.img-fluid, img[src*="auction"]');
-          if (img) imageUrl = img.getAttribute('src') || '';
+        // Strategy 1: image inside the block itself
+        let img = block.querySelector('img.d-block, img.img-fluid, img[src*="auction"], img[src*="/assets/"]');
+        // Strategy 2: sibling column in the same .row (each lot has its own .row)
+        if (!img) {
+          const row = block.closest('.row');
+          if (row) {
+            // Find images NOT inside this block (sibling col)
+            const allImgs = row.querySelectorAll('img.d-block, img.img-fluid, img[src*="auction"], img[src*="/assets/"]');
+            for (const candidate of allImgs) {
+              if (!block.contains(candidate)) {
+                const src = candidate.getAttribute('src') || '';
+                // Skip if this exact image was already assigned to another lot
+                if (src && !usedImages.has(src)) { img = candidate; break; }
+              }
+            }
+          }
+        }
+        if (img) {
+          const src = img.getAttribute('src') || '';
+          if (src && !usedImages.has(src)) {
+            imageUrl = src;
+            usedImages.add(src);
+          }
         }
         const bullets = [];
         const beds = block.querySelector('.fa-bed');
