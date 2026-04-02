@@ -24,6 +24,17 @@ try { puppeteer = (await import('puppeteer')).default; } catch {}
 import Stripe from 'stripe';
 import { callAI, initAI, getAICostSummary } from './lib/ai-provider.js';
 
+// ── Harness modules (adaptive resilience framework) ──
+import { initAlerts, fireAlert as harnessFireAlert, resolveAlert as harnessResolveAlert, getUnresolved as harnessGetUnresolved } from './lib/harness/alert-router.js';
+import { validateBatch } from './lib/harness/data-contract.js';
+import { detectRegression } from './lib/harness/regression-detector.js';
+import { evaluateGate } from './lib/harness/quality-gate.js';
+import { initHouseHealth, updateHealth as harnessUpdateHealth, getHealth as harnessGetHealth, getAllHealth, isCircuitOpen, getBaseline } from './lib/harness/house-health.js';
+import { enrichBatch, getEnrichmentReport } from './lib/harness/enrichment-engine.js';
+import { initDiscovery, discoverNewHouses, getDiscoveryQueue, approveCandidate, getDiscoveryBudget } from './lib/harness/house-discovery.js';
+import { initGenerator } from './lib/harness/extractor-generator.js';
+import { initManager, runManagerCycle, getManagerReport, setManagerConfig, getManagerConfig } from './lib/harness/manager.js';
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // ═══════════════════════════════════════════════════════════════
@@ -269,6 +280,13 @@ let PUPPETEER_IMAGE_HOUSES = null;
 // ═══════════════════════════════════════════════════════════════
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 initAI(genAI, supabase);
+
+// ── Harness initialization ──
+initAlerts(supabase);
+initHouseHealth(supabase).catch(e => console.warn('Harness: health init failed:', e.message));
+initDiscovery(supabase, callAI);
+initGenerator(supabase, callAI);
+// Manager init deferred to after HOUSE_ROOTS and DOM_EXTRACTORS are defined (see below)
 
 // ── Firecrawl rate limiter & credit tracking ──
 const FIRECRAWL_API_KEY = process.env.FIRECRAWL_API_KEY || '';
@@ -12677,6 +12695,108 @@ async function syncCalendarAndHouseNames() {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════
+// HARNESS ADMIN ENDPOINTS
+// ═══════════════════════════════════════════════════════════════
+
+app.get('/api/house-health', async (req, res) => {
+  const token = req.headers['x-admin-secret'] || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  res.json(getAllHealth());
+});
+
+app.get('/api/discovery/candidates', async (req, res) => {
+  const token = req.headers['x-admin-secret'] || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  const candidates = await getDiscoveryQueue();
+  res.json({ candidates, budget: getDiscoveryBudget() });
+});
+
+app.post('/api/discovery/approve', async (req, res) => {
+  const token = req.headers['x-admin-secret'] || req.body?.secret || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  const { url } = req.body || {};
+  if (!url) return res.status(400).json({ error: 'url required' });
+  const ok = await approveCandidate(url);
+  res.json({ approved: ok });
+});
+
+app.get('/api/enrichment/report', async (req, res) => {
+  const token = req.headers['x-admin-secret'] || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  const house = req.query.house || null;
+  // Get cached lots for the house to generate report
+  if (house) {
+    const { data } = await supabase.from('cached_analyses')
+      .select('lots, house')
+      .eq('house', house)
+      .limit(1)
+      .maybeSingle();
+    if (data?.lots) {
+      return res.json(getEnrichmentReport(data.lots, house));
+    }
+  }
+  res.json({ message: 'Provide ?house=slug for per-house report' });
+});
+
+app.get('/api/manager/report', async (req, res) => {
+  const token = req.headers['x-admin-secret'] || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  const report = getManagerReport();
+  res.json(report || { message: 'No manager cycle has run yet' });
+});
+
+app.post('/api/manager/cycle', async (req, res) => {
+  const token = req.headers['x-admin-secret'] || req.body?.secret || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  const report = await runManagerCycle();
+  res.json(report);
+});
+
+app.post('/api/manager/config', async (req, res) => {
+  const token = req.headers['x-admin-secret'] || req.body?.secret || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  const { config } = req.body || {};
+  if (!config) return res.status(400).json({ error: 'config object required' });
+  const updated = setManagerConfig(config);
+  res.json(updated);
+});
+
+app.get('/api/harness/status', async (req, res) => {
+  const token = req.headers['x-admin-secret'] || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  const health = getAllHealth();
+  const healthCounts = { healthy: 0, degraded: 0, broken: 0 };
+  for (const h of Object.values(health)) {
+    if (h.status === 'broken') healthCounts.broken++;
+    else if (h.status === 'degraded') healthCounts.degraded++;
+    else healthCounts.healthy++;
+  }
+  res.json({
+    health: healthCounts,
+    houses: Object.keys(health).length,
+    manager: getManagerReport() || { message: 'No cycle yet' },
+    managerConfig: getManagerConfig(),
+    discoveryBudget: getDiscoveryBudget(),
+  });
+});
+
 // Sentry error handler — must be after all routes, before app.listen
 if (process.env.SENTRY_DSN) {
   Sentry.setupExpressErrorHandler(app);
@@ -12687,6 +12807,13 @@ app.listen(PORT, () => {
   if (!process.env.SUPABASE_URL) log.warn('missing_env', { var: 'SUPABASE_URL' });
   if (!process.env.SUPABASE_SERVICE_KEY) log.warn('missing_env', { var: 'SUPABASE_SERVICE_KEY' });
   if (!process.env.GEMINI_API_KEY) log.warn('missing_env', { var: 'GEMINI_API_KEY' });
+
+  // ── Harness manager initialization (after HOUSE_ROOTS + DOM_EXTRACTORS available) ──
+  initManager({
+    supabase, callAI,
+    houseRoots: HOUSE_ROOTS, domExtractors: DOM_EXTRACTORS,
+    healBrokenHouse,
+  });
 
   // ── Ensure enrichment_cache table exists ──
   setTimeout(() => ensureEnrichmentCacheTable(), 3000);
@@ -13145,6 +13272,16 @@ async function _doAutoAnalyseAll() {
     );
   }
 
+  // ── Harness: Manager autonomous review cycle ──
+  try {
+    const managerReport = await runManagerCycle();
+    if (managerReport && !managerReport.skipped) {
+      console.log(`MANAGER: Cycle ${managerReport.cycle}: ${managerReport.actions_taken.length} actions, effectiveness ${managerReport.effectiveness_score}`);
+    }
+  } catch (mgrErr) {
+    console.warn('MANAGER: Cycle failed (non-fatal):', mgrErr.message);
+  }
+
   // ── Save daily analytics snapshot ──
   try { await saveDailySnapshot(); } catch (e) { console.warn('Daily snapshot failed:', e.message); }
 
@@ -13556,6 +13693,12 @@ async function autoAnalyseOne(url) {
   const house = detectAuctionHouse(url);
 
   try {
+  // ── Harness: circuit breaker check ──
+  if (isCircuitOpen(house)) {
+    console.log(`AUTO: Skipping ${house} — circuit breaker open`);
+    return;
+  }
+
   // Skip Knight Frank forthcoming-auctions index page — it's a discovery page, not a catalogue.
   // Actual catalogue URLs like /auction/3833/... are discovered and analysed separately.
   if (house === 'knightfrank' && url.toLowerCase().includes('forthcoming-auctions')) {
@@ -13871,7 +14014,7 @@ async function autoAnalyseOne(url) {
     return;
   }
 
-  const lots = rawLots.map(lot => analyseLot(lot)).sort((a, b) => b.score - a.score);
+  let lots = rawLots.map(lot => analyseLot(lot)).sort((a, b) => b.score - a.score);
   await enrichLots(lots, house, url);
 
   // Unified lot-page enrichment: single fetch per lot extracts all missing data
@@ -13916,6 +14059,44 @@ async function autoAnalyseOne(url) {
     return;
   }
   lots = qg.lots; // use cleaned lots
+
+  // ── Harness: data contract validation + enrichment + regression detection + health update ──
+  try {
+    const harnessBaseline = getBaseline(house);
+    const harnessValidated = validateBatch(lots, house, { averageLotCount: harnessBaseline.averageLotCount });
+    const harnessEnriched = enrichBatch(lots, house, {
+      previousCache: prevCached?.lots || [],
+    });
+    lots = harnessEnriched.lots;
+    if (harnessEnriched.stats.enriched > 0) {
+      console.log(`HARNESS: ${house}: enriched ${harnessEnriched.stats.enriched} lots (${harnessEnriched.stats.fieldsImproved.join(', ')})`);
+    }
+    const harnessRegression = detectRegression(house, harnessValidated, harnessBaseline);
+    const harnessGate = evaluateGate(house, harnessValidated, harnessRegression, prevCached);
+    if (harnessGate.decision === 'reject') {
+      console.log(`HARNESS: ${house} quality gate REJECTED — ${harnessGate.reason}. Keeping old data.`);
+      // Extend existing cache TTL by 6h
+      if (prevCached) {
+        const extendedExpiry = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString();
+        await supabase.from('cached_analyses').update({ expires_at: extendedExpiry }).eq('url', normalisedUrl);
+      }
+      return;
+    }
+    const harnessHealth = harnessUpdateHealth(house, {
+      lots: harnessValidated,
+      regression: harnessRegression,
+      gate: harnessGate,
+      extractionMethod: _lastExtractorUsed || 'unknown',
+    });
+    if (harnessHealth.circuitBreaker === 'open') {
+      harnessFireAlert({ type: 'circuit_open', severity: 'error', house, message: `Health ${harnessHealth.health}/100` }).catch(() => {});
+    }
+    if (harnessRegression.verdict === 'healthy') {
+      harnessResolveAlert(house, 'extractor_regression').catch(() => {});
+    }
+  } catch (harnessErr) {
+    console.warn(`HARNESS: ${house} harness processing failed (non-fatal):`, harnessErr.message);
+  }
 
   const lotsWithPrice = lots.filter(l => l.price && l.price > 0);
   const yieldsArr = lots.map(l => l.estGrossYield).filter(y => y && y > 0);

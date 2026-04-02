@@ -185,3 +185,49 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_complete BOOLEAN DEFAULT F
 ALTER TABLE users ADD COLUMN IF NOT EXISTS experience_level TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS budget_max INTEGER;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS interests TEXT[] DEFAULT '{}';
+
+-- 14. HARNESS: house_skills health tracking additions
+ALTER TABLE house_skills ADD COLUMN IF NOT EXISTS health_score INTEGER DEFAULT 100;
+ALTER TABLE house_skills ADD COLUMN IF NOT EXISTS circuit_state TEXT DEFAULT 'closed';
+ALTER TABLE house_skills ADD COLUMN IF NOT EXISTS consecutive_failures INTEGER DEFAULT 0;
+ALTER TABLE house_skills ADD COLUMN IF NOT EXISTS last_success_at TIMESTAMPTZ;
+ALTER TABLE house_skills ADD COLUMN IF NOT EXISTS rolling_lot_counts INTEGER[] DEFAULT '{}';
+ALTER TABLE house_skills ADD COLUMN IF NOT EXISTS rolling_image_coverage INTEGER[] DEFAULT '{}';
+ALTER TABLE house_skills ADD COLUMN IF NOT EXISTS enrichment_stats JSONB DEFAULT '{}';
+
+-- 15. HARNESS: discovery_candidates table
+CREATE TABLE IF NOT EXISTS discovery_candidates (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  url TEXT NOT NULL UNIQUE,
+  name TEXT,
+  source TEXT NOT NULL,
+  confidence NUMERIC(3,2),
+  platform_family TEXT,
+  est_lots INTEGER,
+  gem_score INTEGER DEFAULT 0,
+  status TEXT DEFAULT 'pending',
+  reject_reason TEXT,
+  discovered_at TIMESTAMPTZ DEFAULT NOW(),
+  evaluated_at TIMESTAMPTZ,
+  approved_at TIMESTAMPTZ,
+  cooldown_until TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_discovery_status ON discovery_candidates(status);
+ALTER TABLE discovery_candidates ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Service role full access" ON discovery_candidates FOR ALL USING (true) WITH CHECK (true);
+
+-- 16. HARNESS: manager_cycles audit table
+CREATE TABLE IF NOT EXISTS manager_cycles (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  cycle_number INTEGER NOT NULL,
+  duration_ms INTEGER,
+  actions_taken JSONB DEFAULT '[]',
+  actions_skipped JSONB DEFAULT '[]',
+  health_summary JSONB DEFAULT '{}',
+  effectiveness_score NUMERIC(3,2) DEFAULT 0,
+  budget_used JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_manager_cycles_created ON manager_cycles(created_at DESC);
+ALTER TABLE manager_cycles ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Service role full access" ON manager_cycles FOR ALL USING (true) WITH CHECK (true);
