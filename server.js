@@ -389,6 +389,86 @@ function isValidImageUrl(url) {
   return false;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// QUALITY GATE — runs before caching to reject bad batches and clean data.
+// Called from both /api/analyse (manual) and autoAnalyseOne (auto-scraper).
+// Returns { lots, alerts, rejected } where rejected=true means batch is
+// too poor to cache and should be discarded.
+// ═══════════════════════════════════════════════════════════════════════════
+function qualityGate(lots, house, prevCached) {
+  const alerts = [];
+  const before = lots.length;
+
+  // ── Guard 1: Price sanity — strip lots with implausible prices ──
+  lots = lots.filter(lot => {
+    if (!lot.price) return true; // no price is OK (many lots don't list one)
+    if (lot.price < 1000) {
+      alerts.push(`Stripped lot with implausible price £${lot.price}: "${(lot.address || '').substring(0, 50)}"`);
+      return false;
+    }
+    if (lot.price > 50000000) {
+      alerts.push(`Stripped lot with implausible price £${lot.price.toLocaleString()}: "${(lot.address || '').substring(0, 50)}"`);
+      return false;
+    }
+    return true;
+  });
+
+  // ── Guard 2: URL validation — strip lots without a usable URL ──
+  lots = lots.filter(lot => {
+    if (!lot.url) return true; // missing URL is tolerated (Gemini-extracted lots often lack URLs)
+    // Strip lots with javascript: or clearly broken URLs
+    if (/^javascript:|^#|^mailto:|^void/i.test(lot.url)) {
+      lot.url = ''; // clear the junk URL but keep the lot
+    }
+    return true;
+  });
+
+  // ── Guard 3: Minimum quality gate — reject batch if too sparse ──
+  // At least 30% of lots must have either a price OR an image to be worth caching.
+  // This catches catastrophic extraction failures where we get addresses only.
+  if (lots.length >= 5) {
+    const hasSubstance = lots.filter(l => l.price || l.imageUrl).length;
+    const coverage = hasSubstance / lots.length;
+    if (coverage < 0.3) {
+      alerts.push(`QUALITY GATE FAIL: only ${Math.round(coverage * 100)}% of lots have a price or image (${hasSubstance}/${lots.length}). Batch rejected.`);
+      return { lots, alerts, rejected: true };
+    }
+  }
+
+  // ── Guard 4: Regression detection — compare against previous cache ──
+  if (prevCached && prevCached.total_lots > 5) {
+    // Lot count regression (already in autoAnalyseOne, now universal)
+    if (lots.length < prevCached.total_lots * 0.5) {
+      alerts.push(`LOT COUNT REGRESSION: ${prevCached.total_lots} → ${lots.length} (${Math.round(lots.length / prevCached.total_lots * 100)}%). Batch rejected.`);
+      return { lots, alerts, rejected: true };
+    }
+
+    // Image coverage regression — if previous had >50% images and new has <20%, flag it
+    if (Array.isArray(prevCached.lots)) {
+      const prevImgCount = prevCached.lots.filter(l => l.imageUrl).length;
+      const prevImgPct = prevImgCount / prevCached.total_lots;
+      const newImgCount = lots.filter(l => l.imageUrl).length;
+      const newImgPct = lots.length > 0 ? newImgCount / lots.length : 0;
+      if (prevImgPct > 0.5 && newImgPct < 0.2) {
+        alerts.push(`IMAGE COVERAGE REGRESSION: ${Math.round(prevImgPct * 100)}% → ${Math.round(newImgPct * 100)}% (${prevImgCount} → ${newImgCount})`);
+        // Don't reject — images can be backfilled, but log the alert
+      }
+    }
+  }
+
+  const stripped = before - lots.length;
+  if (stripped > 0) {
+    alerts.push(`Cleaned ${stripped} lots with invalid data (${before} → ${lots.length})`);
+  }
+
+  // Log all alerts
+  for (const a of alerts) {
+    console.log(`[QUALITY] ${house}: ${a}`);
+  }
+
+  return { lots, alerts, rejected: false };
+}
+
 function extractWithJSDOM(html, house, baseUrl, firecrawlImages) {
   const dom = new JSDOM(html, { url: baseUrl });
   const { document } = dom.window;
@@ -3783,8 +3863,6 @@ app.post('/api/analyse', async (req, res) => {
     // ── Cache results ──
     const displayName = getHouseDisplayName(house, url);
     const expiresAt = new Date(Date.now() + getCacheTTL(house)).toISOString();
-    const lotsWithPrice = analysed.filter(l => l.price && l.price > 0);
-    const yieldsArr = analysed.map(l => l.estGrossYield).filter(y => y && y > 0);
 
     // Log unknown house successes for future house addition
     if (house === 'unknown' && analysed.length >= 3) {
@@ -3794,9 +3872,19 @@ app.post('/api/analyse', async (req, res) => {
     // Check if catalogue data actually changed before invalidating preset cache
     const { data: prevCached } = await supabase
       .from('cached_analyses')
-      .select('total_lots, top_picks, title_splits')
+      .select('total_lots, top_picks, title_splits, lots')
       .eq('url', normalisedUrl)
       .single();
+
+    // ── Quality gate — validate batch before caching ──
+    const qg = qualityGate(analysed, house, prevCached);
+    // For manual analyses, log but don't reject — user explicitly asked for this
+    if (qg.alerts.length > 0) {
+      for (const a of qg.alerts) sseWrite(res, 'warn', { message: a });
+    }
+
+    const lotsWithPrice = analysed.filter(l => l.price && l.price > 0);
+    const yieldsArr = analysed.map(l => l.estGrossYield).filter(y => y && y > 0);
 
     const catalogueChanged = !prevCached
       || prevCached.total_lots !== analysed.length
@@ -13805,25 +13893,35 @@ async function autoAnalyseOne(url) {
   }
 
   const expiresAt = new Date(Date.now() + getCacheTTL(house)).toISOString();
-  const lotsWithPrice = lots.filter(l => l.price && l.price > 0);
-  const yieldsArr = lots.map(l => l.estGrossYield).filter(y => y && y > 0);
 
-  // Check if catalogue data actually changed + lot count regression guard
+  // Check if catalogue data actually changed + quality gate
   const { data: prevCached } = await supabase
     .from('cached_analyses')
     .select('total_lots, top_picks, title_splits, lots')
     .eq('url', normalisedUrl)
     .single();
 
+  // ── Quality gate — reject bad batches before caching ──
+  const qg = qualityGate(lots, house, prevCached);
+  if (qg.rejected) {
+    console.log(`AUTO: ⚠ ${house} quality gate REJECTED batch. Keeping old data.`);
+    // Record alert for monitoring
+    if (supabase) {
+      await supabase.from('pipeline_alerts').insert({
+        house, url, type: 'quality_gate_reject',
+        message: qg.alerts.join(' | '),
+        created_at: new Date().toISOString(),
+      }).catch(() => {});
+    }
+    return;
+  }
+  lots = qg.lots; // use cleaned lots
+
+  const lotsWithPrice = lots.filter(l => l.price && l.price > 0);
+  const yieldsArr = lots.map(l => l.estGrossYield).filter(y => y && y > 0);
   const newTotalLots = lots.length;
   const newTopPicks = lots.filter(l => l.score >= 3).length;
   const newTitleSplits = lots.filter(l => l.titleSplit).length;
-
-  // Lot count regression guard — if new scrape finds <50% of previous lots, warn and keep old data
-  if (prevCached && prevCached.total_lots > 5 && newTotalLots < prevCached.total_lots * 0.5) {
-    console.log(`AUTO: ⚠ ${house} lot count regression: ${prevCached.total_lots} → ${newTotalLots} (${Math.round(newTotalLots / prevCached.total_lots * 100)}%). Keeping old data.`);
-    return;
-  }
 
   const catalogueChanged = !prevCached
     || prevCached.total_lots !== newTotalLots
