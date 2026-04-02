@@ -13617,13 +13617,24 @@ No catalogues? Return {"catalogues": []}`, { tier: 'capable', maxTokens: 1500, t
         const normUrl = normaliseUrl(cat.url);
 
         // Check if this URL is already in the calendar
-        const { data: existing } = await supabase
+        const { data: existingUrl } = await supabase
           .from('auction_calendar')
           .select('id')
           .eq('url', cat.url)
           .maybeSingle();
 
-        if (existing) continue; // Already known
+        if (existingUrl) continue; // Already known
+
+        // Check if this house+date combo already has an entry (prevent URL variant dupes)
+        if (cat.date) {
+          const { data: existingDate } = await supabase
+            .from('auction_calendar')
+            .select('id')
+            .eq('house_slug', slug)
+            .eq('date', cat.date)
+            .limit(1);
+          if (existingDate && existingDate.length > 0) continue; // Already have entry for this house+date
+        }
 
         // Insert new calendar entry
         const { error } = await supabase.from('auction_calendar').insert({
@@ -14050,11 +14061,14 @@ async function autoAnalyseOne(url) {
     console.log(`AUTO: ⚠ ${house} quality gate REJECTED batch. Keeping old data.`);
     // Record alert for monitoring
     if (supabase) {
-      await supabase.from('pipeline_alerts').insert({
-        house, url, type: 'quality_gate_reject',
-        message: qg.alerts.join(' | '),
-        created_at: new Date().toISOString(),
-      }).catch(() => {});
+      try {
+        await supabase.from('pipeline_alerts').insert({
+          event_type: 'quality_gate_reject',
+          severity: 'warning',
+          house,
+          message: qg.alerts.join(' | '),
+        });
+      } catch (e) { /* non-fatal */ }
     }
     return;
   }
