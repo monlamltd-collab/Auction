@@ -96,10 +96,14 @@ function extractConfig() {
   const UNIVERSAL_DOM_EXTRACTOR = extractTemplateLiteral(serverCode, 'const UNIVERSAL_DOM_EXTRACTOR = `');
   if (!UNIVERSAL_DOM_EXTRACTOR) throw new Error('Could not find UNIVERSAL_DOM_EXTRACTOR in server.js');
 
-  // rewriteUrl function
-  const rwCode = extractBraceBlock(serverCode, 'function rewriteUrl(url, house) {');
+  // rewriteUrl function (may be async)
+  const isAsyncRw = serverCode.includes('async function rewriteUrl(');
+  const rwMarker = isAsyncRw ? 'async function rewriteUrl(url, house) {' : 'function rewriteUrl(url, house) {';
+  const rwCode = extractBraceBlock(serverCode, rwMarker);
   if (!rwCode) throw new Error('Could not find rewriteUrl in server.js');
-  const rewriteUrl = new Function('HOUSE_ROOTS', `${rwCode}; return rewriteUrl;`)(HOUSE_ROOTS);
+  const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+  const FnCtor = isAsyncRw ? AsyncFunction : Function;
+  const rewriteUrl = new FnCtor('HOUSE_ROOTS', 'HEADERS', `${rwCode}; return rewriteUrl;`)(HOUSE_ROOTS, { 'User-Agent': USER_AGENT });
 
   // SKIP_PUPPETEER — extract the first occurrence
   const skipMatch = serverCode.match(/const SKIP_PUPPETEER\s*=\s*\[([^\]]+)\]/);
@@ -607,13 +611,13 @@ async function autoDisableBrokenHouses(brokenHouses, apiBase) {
 // PROBLEM DETECTION — Cross-Probe Intelligence
 // ═══════════════════════════════════════════════════════════════
 
-function detectProblems(house, httpResult, puppeteerResult, prodData, config) {
+async function detectProblems(house, httpResult, puppeteerResult, prodData, config) {
   const issues = [];
 
   // Get rewriteUrl config for this house
   let rw = { preferPuppeteer: false, paginateAs: null, isApi: false };
   try {
-    rw = config.rewriteUrl(config.HOUSE_ROOTS[house], house);
+    rw = await config.rewriteUrl(config.HOUSE_ROOTS[house], house);
   } catch {}
 
   const hasCustomExtractor = !!config.DOM_EXTRACTORS[house];
@@ -1005,12 +1009,12 @@ async function main() {
   }
 
   // ── Detect problems (cross-probe intelligence) ──
-  const results = houses.map(house => {
+  const results = await Promise.all(houses.map(async house => {
     const httpResult = httpResults[house] || null;
     const puppeteerResult = puppeteerResults[house] || null;
-    const issues = detectProblems(house, httpResult, puppeteerResult, prodData, config);
+    const issues = await detectProblems(house, httpResult, puppeteerResult, prodData, config);
     return { house, http: httpResult, puppeteer: puppeteerResult, issues };
-  });
+  }));
 
   // ── Lot-Count Cross-Validation ──
   if (!JSON_MODE) console.log('\n  Phase 6: Lot-count cross-validation...');
