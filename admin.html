@@ -389,6 +389,33 @@ tr:hover td { background: rgba(255,255,255,.02); }
       </div>
     </div>
 
+    <!-- Field Coverage Per House -->
+    <div class="section" id="field-coverage-section">
+      <details>
+        <summary style="padding:14px 18px;font-size:.88rem;font-weight:700;cursor:pointer;">
+          Field Coverage Per House
+          <span class="badge" id="field-coverage-badge" style="font-size:.7rem;">-</span>
+        </summary>
+        <div style="overflow-x:auto;">
+          <table id="field-coverage-table">
+            <thead>
+              <tr>
+                <th>House</th>
+                <th title="% of lots with bedroom count">Beds %</th>
+                <th title="% of lots with freehold/leasehold">Tenure %</th>
+                <th title="% of lots with guide price">Price %</th>
+                <th title="% of lots with image URL">Images %</th>
+                <th title="% of lots with normalised property type">PropType %</th>
+              </tr>
+            </thead>
+            <tbody id="field-coverage-tbody">
+              <tr><td colspan="6" class="loading"><span class="spinner"></span> Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </details>
+    </div>
+
     <!-- Issues and Calendar removed — data now in Attention Required + Next Auction column + Missing Catalogues -->
     <div id="issues-list" style="display:none;"></div>
     <span id="issues-badge" style="display:none;"></span>
@@ -1290,6 +1317,29 @@ async function loadQualityReport() {
         imgCell.textContent = `${pct}%`;
       }
     });
+
+    // Field coverage table
+    const coverageStyle = (pct) => {
+      if (pct === null || pct === undefined) return '';
+      if (pct < 50) return 'background:#c0392b;color:#fff;';
+      if (pct < 70) return 'background:#e67e22;color:#fff;';
+      return '';
+    };
+    const coverageFmt = (pct) => (pct === null || pct === undefined) ? '-' : `${pct}%`;
+    const coverageRows = data.houses
+      .filter(h => h.fieldCoverage != null)
+      .map(h => `<tr>
+          <td>${esc(h.house)}</td>
+          <td class="mono" style="${coverageStyle(h.fieldCoverage.beds)}">${coverageFmt(h.fieldCoverage.beds)}</td>
+          <td class="mono" style="${coverageStyle(h.fieldCoverage.tenure)}">${coverageFmt(h.fieldCoverage.tenure)}</td>
+          <td class="mono" style="${coverageStyle(h.fieldCoverage.price)}">${coverageFmt(h.fieldCoverage.price)}</td>
+          <td class="mono" style="${coverageStyle(h.fieldCoverage.imageUrl)}">${coverageFmt(h.fieldCoverage.imageUrl)}</td>
+          <td class="mono" style="${coverageStyle(h.fieldCoverage.propType)}">${coverageFmt(h.fieldCoverage.propType)}</td>
+        </tr>`);
+    document.getElementById('field-coverage-tbody').innerHTML = coverageRows.length
+      ? coverageRows.join('')
+      : '<tr><td colspan="6" class="text-muted" style="padding:12px 18px;">No field coverage data available</td></tr>';
+    document.getElementById('field-coverage-badge').textContent = `${data.houses.length} houses`;
   }
 
   // Issues
