@@ -523,6 +523,16 @@ footer .logo-f span{color:var(--green)}
 .card-image-placeholder .ph-label{font-size:.72rem;color:#a0aab4;font-weight:500;letter-spacing:.03em}
 @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
 .card-image-shimmer{position:absolute;inset:0;background:linear-gradient(90deg,#eef2f7 25%,#f5f7fa 50%,#eef2f7 75%);background-size:200% 100%;animation:shimmer 1.5s infinite}
+.card-carousel{position:relative;width:100%;height:100%}
+.card-carousel img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;opacity:0;transition:opacity 0.8s ease}
+.card-carousel img.carousel-active{opacity:1}
+.card-carousel .carousel-dots{position:absolute;bottom:6px;left:50%;transform:translateX(-50%);display:flex;gap:4px;z-index:2}
+.card-carousel .carousel-dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.5);transition:background .3s}
+.card-carousel .carousel-dot.dot-active{background:#fff}
+.exp-gallery{display:flex;flex-direction:column;gap:8px}
+.exp-thumbs{display:flex;gap:6px;overflow-x:auto;padding:2px 0}
+.exp-thumb{width:64px;height:48px;object-fit:cover;border-radius:4px;cursor:pointer;opacity:.6;transition:opacity .2s,border-color .2s;border:2px solid transparent}
+.exp-thumb:hover,.exp-thumb-active{opacity:1;border-color:var(--accent)}
 .skel-card{background:var(--white);border:1px solid #d5dde5;border-radius:var(--radius);overflow:hidden}
 .skel-card .skel-img{height:200px;background:linear-gradient(90deg,#eef2f7 25%,#f5f7fa 50%,#eef2f7 75%);background-size:200% 100%;animation:shimmer 1.5s infinite}
 .skel-card .skel-body{padding:16px;display:flex;flex-direction:column;gap:10px}
@@ -3318,6 +3328,42 @@ function renderLots(){
     out.insertAdjacentHTML('beforeend',pgHtml);
   }
   if(typeof syncFiltersToURL==='function') syncFiltersToURL();
+  startCardCarousels();
+}
+
+// ── Cascading image carousel for lot cards ──
+var _carouselTimer=null;
+function startCardCarousels(){
+  if(_carouselTimer) clearInterval(_carouselTimer);
+  var carousels=document.querySelectorAll('.card-carousel');
+  if(!carousels.length) return;
+  // Each card gets a stagger offset based on its position in the grid
+  // so transitions cascade down the page like a wave
+  var INTERVAL=4000; // ms between transitions per card
+  var STAGGER=300;   // ms delay between consecutive cards
+  var tick=0;
+  _carouselTimer=setInterval(function(){
+    for(var i=0;i<carousels.length;i++){
+      var c=carousels[i];
+      // Each card advances when tick matches its staggered slot
+      var cardTrigger=Math.floor((tick-i*STAGGER)/INTERVAL);
+      var prevTrigger=Math.floor((tick-STAGGER-i*STAGGER)/INTERVAL);
+      if(cardTrigger>prevTrigger && cardTrigger>0){
+        var count=parseInt(c.dataset.count)||1;
+        var idx=(parseInt(c.dataset.idx)+1)%count;
+        c.dataset.idx=idx;
+        var imgs=c.querySelectorAll('img');
+        var dots=c.querySelectorAll('.carousel-dot');
+        for(var j=0;j<imgs.length;j++){
+          imgs[j].classList.toggle('carousel-active',j===idx);
+        }
+        for(var j=0;j<dots.length;j++){
+          dots[j].classList.toggle('dot-active',j===idx);
+        }
+      }
+    }
+    tick+=200;
+  },200);
 }
 
 function card(l){
@@ -3835,6 +3881,25 @@ function getCardImageHtml(lot) {
       getCardImageBadges(lot) +
     '</div>';
   }
+  // Multi-image carousel (cascading crossfade)
+  if (lot.images && lot.images.length > 1) {
+    var imgs = lot.images;
+    var imgsHtml = '';
+    var dotsHtml = '<div class="carousel-dots">';
+    for (var ci = 0; ci < imgs.length; ci++) {
+      imgsHtml += '<img src="' + esc(optimImg(imgs[ci], 400)) + '" alt="' + esc((lot.address || 'Auction property') + ' ' + (ci+1)) + '" loading="lazy" decoding="async"' + (ci === 0 ? ' class="carousel-active"' : '') + ' onerror="this.remove()">';
+      dotsHtml += '<span class="carousel-dot' + (ci === 0 ? ' dot-active' : '') + '"></span>';
+    }
+    dotsHtml += '</div>';
+    return '<div class="card-image-wrapper">' +
+      '<div class="card-carousel" data-idx="0" data-count="' + imgs.length + '">' +
+        imgsHtml + dotsHtml +
+      '</div>' +
+      overlay +
+      getCardImageBadges(lot) +
+    '</div>';
+  }
+  // Single image fallback
   return '<div class="card-image-wrapper">' +
     '<div class="card-image-shimmer"></div>' +
     '<img class="card-image" src="' + esc(optimImg(lot.imageUrl, 400)) + '" alt="' + esc((lot.address || 'Auction property') + ' — ' + (lot._house || 'auction lot')) + '" loading="lazy" decoding="async" width="400" height="300" ' +
@@ -3886,9 +3951,21 @@ function expandCard(lot) {
 
   // Build expanded panel
   const validImg = lot.imageUrl && isValidImageUrl(lot.imageUrl);
-  const imgHtml = validImg
-    ? '<img class="exp-large-img" src="' + esc(optimImg(lot.imageUrl, 600)) + '" alt="' + esc(lot.address || 'Auction property') + '" decoding="async" onerror="this.outerHTML=\'<div class=exp-large-img-placeholder>' + getPropertyTypeIcon(lot.propType) + '</div>\'">'
-    : '<div class="exp-large-img-placeholder">' + getPropertyTypeIcon(lot.propType) + '</div>';
+  var imgHtml;
+  if (lot.images && lot.images.length > 1) {
+    // Multi-image gallery in expanded view
+    imgHtml = '<div class="exp-gallery">';
+    imgHtml += '<img class="exp-large-img" id="exp-main-img" src="' + esc(optimImg(lot.images[0], 600)) + '" alt="' + esc(lot.address || 'Auction property') + '" decoding="async" onerror="this.style.display=\'none\'">';
+    imgHtml += '<div class="exp-thumbs">';
+    for (var ti = 0; ti < lot.images.length; ti++) {
+      imgHtml += '<img class="exp-thumb' + (ti === 0 ? ' exp-thumb-active' : '') + '" src="' + esc(optimImg(lot.images[ti], 120)) + '" alt="Photo ' + (ti+1) + '" onclick="document.getElementById(\'exp-main-img\').src=this.src.replace(/w\\d+/,\'w600\');document.querySelectorAll(\'.exp-thumb\').forEach(function(t){t.classList.remove(\'exp-thumb-active\')});this.classList.add(\'exp-thumb-active\')" onerror="this.remove()">';
+    }
+    imgHtml += '</div></div>';
+  } else if (validImg) {
+    imgHtml = '<img class="exp-large-img" src="' + esc(optimImg(lot.imageUrl, 600)) + '" alt="' + esc(lot.address || 'Auction property') + '" decoding="async" onerror="this.outerHTML=\'<div class=exp-large-img-placeholder>' + getPropertyTypeIcon(lot.propType) + '</div>\'">';
+  } else {
+    imgHtml = '<div class="exp-large-img-placeholder">' + getPropertyTypeIcon(lot.propType) + '</div>';
+  }
 
   const analysisText = (lot.bullets || []).join('. ');
   const signalsHtml = (lot.opps || []).map(o =>

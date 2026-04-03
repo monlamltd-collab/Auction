@@ -7190,16 +7190,20 @@ const DOM_EXTRACTORS = {
         if (text.match(/\\bSold\\b|\\bWithdrawn\\b/i)) {
           if (!bullets.some(b => b.match(/sold|withdrawn/i))) bullets.push('SOLD/STC');
         }
-        // Image: first real image from the lot-image-list carousel
+        // Image: prefer 2nd carousel image (1st is often a floorplan on Savills)
+        // Savills loads all images (12-24) per lot card with no photo/floorplan metadata,
+        // so we skip the first and take the second which is almost always a property photo.
         let imageUrl = '';
         const carouselImgs = li.querySelectorAll('.lot-image-list img[src], .lot-image img[src]');
+        const validImgs = [];
         for (const img of carouselImgs) {
           const s = img.getAttribute('src') || img.dataset.src || '';
           if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && !/floor[\\s_-]?plan|floorplan|site[\\s_-]?plan|epc/i.test(s) && s.length > 10) {
-            imageUrl = s;
-            break;
+            validImgs.push(s);
           }
         }
+        // Use 2nd image as primary (1st is often a floorplan on Savills), store all for carousel
+        imageUrl = validImgs[1] || validImgs[0] || '';
         // Fallback: any img inside the lot card
         if (!imageUrl) {
           const anyImg = li.querySelector('img[src]');
@@ -7208,7 +7212,11 @@ const DOM_EXTRACTORS = {
             if (s && !s.includes('logo') && !s.includes('icon') && !s.includes('.svg') && !/floor[\\s_-]?plan|floorplan|site[\\s_-]?plan|epc/i.test(s) && s.length > 10) imageUrl = s;
           }
         }
-        lots.push({ lot: lotNum, address, price, url, bullets, imageUrl: imageUrl || undefined });
+        // Store all valid images for frontend carousel (max 8 to keep payload reasonable)
+        const images = validImgs.length > 1 ? validImgs.slice(0, 8) : undefined;
+        const entry = { lot: lotNum, address, price, url, bullets, imageUrl: imageUrl || undefined };
+        if (images) entry.images = images;
+        lots.push(entry);
       }
       return lots;
     })()
