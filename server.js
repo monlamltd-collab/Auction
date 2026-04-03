@@ -11713,7 +11713,10 @@ LIMIT 30`;
       signal: controller.signal,
     });
     clearTimeout(timeout);
-    if (!resp.ok) return [];
+    if (!resp.ok) {
+      console.warn(`Land Registry API ${resp.status} for ${postcode}`);
+      return { data: [], failed: true };
+    }
     const data = await resp.json();
     const results = (data.results?.bindings || []).map(b => ({
       address: [b.saon?.value, b.paon?.value, b.street?.value].filter(Boolean).join(', '),
@@ -11724,10 +11727,10 @@ LIMIT 30`;
       category: b.category?.value || '',
       propertyType: b.propertyType?.value || '',
     }));
-    return results;
+    return { data: results, failed: false };
   } catch (e) {
     console.log(`Land Registry query failed for ${postcode}: ${e.message}`);
-    return [];
+    return { data: [], failed: true };
   }
 }
 
@@ -12394,15 +12397,15 @@ async function fetchFloodZone(postcode) {
 // ENRICHMENT: EPC Address Matching
 // ═══════════════════════════════════════════════════════════════
 
+// Common street suffixes to normalise (Road→rd, Street→st, etc.) — hoisted for performance
+const EPC_SUFFIX_MAP = { road: 'rd', street: 'st', avenue: 'ave', drive: 'dr', lane: 'ln', close: 'cl', crescent: 'cres', terrace: 'ter', place: 'pl', court: 'ct', gardens: 'gdns', grove: 'gr', way: 'wy', park: 'pk' };
+
 /**
  * Match EPC records to a specific lot address.
- * Returns { epcRating, epcScore, epcDate } or null if no confident match.
+ * Returns { epcRating, epcScore, epcDate, _matchConfidence } or null if no confident match.
  */
 function matchEPCToLot(epcRecords, lotAddress) {
   if (!epcRecords || !epcRecords.length || !lotAddress) return null;
-
-  // Common street suffixes to normalise (Road→rd, Street→st, etc.)
-  const suffixMap = { road: 'rd', street: 'st', avenue: 'ave', drive: 'dr', lane: 'ln', close: 'cl', crescent: 'cres', terrace: 'ter', place: 'pl', court: 'ct', gardens: 'gdns', grove: 'gr', way: 'wy', park: 'pk' };
 
   function normalise(addr) {
     return (addr || '')
@@ -12423,7 +12426,7 @@ function matchEPCToLot(epcRecords, lotAddress) {
       .replace(/^\d+[a-z]?\s+/i, '')
       .replace(/\b[a-z]{1,2}\d[a-z\d]?\s*\d[a-z]{2}\b/i, '') // remove postcode
       .trim();
-    return cleaned.split(/\s+/).slice(0, 4).map(w => suffixMap[w] || w);
+    return cleaned.split(/\s+/).slice(0, 4).map(w => EPC_SUFFIX_MAP[w] || w);
   }
 
   function streetMatchScore(wordsA, wordsB) {
@@ -12534,7 +12537,7 @@ async function enrichLots(lots, house, sourceUrl, onProgress) {
   let lrCacheHits = 0;
 
   // Check Supabase cache for LR data first
-  if (supabase) {
+  if (supabase && postcodes.length > 0) {
     try {
       const { data: cached } = await supabase
         .from('enrichment_cache')
@@ -12561,14 +12564,13 @@ async function enrichLots(lots, house, sourceUrl, onProgress) {
     }
     const batch = uncachedPostcodes.slice(i, i + LR_CONCURRENCY);
     const results = await Promise.all(batch.map(async (pc) => {
-      try {
-        const data = await queryLandRegistry(pc);
-        if (data && data.length > 0) lrBreaker.recordSuccess();
-        return data;
-      } catch (e) {
+      const result = await queryLandRegistry(pc);
+      if (result.failed) {
         lrBreaker.recordFailure();
-        return [];
+      } else if (result.data.length > 0) {
+        lrBreaker.recordSuccess();
       }
+      return result.data;
     }));
     batch.forEach((pc, idx) => { lrCache[pc] = results[idx]; });
     enrichDone += batch.length;
@@ -12576,24 +12578,31 @@ async function enrichLots(lots, house, sourceUrl, onProgress) {
     if (i + LR_CONCURRENCY < uncachedPostcodes.length) await new Promise(r => setTimeout(r, 200));
   }
 
-  // Persist LR results to Supabase cache
+  // Persist LR results to Supabase cache (update only lr_data columns, preserve EPC/flood)
   if (supabase && uncachedPostcodes.length > 0) {
     const lrExpiry = new Date(Date.now() + LR_CACHE_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString();
     try {
-      const upserts = uncachedPostcodes
-        .filter(pc => lrCache[pc])
-        .map(pc => ({
-          postcode: pc,
-          lr_data: lrCache[pc],
-          lr_expires_at: lrExpiry,
-        }));
-      if (upserts.length > 0) {
-        // Batch upsert in chunks of 50
-        for (let j = 0; j < upserts.length; j += 50) {
-          await supabase.from('enrichment_cache').upsert(upserts.slice(j, j + 50), { onConflict: 'postcode', ignoreDuplicates: false });
-        }
-        console.log(`LR cache: stored ${upserts.length} postcodes (${LR_CACHE_TTL_DAYS}d TTL)`);
+      const toStore = uncachedPostcodes.filter(pc => lrCache[pc] && lrCache[pc].length > 0);
+      let stored = 0;
+      for (const pc of toStore) {
+        try {
+          // Try update first (row may exist from EPC/flood enrichment)
+          const { data: updated } = await supabase.from('enrichment_cache')
+            .update({ lr_data: lrCache[pc], lr_expires_at: lrExpiry })
+            .eq('postcode', pc)
+            .select('postcode');
+          if (!updated || updated.length === 0) {
+            // Row doesn't exist yet — insert with LR data only
+            await supabase.from('enrichment_cache').insert({
+              postcode: pc, lr_data: lrCache[pc], lr_expires_at: lrExpiry,
+              cached_at: new Date().toISOString(),
+              expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+            });
+          }
+          stored++;
+        } catch { /* individual write failure — continue */ }
       }
+      if (stored > 0) console.log(`LR cache: stored ${stored} postcodes (${LR_CACHE_TTL_DAYS}d TTL)`);
     } catch (e) {
       console.warn('LR cache write failed (non-fatal):', e.message);
     }

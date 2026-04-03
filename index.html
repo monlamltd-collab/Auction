@@ -3733,6 +3733,7 @@ function renderDealStackResults(idx, r, showHold) {
   if (!el) return;
 
   var fmtCurrency = function(v) {
+    if (isNaN(v) || v == null) return '\u00a30';
     var prefix = v < 0 ? '-\u00a3' : '\u00a3';
     return prefix + Math.abs(Math.round(v)).toLocaleString();
   };
@@ -3745,7 +3746,7 @@ function renderDealStackResults(idx, r, showHold) {
 
   // Day-one cash headline
   var dayOneBanner =
-    '<div style="display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:linear-gradient(135deg,#1a3a5c,#2a5a8c); border-radius:8px; margin-bottom:10px; color:#fff;">' +
+    '<div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:4px 12px; padding:10px 14px; background:linear-gradient(135deg,#1a3a5c,#2a5a8c); border-radius:8px; margin-bottom:10px; color:#fff;">' +
       '<div>' +
         '<div style="font-size:11px; opacity:0.8;">Day-one cash required</div>' +
         '<div style="font-size:20px; font-weight:700;">' + fmtCurrency(r.dayOneCash) + '</div>' +
@@ -3849,14 +3850,15 @@ function renderDealStackResults(idx, r, showHold) {
   // Verdict message
   var verdict = '';
   var flipProfit = r.flip.netProfit;
-  var stressProfit = r.stress ? r.stress.netProfit : 0;
+  var stressProfit = r.stress ? r.stress.netProfit : null;
+  var stressPasses = stressProfit === null || stressProfit > 0;
   var flipRoi = r.flip.roi;
-  if (flipProfit > 0 && stressProfit > 0 && flipRoi >= 20) {
+  if (flipProfit > 0 && stressPasses && flipRoi >= 20) {
     verdict = '<div style="margin-top:10px; padding:10px 14px; background:#e8f5ee; border-radius:8px; border-left:4px solid var(--accent);">' +
       '<div style="font-size:14px; font-weight:700; color:var(--accent); margin-bottom:2px;">This deal stacks.</div>' +
       '<div style="font-size:12px; color:var(--text-muted);">Profitable even at GDV -10%. ' + Math.round(flipRoi) + '% ROI on cash deployed.</div>' +
     '</div>';
-  } else if (flipProfit > 0 && stressProfit <= 0) {
+  } else if (flipProfit > 0 && !stressPasses) {
     verdict = '<div style="margin-top:10px; padding:10px 14px; background:#fef3e2; border-radius:8px; border-left:4px solid var(--accent-warn);">' +
       '<div style="font-size:14px; font-weight:700; color:var(--accent-warn); margin-bottom:2px;">Tight deal \u2014 thin margin.</div>' +
       '<div style="font-size:12px; color:var(--text-muted);">Profitable at your GDV, but doesn\'t survive a 10% haircut. Sharpen your numbers or negotiate harder.</div>' +
