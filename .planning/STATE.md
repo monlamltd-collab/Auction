@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Data Quality Hardening
 status: planning
-stopped_at: Phase 9 context gathered
-last_updated: "2026-04-14T23:39:10.014Z"
+stopped_at: Completed 08-03-PLAN.md
+last_updated: "2026-04-03T20:17:04.634Z"
 last_activity: 2026-04-03 -- Roadmap revised for v1.3 (geocoding deferred, quality gate reworded, 3 phases)
 progress:
   total_phases: 3
-  completed_phases: 1
+  completed_phases: 0
   total_plans: 3
-  completed_plans: 3
-  percent: 100
+  completed_plans: 1
+  percent: 0
 ---
 
 # Project State
@@ -48,9 +48,7 @@ Progress: [░░░░░░░░░░] 0%
 
 ## Accumulated Context
 
-| Phase 08-field-extraction-validation P01 | 5 | 3 tasks | 5 files |
 | Phase 08 P03 | 3m | 1 tasks | 1 files |
-| Phase 08 P02 | 5 | 2 tasks | 2 files |
 
 ### Decisions
 
@@ -61,12 +59,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - VAL-01 reworded: quality gate flags for graceful handling, never rejects/hides lots
 - VAL-03 (admin field coverage dashboard) moved from geocoding phase into Phase 8
 - COV-01/COV-02 in final phase (Phase 10) -- quality infrastructure must be solid before scaling
-- [Phase 08-field-extraction-validation]: Quality gate thresholds raised: reject 0.30→0.45, warn band 0.30-0.50→0.45-0.60 (VAL-01 fix)
-- [Phase 08-field-extraction-validation]: propType tracked in fieldCoverage but not in FIELD_WEIGHTS — coverage metric only, not quality score
-- [Phase 08-field-extraction-validation]: Enrichment cap removed: all qualifying lots processed, not capped at 200
 - [Phase 08]: Silent omission for missing supplementary fields: removed '?' gap chips for beds and tenure — no chip beats a broken-looking '?' indicator
-- [Phase 08]: validateBatch wrapped in try/catch in quality-report handler to prevent malformed lots breaking report
-- [Phase 08]: Literal hex colours in field coverage cells rather than CSS var() references to avoid resolution issues
 
 ### Pending Todos
 
@@ -76,17 +69,11 @@ None yet.
 
 None yet.
 
-### Quick Tasks Completed
-
-| # | Description | Date | Commit | Directory |
-|---|-------------|------|--------|-----------|
-| 260404-ovd | Fix image reloading on back-navigation: bfcache headers, sessionStorage lot persistence, renderKey persistence, scroll restoration, and preserve grid DOM on in-app back | 2026-04-04 | 4c1bb69 | [260404-ovd-fix-image-reloading-on-back-navigation-b](./quick/260404-ovd-fix-image-reloading-on-back-navigation-b/) |
-
 ## Session Continuity
 
-Last session: 2026-04-14T23:39:10.010Z
-Stopped at: Phase 9 context gathered
-Resume file: .planning/phases/09-image-pipeline-frontend-polish/09-CONTEXT.md
+Last session: 2026-04-03T20:17:04.631Z
+Stopped at: Completed 08-03-PLAN.md
+Resume file: None
 
 ---
 *Last updated: 2026-04-03 after v1.3 roadmap revision*
