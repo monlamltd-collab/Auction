@@ -540,6 +540,7 @@ footer .logo-f span{color:var(--green)}
 .skel-card .skel-line.w80{width:80%}.skel-card .skel-line.w60{width:60%}.skel-card .skel-line.w40{width:40%}
 .card-badge{position:absolute;border-radius:20px;padding:4px 10px;font-family:var(--font-main);font-size:11px;font-weight:600;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
 .badge-house{top:10px;left:10px;background:rgba(255,255,255,0.92);color:#1a2a3a}
+.badge-dist{bottom:10px;left:10px;background:rgba(46,125,50,0.9);color:#fff;font-size:.65rem}
 .badge-score{top:10px;right:10px;font-family:var(--font-main);font-weight:700;font-size:13px;border-radius:8px;padding:4px 10px}
 .badge-score.high{background:rgba(192,57,43,0.9);color:#fff}
 .badge-score.mid{background:rgba(230,126,34,0.9);color:#fff}
@@ -1157,8 +1158,14 @@ footer .logo-f span{color:var(--green)}
               </select>
             </div>
             <div class="mf-field">
-              <label>Postcode</label>
-              <input class="tb-search" type="text" id="fPostcode" placeholder="e.g. BS1" oninput="renderLots();updateMoreDot()" aria-label="Filter by postcode">
+              <label>Location</label>
+              <input class="tb-search" type="text" id="fPostcode" placeholder="e.g. BS1 or Bristol" oninput="onLocationInput()" aria-label="Search by postcode or town">
+            </div>
+            <div class="mf-field">
+              <label>Radius</label>
+              <select class="tb-select" id="fRadius" onchange="renderLots();updateMoreDot()" aria-label="Search radius">
+                <option value="">Any distance</option><option value="1">1 mile</option><option value="5">5 miles</option><option value="10">10 miles</option><option value="25">25 miles</option><option value="50">50 miles</option>
+              </select>
             </div>
             <div class="mf-field">
               <label>Price info</label>
@@ -1409,8 +1416,9 @@ function resetSearchState(){
 }
 
 function clearAllFilters(silent){
-  const resets={fDeal:'',fType:'',fCondition:'',fTenure:'',fLocation:'',fAfford:'all',fSoldTop:'all',fSort:'score',fBeds:'',fPostcode:'',fMinPrice:'',fMaxPrice:'',fExcludePOA:''};
+  const resets={fDeal:'',fType:'',fCondition:'',fTenure:'',fLocation:'',fAfford:'all',fSoldTop:'all',fSort:'score',fBeds:'',fPostcode:'',fMinPrice:'',fMaxPrice:'',fExcludePOA:'',fRadius:''};
   for(const[id,val] of Object.entries(resets)){const el=$(id);if(el)el.value=val}
+  _searchCentre=null;
   if($('fShowPast')) { $('fShowPast').checked=false; if(!silent) onShowPastChange(); }
   _selectedHouses.clear();
   updateHouseBtn();
@@ -1458,7 +1466,7 @@ function closeMoreFilters(e) {
 }
 function updateMoreDot() {
   var active = $('fDeal')?.value || $('fTenure')?.value ||
-    ($('fPostcode')?.value||'').trim() || $('fExcludePOA')?.value;
+    ($('fPostcode')?.value||'').trim() || $('fRadius')?.value || $('fExcludePOA')?.value;
   $('mfDot').style.display = active ? '' : 'none';
 }
 
@@ -1640,6 +1648,7 @@ function getCurrentFilters() {
     deal: $('fDeal')?.value || '',
     tenure: $('fTenure')?.value || '',
     postcode: $('fPostcode')?.value || '',
+    radius: $('fRadius')?.value || '',
     condition: $('fCondition')?.value || '',
     excludePOA: $('fExcludePOA')?.value || '',
     query: $('smartQuery')?.value || ''
@@ -1657,7 +1666,8 @@ function applyFilters(f) {
   if (f.sort) $('fSort').value = f.sort;
   if (f.deal && $('fDeal')) $('fDeal').value = f.deal;
   if (f.tenure && $('fTenure')) $('fTenure').value = f.tenure;
-  if (f.postcode && $('fPostcode')) $('fPostcode').value = f.postcode;
+  if (f.postcode && $('fPostcode')) { $('fPostcode').value = f.postcode; onLocationInput(); }
+  if (f.radius && $('fRadius')) $('fRadius').value = f.radius;
   if (f.condition && $('fCondition')) $('fCondition').value = f.condition;
   if (f.excludePOA && $('fExcludePOA')) $('fExcludePOA').value = f.excludePOA;
   if (f.query && $('smartQuery')) $('smartQuery').value = f.query;
@@ -1892,6 +1902,58 @@ async function loadAllLots(){
     const out=$('lotsGrid');
     if(out)out.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:3rem 1rem;color:#6b7c8d"><div style="font-size:1.2rem;margin-bottom:0.5rem">Unable to load auction lots</div><div>Please check your connection and <a href="javascript:location.reload()" style="color:var(--red)">try again</a>.</div></div>';
   }
+}
+
+// ═══════════════════════════════
+// LOCATION / RADIUS SEARCH
+// ═══════════════════════════════
+let _searchLocationCache={};
+let _searchLocationTimer=null;
+let _searchCentre=null; // {lat,lng,label}
+
+function haversine(lat1,lng1,lat2,lng2){
+  const R=3958.8; // miles
+  const dLat=(lat2-lat1)*Math.PI/180;
+  const dLng=(lng2-lng1)*Math.PI/180;
+  const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+function onLocationInput(){
+  clearTimeout(_searchLocationTimer);
+  const val=$('fPostcode')?.value.trim()||'';
+  if(!val){_searchCentre=null;renderLots();updateMoreDot();return}
+  // If looks like a UK postcode (full or partial), geocode it
+  _searchLocationTimer=setTimeout(async()=>{
+    const q=val.trim();
+    if(!q){_searchCentre=null;renderLots();updateMoreDot();return}
+    // Check cache
+    const cacheKey=q.toUpperCase();
+    if(_searchLocationCache[cacheKey]){_searchCentre=_searchLocationCache[cacheKey];renderLots();updateMoreDot();return}
+    try{
+      // Try postcode first
+      let resp=await fetch('https://api.postcodes.io/postcodes/'+encodeURIComponent(q));
+      let data=await resp.json();
+      if(data.status===200&&data.result){
+        _searchCentre={lat:data.result.latitude,lng:data.result.longitude,label:q};
+        _searchLocationCache[cacheKey]=_searchCentre;
+        renderLots();updateMoreDot();return;
+      }
+      // Try as place name
+      resp=await fetch('https://api.postcodes.io/places?q='+encodeURIComponent(q)+'&limit=1');
+      data=await resp.json();
+      if(data.status===200&&data.result&&data.result.length>0){
+        _searchCentre={lat:data.result[0].latitude,lng:data.result[0].longitude,label:data.result[0].name_1||q};
+        _searchLocationCache[cacheKey]=_searchCentre;
+        renderLots();updateMoreDot();return;
+      }
+      // Fallback: treat as postcode prefix filter (existing behaviour)
+      _searchCentre=null;renderLots();updateMoreDot();
+    }catch(e){
+      // Network error — fall back to prefix filter
+      _searchCentre=null;renderLots();updateMoreDot();
+    }
+  },400);
 }
 
 // Region → postcode prefix mapping for location filter
@@ -3093,7 +3155,23 @@ function renderLots(){
   else if(fco==='tenanted') lots=lots.filter(l=>l.vacant===false);
   else if(fco==='repossession') lots=lots.filter(l=>(l.bullets||[]).join(' ').toLowerCase().match(/\b(repossess(?:ion|ed)?|receivership|lpa receiver|mortgagee.?(?:sale|possess)|bank.?sale)\b/i)||(l.opps||[]).join(' ').toLowerCase().match(/repossess|receivership/i));
   if(floc) lots=lots.filter(l=>matchesRegion(l.address, floc));
-  if(fpc) lots=lots.filter(l=>(l.address||'').toUpperCase().includes(fpc));
+  const fradius=+($('fRadius')?.value||0);
+  if(fpc&&_searchCentre&&fradius){
+    // Radius search: filter by distance from geocoded centre
+    lots=lots.filter(l=>{
+      if(l._lat&&l._lng) return haversine(_searchCentre.lat,_searchCentre.lng,l._lat,l._lng)<=fradius;
+      // Fallback: prefix match for lots without coords
+      return (l.address||'').toUpperCase().includes(fpc);
+    });
+    // Sort by distance (closest first) when radius filtering
+    lots.sort((a,b)=>{
+      const da=(a._lat&&a._lng)?haversine(_searchCentre.lat,_searchCentre.lng,a._lat,a._lng):999;
+      const db=(b._lat&&b._lng)?haversine(_searchCentre.lat,_searchCentre.lng,b._lat,b._lng):999;
+      return da-db;
+    });
+  } else if(fpc){
+    lots=lots.filter(l=>(l.address||'').toUpperCase().includes(fpc));
+  }
   if(fa==='affordable'&&fp.cash) lots=lots.filter(l=>l._affTag!=='out_of_reach');
   if(fa==='in_budget'&&fp.cash) lots=lots.filter(l=>l._affTag==='in_budget'||l._affTag==='unknown');
   if(fa==='full_finance'&&fp.cash) lots=lots.filter(l=>l._affTag==='full_finance');
@@ -3771,6 +3849,10 @@ function getPlaceholderHtml(type) {
 function getCardImageBadges(lot) {
   let html = '';
   if (lot._house) html += '<div class="card-badge badge-house">' + esc(lot._house) + '</div>';
+  if (_searchCentre && lot._lat && lot._lng) {
+    const dist = haversine(_searchCentre.lat, _searchCentre.lng, lot._lat, lot._lng);
+    html += '<div class="card-badge badge-dist">' + (dist < 1 ? dist.toFixed(1) : Math.round(dist)) + ' mi</div>';
+  }
   if (lot.anonGated) {
     // Anonymous user — show teaser badge instead of score
     html += '<div class="card-badge badge-score mid" style="cursor:pointer;font-size:.65rem" onclick="event.stopPropagation();$(\'signupModal\').classList.add(\'show\')">Sign up for AI scores</div>';
@@ -4400,7 +4482,7 @@ function bridgeMatchLot(idx, event) {
 // ═══════════════════════════════
 // SHAREABLE FILTER URLs (#65)
 // ═══════════════════════════════
-const FILTER_PARAMS=['smartQuery','fSort','fMinPrice','fMaxPrice','fBeds','fType','fLocation','fDeal','fCondition','fTenure','fSoldTop','fPostcode','fExcludePOA'];
+const FILTER_PARAMS=['smartQuery','fSort','fMinPrice','fMaxPrice','fBeds','fType','fLocation','fDeal','fCondition','fTenure','fSoldTop','fPostcode','fRadius','fExcludePOA'];
 function restoreFiltersFromURL(){
   const p=new URLSearchParams(window.location.search);
   for(const id of FILTER_PARAMS){const v=p.get(id);if(v&&$(id))$(id).value=v}

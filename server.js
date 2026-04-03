@@ -3927,13 +3927,32 @@ app.post('/api/analyse', async (req, res) => {
     // (address, image, tenure, leaseLength, condition, beds, propType)
     await enrichLotsFromLotPages(analysed);
 
+    // ── Harness enrichment: gap-filling, cross-lot inference, cache carry-forward ──
+    const { data: prevCachedForEnrich } = await supabase
+      .from('cached_analyses')
+      .select('lots')
+      .eq('url', normalisedUrl)
+      .single();
+    const harnessResult = enrichBatch(analysed, house, {
+      previousCache: prevCachedForEnrich?.lots || [],
+    });
+    const enrichedAnalysed = harnessResult.lots;
+    if (harnessResult.stats.enriched > 0) {
+      console.log(`HARNESS (manual): ${house}: enriched ${harnessResult.stats.enriched} lots (${harnessResult.stats.fieldsImproved.join(', ')})`);
+    }
+    // Re-score after enrichment fills gaps (e.g. tenure, beds may affect score)
+    for (const lot of enrichedAnalysed) {
+      const rescored = analyseLot(lot);
+      Object.assign(lot, rescored);
+    }
+
     // ── Cache results ──
     const displayName = getHouseDisplayName(house, url);
     const expiresAt = new Date(Date.now() + getCacheTTL(house)).toISOString();
 
     // Log unknown house successes for future house addition
-    if (house === 'unknown' && analysed.length >= 3) {
-      log.info('NEW_HOUSE_CANDIDATE', { hostname: new URL(url).hostname, lots: analysed.length, url });
+    if (house === 'unknown' && enrichedAnalysed.length >= 3) {
+      log.info('NEW_HOUSE_CANDIDATE', { hostname: new URL(url).hostname, lots: enrichedAnalysed.length, url });
     }
 
     // Check if catalogue data actually changed before invalidating preset cache
@@ -3944,31 +3963,31 @@ app.post('/api/analyse', async (req, res) => {
       .single();
 
     // ── Quality gate — validate batch before caching ──
-    const qg = qualityGate(analysed, house, prevCached);
+    const qg = qualityGate(enrichedAnalysed, house, prevCached);
     // For manual analyses, log but don't reject — user explicitly asked for this
     if (qg.alerts.length > 0) {
       for (const a of qg.alerts) sseWrite(res, 'warn', { message: a });
     }
 
-    const lotsWithPrice = analysed.filter(l => l.price && l.price > 0);
-    const yieldsArr = analysed.map(l => l.estGrossYield).filter(y => y && y > 0);
+    const lotsWithPrice = enrichedAnalysed.filter(l => l.price && l.price > 0);
+    const yieldsArr = enrichedAnalysed.map(l => l.estGrossYield).filter(y => y && y > 0);
 
     const catalogueChanged = !prevCached
-      || prevCached.total_lots !== analysed.length
-      || prevCached.top_picks !== analysed.filter(l => l.score >= 3).length
-      || prevCached.title_splits !== analysed.filter(l => l.titleSplit).length;
+      || prevCached.total_lots !== enrichedAnalysed.length
+      || prevCached.top_picks !== enrichedAnalysed.filter(l => l.score >= 3).length
+      || prevCached.title_splits !== enrichedAnalysed.filter(l => l.titleSplit).length;
 
     await supabase.from('cached_analyses').upsert({
       url: normalisedUrl,
       house: house,
-      total_lots: analysed.length,
-      title_splits: analysed.filter(l => l.titleSplit).length,
-      top_picks: analysed.filter(l => l.score >= 3).length,
+      total_lots: enrichedAnalysed.length,
+      title_splits: enrichedAnalysed.filter(l => l.titleSplit).length,
+      top_picks: enrichedAnalysed.filter(l => l.score >= 3).length,
       under_100k: lotsWithPrice.filter(l => l.price < 100000).length,
       avg_yield: yieldsArr.length ? +(yieldsArr.reduce((a, b) => a + b, 0) / yieldsArr.length).toFixed(1) : null,
-      dev_potential: analysed.filter(l => (l.opps || []).some(o => /development|planning|conversion/i.test(o))).length,
-      vacant_count: analysed.filter(l => l.vacant === true).length,
-      lots: analysed,
+      dev_potential: enrichedAnalysed.filter(l => (l.opps || []).some(o => /development|planning|conversion/i.test(o))).length,
+      vacant_count: enrichedAnalysed.filter(l => l.vacant === true).length,
+      lots: enrichedAnalysed,
       created_at: new Date().toISOString(),
       expires_at: expiresAt,
       last_scraped_at: new Date().toISOString(),
@@ -4000,23 +4019,23 @@ app.post('/api/analyse', async (req, res) => {
       .eq('id', user.id);
 
     // Log activity event
-    logActivityEvent('analysis', { house: displayName, url: normalisedUrl, lots_found: analysed.length }, user?.email, getClientIP(req));
+    logActivityEvent('analysis', { house: displayName, url: normalisedUrl, lots_found: enrichedAnalysed.length }, user?.email, getClientIP(req));
 
     const updatedScanCount = (user.analyses_count || 0) + 1;
 
     const isPremium = userTier === 'premium';
-    const gatedAnalysed = isPremium ? analysed : stripAIFields(analysed);
+    const gatedAnalysed = isPremium ? enrichedAnalysed : stripAIFields(enrichedAnalysed);
     sseWrite(res, 'done', {
       house: displayName,
       houseSlug: house,
       recognised: house !== 'unknown',
-      totalLots: analysed.length,
-      titleSplits: analysed.filter(l => l.titleSplit).length,
-      topPicks: analysed.filter(l => l.score >= 3).length,
+      totalLots: enrichedAnalysed.length,
+      titleSplits: enrichedAnalysed.filter(l => l.titleSplit).length,
+      topPicks: enrichedAnalysed.filter(l => l.score >= 3).length,
       under100k: lotsWithPrice.filter(l => l.price < 100000).length,
       avgYield: yieldsArr.length ? +(yieldsArr.reduce((a, b) => a + b, 0) / yieldsArr.length).toFixed(1) : null,
-      devPotential: analysed.filter(l => (l.opps || []).some(o => /development|planning|conversion/i.test(o))).length,
-      vacantCount: analysed.filter(l => l.vacant === true).length,
+      devPotential: enrichedAnalysed.filter(l => (l.opps || []).some(o => /development|planning|conversion/i.test(o))).length,
+      vacantCount: enrichedAnalysed.filter(l => l.vacant === true).length,
       lots: gatedAnalysed,
       cached: false,
       blurred: !isPremium,
@@ -12420,6 +12439,35 @@ async function enrichLots(lots, house, sourceUrl, onProgress) {
 
   const postcodes = Object.keys(postcodeMap);
   console.log(`Enriching ${lots.length} lots across ${postcodes.length} unique postcodes...`);
+
+  // ── Geocode postcodes via postcodes.io (free, bulk, no API key) ──
+  try {
+    for (let i = 0; i < postcodes.length; i += 100) {
+      const batch = postcodes.slice(i, i + 100);
+      const geoResp = await fetch('https://api.postcodes.io/postcodes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postcodes: batch }),
+      });
+      if (geoResp.ok) {
+        const geoData = await geoResp.json();
+        for (const item of (geoData.result || [])) {
+          if (item.result) {
+            const pc = item.query.toUpperCase().replace(/\s+/g, ' ');
+            const lotsForPc = postcodeMap[pc] || postcodeMap[item.query] || [];
+            for (const lot of lotsForPc) {
+              lot._lat = item.result.latitude;
+              lot._lng = item.result.longitude;
+            }
+          }
+        }
+      }
+    }
+    const geocoded = lots.filter(l => l._lat).length;
+    if (geocoded > 0) console.log(`Geocoded ${geocoded}/${lots.length} lots`);
+  } catch (geoErr) {
+    console.warn('Geocoding failed (non-fatal):', geoErr.message);
+  }
 
   // Query Land Registry for each unique postcode (with concurrency limit)
   const CONCURRENCY = 5;
