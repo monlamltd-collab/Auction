@@ -9,10 +9,10 @@ Requirements for Data Quality Hardening milestone. Each maps to roadmap phases.
 
 ### Field Coverage
 
-- [ ] **FIELD-01**: Bedroom count is extracted for >80% of lots across all auction houses (priority field)
-- [ ] **FIELD-02**: Tenure (freehold/leasehold) is extracted for >80% of lots
-- [ ] **FIELD-03**: Property type is normalised to canonical values (house/flat/land/commercial/mixed) across all houses
-- [ ] **FIELD-04**: Guide price is extracted for >95% of lots, with price ranges handled consistently
+- [x] **FIELD-01**: Bedroom count is extracted for >80% of lots across all auction houses (priority field)
+- [x] **FIELD-02**: Tenure (freehold/leasehold) is extracted for >80% of lots
+- [x] **FIELD-03**: Property type is normalised to canonical values (house/flat/land/commercial/mixed) across all houses
+- [x] **FIELD-04**: Guide price is extracted for >95% of lots, with price ranges handled consistently
 
 ### Image Quality
 
@@ -23,7 +23,7 @@ Requirements for Data Quality Hardening milestone. Each maps to roadmap phases.
 
 ### Validation & UX
 
-- [ ] **VAL-01**: Quality gate flags low-quality lots for graceful frontend handling (missing fields omitted from display, not shown as blanks) -- every lot remains visible in the directory regardless of data quality score
+- [x] **VAL-01**: Quality gate flags low-quality lots for graceful frontend handling (missing fields omitted from display, not shown as blanks) -- every lot remains visible in the directory regardless of data quality score
 - [ ] **VAL-02**: Missing data displays gracefully -- fields with no data are simply absent from the listing card, not shown as "?" or empty gaps
 - [ ] **VAL-03**: Admin dashboard shows per-house field coverage breakdown (beds, tenure, price, images, propType)
 
@@ -72,15 +72,15 @@ Requirements for Data Quality Hardening milestone. Each maps to roadmap phases.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FIELD-01 | Phase 8 | Pending |
-| FIELD-02 | Phase 8 | Pending |
-| FIELD-03 | Phase 8 | Pending |
-| FIELD-04 | Phase 8 | Pending |
+| FIELD-01 | Phase 8 | Complete |
+| FIELD-02 | Phase 8 | Complete |
+| FIELD-03 | Phase 8 | Complete |
+| FIELD-04 | Phase 8 | Complete |
 | IMG-01 | Phase 9 | Pending |
 | IMG-02 | Phase 9 | Pending |
 | IMG-03 | Phase 9 | Pending |
 | IMG-04 | Phase 9 | Pending |
-| VAL-01 | Phase 8 | Pending |
+| VAL-01 | Phase 8 | Complete |
 | VAL-02 | Phase 9 | Pending |
 | VAL-03 | Phase 8 | Pending |
 | COV-01 | Phase 10 | Pending |

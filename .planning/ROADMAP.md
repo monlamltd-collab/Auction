@@ -51,7 +51,7 @@
 **Plans**: 3 plans
 
 Plans:
-- [ ] 08-01-PLAN.md — Remove enrichment caps, fix price k-suffix, fix bungalow propType, raise quality gate thresholds, add propType to validateBatch coverage
+- [x] 08-01-PLAN.md — Remove enrichment caps, fix price k-suffix, fix bungalow propType, raise quality gate thresholds, add propType to validateBatch coverage
 - [ ] 08-02-PLAN.md — Extend /api/quality-report with fieldCoverage; add Field Coverage Per House table to admin Operations tab
 - [ ] 08-03-PLAN.md — Remove "?" gap chips for beds, tenure, propType from lot card and expanded panel in index.html
 

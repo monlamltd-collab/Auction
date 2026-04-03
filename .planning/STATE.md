@@ -2,14 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Data Quality Hardening
-status: ready_to_plan
-last_updated: "2026-04-03"
-last_activity: 2026-04-03 -- Roadmap revised (3 phases, geocoding deferred, quality gate reworded)
+status: planning
+stopped_at: Completed 08-field-extraction-validation plan 01
+last_updated: "2026-04-03T20:21:33.952Z"
+last_activity: 2026-04-03 -- Roadmap revised for v1.3 (geocoding deferred, quality gate reworded, 3 phases)
 progress:
   total_phases: 3
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 3
+  completed_plans: 1
+  percent: 0
 ---
 
 # Project State
@@ -33,6 +35,7 @@ Progress: [░░░░░░░░░░] 0%
 ## Performance Metrics
 
 **Velocity:**
+
 - Total plans completed: 0 (v1.3)
 - Average duration: --
 - Total execution time: --
@@ -45,6 +48,8 @@ Progress: [░░░░░░░░░░] 0%
 
 ## Accumulated Context
 
+| Phase 08-field-extraction-validation P01 | 5 | 3 tasks | 5 files |
+
 ### Decisions
 
 Decisions are logged in PROJECT.md Key Decisions table.
@@ -54,6 +59,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - VAL-01 reworded: quality gate flags for graceful handling, never rejects/hides lots
 - VAL-03 (admin field coverage dashboard) moved from geocoding phase into Phase 8
 - COV-01/COV-02 in final phase (Phase 10) -- quality infrastructure must be solid before scaling
+- [Phase 08-field-extraction-validation]: Quality gate thresholds raised: reject 0.30→0.45, warn band 0.30-0.50→0.45-0.60 (VAL-01 fix)
+- [Phase 08-field-extraction-validation]: propType tracked in fieldCoverage but not in FIELD_WEIGHTS — coverage metric only, not quality score
+- [Phase 08-field-extraction-validation]: Enrichment cap removed: all qualifying lots processed, not capped at 200
 
 ### Pending Todos
 
@@ -65,8 +73,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-03
-Stopped at: Roadmap revised for v1.3
+Last session: 2026-04-03T20:21:33.949Z
+Stopped at: Completed 08-field-extraction-validation plan 01
 Resume file: None
 
 ---
