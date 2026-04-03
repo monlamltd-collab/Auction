@@ -48,11 +48,12 @@
   4. Guide price is present on more than 95% of lots, with price ranges (e.g. "50,000-60,000") parsed into a usable numeric value
   5. Quality gate flags low-quality lots so the frontend can omit missing fields gracefully -- but every lot remains visible in the directory (no lots are rejected or hidden)
   6. Admin dashboard shows per-house field coverage breakdown (beds, tenure, price, images, propType) so data quality gaps are immediately visible
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 08-01: TBD
-- [ ] 08-02: TBD
+- [ ] 08-01-PLAN.md — Remove enrichment caps, fix price k-suffix, fix bungalow propType, raise quality gate thresholds, add propType to validateBatch coverage
+- [ ] 08-02-PLAN.md — Extend /api/quality-report with fieldCoverage; add Field Coverage Per House table to admin Operations tab
+- [ ] 08-03-PLAN.md — Remove "?" gap chips for beds, tenure, propType from lot card and expanded panel in index.html
 
 ### Phase 9: Image Pipeline & Frontend Polish
 **Goal**: Listings look polished and load fast -- no broken images, no phantom badges, and missing data fields are simply absent rather than showing gaps
@@ -99,7 +100,7 @@ Phases execute in numeric order: 8 -> 9 -> 10
 | 5. Measurement | v1.2 | 3/3 | Complete | 2026-04-03 |
 | 6. AI & Scraping Hardening | v1.2 | 3/3 | Complete | 2026-04-03 |
 | 7. Landing Page | v1.2 | 1/1 | Complete | 2026-04-03 |
-| 8. Field Extraction & Validation | v1.3 | 0/? | Not started | - |
+| 8. Field Extraction & Validation | v1.3 | 0/3 | Not started | - |
 | 9. Image Pipeline & Frontend Polish | v1.3 | 0/? | Not started | - |
 | 10. Coverage Expansion | v1.3 | 0/? | Not started | - |
 
@@ -110,3 +111,4 @@ Phases execute in numeric order: 8 -> 9 -> 10
 *v1.2 shipped: 2026-04-03*
 *v1.3 phases added: 2026-04-03*
 *v1.3 revised: 2026-04-03 (removed geocoding phase, reworded quality gate, moved VAL-03 to Phase 8)*
+*Phase 8 planned: 2026-04-03 (3 plans)*
