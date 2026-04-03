@@ -4734,7 +4734,7 @@ app.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
         const addr = (lot.address || '').toLowerCase();
         if (/\bflat\b|\bapt\b|\bapartment\b/.test(addr)) lot.propType = 'flat';
         else if (/\bhouse\b|\bcottage\b|\bvilla\b|\blodge\b/.test(addr)) lot.propType = 'house';
-        else if (/\bbungalow\b/.test(addr)) lot.propType = 'bungalow';
+        else if (/\bbungalow\b/.test(addr)) lot.propType = 'house';
         else if (/\bland\b|\bplot\b|\bgarage\b|\bparking\b|\bkiosk\b/.test(addr)) lot.propType = 'land';
         else if (/\bshop\b|\boffice\b|\bwarehouse\b|\bindustrial\b|\bhotel\b|\bpub\b/.test(addr)) lot.propType = 'commercial';
       }
@@ -11135,19 +11135,17 @@ async function enrichLotsFromLotPages(lots, concurrency = 5) {
   });
   if (targets.length === 0) return 0;
 
-  const MAX_LOT_PAGES = 200;
   // Prioritise lots missing beds (high-value enrichment) ahead of other gaps
   targets.sort((a, b) => (!a.beds ? 0 : 1) - (!b.beds ? 0 : 1));
-  const capped = targets.slice(0, MAX_LOT_PAGES);
 
   const junk = /logo|icon|nav|sprite|\.svg|placeholder|no-image|modal\.png|_NYC\.|_LCC\.|_BMDC\.|council|utilit|cardwell|badge|spacer|pixel|facebook|twitter|1x1|gavel|backdrop|generic[_-]?image|coming[_-]?soon/i;
 
   let fcUsed = 0;
   const stats = { address: 0, image: 0, tenure: 0, condition: 0, beds: 0, leaseLength: 0, propType: 0 };
 
-  for (let i = 0; i < capped.length; i += concurrency) {
+  for (let i = 0; i < targets.length; i += concurrency) {
     if (i > 0) await new Promise(r => setTimeout(r, 500));
-    const batch = capped.slice(i, i + concurrency);
+    const batch = targets.slice(i, i + concurrency);
     await Promise.allSettled(batch.map(async (lot) => {
       try {
         const result = await fetchLotPage(lot.url);
@@ -11200,7 +11198,7 @@ async function enrichLotsFromLotPages(lots, concurrency = 5) {
           else if (/\bfreehold\b/.test(text) && !/leasehold/.test(text)) { lot.tenure = 'Freehold'; stats.tenure++; }
           else if (/\bleasehold\b|long\s+lease|lease\s+remaining|\byears?\s+(?:remaining|unexpired|left)\b|\b\d+\s*(?:year|yr)\s*lease\b/.test(text)) { lot.tenure = 'Leasehold'; stats.tenure++; }
           // Freehold scoring bonus
-          if (lot.tenure === 'Freehold' && ['house', 'bungalow'].includes(lot.propType) && !(lot.opps || []).includes('Freehold')) {
+          if (lot.tenure === 'Freehold' && lot.propType === 'house' && !(lot.opps || []).includes('Freehold')) {
             lot.score = (lot.score || 0) + 0.5;
             lot.opps = lot.opps || []; lot.opps.push('Freehold');
             lot.scoreBreakdown = lot.scoreBreakdown || [];
@@ -11281,7 +11279,7 @@ async function enrichLotsFromLotPages(lots, concurrency = 5) {
         if (!lot.propType || lot.propType === 'other' || lot.propType === 'unknown') {
           if (/\b(?:flat|apartment|maisonette|studio\s+flat|penthouse)\b/.test(text)) { lot.propType = 'flat'; stats.propType++; }
           else if (/\b(?:terraced|semi[- ]detached|detached\s+house|end[- ]terrace|mid[- ]terrace|town\s*house|cottage|villa|lodge)\b/.test(text)) { lot.propType = 'house'; stats.propType++; }
-          else if (/\bbungalow\b/.test(text)) { lot.propType = 'bungalow'; stats.propType++; }
+          else if (/\bbungalow\b/.test(text)) { lot.propType = 'house'; stats.propType++; }
           else if (/\b(?:land|plot|garage|parking\s+space|storage\s+unit)\b/.test(text)) { lot.propType = 'land'; stats.propType++; }
           else if (/\b(?:shop|retail|office|warehouse|industrial|commercial|pub|hotel|restaurant)\b/.test(text)) { lot.propType = 'commercial'; stats.propType++; }
         }
@@ -11294,7 +11292,7 @@ async function enrichLotsFromLotPages(lots, concurrency = 5) {
   if (total > 0) {
     const parts = Object.entries(stats).filter(([, v]) => v > 0).map(([k, v]) => `${k}:${v}`).join(' ');
     const bedCoverage = lots.filter(l => l.beds != null).length;
-    console.log(`Lot-page enrichment: ${capped.length} pages fetched, ${total} fields filled — ${parts}${fcUsed > 0 ? ` (${fcUsed} via Firecrawl)` : ''} | beds coverage: ${bedCoverage}/${lots.length} (${Math.round(bedCoverage/lots.length*100)}%)`);
+    console.log(`Lot-page enrichment: ${targets.length} pages fetched, ${total} fields filled — ${parts}${fcUsed > 0 ? ` (${fcUsed} via Firecrawl)` : ''} | beds coverage: ${bedCoverage}/${lots.length} (${Math.round(bedCoverage/lots.length*100)}%)`);
   }
   return total;
 }
@@ -11532,7 +11530,7 @@ function analyseLot(raw) {
   const hasBeds = /\d+\s*[-\s]?bed|\bone\s+bed|\btwo\s+bed|\bthree\s+bed|\bstudio/.test(t);
   const hasResidentialSignal = /\bflats?\b|\bhouse\b|\bcottage\b|\bbungalow\b|\bapartments?\b|\bmaisonette\b/.test(t);
   if (/semi[- ]?detached|terraced?|terrace house|detached house|town\s?house|end of terrace|mid[- ]terrace/.test(t)) L.propType = 'house';
-  else if (/bungalow/.test(t)) L.propType = 'bungalow';
+  else if (/bungalow/.test(t)) L.propType = 'house';
   else if (/\bflt\b|\bflats?\b|\bapartments?\b|\bmaisonette\b/.test(t) && !/\bblock\b.*\bflats?\b|development\s+site|building\s+plot|planning\s+permission\s+for/.test(t)) L.propType = 'flat';
   else if (/\bdetached\b|period\s+property|residential\s+property|chalet|cottage|lodge|villa|mansion/.test(t)) L.propType = 'house';
   else if (/\bhouse\b/.test(t)) L.propType = 'house';
