@@ -25,7 +25,7 @@ Requirements for Data Quality Hardening milestone. Each maps to roadmap phases.
 
 - [x] **VAL-01**: Quality gate flags low-quality lots for graceful frontend handling (missing fields omitted from display, not shown as blanks) -- every lot remains visible in the directory regardless of data quality score
 - [ ] **VAL-02**: Missing data displays gracefully -- fields with no data are simply absent from the listing card, not shown as "?" or empty gaps
-- [ ] **VAL-03**: Admin dashboard shows per-house field coverage breakdown (beds, tenure, price, images, propType)
+- [x] **VAL-03**: Admin dashboard shows per-house field coverage breakdown (beds, tenure, price, images, propType)
 
 ### Coverage Expansion
 
@@ -82,7 +82,7 @@ Requirements for Data Quality Hardening milestone. Each maps to roadmap phases.
 | IMG-04 | Phase 9 | Pending |
 | VAL-01 | Phase 8 | Complete |
 | VAL-02 | Phase 9 | Pending |
-| VAL-03 | Phase 8 | Pending |
+| VAL-03 | Phase 8 | Complete |
 | COV-01 | Phase 10 | Pending |
 | COV-02 | Phase 10 | Pending |
 

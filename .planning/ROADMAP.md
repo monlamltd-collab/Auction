@@ -31,7 +31,7 @@
 
 **Milestone Goal:** Close the data quality gap with competitors -- every listing should feel complete, consistent, and trustworthy. Harden extraction, validation, and image pipelines so lots always appear but missing data is handled gracefully rather than displayed as gaps.
 
-- [ ] **Phase 8: Field Extraction & Validation** - Improve extraction coverage for beds, tenure, propType, and price; tighten quality gate to flag (not reject) low-quality data; add admin field coverage dashboard
+- [x] **Phase 8: Field Extraction & Validation** - Improve extraction coverage for beds, tenure, propType, and price; tighten quality gate to flag (not reject) low-quality data; add admin field coverage dashboard (completed 2026-04-03)
 - [ ] **Phase 9: Image Pipeline & Frontend Polish** - Validate images at scrape time, fix badge bug, optimise loading speed, handle missing data gracefully
 - [ ] **Phase 10: Coverage Expansion** - Onboard new auction houses with streamlined process using hardened quality infrastructure
 
@@ -52,7 +52,7 @@
 
 Plans:
 - [x] 08-01-PLAN.md — Remove enrichment caps, fix price k-suffix, fix bungalow propType, raise quality gate thresholds, add propType to validateBatch coverage
-- [ ] 08-02-PLAN.md — Extend /api/quality-report with fieldCoverage; add Field Coverage Per House table to admin Operations tab
+- [x] 08-02-PLAN.md — Extend /api/quality-report with fieldCoverage; add Field Coverage Per House table to admin Operations tab
 - [x] 08-03-PLAN.md — Remove "?" gap chips for beds, tenure, propType from lot card and expanded panel in index.html
 
 ### Phase 9: Image Pipeline & Frontend Polish
@@ -100,7 +100,7 @@ Phases execute in numeric order: 8 -> 9 -> 10
 | 5. Measurement | v1.2 | 3/3 | Complete | 2026-04-03 |
 | 6. AI & Scraping Hardening | v1.2 | 3/3 | Complete | 2026-04-03 |
 | 7. Landing Page | v1.2 | 1/1 | Complete | 2026-04-03 |
-| 8. Field Extraction & Validation | v1.3 | 1/3 | In Progress|  |
+| 8. Field Extraction & Validation | v1.3 | 3/3 | Complete   | 2026-04-03 |
 | 9. Image Pipeline & Frontend Polish | v1.3 | 0/? | Not started | - |
 | 10. Coverage Expansion | v1.3 | 0/? | Not started | - |
 
