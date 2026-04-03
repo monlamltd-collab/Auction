@@ -790,6 +790,53 @@ function extractWithJSDOM(html, house, baseUrl, firecrawlImages) {
     }
   }
 
+  // ── Multi-image collection — gather all property images per lot for carousel ──
+  // Walk each lot's card container in the DOM and collect all valid <img> sources.
+  // This runs universally so every extractor gets multi-image support for free.
+  // Lots that already have an `images` array (e.g. Savills) are skipped.
+  const imgCarouselSkip = /logo|icon|arrow|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|favicon|banner|btn|gallery-left|gallery-right|advert|1x1|noimage|placeholder|gavel|backdrop/i;
+  let carouselLots = 0;
+  for (const lot of lots) {
+    if (lot.images && lot.images.length > 1) { carouselLots++; continue; } // already has multi-image
+    const href = lot.url || '';
+    if (!href) continue;
+    const relHref = href.replace(baseUrl, '').replace(/^\//, '');
+    const anchor = document.querySelector(`a[href="${href}"], a[href="/${relHref}"], a[href="${relHref}"]`);
+    if (!anchor) continue;
+    // Walk up to find the card container
+    let card = anchor;
+    for (let d = 0; d < 6; d++) {
+      card = card.parentElement;
+      if (!card) break;
+      const cls = card.className || '';
+      if (/card|lot|listing|property|item|panel/i.test(cls)) break;
+    }
+    if (!card) continue;
+    // Collect all valid images from the card
+    const cardImgs = card.querySelectorAll('img[src], img[data-src]');
+    const validSrcs = [];
+    const seenSrcs = new Set();
+    for (const img of cardImgs) {
+      let s = img.getAttribute('src') || img.getAttribute('data-src') || '';
+      if (!s || s.length < 10 || s.startsWith('data:') || imgCarouselSkip.test(s)) continue;
+      if (!/^https?:\/\//i.test(s)) { try { s = new URL(s, baseUrl).href; } catch { continue; } }
+      if (seenSrcs.has(s)) continue;
+      seenSrcs.add(s);
+      if (imgBlocklist.test(s) || imgDomainBlock.test(s)) continue;
+      validSrcs.push(s);
+    }
+    if (validSrcs.length > 1) {
+      lot.images = validSrcs.slice(0, 8); // cap at 8 to keep payload reasonable
+      // Ensure imageUrl is in the images array and is first
+      if (lot.imageUrl && !lot.images.includes(lot.imageUrl)) {
+        lot.images.unshift(lot.imageUrl);
+        if (lot.images.length > 8) lot.images.pop();
+      }
+      carouselLots++;
+    }
+  }
+  if (carouselLots > 0) console.log(`JSDOM multi-image: ${carouselLots}/${lots.length} lots got image carousels for ${house}`);
+
   // ═══════════════════════════════════════════════════════════════
   // UNIVERSAL LOT VALIDATION HARNESS — applies to ALL houses
   // Guards against page chrome leaking in as fake lots, junk
