@@ -53,7 +53,7 @@
 Plans:
 - [x] 08-01-PLAN.md — Remove enrichment caps, fix price k-suffix, fix bungalow propType, raise quality gate thresholds, add propType to validateBatch coverage
 - [ ] 08-02-PLAN.md — Extend /api/quality-report with fieldCoverage; add Field Coverage Per House table to admin Operations tab
-- [ ] 08-03-PLAN.md — Remove "?" gap chips for beds, tenure, propType from lot card and expanded panel in index.html
+- [x] 08-03-PLAN.md — Remove "?" gap chips for beds, tenure, propType from lot card and expanded panel in index.html
 
 ### Phase 9: Image Pipeline & Frontend Polish
 **Goal**: Listings look polished and load fast -- no broken images, no phantom badges, and missing data fields are simply absent rather than showing gaps
@@ -100,7 +100,7 @@ Phases execute in numeric order: 8 -> 9 -> 10
 | 5. Measurement | v1.2 | 3/3 | Complete | 2026-04-03 |
 | 6. AI & Scraping Hardening | v1.2 | 3/3 | Complete | 2026-04-03 |
 | 7. Landing Page | v1.2 | 1/1 | Complete | 2026-04-03 |
-| 8. Field Extraction & Validation | v1.3 | 0/3 | Not started | - |
+| 8. Field Extraction & Validation | v1.3 | 1/3 | In Progress|  |
 | 9. Image Pipeline & Frontend Polish | v1.3 | 0/? | Not started | - |
 | 10. Coverage Expansion | v1.3 | 0/? | Not started | - |
 
