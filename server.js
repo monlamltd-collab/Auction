@@ -33,7 +33,7 @@ import { initHouseHealth, updateHealth as harnessUpdateHealth, getHealth as harn
 import { enrichBatch, getEnrichmentReport } from './lib/harness/enrichment-engine.js';
 import { initDiscovery, discoverNewHouses, getDiscoveryQueue, approveCandidate, getDiscoveryBudget } from './lib/harness/house-discovery.js';
 import { initGenerator } from './lib/harness/extractor-generator.js';
-import { initManager, runManagerCycle, getManagerReport, setManagerConfig, getManagerConfig } from './lib/harness/manager.js';
+import { initManager, runManagerCycle, getManagerReport, getManagerDirectives, setManagerConfig, getManagerConfig } from './lib/harness/manager.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -3029,9 +3029,9 @@ const FALLBACK_CALENDAR = [
     },
     {
       house: 'Clarke & Simpson', houseSlug: 'clarkesimpson', logo: '🔨',
-      date: '2026-03-25', title: 'March 2026 — Suffolk', lots: null,
+      date: '2099-12-31', title: 'Current Catalogue', lots: null,
       url: 'https://clarke-simpson.eigonlineauctions.com/search',
-      location: 'Suffolk', type: 'Residential & Land', status: 'upcoming',
+      location: 'Suffolk', type: 'Residential & Land', status: 'always_on',
       catalogueReady: true,
     },
     {
@@ -9252,7 +9252,12 @@ const DOM_EXTRACTORS = {
           if (/sold|completed|exchanged/i.test(r)) continue;
           if (r) bullets.push(r);
         } else if (text.match(/\\bSOLD\\b|\\bSALE.?AGREED\\b|\\bSTC\\b|\\bWithdrawn\\b|\\bCompleted\\b|\\bExchanged\\b/i)) continue;
-        lots.push({ lot: num, address: address.substring(0, 200), price, url, bullets, imageUrl: imageUrl || undefined });
+        // Extract bedrooms from card text (e.g. "3 Bedroom", "2 bed", "4-bed")
+        const bedMatch = text.match(/(\\d+)\\s*[-\\s]?(?:bed(?:room)?s?)\\b/i);
+        const beds = bedMatch ? parseInt(bedMatch[1]) : null;
+        const entry = { lot: num, address: address.substring(0, 200), price, url, bullets, imageUrl: imageUrl || undefined };
+        if (beds) entry.beds = beds;
+        lots.push(entry);
       }
       return lots;
     })()
@@ -12871,6 +12876,51 @@ let apiCallCount = 0;
 let hashHitCount = 0;
 const serverStartTime = new Date().toISOString();
 
+// ── Concurrency utilities for wave-based pipeline ──
+function createSemaphore(max) {
+  let active = 0;
+  const queue = [];
+  return {
+    async acquire() {
+      if (active < max) { active++; return; }
+      await new Promise(resolve => queue.push(resolve));
+      active++;
+    },
+    release() {
+      active--;
+      if (queue.length > 0) queue.shift()();
+    },
+  };
+}
+
+async function runWave(auctions, concurrency, label, processFn) {
+  if (auctions.length === 0) return { analysed: 0, skipped: 0, failed: 0 };
+  console.log(`WAVE [${label}]: ${auctions.length} houses at concurrency ${concurrency}`);
+  const sem = createSemaphore(concurrency);
+  const results = await Promise.allSettled(
+    auctions.map(async (auction) => {
+      await sem.acquire();
+      try {
+        return await processFn(auction);
+      } finally {
+        sem.release();
+      }
+    })
+  );
+  let analysed = 0, skipped = 0, failed = 0;
+  for (const r of results) {
+    if (r.status === 'fulfilled') {
+      if (r.value === 'analysed') analysed++;
+      else if (r.value === 'skipped') skipped++;
+      else if (r.value === 'failed') failed++;
+    } else {
+      failed++;
+    }
+  }
+  console.log(`WAVE [${label}]: done — ${analysed} analysed, ${skipped} cached, ${failed} failed`);
+  return { analysed, skipped, failed };
+}
+
 async function autoAnalyseAll() {
   if (creditExhausted) {
     console.log('AUTO: Gemini API rate limited — DOM-only houses will still be processed');
@@ -13109,9 +13159,51 @@ async function _doAutoAnalyseAll() {
   }
   console.log(`AUTO: ${ready.length} catalogue-ready auctions to check (${allReady.length} total, limited to ${MAX_AUCTIONS_PER_HOUSE} per house)`);
 
-  let analysed = 0, skipped = 0, failed = 0;
+  // ── Manager pre-scrape cycle → get directives ──
+  let directives;
+  try {
+    const preReport = await runManagerCycle();
+    if (preReport && !preReport.skipped) {
+      console.log(`MANAGER PRE-SCRAPE: Cycle ${preReport.cycle} — ${preReport.actions_taken.length} actions`);
+    }
+    directives = getManagerDirectives();
+  } catch (mgrErr) {
+    console.warn('MANAGER PRE-SCRAPE: failed (non-fatal):', mgrErr.message);
+    directives = getManagerDirectives(); // returns defaults
+  }
+
+  // ── Partition into DOM houses vs Gemini houses ──
+  const skipSet = new Set(directives.skip_houses || []);
+  const priorityOrder = (directives.priority_houses || []).reduce((m, slug, i) => { m[slug] = i; return m; }, {});
+
+  const domHouses = [];
+  const geminiHouses = [];
+  const skippedByManager = [];
 
   for (const auction of ready) {
+    const slug = detectAuctionHouse(auction.url);
+    if (skipSet.has(slug)) {
+      skippedByManager.push(auction);
+      console.log(`AUTO: Skipping ${auction.house} — manager directive (${(directives.skip_reasons || {})[slug] || 'skipped'})`);
+      continue;
+    }
+    auction._slug = slug;
+    auction._priority = priorityOrder[slug] !== undefined ? priorityOrder[slug] : 999;
+    if (slug && DOM_EXTRACTORS[slug]) {
+      domHouses.push(auction);
+    } else {
+      geminiHouses.push(auction);
+    }
+  }
+
+  // Sort by manager priority (lower = higher priority)
+  domHouses.sort((a, b) => a._priority - b._priority);
+  geminiHouses.sort((a, b) => a._priority - b._priority);
+
+  console.log(`AUTO: Partitioned — ${domHouses.length} DOM houses, ${geminiHouses.length} Gemini houses, ${skippedByManager.length} skipped by manager`);
+
+  // ── Per-auction processing function (same logic as before, no 5s pause) ──
+  async function processAuction(auction) {
     try {
       const normalisedUrl = normaliseUrl(auction.url);
 
@@ -13138,7 +13230,6 @@ async function _doAutoAnalyseAll() {
                 const pages = await scrapeAllsopApi(rewritten.baseUrl);
                 if (pages.length > 0) {
                   enrichAllsopLots(cachedLots, pages);
-                  // Rebuild URLs for enriched lots
                   for (const lot of cachedLots) {
                     if (lot.reference) {
                       lot.url = `https://www.allsop.co.uk/lot-overview/lot/${lot.reference}`;
@@ -13158,7 +13249,6 @@ async function _doAutoAnalyseAll() {
         // Backfill images for cached lots that are missing them
         const totalMissingImages = cachedLots.filter(l => !l.imageUrl).length;
         if (totalMissingImages > 0) {
-          // Step 1: Plain HTTP backfill from catalogue page
           const lotsWithUrl = cachedLots.filter(l => l.url && !l.imageUrl).length;
           if (lotsWithUrl > 0) {
             const updated = await backfillImages(auction.url, cachedLots);
@@ -13167,24 +13257,20 @@ async function _doAutoAnalyseAll() {
               const gained = updated.filter(l => l.imageUrl).length;
               console.log(`AUTO: ✓ ${auction.house} — HTTP backfill got ${gained} images`);
             }
-            // Step 2: Deep backfill from individual lot pages
             const stillMissing = cachedLots.filter(l => l.url && !l.imageUrl).length;
             if (stillMissing > 0) {
               const deepFilled = await backfillImagesFromLotPages(cachedLots);
               if (deepFilled > 0) needsUpdate = true;
             }
           }
-          // Step 3: Rendered backfill — try both engines for best image coverage
           const stillNoImages = cachedLots.filter(l => !l.imageUrl).length;
           const houseSlug = Object.entries(HOUSE_DISPLAY_NAMES).find(([k, v]) => v === auction.house)?.[0] || auction.house;
           if (stillNoImages > 0 && PUPPETEER_IMAGE_HOUSES.has(houseSlug)) {
             console.log(`AUTO: ${auction.house} — ${stillNoImages} lots still missing images, trying rendered backfill...`);
             let gained = 0;
-            // Pass 1: Firecrawl with executeJavascript + images format
             if (FIRECRAWL_API_KEY && !fcCreditExhausted) {
               gained += await backfillImagesWithFirecrawl(auction.url, cachedLots, houseSlug);
             }
-            // Pass 2: Puppeteer for remaining misses
             const afterFc = cachedLots.filter(l => !l.imageUrl).length;
             if (afterFc > 0 && puppeteer) {
               gained += await backfillImagesWithPuppeteer(auction.url, cachedLots, houseSlug);
@@ -13201,28 +13287,34 @@ async function _doAutoAnalyseAll() {
         if (needsUpdate) {
           await supabase.from('cached_analyses').update({ lots: cachedLots }).eq('url', normalisedUrl);
         }
-        skipped++;
-        continue;
+        return 'skipped';
       }
 
       console.log(`AUTO: Analysing ${auction.house} — ${auction.url}`);
-      const HOUSE_TIMEOUT_MS = 90000; // 90 seconds per house
+      const HOUSE_TIMEOUT_MS = 90000;
       await Promise.race([
         autoAnalyseOne(auction.url),
         new Promise((_, reject) => setTimeout(() => reject(new Error('House scrape timeout (90s)')), HOUSE_TIMEOUT_MS))
       ]);
-      analysed++;
-
-      // Pause between analyses to be kind to servers and our resources
-      await new Promise(r => setTimeout(r, 5000));
+      return 'analysed';
 
     } catch (e) {
       console.error(`AUTO: ✗ ${auction.house} failed: ${e.message}`);
-      failed++;
+      return 'failed';
     }
   }
 
-  console.log(`═══ AUTO-ANALYSIS COMPLETE: ${analysed} analysed, ${skipped} cached, ${failed} failed ═══\n`);
+  // ── Wave 1: DOM houses at high concurrency ──
+  const wave1 = await runWave(domHouses, directives.dom_concurrency || 10, 'DOM', processAuction);
+
+  // ── Wave 2: Gemini houses at low concurrency ──
+  const wave2 = await runWave(geminiHouses, directives.gemini_concurrency || 3, 'Gemini', processAuction);
+
+  const analysed = wave1.analysed + wave2.analysed;
+  const skipped = wave1.skipped + wave2.skipped + skippedByManager.length;
+  const failed = wave1.failed + wave2.failed;
+
+  console.log(`═══ AUTO-ANALYSIS COMPLETE: ${analysed} analysed, ${skipped} cached/skipped, ${failed} failed ═══\n`);
 
   // ── Step 3: Proactive healing sweep for houses with unresolved 0-lot regressions ──
   if (FIRECRAWL_API_KEY && !fcCreditExhausted) {
@@ -13272,14 +13364,14 @@ async function _doAutoAnalyseAll() {
     );
   }
 
-  // ── Harness: Manager autonomous review cycle ──
+  // ── Harness: Manager post-scrape cycle (corrective actions) ──
   try {
-    const managerReport = await runManagerCycle();
-    if (managerReport && !managerReport.skipped) {
-      console.log(`MANAGER: Cycle ${managerReport.cycle}: ${managerReport.actions_taken.length} actions, effectiveness ${managerReport.effectiveness_score}`);
+    const postReport = await runManagerCycle();
+    if (postReport && !postReport.skipped) {
+      console.log(`MANAGER POST-SCRAPE: Cycle ${postReport.cycle}: ${postReport.actions_taken.length} actions, effectiveness ${postReport.effectiveness_score}`);
     }
   } catch (mgrErr) {
-    console.warn('MANAGER: Cycle failed (non-fatal):', mgrErr.message);
+    console.warn('MANAGER POST-SCRAPE: failed (non-fatal):', mgrErr.message);
   }
 
   // ── Save daily analytics snapshot ──
