@@ -124,6 +124,59 @@ const imgDropRegression = detectRegression('test', {
 assert(imgDropRegression.verdict === 'degraded', `Image coverage drop → degraded: ${imgDropRegression.verdict}`);
 
 // ═══════════════════════════════════════════════════════════════
+// WAVE 0 FIXES — Tests for changed behaviours (must run RED before implementation)
+// ═══════════════════════════════════════════════════════════════
+section('wave-0: normalisePrice k-suffix');
+
+// Import normalisePrice and normalisePropType via validateLot (they are not exported directly)
+// We test through validateLot which calls normalisePrice internally
+{
+  // normalisePrice('50k-60k') should parse to 50000 (lower bound, k-suffix range)
+  const r1 = validateLot({ lot: 1, address: 'Test', price: '50k-60k' });
+  assert(r1.normalized.price === 50000, 'normalisePrice(\'50k-60k\') === 50000');
+
+  // normalisePrice('£50k') should parse to 50000 (single k-suffix with £)
+  const r2 = validateLot({ lot: 1, address: 'Test', price: '£50k' });
+  assert(r2.normalized.price === 50000, 'normalisePrice(\'£50k\') === 50000');
+
+  // normalisePrice('50,000-60,000') should parse to 50000 (comma range — regression guard)
+  const r3 = validateLot({ lot: 1, address: 'Test', price: '50,000-60,000' });
+  assert(r3.normalized.price === 50000, 'normalisePrice(\'50,000-60,000\') === 50000 (range lower bound)');
+
+  // normalisePropType('bungalow') should return 'house' (PROP_TYPE_MAP maps it)
+  const r4 = validateLot({ lot: 1, address: 'Test', propType: 'bungalow' });
+  assert(r4.normalized.propType === 'house', 'normalisePropType(\'bungalow\') === \'house\'');
+}
+
+section('wave-0: quality gate thresholds');
+
+{
+  // evaluateGate with batchQuality=0.44 → verdict 'reject' (new threshold 0.45)
+  const g1 = evaluateGate('wave0test',
+    { lots: new Array(10), batchQuality: 0.44 },
+    { verdict: 'healthy', reasons: [], severity: 'info' },
+    { total_lots: 10 },
+  );
+  assert(g1.decision === 'reject', 'evaluateGate batchQuality=0.44 → reject (new threshold 0.45)');
+
+  // evaluateGate with batchQuality=0.50 → verdict 'cache_warn' (in new warn band 0.45-0.60)
+  const g2 = evaluateGate('wave0test',
+    { lots: new Array(10), batchQuality: 0.50 },
+    { verdict: 'healthy', reasons: [], severity: 'info' },
+    { total_lots: 10 },
+  );
+  assert(g2.decision === 'cache_warn', 'evaluateGate batchQuality=0.50 → cache_warn (new warn band 0.45-0.60)');
+
+  // evaluateGate with batchQuality=0.65 → verdict 'cache' (above new warn ceiling 0.60)
+  const g3 = evaluateGate('wave0test',
+    { lots: new Array(10), batchQuality: 0.65 },
+    { verdict: 'healthy', reasons: [], severity: 'info' },
+    { total_lots: 10 },
+  );
+  assert(g3.decision === 'cache', 'evaluateGate batchQuality=0.65 → cache (above warn ceiling 0.60)');
+}
+
+// ═══════════════════════════════════════════════════════════════
 // 3. QUALITY GATE
 // ═══════════════════════════════════════════════════════════════
 section('quality-gate');
