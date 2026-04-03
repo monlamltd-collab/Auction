@@ -50,16 +50,9 @@ Every upcoming UK auction lot, with complete data (images, links, metadata), sco
 
 ### Active
 
-<!-- v1.2 — Free-First Growth: Maximize Users, Generate Leads -->
+<!-- v1.3 — Data Quality Hardening -->
 
-- [ ] Hibernate Stripe behind STRIPE_ENABLED feature flag (all code preserved, dormant)
-- [ ] Free-first gating: all AI features free but require sign-in for data capture
-- [ ] Fix 8 known frontend bugs (heavy refurb, score sort, empty states, sign-in page, etc.)
-- [ ] Landing page with USP hero: "50% of auction houses aren't on Rightmove"
-- [ ] Scraping reliability: verify all extractors, improve coverage
-- [ ] Admin dashboard usability overhaul
-- [ ] AI cost optimisation: audit spend, evaluate cheapest models (Grok, Gemini Flash)
-- [ ] Analytics tracking: MAU, BridgeMatch funnel, engagement metrics
+(Defined during v1.3 requirements phase)
 
 ### Out of Scope
 
@@ -73,39 +66,35 @@ Every upcoming UK auction lot, with complete data (images, links, metadata), sco
 - Frontend full redesign — deferred to v1.3 (landing page is in scope for v1.2)
 - Individual lot pages with SEO-friendly URLs — deferred to v1.3
 
-## Current Milestone: v1.2 Free-First Growth
+## Current Milestone: v1.3 Data Quality Hardening
 
-**Goal:** Pivot to free tool, maximize user signups, monetize via bridging finance leads. Target 500-1,000 MAU to approach lenders for sponsorship.
+**Goal:** Close the data quality gap with competitors — every listing should feel complete, consistent, and trustworthy. Harden the extraction and validation pipeline so missing fields, broken images, and inconsistent data don't reach users.
 
 **Target features:**
-- Hibernate Stripe (feature flag, code preserved for reactivation)
-- Free-first gating (sign-in captures data, all AI features free)
-- Bug fixes (8 known frontend issues)
-- Landing page with "50% aren't on Rightmove" USP
-- Scraping reliability and coverage
-- Admin dashboard usability
-- AI cost optimisation (cheapest viable model)
-- Analytics tracking (MAU, BridgeMatch funnel, engagement)
+- Improve field coverage (beds ~51%, tenure ~67% → both above 80%)
+- Image validation at scrape time (HTTP HEAD check, reject broken URLs before caching)
+- Tighten quality gate thresholds (0.3 may be too lenient)
+- Graceful frontend display for missing data (smooth, not broken-looking)
+- Persist geocoding to DB for future map view
+- Standardise field extraction across auction houses
+- Better Gemini prompt tuning for low-coverage fields
 
 ## Context
 
-- **Shipped v1.1** with ~2,400 new lines across 8 files. ~15,755 LOC total (JS/HTML).
-- **Strategic pivot (2026-03-20):** Dropping paid tier, going fully free. Monetize via bridging finance leads. Stripe code hibernated, not deleted.
-- **Budget:** £950 seed funding, ~£150/month burn (Claude Max £80 + Firecrawl £70). ~6 months runway. Every cost decision matters.
-- **Key USP:** ~50% of auction houses aren't on Rightmove — hero message for landing page.
-- **Target:** 500-1,000 MAU → pitch lenders for sponsorship/advertising revenue to fund ongoing costs.
-- **~36 auction houses** with DOM extractors (up from ~21). ASI bug fix in v1.1 resolved silent failures across all extractors.
-- **Firecrawl now used for markdown+rawHtml** — better Gemini extraction at zero additional credit cost.
-- **Image coverage significantly improved** — IMG_HELPERS module, 99.6% coverage on new houses, admin tooling for missing images.
-- **Enrichment pipeline live** — EPC (MHCLG) + flood risk (EA) with 30-day Supabase cache. Free for all users.
-- **Tier gating strategy v2:** Tool fully free, sign-in gates AI features for data capture (per memory: `project_tier_strategy.md`).
-- **Future lead model:** Broker pool/marketplace for regulated leads (per memory: `project_broker_marketplace.md`).
-- **server.js is ~11,000 lines** — monolith containing all backend logic. No immediate plans to split.
-- **Gemini:** Upgraded to paid Tier 1 — need to audit actual spend and consider cheaper alternatives.
-- **Firecrawl credit management:** Monthly budget cap, auto-exhaustion detection, hash-based skip saves ~50-70%.
-- **Known bugs (8):** Heavy refurb blank page, score sort within tiers, empty state messaging, search trim/debounce, negative page guard, deal stacking mobile, sign-in page overflow, CSV client-only gate.
-- **New env vars added in v1.1:** `EPC_API_EMAIL`, `EPC_API_KEY`
-- **Manual Supabase tables needed:** `processed_webhook_events`, `pipeline_alerts`, `enrichment_cache`, `last_diff` column on `house_skills`
+- **Shipped v1.2** with +24,034 / -3,185 lines across 73 files. Major platform maturity leap.
+- **Strategic pivot complete:** Free-first model live, Stripe hibernated, all AI features free after sign-in.
+- **Budget:** £950 seed funding, ~£150/month burn (Claude Max £80 + Firecrawl £70). ~6 months runway.
+- **~42 auction houses** with DOM extractors. Universal extraction harness + quality gate in place.
+- **Resilience harness:** 9-module self-healing pipeline with circuit breakers, regression detection, auto-recovery.
+- **AI-driven manager:** Wave-based concurrent pipeline orchestration with cost logging and budget tracking.
+- **Enrichment pipeline live** — EPC (MHCLG) + flood risk (EA) + geocoding (Postcodes.io) with caching.
+- **Field coverage gaps:** Beds ~51%, tenure ~67% — need improvement for competitor parity.
+- **Image pipeline:** Multi-image carousel, junk detection, onerror fallbacks — but no scrape-time HTTP validation.
+- **Geocoding:** Batch geocoding works but uses temporary `_lat`/`_lng` — not persisted to DB.
+- **Competitor:** PropertyAuctions.io — 250+ auctioneers, clean consistent data, sold prices. Ahead on data quality.
+- **Tier gating strategy v2:** Tool fully free, sign-in gates AI features for data capture.
+- **Future lead model:** Broker pool/marketplace for regulated leads.
+- **server.js is ~14,000+ lines** — monolith with lib/harness/ modules extracted in v1.2.
 
 ## Constraints
 
@@ -140,4 +129,4 @@ Every upcoming UK auction lot, with complete data (images, links, metadata), sco
 | Analytics for lender pitch | Need MAU/funnel data to approach lenders at 500-1000 MAU | — Pending — v1.2 |
 
 ---
-*Last updated: 2026-03-20 after v1.2 milestone start*
+*Last updated: 2026-04-03 after v1.3 milestone start*
