@@ -1,66 +1,55 @@
-# Requirements: Bridgematch Auction Tool v1.2
+# Requirements: Bridgematch Auction Tool
 
-**Defined:** 2026-03-20
-**Core Value:** Every upcoming UK auction lot, with complete data, scored for investment potential and matched to bridging lenders -- so investors can find and fund deals in one place.
+**Defined:** 2026-04-03
+**Core Value:** Every upcoming UK auction lot, with complete data, scored for investment potential and matched to bridging lenders — so investors can find and fund deals in one place.
 
-## v1.2 Requirements
+## v1.3 Requirements
 
-### Gating & Monetization
+Requirements for Data Quality Hardening milestone. Each maps to roadmap phases.
 
-- [x] **GATE-01**: System hibernates Stripe behind `STRIPE_ENABLED` env var -- all payment code preserved but unreachable when disabled
-- [x] **GATE-02**: `resolveEffectiveTier()` returns premium for all signed-in users when Stripe disabled
-- [x] **GATE-03**: Paywall modals and upgrade CTAs hidden when Stripe disabled
-- [x] **GATE-04**: AI features (smart search, analyser, scores, deal stacking, CSV export) require sign-in but are free
-- [x] **GATE-05**: Signed-in users have daily AI rate limit (e.g. 50 searches/day) as cost safety valve
+### Field Coverage
 
-### Bug Fixes
+- [ ] **FIELD-01**: Bedroom count is extracted for >80% of lots across all auction houses (priority field)
+- [ ] **FIELD-02**: Tenure (freehold/leasehold) is extracted for >80% of lots
+- [ ] **FIELD-03**: Property type is normalised to canonical values (house/flat/land/commercial/mixed) across all houses
+- [ ] **FIELD-04**: Guide price is extracted for >95% of lots, with price ranges handled consistently
 
-- [x] **FIX-01**: Heavy refurb button triggers search execution, not just input population
-- [x] **FIX-02**: Score sort orders lots within tiers (not just groups into tiers)
-- [x] **FIX-03**: Empty state messaging when filters or AI search return 0 results
-- [x] **FIX-04**: Search input trimmed and debounced
-- [x] **FIX-05**: Negative page numbers guarded
-- [x] **FIX-06**: Deal stacking widget reflows to single column on mobile
-- [x] **FIX-07**: Sign-in page text no longer overflows container
-- [x] **FIX-08**: CSV export has server-side tier check
+### Image Quality
 
-### Landing Page
+- [ ] **IMG-01**: Image URLs are validated via HTTP HEAD check at scrape time — broken/unreachable URLs rejected before caching
+- [ ] **IMG-02**: Broken CDN image badge bug (HIGH-8) is fixed — no phantom badges on failed images
+- [ ] **IMG-03**: Per-house image coverage % is tracked and visible in admin dashboard, with houses below 70% flagged
+- [ ] **IMG-04**: Image loading is fast — optimised proxying, correct sizing, lazy loading, and CDN caching so listings feel instant
 
-- [ ] **LAND-01**: Welcome page updated with "50% aren't on Rightmove" USP hero message
-- [ ] **LAND-02**: Features/benefits section and free sign-up CTA on welcome page
+### Validation & UX
 
-### Analytics
+- [ ] **VAL-01**: Quality gate batch threshold is raised above 0.3 and per-lot minimum enforced before frontend display
+- [ ] **VAL-02**: Missing data displays gracefully — clean gaps with contextual messaging, not raw "?" or empty fields
+- [ ] **VAL-03**: Admin dashboard shows per-house field coverage breakdown (beds, tenure, price, images, propType)
 
-- [x] **ANAL-01**: Supabase `activity_events` wired to key API endpoints (search, analyse, deal stacking, BridgeMatch, sign-up)
-- [x] **ANAL-02**: Umami Cloud integrated for page-level metrics (MAU, bounce rate, page views)
-- [x] **ANAL-03**: BridgeMatch funnel tracked: lot view -> finance click -> form start -> submission
-- [x] **ANAL-04**: Admin can view analytics summary (MAU, funnel, engagement)
+### Geocoding
 
-### Scraping & Coverage
+- [ ] **GEO-01**: Lot lat/lng is persisted to Supabase (not temporary _lat/_lng) for future map view
+- [ ] **GEO-02**: Postcode extraction from addresses is improved via better regex and Gemini prompt tuning for higher geocode rate
 
-- [x] **SCRP-01**: All existing DOM extractors audited and broken ones fixed
-- [x] **SCRP-02**: Image coverage verified across all houses (target >90%)
-- [x] **SCRP-03**: New auction houses recruited to increase coverage
-- [ ] **SCRP-04**: Admin dashboard cleaned up -- surface actionable data, hide noise
+### Coverage Expansion
 
-### AI Abstraction
+- [ ] **COV-01**: New auction houses are onboarded to expand coverage toward competitor parity (~250 auctioneers)
+- [ ] **COV-02**: Onboarding process is streamlined — platform family detection, shared extractors, and validation gates reduce per-house effort
 
-- [x] **AI-01**: `callGemini()` extracted to `lib/ai-provider.js` with provider abstraction
-- [x] **AI-02**: Token usage and cost logging per API call
-- [x] **AI-03**: Model selection via env var (ready for future provider swap)
+## Future Requirements
 
-### Infrastructure
+### Map View
+- **MAP-01**: Interactive map showing lot locations with clustering
+- **MAP-02**: Map filters synchronised with list view filters
 
-- [x] **INFR-01**: Confirm Supabase is on paid plan (not free tier) before scaling
-- [x] **INFR-02**: Cancel any active Stripe subscriptions before hibernating
-- [x] **INFR-03**: Verify Railway memory/CPU baseline can handle free-tier traffic volume
-
-## Future Requirements (v1.3+)
+### Transaction Data
+- **TXN-01**: Sold prices tracked per lot after auction
+- **TXN-02**: Transaction history per auction house
 
 ### Growth & SEO
 - **SEO-01**: Individual lot pages with SEO-friendly URLs
 - **SEO-02**: Blog/content section for organic SEO traffic
-- **SEO-03**: Full marketing landing page with UI animations and modern tooling
 
 ### Engagement
 - **ENG-01**: Email alerts when new catalogues drop for followed auction houses
@@ -73,51 +62,37 @@
 
 | Feature | Reason |
 |---------|--------|
-| Full landing page rebuild with animation tooling | Deferred -- needs research into UI framework, build as separate milestone |
+| Map view UI | Needs geocoding persistence first (GEO-01) — separate milestone |
+| Sold prices / transaction history | Competitor feature but requires different data sources |
+| Scoring engine changes | Scoring depends on clean data — fix data first |
 | Branding split (AuctionBrain vs Bridgematch) | Future consideration |
 | Mobile app | Web-first, mobile later |
-| Zoopla/Rightmove scraping | ToS violation |
-| Full Bridgematch auto-finance per lot | Future milestone |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| GATE-01 | Phase 4 | Complete |
-| GATE-02 | Phase 4 | Complete |
-| GATE-03 | Phase 4 | Complete |
-| GATE-04 | Phase 4 | Complete |
-| GATE-05 | Phase 4 | Complete |
-| FIX-01 | Phase 4 | Complete |
-| FIX-02 | Phase 4 | Complete |
-| FIX-03 | Phase 4 | Complete |
-| FIX-04 | Phase 4 | Complete |
-| FIX-05 | Phase 4 | Complete |
-| FIX-06 | Phase 4 | Complete |
-| FIX-07 | Phase 4 | Complete |
-| FIX-08 | Phase 4 | Complete |
-| LAND-01 | Phase 7 | Pending |
-| LAND-02 | Phase 7 | Pending |
-| ANAL-01 | Phase 5 | Complete |
-| ANAL-02 | Phase 5 | Complete |
-| ANAL-03 | Phase 5 | Complete |
-| ANAL-04 | Phase 5 | Complete |
-| SCRP-01 | Phase 6 | Complete |
-| SCRP-02 | Phase 6 | Complete |
-| SCRP-03 | Phase 6 | Complete |
-| SCRP-04 | Phase 6 | Pending |
-| AI-01 | Phase 6 | Complete |
-| AI-02 | Phase 6 | Complete |
-| AI-03 | Phase 6 | Complete |
-| INFR-01 | Phase 4 | Complete |
-| INFR-02 | Phase 4 | Complete |
-| INFR-03 | Phase 4 | Complete |
+| FIELD-01 | TBD | Pending |
+| FIELD-02 | TBD | Pending |
+| FIELD-03 | TBD | Pending |
+| FIELD-04 | TBD | Pending |
+| IMG-01 | TBD | Pending |
+| IMG-02 | TBD | Pending |
+| IMG-03 | TBD | Pending |
+| IMG-04 | TBD | Pending |
+| VAL-01 | TBD | Pending |
+| VAL-02 | TBD | Pending |
+| VAL-03 | TBD | Pending |
+| GEO-01 | TBD | Pending |
+| GEO-02 | TBD | Pending |
+| COV-01 | TBD | Pending |
+| COV-02 | TBD | Pending |
 
 **Coverage:**
-- v1.2 requirements: 29 total
-- Mapped to phases: 29
-- Unmapped: 0
+- v1.3 requirements: 15 total
+- Mapped to phases: 0
+- Unmapped: 15
 
 ---
-*Requirements defined: 2026-03-20*
-*Last updated: 2026-03-20 after roadmap creation*
+*Requirements defined: 2026-04-03*
+*Last updated: 2026-04-03 after initial definition*
