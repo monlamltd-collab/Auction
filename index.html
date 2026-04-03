@@ -3569,9 +3569,14 @@ function detectCountry(address){
   return 'england';
 }
 
-// ── DEAL STACKING CALCULATOR ──
-function calcDealStack(purchasePrice, gdv, worksCost, rentalIncome, ltvPct, address) {
+// ── DEAL STACKING CALCULATOR (True Acquisition Cost) ──
+function calcDealStack(purchasePrice, gdv, worksCost, rentalIncome, ltvPct, address, opts) {
   if (!purchasePrice || purchasePrice <= 0 || isNaN(purchasePrice)) return null;
+  opts = opts || {};
+  var buyerPremPct = (opts.buyerPremPct || 0) / 100;    // e.g. 2 → 0.02
+  var contingencyPct = (opts.contingencyPct || 10) / 100; // e.g. 10 → 0.10
+  var legalPackCost = opts.legalPackCost != null ? opts.legalPackCost : 300;
+  var insuranceCost = opts.insuranceCost != null ? opts.insuranceCost : 500;
 
   // Lender matching — find best rate from LENDER_DATA
   let bestLender = null;
@@ -3599,22 +3604,49 @@ function calcDealStack(purchasePrice, gdv, worksCost, rentalIncome, ltvPct, addr
     }
   }
 
-  // Shared cost calculations
+  // Acquisition costs
   const country = detectCountry(address);
   const sdlt = calcSDLT(purchasePrice, country);
+  const buyerPremium = Math.round(purchasePrice * buyerPremPct * 1.2); // +VAT
+  const worksContingency = Math.round(worksCost * contingencyPct);
+  const totalWorks = worksCost + worksContingency;
+
+  // Finance costs
   const loanAmount = Math.round(purchasePrice * (ltvPct / 100));
   const bridgingInterest = Math.round(loanAmount * monthlyRate * 12);
   const arrangementFee = Math.round(loanAmount * procFeePct);
   const solicitor = 1500;
   const survey = 500;
   const brokerFee = Math.round(loanAmount * 0.01);
-  const totalCostIn = purchasePrice + sdlt + worksCost + bridgingInterest + arrangementFee + solicitor + survey + brokerFee;
-  const cashIn = (purchasePrice - loanAmount) + sdlt + worksCost + solicitor + survey + brokerFee;
+
+  // True total cost in (everything to get the property done)
+  const totalCostIn = purchasePrice + sdlt + buyerPremium + totalWorks + bridgingInterest + arrangementFee + solicitor + survey + brokerFee + legalPackCost + insuranceCost;
+
+  // Day-one cash required (what you need in your bank on completion day)
+  const dayOneCash = (purchasePrice - loanAmount) + sdlt + buyerPremium + solicitor + survey + brokerFee + legalPackCost + insuranceCost;
+
+  // Total cash required over project (day-one + works not covered by lender)
+  const cashIn = dayOneCash + totalWorks;
+
+  // Exit costs (for flip)
+  const agentFees = gdv > 0 ? Math.round(gdv * 0.015 * 1.2) : 0; // 1.5% + VAT
+  const exitSolicitor = 1000;
+  const totalExitCosts = agentFees + exitSolicitor;
 
   // Flip scenario
-  const netProfit = gdv - totalCostIn;
+  const netProfit = gdv - totalCostIn - totalExitCosts;
   const roi = cashIn > 0 ? (netProfit / cashIn * 100) : 0;
-  const cashOnCash = roi;
+
+  // Stress test: GDV -10%
+  var stress = null;
+  if (gdv > 0) {
+    var stressGdv = Math.round(gdv * 0.9);
+    var stressAgentFees = Math.round(stressGdv * 0.015 * 1.2);
+    var stressExitCosts = stressAgentFees + exitSolicitor;
+    var stressProfit = stressGdv - totalCostIn - stressExitCosts;
+    var stressRoi = cashIn > 0 ? (stressProfit / cashIn * 100) : 0;
+    stress = { gdv: stressGdv, netProfit: stressProfit, roi: stressRoi };
+  }
 
   // Hold scenario (only if rentalIncome > 0)
   let hold = null;
@@ -3632,8 +3664,11 @@ function calcDealStack(purchasePrice, gdv, worksCost, rentalIncome, ltvPct, addr
 
   return {
     sdlt, loanAmount, bridgingInterest, arrangementFee, solicitor, survey, brokerFee,
-    totalCostIn, cashIn, usingFallback, bestLenderName: bestLender?.name || null,
-    flip: { netProfit, roi, cashOnCash },
+    buyerPremium, worksContingency, totalWorks, legalPackCost, insuranceCost,
+    totalCostIn, dayOneCash, cashIn, usingFallback, bestLenderName: bestLender?.name || null,
+    agentFees, exitSolicitor, totalExitCosts,
+    flip: { netProfit, roi },
+    stress,
     hold
   };
 }
@@ -3666,6 +3701,13 @@ function runDealStack(idx) {
   var rental = parseFloat(document.getElementById('ds-rental-' + idx)?.value) || 0;
   var ltvSlider = document.getElementById('ltv-slider-' + idx);
   var ltv = ltvSlider ? parseInt(ltvSlider.value) : 70;
+  var buyerPrem = parseFloat(document.getElementById('ds-buyerprem-' + idx)?.value) || 0;
+  var contingency = parseFloat(document.getElementById('ds-contingency-' + idx)?.value);
+  if (isNaN(contingency)) contingency = 10;
+  var legalPack = parseFloat(document.getElementById('ds-legalpack-' + idx)?.value);
+  if (isNaN(legalPack)) legalPack = 300;
+  var insurance = parseFloat(document.getElementById('ds-insurance-' + idx)?.value);
+  if (isNaN(insurance)) insurance = 500;
 
   if (gdv <= 0) {
     document.getElementById('ds-results-' + idx).innerHTML =
@@ -3673,7 +3715,10 @@ function runDealStack(idx) {
     return;
   }
 
-  var result = calcDealStack(lot.price, gdv, works, rental, ltv, lot.address || '');
+  var result = calcDealStack(lot.price, gdv, works, rental, ltv, lot.address || '', {
+    buyerPremPct: buyerPrem, contingencyPct: contingency,
+    legalPackCost: legalPack, insuranceCost: insurance
+  });
   if (!result) {
     document.getElementById('ds-results-' + idx).innerHTML =
       '<p style="color:var(--text-muted); font-size:13px; text-align:center; padding:12px 0;">Guide price not available \u2014 deal stacking requires a price</p>';
@@ -3698,19 +3743,43 @@ function renderDealStackResults(idx, r, showHold) {
     ? '<p style="font-size:11px; color:var(--text-muted); margin:0 0 8px; font-style:italic;">Based on market averages \u2014 lender data unavailable</p>'
     : '<p style="font-size:11px; color:var(--text-muted); margin:0 0 8px; font-style:italic;">Based on ' + (r.bestLenderName || 'best match') + ' rates</p>';
 
+  // Day-one cash headline
+  var dayOneBanner =
+    '<div style="display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:linear-gradient(135deg,#1a3a5c,#2a5a8c); border-radius:8px; margin-bottom:10px; color:#fff;">' +
+      '<div>' +
+        '<div style="font-size:11px; opacity:0.8;">Day-one cash required</div>' +
+        '<div style="font-size:20px; font-weight:700;">' + fmtCurrency(r.dayOneCash) + '</div>' +
+      '</div>' +
+      '<div style="text-align:right;">' +
+        '<div style="font-size:11px; opacity:0.8;">True total cost</div>' +
+        '<div style="font-size:20px; font-weight:700;">' + fmtCurrency(r.totalCostIn) + '</div>' +
+      '</div>' +
+    '</div>';
+
   // Cost breakdown (collapsible)
   var costBreakdown =
     '<details style="margin-bottom:12px; font-size:13px;">' +
-      '<summary style="cursor:pointer; font-weight:600; color:var(--text); padding:4px 0;">Cost Breakdown</summary>' +
+      '<summary style="cursor:pointer; font-weight:600; color:var(--text); padding:4px 0;">Full Cost Breakdown</summary>' +
       '<div style="padding:8px 0; display:grid; grid-template-columns:1fr auto; gap:4px 12px;">' +
+        '<span style="color:var(--text-muted); font-size:11px; font-weight:600; grid-column:span 2; margin-top:4px;">ACQUISITION</span>' +
         '<span style="color:var(--text-muted)">SDLT</span><span>' + fmtCurrency(r.sdlt) + '</span>' +
+        (r.buyerPremium > 0 ? '<span style="color:var(--text-muted)">Buyer\'s premium (+VAT)</span><span>' + fmtCurrency(r.buyerPremium) + '</span>' : '') +
+        '<span style="color:var(--text-muted)">Legal pack review</span><span>' + fmtCurrency(r.legalPackCost) + '</span>' +
+        '<span style="color:var(--text-muted)">Buildings insurance</span><span>' + fmtCurrency(r.insuranceCost) + '</span>' +
+        '<span style="color:var(--text-muted); font-size:11px; font-weight:600; grid-column:span 2; margin-top:8px;">FINANCE</span>' +
         '<span style="color:var(--text-muted)">Bridging interest (12mo)</span><span>' + fmtCurrency(r.bridgingInterest) + '</span>' +
         '<span style="color:var(--text-muted)">Arrangement fee</span><span>' + fmtCurrency(r.arrangementFee) + '</span>' +
         '<span style="color:var(--text-muted)">Solicitor</span><span>' + fmtCurrency(r.solicitor) + '</span>' +
         '<span style="color:var(--text-muted)">Survey</span><span>' + fmtCurrency(r.survey) + '</span>' +
         '<span style="color:var(--text-muted)">Broker fee</span><span>' + fmtCurrency(r.brokerFee) + '</span>' +
+        '<span style="color:var(--text-muted); font-size:11px; font-weight:600; grid-column:span 2; margin-top:8px;">WORKS</span>' +
+        '<span style="color:var(--text-muted)">Works cost</span><span>' + fmtCurrency(r.totalWorks - r.worksContingency) + '</span>' +
+        (r.worksContingency > 0 ? '<span style="color:var(--text-muted)">Contingency</span><span>' + fmtCurrency(r.worksContingency) + '</span>' : '') +
         '<span style="font-weight:700; color:var(--text); border-top:1px solid rgba(0,0,0,0.1); padding-top:6px; margin-top:4px;">Total cost in</span>' +
         '<span style="font-weight:700; border-top:1px solid rgba(0,0,0,0.1); padding-top:6px; margin-top:4px;">' + fmtCurrency(r.totalCostIn) + '</span>' +
+        (r.totalExitCosts > 0 ? '<span style="color:var(--text-muted); font-size:11px; font-weight:600; grid-column:span 2; margin-top:8px;">EXIT (flip)</span>' +
+        '<span style="color:var(--text-muted)">Estate agent (1.5%+VAT)</span><span>' + fmtCurrency(r.agentFees) + '</span>' +
+        '<span style="color:var(--text-muted)">Exit solicitor</span><span>' + fmtCurrency(r.exitSolicitor) + '</span>' : '') +
       '</div>' +
     '</details>';
 
@@ -3719,17 +3788,17 @@ function renderDealStackResults(idx, r, showHold) {
     '<div style="flex:1; min-width:140px;">' +
       '<div style="font-weight:600; font-size:13px; color:var(--text); margin-bottom:8px; text-align:center;">Flip (Sell)</div>' +
       '<div style="text-align:center; margin-bottom:6px;">' +
-        '<div style="font-size:11px; color:var(--text-muted);">Net Profit</div>' +
+        '<div style="font-size:11px; color:var(--text-muted);">Net Profit (after exit costs)</div>' +
         '<div style="font-size:18px; font-weight:700; ' + valColor(r.flip.netProfit) + '">' + fmtCurrency(r.flip.netProfit) + '</div>' +
       '</div>' +
       '<div style="text-align:center; margin-bottom:6px;">' +
-        '<div style="font-size:11px; color:var(--text-muted);">ROI</div>' +
+        '<div style="font-size:11px; color:var(--text-muted);">ROI on Cash</div>' +
         '<div style="font-size:15px; font-weight:600; ' + valColor(r.flip.roi) + '">' + r.flip.roi.toFixed(1) + '%</div>' +
       '</div>' +
-      '<div style="text-align:center;">' +
-        '<div style="font-size:11px; color:var(--text-muted);">Cash-on-Cash</div>' +
-        '<div style="font-size:15px; font-weight:600; ' + valColor(r.flip.cashOnCash) + '">' + r.flip.cashOnCash.toFixed(1) + '%</div>' +
-      '</div>' +
+      (r.stress ? '<div style="text-align:center; margin-top:8px; padding-top:8px; border-top:1px dashed rgba(0,0,0,0.1);">' +
+        '<div style="font-size:10px; color:var(--text-muted); font-weight:600;">STRESS TEST (GDV -10%)</div>' +
+        '<div style="font-size:14px; font-weight:600; ' + valColor(r.stress.netProfit) + '">' + fmtCurrency(r.stress.netProfit) + ' <span style="font-size:12px;">(' + r.stress.roi.toFixed(1) + '% ROI)</span></div>' +
+      '</div>' : '') +
     '</div>';
 
   // Hold column
@@ -3777,7 +3846,40 @@ function renderDealStackResults(idx, r, showHold) {
       flipCol + holdCol +
     '</div>';
 
-  el.innerHTML = lenderNote + costBreakdown + scenarios;
+  // Verdict message
+  var verdict = '';
+  var flipProfit = r.flip.netProfit;
+  var stressProfit = r.stress ? r.stress.netProfit : 0;
+  var flipRoi = r.flip.roi;
+  if (flipProfit > 0 && stressProfit > 0 && flipRoi >= 20) {
+    verdict = '<div style="margin-top:10px; padding:10px 14px; background:#e8f5ee; border-radius:8px; border-left:4px solid var(--accent);">' +
+      '<div style="font-size:14px; font-weight:700; color:var(--accent); margin-bottom:2px;">This deal stacks.</div>' +
+      '<div style="font-size:12px; color:var(--text-muted);">Profitable even at GDV -10%. ' + Math.round(flipRoi) + '% ROI on cash deployed.</div>' +
+    '</div>';
+  } else if (flipProfit > 0 && stressProfit <= 0) {
+    verdict = '<div style="margin-top:10px; padding:10px 14px; background:#fef3e2; border-radius:8px; border-left:4px solid var(--accent-warn);">' +
+      '<div style="font-size:14px; font-weight:700; color:var(--accent-warn); margin-bottom:2px;">Tight deal \u2014 thin margin.</div>' +
+      '<div style="font-size:12px; color:var(--text-muted);">Profitable at your GDV, but doesn\'t survive a 10% haircut. Sharpen your numbers or negotiate harder.</div>' +
+    '</div>';
+  } else if (flipProfit <= 0) {
+    verdict = '<div style="margin-top:10px; padding:10px 14px; background:#fdf0ee; border-radius:8px; border-left:4px solid var(--accent-danger);">' +
+      '<div style="font-size:14px; font-weight:700; color:var(--accent-danger); margin-bottom:2px;">This deal doesn\'t stack.</div>' +
+      '<div style="font-size:12px; color:var(--text-muted);">Costs exceed GDV. Walk away or rework the numbers.</div>' +
+    '</div>';
+  } else if (flipProfit > 0 && flipRoi < 20) {
+    verdict = '<div style="margin-top:10px; padding:10px 14px; background:#fef3e2; border-radius:8px; border-left:4px solid var(--accent-warn);">' +
+      '<div style="font-size:14px; font-weight:700; color:var(--accent-warn); margin-bottom:2px;">Marginal \u2014 worth a closer look.</div>' +
+      '<div style="font-size:12px; color:var(--text-muted);">Profitable but ROI under 20%. Factor in your time and opportunity cost.</div>' +
+    '</div>';
+  }
+
+  // Disclaimer
+  var disclaimer = '<p style="font-size:10px; color:var(--text-muted); margin:8px 0 0; line-height:1.4; opacity:0.7;">' +
+    'For illustration only \u2014 not financial advice. Figures are estimates based on the inputs you provide and publicly available lender data. ' +
+    'Always verify costs independently and seek professional advice before committing to any property purchase.' +
+    '</p>';
+
+  el.innerHTML = lenderNote + dayOneBanner + costBreakdown + scenarios + verdict + disclaimer;
 }
 
 // Downloads
@@ -4187,6 +4289,38 @@ function expandCard(lot) {
                 'oninput="debounceDealStack(' + lot._idx + ')">' +
             '</div>' +
           '</div>' +
+          // ── True Acquisition Cost: additional fields (collapsible) ──
+          '<details style="margin-bottom:12px;">' +
+            '<summary style="cursor:pointer; font-size:12px; font-weight:600; color:var(--text-muted); padding:4px 0;">Auction &amp; hidden costs (tap to adjust)</summary>' +
+            '<div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px;">' +
+              '<div>' +
+                '<label style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:2px;">Buyer\'s Premium %</label>' +
+                '<input type="number" id="ds-buyerprem-' + lot._idx + '" value="0" step="0.5" min="0" max="5" ' +
+                  'style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:6px; font-size:13px; box-sizing:border-box;" ' +
+                  'oninput="debounceDealStack(' + lot._idx + ')">' +
+                '<div style="font-size:10px; color:var(--text-muted); margin-top:1px;">+VAT. Check auction T&amp;Cs</div>' +
+              '</div>' +
+              '<div>' +
+                '<label style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:2px;">Works Contingency %</label>' +
+                '<input type="number" id="ds-contingency-' + lot._idx + '" value="10" step="5" min="0" max="30" ' +
+                  'style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:6px; font-size:13px; box-sizing:border-box;" ' +
+                  'oninput="debounceDealStack(' + lot._idx + ')">' +
+                '<div style="font-size:10px; color:var(--text-muted); margin-top:1px;">10-15% typical</div>' +
+              '</div>' +
+              '<div>' +
+                '<label style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:2px;">Legal Pack Review</label>' +
+                '<input type="number" id="ds-legalpack-' + lot._idx + '" value="300" step="50" min="0" ' +
+                  'style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:6px; font-size:13px; box-sizing:border-box;" ' +
+                  'oninput="debounceDealStack(' + lot._idx + ')">' +
+              '</div>' +
+              '<div>' +
+                '<label style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:2px;">Buildings Insurance</label>' +
+                '<input type="number" id="ds-insurance-' + lot._idx + '" value="500" step="50" min="0" ' +
+                  'style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:6px; font-size:13px; box-sizing:border-box;" ' +
+                  'oninput="debounceDealStack(' + lot._idx + ')">' +
+              '</div>' +
+            '</div>' +
+          '</details>' +
           '<div id="ds-results-' + lot._idx + '"></div>' +
         '</div>';
       })() :
