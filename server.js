@@ -5303,6 +5303,11 @@ app.get('/api/diag', (req, res) => {
     puppeteerAvailable: !!puppeteer,
     geminiKey: process.env.GEMINI_API_KEY ? 'set' : 'NOT SET',
     apiCallCount,
+    circuitBreakers: {
+      epc: epcBreaker.status,
+      flood: floodBreaker.status,
+      landRegistry: lrBreaker.status,
+    },
   });
 });
 
@@ -12144,6 +12149,39 @@ function buildLotUrl(lot, house, sourceUrl) {
 // ENRICHMENT: EPC & Flood Risk APIs
 // ═══════════════════════════════════════════════════════════════
 
+// ── Circuit Breaker (shared pattern for external APIs) ──
+class CircuitBreaker {
+  constructor(name, { maxFailures = 3, resetMs = 600000 } = {}) {
+    this.name = name;
+    this.maxFailures = maxFailures;
+    this.resetMs = resetMs;
+    this.failures = 0;
+    this.openedAt = 0;
+  }
+  isOpen() {
+    if (this.failures < this.maxFailures) return false;
+    if (Date.now() - this.openedAt > this.resetMs) {
+      console.log(`Circuit breaker [${this.name}] half-open — retrying`);
+      this.failures = 0;
+      return false;
+    }
+    return true;
+  }
+  recordFailure() {
+    this.failures++;
+    if (this.failures >= this.maxFailures) {
+      this.openedAt = Date.now();
+      console.warn(`Circuit breaker [${this.name}] OPEN — ${this.maxFailures} consecutive failures, pausing for ${this.resetMs / 1000}s`);
+    }
+  }
+  recordSuccess() { this.failures = 0; }
+  get status() { return this.isOpen() ? 'open' : this.failures > 0 ? 'half-open' : 'closed'; }
+}
+
+const epcBreaker = new CircuitBreaker('EPC', { maxFailures: 3, resetMs: 600000 });
+const floodBreaker = new CircuitBreaker('Flood', { maxFailures: 3, resetMs: 600000 });
+const lrBreaker = new CircuitBreaker('LandRegistry', { maxFailures: 5, resetMs: 300000 });
+
 // EPC API credentials check (logged once at startup)
 let _epcWarningLogged = false;
 const EPC_API_EMAIL = process.env.EPC_API_EMAIL || '';
@@ -12163,6 +12201,7 @@ let _lastEPCCallTime = 0;
 async function fetchEPCByPostcode(postcode) {
   if (!EPC_API_EMAIL || !EPC_API_KEY) return null;
   if (!postcode) return null;
+  if (epcBreaker.isOpen()) return null;
 
   // Rate limit: 500ms between consecutive calls
   const now = Date.now();
@@ -12191,11 +12230,13 @@ async function fetchEPCByPostcode(postcode) {
 
     if (!response.ok) {
       console.warn(`EPC API ${response.status} for ${postcode}`);
+      epcBreaker.recordFailure();
       return null;
     }
 
     const data = await response.json();
     const rows = data.rows || data.results || data;
+    epcBreaker.recordSuccess();
     return Array.isArray(rows) ? rows : null;
   } catch (e) {
     if (e.name === 'AbortError') {
@@ -12203,6 +12244,7 @@ async function fetchEPCByPostcode(postcode) {
     } else {
       console.warn(`EPC API error for ${postcode}: ${e.message}`);
     }
+    epcBreaker.recordFailure();
     return null;
   }
 }
@@ -12220,6 +12262,7 @@ const EA_RATE_LIMIT_MS = 200;
  */
 async function fetchFloodZone(postcode) {
   if (!postcode) return null;
+  if (floodBreaker.isOpen()) return null;
 
   try {
     // Step 1: Geocode via Postcodes.io
@@ -12333,12 +12376,16 @@ async function fetchFloodZone(postcode) {
       } catch (fmErr) {
         console.warn(`EA flood monitoring API also failed for ${postcode}: ${fmErr.message}`);
         floodData = { source: "none", error: "both_apis_failed" };
+        floodBreaker.recordFailure();
+        return { floodZone: null, floodRiskLevel: null, floodData, lat, lon };
       }
     }
 
+    floodBreaker.recordSuccess();
     return { floodZone, floodRiskLevel, floodData, lat, lon };
   } catch (e) {
     console.warn(`fetchFloodZone error for ${postcode}: ${e.message}`);
+    floodBreaker.recordFailure();
     return null;
   }
 }
@@ -12354,10 +12401,13 @@ async function fetchFloodZone(postcode) {
 function matchEPCToLot(epcRecords, lotAddress) {
   if (!epcRecords || !epcRecords.length || !lotAddress) return null;
 
+  // Common street suffixes to normalise (Road→rd, Street→st, etc.)
+  const suffixMap = { road: 'rd', street: 'st', avenue: 'ave', drive: 'dr', lane: 'ln', close: 'cl', crescent: 'cres', terrace: 'ter', place: 'pl', court: 'ct', gardens: 'gdns', grove: 'gr', way: 'wy', park: 'pk' };
+
   function normalise(addr) {
     return (addr || '')
       .toLowerCase()
-      .replace(/\b(flat|apartment|unit|apt)\b/gi, '')
+      .replace(/\b(flat|apartment|unit|apt|ground\s+floor|first\s+floor|second\s+floor)\b/gi, '')
       .replace(/,/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
@@ -12368,22 +12418,33 @@ function matchEPCToLot(epcRecords, lotAddress) {
     return m ? m[1].toLowerCase() : null;
   }
 
-  function extractStreetName(addr) {
+  function extractStreetWords(addr) {
     const cleaned = addr
       .replace(/^\d+[a-z]?\s+/i, '')
-      .replace(/\b[a-z]{1,2}\d[a-z\d]?\s*\d[a-z]{2}\b/i, '')
+      .replace(/\b[a-z]{1,2}\d[a-z\d]?\s*\d[a-z]{2}\b/i, '') // remove postcode
       .trim();
-    return cleaned.split(/\s+/).slice(0, 3).join(' ') || null;
+    return cleaned.split(/\s+/).slice(0, 4).map(w => suffixMap[w] || w);
+  }
+
+  function streetMatchScore(wordsA, wordsB) {
+    if (!wordsA.length || !wordsB.length) return 0;
+    let matched = 0;
+    for (const w of wordsA) {
+      if (wordsB.includes(w)) matched++;
+    }
+    // Score: proportion of the shorter street name that matched
+    return matched / Math.min(wordsA.length, wordsB.length);
   }
 
   const normLot = normalise(lotAddress);
   const lotNumber = extractNumber(normLot);
-  const lotStreet = extractStreetName(normLot);
+  const lotStreetWords = extractStreetWords(normLot);
 
-  if (!lotNumber || !lotStreet) return null;
+  if (!lotNumber || !lotStreetWords.length) return null;
 
   let bestMatch = null;
   let bestDate = '';
+  let bestStreetScore = 0;
 
   for (const rec of epcRecords) {
     const epcAddr = normalise(
@@ -12391,32 +12452,28 @@ function matchEPCToLot(epcRecords, lotAddress) {
     );
 
     const epcNumber = extractNumber(epcAddr);
-    const epcStreet = extractStreetName(epcAddr);
+    if (!epcNumber || epcNumber !== lotNumber) continue;
 
-    if (!epcNumber || !epcStreet) continue;
-    if (epcNumber !== lotNumber) continue;
+    const epcStreetWords = extractStreetWords(epcAddr);
+    const score = streetMatchScore(lotStreetWords, epcStreetWords);
 
-    const streetWords = lotStreet.split(/\s+/);
-    const epcStreetWords = epcStreet.split(/\s+/);
-    if (streetWords[0] !== epcStreetWords[0] &&
-        !epcAddr.includes(streetWords[0]) &&
-        !normLot.includes(epcStreetWords[0])) {
-      continue;
-    }
+    // Require at least 50% of street words to match (was: first word only)
+    if (score < 0.5) continue;
 
     const rating = (rec['current-energy-rating'] || rec.currentEnergyRating || '').toUpperCase();
-    const score = parseInt(rec['current-energy-efficiency'] || rec.currentEnergyEfficiency || '0', 10);
+    const epcScore = parseInt(rec['current-energy-efficiency'] || rec.currentEnergyEfficiency || '0', 10);
     const date = rec['lodgement-date'] || rec.lodgementDate || '';
 
     if (!/^[A-G]$/.test(rating)) continue;
-    if (score < 1 || score > 100) continue;
+    if (epcScore < 1 || epcScore > 100) continue;
 
-    // Extract bedroom count from EPC record
     const epcBeds = parseInt(rec['number-habitable-rooms'] || rec.numberHabitableRooms || rec['number-heated-rooms'] || rec.numberHeatedRooms || '0', 10);
 
-    if (!bestMatch || date > bestDate) {
-      bestMatch = { epcRating: rating, epcScore: score, epcDate: date, epcBeds: (epcBeds >= 1 && epcBeds <= 20) ? epcBeds : null };
+    // Prefer: higher street match score, then most recent date
+    if (!bestMatch || score > bestStreetScore || (score === bestStreetScore && date > bestDate)) {
+      bestMatch = { epcRating: rating, epcScore: epcScore, epcDate: date, epcBeds: (epcBeds >= 1 && epcBeds <= 20) ? epcBeds : null, _matchConfidence: score };
       bestDate = date;
+      bestStreetScore = score;
     }
   }
 
@@ -12469,17 +12526,77 @@ async function enrichLots(lots, house, sourceUrl, onProgress) {
     console.warn('Geocoding failed (non-fatal):', geoErr.message);
   }
 
-  // Query Land Registry for each unique postcode (with concurrency limit)
-  const CONCURRENCY = 5;
+  // Query Land Registry for each unique postcode (with persistent cache + circuit breaker)
+  const LR_CONCURRENCY = 5;
+  const LR_CACHE_TTL_DAYS = 14;
   const lrCache = {};
   let enrichDone = 0;
-  for (let i = 0; i < postcodes.length; i += CONCURRENCY) {
-    const batch = postcodes.slice(i, i + CONCURRENCY);
-    const results = await Promise.all(batch.map(pc => queryLandRegistry(pc)));
+  let lrCacheHits = 0;
+
+  // Check Supabase cache for LR data first
+  if (supabase) {
+    try {
+      const { data: cached } = await supabase
+        .from('enrichment_cache')
+        .select('postcode, lr_data')
+        .in('postcode', postcodes)
+        .gt('lr_expires_at', new Date().toISOString())
+        .not('lr_data', 'is', null);
+      if (cached) {
+        for (const row of cached) {
+          lrCache[row.postcode] = row.lr_data;
+          lrCacheHits++;
+        }
+      }
+    } catch { /* cache miss — proceed with API */ }
+  }
+
+  const uncachedPostcodes = postcodes.filter(pc => !lrCache[pc]);
+  if (lrCacheHits > 0) console.log(`LR cache: ${lrCacheHits} hits, ${uncachedPostcodes.length} to fetch`);
+
+  for (let i = 0; i < uncachedPostcodes.length; i += LR_CONCURRENCY) {
+    if (lrBreaker.isOpen()) {
+      console.warn('LR circuit breaker open — skipping remaining postcodes');
+      break;
+    }
+    const batch = uncachedPostcodes.slice(i, i + LR_CONCURRENCY);
+    const results = await Promise.all(batch.map(async (pc) => {
+      try {
+        const data = await queryLandRegistry(pc);
+        if (data && data.length > 0) lrBreaker.recordSuccess();
+        return data;
+      } catch (e) {
+        lrBreaker.recordFailure();
+        return [];
+      }
+    }));
     batch.forEach((pc, idx) => { lrCache[pc] = results[idx]; });
     enrichDone += batch.length;
-    if (onProgress) onProgress(enrichDone, postcodes.length);
-    if (i + CONCURRENCY < postcodes.length) await new Promise(r => setTimeout(r, 200));
+    if (onProgress) onProgress(lrCacheHits + enrichDone, postcodes.length);
+    if (i + LR_CONCURRENCY < uncachedPostcodes.length) await new Promise(r => setTimeout(r, 200));
+  }
+
+  // Persist LR results to Supabase cache
+  if (supabase && uncachedPostcodes.length > 0) {
+    const lrExpiry = new Date(Date.now() + LR_CACHE_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    try {
+      const upserts = uncachedPostcodes
+        .filter(pc => lrCache[pc])
+        .map(pc => ({
+          postcode: pc,
+          lr_data: lrCache[pc],
+          lr_expires_at: lrExpiry,
+        }));
+      if (upserts.length > 0) {
+        // Batch upsert in chunks of 50
+        for (let j = 0; j < upserts.length; j += 50) {
+          await supabase.from('enrichment_cache').upsert(upserts.slice(j, j + 50), { onConflict: 'postcode', ignoreDuplicates: false });
+        }
+        console.log(`LR cache: stored ${upserts.length} postcodes (${LR_CACHE_TTL_DAYS}d TTL)`);
+      }
+    } catch (e) {
+      console.warn('LR cache write failed (non-fatal):', e.message);
+    }
   }
 
   // Enrich each lot
@@ -12737,6 +12854,8 @@ async function ensureEnrichmentCacheTable() {
             flood_data JSONB,
             lat NUMERIC(9,6),
             lon NUMERIC(9,6),
+            lr_data JSONB,
+            lr_expires_at TIMESTAMPTZ,
             cached_at TIMESTAMPTZ DEFAULT NOW(),
             expires_at TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '30 days')
           );
@@ -12753,6 +12872,8 @@ CREATE TABLE IF NOT EXISTS enrichment_cache (
   flood_data JSONB,
   lat NUMERIC(9,6),
   lon NUMERIC(9,6),
+  lr_data JSONB,
+  lr_expires_at TIMESTAMPTZ,
   cached_at TIMESTAMPTZ DEFAULT NOW(),
   expires_at TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '30 days')
 );
@@ -12764,6 +12885,12 @@ CREATE POLICY "Service role full access" ON enrichment_cache FOR ALL USING (true
       }
     } else if (!error) {
       console.log('enrichment_cache table exists');
+      // Migrate: add LR columns if missing
+      try {
+        await supabase.rpc('exec_sql', {
+          sql: `ALTER TABLE enrichment_cache ADD COLUMN IF NOT EXISTS lr_data JSONB; ALTER TABLE enrichment_cache ADD COLUMN IF NOT EXISTS lr_expires_at TIMESTAMPTZ;`
+        });
+      } catch { /* columns may already exist or rpc unavailable */ }
     }
   } catch (e) {
     console.warn('enrichment_cache table check failed:', e.message);
