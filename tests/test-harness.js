@@ -206,11 +206,11 @@ const lowQualityResult = evaluateGate('test',
 assert(lowQualityResult.decision === 'reject', 'Low quality batch → reject');
 
 const warnResult = evaluateGate('test',
-  { lots: new Array(40), batchQuality: 0.4 },
+  { lots: new Array(40), batchQuality: 0.50 },
   { verdict: 'healthy', reasons: [], severity: 'info' },
   { total_lots: 40 },
 );
-assert(warnResult.decision === 'cache_warn', 'Marginal quality → cache_warn');
+assert(warnResult.decision === 'cache_warn', 'Marginal quality (0.50, in warn band 0.45-0.60) → cache_warn');
 
 const degradedWarn = evaluateGate('test',
   { lots: new Array(40), batchQuality: 0.7 },
@@ -220,7 +220,7 @@ const degradedWarn = evaluateGate('test',
 assert(degradedWarn.decision === 'cache_warn', 'Degraded verdict → cache_warn');
 
 const firstRun = evaluateGate('test',
-  { lots: new Array(5), batchQuality: 0.5 },
+  { lots: new Array(5), batchQuality: 0.65 },
   { verdict: 'healthy', reasons: [], severity: 'info' },
   null,
 );
