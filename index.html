@@ -3461,7 +3461,6 @@ function card(l){
   let detailPills = [];
   if (l.propType) detailPills.push({text: l.propType, tip: 'Property type — affects lender eligibility and valuation approach'});
   if (l.beds != null) detailPills.push({text: l.beds + ' bed', tip: 'Number of bedrooms — key driver for rental yield estimates'});
-  else detailPills.push({text: 'Beds: ?', tip: 'Bedroom count not listed — check the legal pack or listing for details', gap: true});
   if (l.tenure) {
     let tenureLabel = l.tenure;
     let tenureTip = l.tenure === 'Freehold' ? 'Freehold — you own the building and land outright' : 'Leasehold — you own the property for a fixed term. Under 80 years = expensive to extend';
@@ -3472,8 +3471,6 @@ function card(l){
       else if (l.leaseLength < 125) { tenureTip = 'Leasehold (' + l.leaseLength + 'yr) — Acceptable length for most lenders but will need extending within your ownership. Budget for extension.'; }
     }
     detailPills.push({text: tenureLabel, tip: tenureTip, gap: tenureWarn, warn: tenureWarn});
-  } else {
-    detailPills.push({text: 'Tenure: ?', tip: 'Tenure not listed — critical for finance. Check the legal pack', gap: true});
   }
   if (l.daysSinceAuction != null && l.status === 'unsold') {
     detailPills.push({text: 'Unsold ' + l.daysSinceAuction + 'd ago', tip: 'Failed to sell at auction — vendor may accept lower offers. Longer unsold = more motivated seller'});
