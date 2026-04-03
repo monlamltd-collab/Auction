@@ -756,6 +756,12 @@ footer .logo-f span{color:var(--green)}
   .how-section,.two-tools,.bottom-cta,.email-capture{padding:24px 14px}
   .ec-form{flex-direction:column}
   .ec-form input{min-width:0}
+  /* HIGH-14: WCAG 44px minimum touch targets on mobile */
+  button,.chip,.filter-field select,.filter-field input,.nav-cta,.nav-link-bm,
+  .sp-ai-group button,.preset-btn,.view-toggle-btn,.stat-card,
+  input[type="checkbox"],input[type="radio"]{min-height:44px}
+  input[type="checkbox"],input[type="radio"]{min-width:44px;min-height:44px}
+  .chip{padding:10px 14px}
 }
 @media(max-width:360px){
   .nav-inner{padding:0 10px;gap:6px}
@@ -1372,7 +1378,8 @@ const SUPABASE_ANON_KEY = window.__SUPABASE_ANON_KEY__ || '';
 const AUTH_ENABLED = window.__AUTH_ENABLED__ || false;
 </script>
 <script>
-const $=id=>document.getElementById(id);
+const _nullProxy=new Proxy(document.createElement('div'),{get(t,p){if(p==='_isNull')return true;const v=t[p];return typeof v==='function'?v.bind(t):v},set(t,p,v){return true}});
+const $=id=>document.getElementById(id)||_nullProxy;
 function esc(s){if(s==null)return '';const d=document.createElement('div');d.textContent=String(s);return d.innerHTML.replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 function safeHref(u){if(!u)return '#';const s=String(u).trim();if(!/^https?:\/\//i.test(s))return '#';if(/google\.\w+\/maps|maps\.google|maps\.app\.goo|waze\.com|bing\.com\/maps/i.test(s))return '#';return esc(s);}
 let LOTS=[], SMART_RESULTS=null;

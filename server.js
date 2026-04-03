@@ -1701,7 +1701,8 @@ app.post('/api/searches', async (req, res) => {
 
   try {
     // Cap at 10 saved searches per user
-    const { count } = await supabase.from('saved_searches').select('id', { count: 'exact', head: true }).eq('user_id', user.id);
+    const { count, error: countErr } = await supabase.from('saved_searches').select('id', { count: 'exact', head: true }).eq('user_id', user.id);
+    if (countErr) { log.error('Saved search count error', { error: countErr.message }); return res.status(500).json({ error: 'Failed to check search limit' }); }
     if (count >= 10) return res.status(400).json({ error: 'Maximum 10 saved searches. Delete one first.' });
 
     const { data, error } = await supabase
@@ -1792,11 +1793,12 @@ app.post('/api/cron/unsold-alerts', async (req, res) => {
 
   try {
     // Get all active alerts that haven't been sent in the last 23 hours (daily) or 6.5 days (weekly)
-    const { data: alerts } = await supabase
+    const { data: alerts, error: alertsErr } = await supabase
       .from('unsold_alerts')
       .select('id, user_id, filters, frequency')
       .eq('active', true);
 
+    if (alertsErr) { log.error('Unsold alerts query error', { error: alertsErr.message }); return res.status(500).json({ error: 'Failed to fetch alerts' }); }
     if (!alerts || alerts.length === 0) return res.json({ sent: 0 });
 
     const now = new Date();
@@ -1812,16 +1814,16 @@ app.post('/api/cron/unsold-alerts', async (req, res) => {
       }
 
       // Get user email
-      const { data: user } = await supabase.from('users').select('email, name').eq('id', alert.user_id).single();
-      if (!user?.email) continue;
+      const { data: user, error: userErr } = await supabase.from('users').select('email, name').eq('id', alert.user_id).single();
+      if (userErr || !user?.email) continue;
 
       // Get all cached lots and find unsold ones
-      const { data: caches } = await supabase
+      const { data: caches, error: cachesErr } = await supabase
         .from('cached_analyses')
         .select('lots, house')
         .gt('expires_at', now.toISOString());
 
-      if (!caches) continue;
+      if (cachesErr || !caches) continue;
 
       const todayStr = now.toISOString().slice(0, 10);
       let unsoldLots = [];
@@ -6723,8 +6725,14 @@ async function acquirePage() {
     await new Promise(r => setTimeout(r, 500));
   }
   activePagesCount++;
-  const browser = await getBrowser();
-  const page = await browser.newPage();
+  let browser, page;
+  try {
+    browser = await getBrowser();
+    page = await browser.newPage();
+  } catch (err) {
+    activePagesCount = Math.max(0, activePagesCount - 1);
+    throw new Error(`Puppeteer page creation failed: ${err.message}`);
+  }
   const origClose = page.close.bind(page);
   page.close = async () => { activePagesCount = Math.max(0, activePagesCount - 1); return origClose(); };
   return page;
