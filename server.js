@@ -5759,7 +5759,12 @@ app.get('/api/quality-report', async (req, res) => {
       if (lots.length === 0) housesWithZero++;
       if (isStale) staleHouses++;
 
-      const entry = { house, lots: lots.length, rawLots: rawLots.length, images: withImage, imgCoverage, dupes, ageHours, stale: !!isStale };
+      let fieldCoverage = null;
+      try {
+        ({ fieldCoverage } = validateBatch(lots, house));
+      } catch (_e) { /* non-fatal */ }
+
+      const entry = { house, lots: lots.length, rawLots: rawLots.length, images: withImage, imgCoverage, dupes, ageHours, stale: !!isStale, fieldCoverage };
       report.houses.push(entry);
 
       if (lots.length === 0) report.issues.push({ severity: 'critical', house, msg: 'Zero lots — extractor may be broken' });
