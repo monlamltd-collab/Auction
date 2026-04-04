@@ -638,7 +638,7 @@ function extractWithJSDOM(html, house, baseUrl, firecrawlImages) {
     const lotsMissingImg = lots.filter(l => !l.imageUrl).length;
     if (lotsMissingImg > 0) {
       // Filter to likely property images (not icons, logos, etc)
-      const skipFc = /logo|icon|arrow|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|1x1|favicon|banner|advert/i;
+      const skipFc = /logo|icon|arrow|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|1x1|favicon|banner|advert|maggsandallen\.co\.uk\/images\/|hollismorgan\.co\.uk\/images\//i;
       const propertyImages = firecrawlImages.filter(img => img && img.length > 20 && /^https?:\/\//i.test(img) && !skipFc.test(img));
       if (propertyImages.length > 0) {
         let fcMatched = 0;
@@ -698,7 +698,7 @@ function extractWithJSDOM(html, house, baseUrl, firecrawlImages) {
   }
 
   // Post-processing: filter junk images (same blocklist as extractWithDOM)
-  const imgBlocklist = /logo|icon|placeholder|no-image|default|blank|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|1x1|noimage|favicon|banner|advert|sponsor|newsletter|widget|thumb_generic|modal\.png|_NYC\.|_LCC\.|_BMDC\.|Unit[ie]*d?_?Utilit|Cardwells|themes\/.*assets\/images\/|download_\(\d+\)\.|watchLIVEauction|property-top-image|auc2-logo|gavel|backdrop|generic[_-]?image|auction[_-]?house[_-]?(?:logo|image)|coming[_-]?soon/i;
+  const imgBlocklist = /logo|icon|placeholder|no-image|default|blank|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|1x1|noimage|favicon|banner|advert|sponsor|newsletter|widget|thumb_generic|modal\.png|_NYC\.|_LCC\.|_BMDC\.|Unit[ie]*d?_?Utilit|Cardwells|themes\/.*assets\/images\/|download_\(\d+\)\.|watchLIVEauction|property-top-image|auc2-logo|gavel|backdrop|generic[_-]?image|auction[_-]?house[_-]?(?:logo|image)|coming[_-]?soon|maggsandallen\.co\.uk\/images\/|hollismorgan\.co\.uk\/images\//i;
   const imgDomainBlock = /flannels|kirklees|rdw\b|council\.gov|\.gov\.uk\/|googleads|doubleclick|analytics|hotjar|intercom|crisp\.chat|tawk\.to|zendesk|hubspot|mailchimp|sendgrid/i;
   const hollisJunk = house === 'hollismorgan' || house === 'maggsandallen';
   for (const lot of lots) {
@@ -716,7 +716,7 @@ function extractWithJSDOM(html, house, baseUrl, firecrawlImages) {
   // walk the DOM to find their card container and extract background-image or <img>.
   // This catches sites that use CSS background-image slideshows (Cycle2, Flickity, etc.)
   // regardless of whether the per-house extractor handled them.
-  const imgRecoverSkip = /logo|icon|arrow|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|favicon|banner|btn|gallery-left|gallery-right/i;
+  const imgRecoverSkip = /logo|icon|arrow|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|favicon|banner|btn|gallery-left|gallery-right|maggsandallen\.co\.uk\/images\/|hollismorgan\.co\.uk\/images\//i;
   const lotsMissingImgCount = lots.filter(l => !l.imageUrl).length;
   if (lotsMissingImgCount > 0) {
     let recovered = 0;
@@ -794,7 +794,7 @@ function extractWithJSDOM(html, house, baseUrl, firecrawlImages) {
   // Walk each lot's card container in the DOM and collect all valid <img> sources.
   // This runs universally so every extractor gets multi-image support for free.
   // Lots that already have an `images` array (e.g. Savills) are skipped.
-  const imgCarouselSkip = /logo|icon|arrow|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|favicon|banner|btn|gallery-left|gallery-right|advert|1x1|noimage|placeholder|gavel|backdrop/i;
+  const imgCarouselSkip = /logo|icon|arrow|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|favicon|banner|btn|gallery-left|gallery-right|advert|1x1|noimage|placeholder|gavel|backdrop|maggsandallen\.co\.uk\/images\/|hollismorgan\.co\.uk\/images\//i;
   let carouselLots = 0;
   for (const lot of lots) {
     if (lot.images && lot.images.length > 1) { carouselLots++; continue; } // already has multi-image
@@ -1041,7 +1041,7 @@ async function backfillImagesWithFirecrawl(catalogueUrl, lots, house) {
     const { document } = dom.window;
 
     // Build href→image map from the rendered page
-    const skip = /logo|icon|arrow|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|loading|cookie|emoji/i;
+    const skip = /logo|icon|arrow|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|loading|cookie|emoji|maggsandallen\.co\.uk\/images\/|hollismorgan\.co\.uk\/images\//i;
     const hrefImageMap = {};
     const links = document.querySelectorAll('a[href]');
     for (const link of links) {
@@ -1091,7 +1091,7 @@ async function backfillImagesWithFirecrawl(catalogueUrl, lots, house) {
     const allPageImages = [];
     // Collect images from JSDOM parsing
     const allImgs = document.querySelectorAll('img[src], img[data-src]');
-    const skipFc = /logo|icon|arrow|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|1x1|favicon|banner|advert/i;
+    const skipFc = /logo|icon|arrow|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|1x1|favicon|banner|advert|maggsandallen\.co\.uk\/images\/|hollismorgan\.co\.uk\/images\//i;
     for (const img of allImgs) {
       const src = img.getAttribute('src') || img.getAttribute('data-src') || '';
       if (src && src.length > 20 && !src.startsWith('data:') && !skipFc.test(src)) {
@@ -7181,7 +7181,7 @@ function normaliseLotStatuses(lots) {
     if (!lot.status) {
       // Check bullets for legacy status detection
       const bulletStr = (lot.bullets || []).join(' ');
-      if (/\bUNSOLD\b|\bNOT.?SOLD\b|\bPASSED\b|\bNO.?SALE\b/i.test(bulletStr)) lot.status = 'unsold';
+      if (/\bUNSOLD\b|\bNOT.?SOLD\b|\bPASSED\b|\bNO.?SALE\b|\bAuction\s*Ended\b/i.test(bulletStr)) lot.status = 'unsold';
       else if (/\bSOLD\b/i.test(bulletStr)) lot.status = 'sold';
       else if (/\bSTC\b|\bSALE.?AGREED\b|\bUNDER.?OFFER\b/i.test(bulletStr)) lot.status = 'stc';
       else if (/\bWITHDRAWN\b|\bPOSTPONED\b/i.test(bulletStr)) lot.status = 'withdrawn';
@@ -11172,7 +11172,7 @@ async function backfillImagesFromLotPages(lots, concurrency = 5) {
   const missing = lots.filter(l => l.url && !l.imageUrl && /^https?:\/\//i.test(l.url));
   if (missing.length === 0) return 0;
   const capped = missing.slice(0, 50);
-  const junk = /logo|icon|nav|sprite|\.svg|placeholder|no-image|modal\.png|_NYC\.|_LCC\.|_BMDC\.|council|utilit|cardwell|badge|spacer|pixel|facebook|twitter|1x1|gavel|backdrop|generic[_-]?image|coming[_-]?soon/i;
+  const junk = /logo|icon|nav|sprite|\.svg|placeholder|no-image|modal\.png|_NYC\.|_LCC\.|_BMDC\.|council|utilit|cardwell|badge|spacer|pixel|facebook|twitter|1x1|gavel|backdrop|generic[_-]?image|coming[_-]?soon|maggsandallen\.co\.uk\/images\/|hollismorgan\.co\.uk\/images\//i;
   let filled = 0, fcUsed = 0;
   for (let i = 0; i < capped.length; i += concurrency) {
     if (i > 0) await new Promise(r => setTimeout(r, 500));
@@ -11225,7 +11225,7 @@ async function enrichLotsFromLotPages(lots, concurrency = 5) {
   // Prioritise lots missing beds (high-value enrichment) ahead of other gaps
   targets.sort((a, b) => (!a.beds ? 0 : 1) - (!b.beds ? 0 : 1));
 
-  const junk = /logo|icon|nav|sprite|\.svg|placeholder|no-image|modal\.png|_NYC\.|_LCC\.|_BMDC\.|council|utilit|cardwell|badge|spacer|pixel|facebook|twitter|1x1|gavel|backdrop|generic[_-]?image|coming[_-]?soon/i;
+  const junk = /logo|icon|nav|sprite|\.svg|placeholder|no-image|modal\.png|_NYC\.|_LCC\.|_BMDC\.|council|utilit|cardwell|badge|spacer|pixel|facebook|twitter|1x1|gavel|backdrop|generic[_-]?image|coming[_-]?soon|maggsandallen\.co\.uk\/images\/|hollismorgan\.co\.uk\/images\//i;
 
   let fcUsed = 0;
   const stats = { address: 0, image: 0, tenure: 0, condition: 0, beds: 0, leaseLength: 0, propType: 0 };
@@ -11579,7 +11579,7 @@ async function extractWithDOM(page, house) {
   }
 
   // Post-processing: filter out non-property images (logos, icons, placeholders, known junk)
-  const imgBlocklist = /logo|icon|placeholder|no-image|default|blank|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|1x1|noimage|favicon|banner|advert|sponsor|newsletter|widget|thumb_generic|modal\.png|_NYC\.|_LCC\.|_BMDC\.|Unit[ie]*d?_?Utilit|Cardwells|themes\/.*assets\/images\/|download_\(\d+\)\.|watchLIVEauction|property-top-image|auc2-logo|gavel|backdrop|generic[_-]?image|auction[_-]?house[_-]?(?:logo|image)|coming[_-]?soon/i;
+  const imgBlocklist = /logo|icon|placeholder|no-image|default|blank|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|1x1|noimage|favicon|banner|advert|sponsor|newsletter|widget|thumb_generic|modal\.png|_NYC\.|_LCC\.|_BMDC\.|Unit[ie]*d?_?Utilit|Cardwells|themes\/.*assets\/images\/|download_\(\d+\)\.|watchLIVEauction|property-top-image|auc2-logo|gavel|backdrop|generic[_-]?image|auction[_-]?house[_-]?(?:logo|image)|coming[_-]?soon|maggsandallen\.co\.uk\/images\/|hollismorgan\.co\.uk\/images\//i;
   // Known non-property domains and brand names that appear as junk images
   const imgDomainBlock = /flannels|kirklees|rdw\b|council\.gov|\.gov\.uk\/|googleads|doubleclick|analytics|hotjar|intercom|crisp\.chat|tawk\.to|zendesk|hubspot|mailchimp|sendgrid/i;
   // House-specific: Hollis Morgan property photos always use /resize/ path
