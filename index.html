@@ -2137,11 +2137,23 @@ function backToAuctions(){
     $('viewToggle').style.display='none';
     $('reportView').style.display='none';
     $('cardsView').style.display='block';
-    buildLotFilters();
-    renderLots();
+    // Only rebuild grid if it is empty (avoids image reload on in-app back)
+    const _grid = document.getElementById('lotsGrid');
+    const _gridHasContent = _grid && _grid.children.length > 1;
+    if (!_gridHasContent) {
+      buildLotFilters();
+      renderLots();
+    }
     $('resultsPanel').style.display='block';
   }
-  window.scrollTo({top:0,behavior:'smooth'});
+  // Restore saved scroll or go to top
+  const _savedY = parseInt(sessionStorage.getItem('ab_scroll_y') || '0');
+  if (_savedY > 0) {
+    requestAnimationFrame(() => window.scrollTo({ top: _savedY, behavior: 'smooth' }));
+    sessionStorage.removeItem('ab_scroll_y'); // consumed
+  } else {
+    window.scrollTo({top:0,behavior:'smooth'});
+  }
 }
 
 // ═══════════════════════════════
