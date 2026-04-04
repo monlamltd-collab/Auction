@@ -638,7 +638,7 @@ function extractWithJSDOM(html, house, baseUrl, firecrawlImages) {
     const lotsMissingImg = lots.filter(l => !l.imageUrl).length;
     if (lotsMissingImg > 0) {
       // Filter to likely property images (not icons, logos, etc)
-      const skipFc = /logo|icon|arrow|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|1x1|favicon|banner|advert|maggsandallen\.co\.uk\/images\/|hollismorgan\.co\.uk\/images\//i;
+      const skipFc = /logo|icon|arrow|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|1x1|favicon|banner|advert|maggsandallen\.co\.uk\/images\/|hollismorgan\.co\.uk\/images\/|fssproperty\.co\.uk\/images\//i;
       const propertyImages = firecrawlImages.filter(img => img && img.length > 20 && /^https?:\/\//i.test(img) && !skipFc.test(img));
       if (propertyImages.length > 0) {
         let fcMatched = 0;
@@ -698,7 +698,7 @@ function extractWithJSDOM(html, house, baseUrl, firecrawlImages) {
   }
 
   // Post-processing: filter junk images (same blocklist as extractWithDOM)
-  const imgBlocklist = /logo|icon|placeholder|no-image|default|blank|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|1x1|noimage|favicon|banner|advert|sponsor|newsletter|widget|thumb_generic|modal\.png|_NYC\.|_LCC\.|_BMDC\.|Unit[ie]*d?_?Utilit|Cardwells|themes\/.*assets\/images\/|download_\(\d+\)\.|watchLIVEauction|property-top-image|auc2-logo|gavel|backdrop|generic[_-]?image|auction[_-]?house[_-]?(?:logo|image)|coming[_-]?soon|maggsandallen\.co\.uk\/images\/|hollismorgan\.co\.uk\/images\//i;
+  const imgBlocklist = /logo|icon|placeholder|no-image|default|blank|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|1x1|noimage|favicon|banner|advert|sponsor|newsletter|widget|thumb_generic|modal\.png|_NYC\.|_LCC\.|_BMDC\.|Unit[ie]*d?_?Utilit|Cardwells|themes\/.*assets\/images\/|download_\(\d+\)\.|watchLIVEauction|property-top-image|auc2-logo|gavel|backdrop|generic[_-]?image|auction[_-]?house[_-]?(?:logo|image)|coming[_-]?soon|maggsandallen\.co\.uk\/images\/|hollismorgan\.co\.uk\/images\/|fssproperty\.co\.uk\/images\//i;
   const imgDomainBlock = /flannels|kirklees|rdw\b|council\.gov|\.gov\.uk\/|googleads|doubleclick|analytics|hotjar|intercom|crisp\.chat|tawk\.to|zendesk|hubspot|mailchimp|sendgrid/i;
   const hollisJunk = house === 'hollismorgan' || house === 'maggsandallen';
   for (const lot of lots) {
@@ -716,7 +716,7 @@ function extractWithJSDOM(html, house, baseUrl, firecrawlImages) {
   // walk the DOM to find their card container and extract background-image or <img>.
   // This catches sites that use CSS background-image slideshows (Cycle2, Flickity, etc.)
   // regardless of whether the per-house extractor handled them.
-  const imgRecoverSkip = /logo|icon|arrow|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|favicon|banner|btn|gallery-left|gallery-right|maggsandallen\.co\.uk\/images\/|hollismorgan\.co\.uk\/images\//i;
+  const imgRecoverSkip = /logo|icon|arrow|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|favicon|banner|btn|gallery-left|gallery-right|maggsandallen\.co\.uk\/images\/|hollismorgan\.co\.uk\/images\/|fssproperty\.co\.uk\/images\//i;
   const lotsMissingImgCount = lots.filter(l => !l.imageUrl).length;
   if (lotsMissingImgCount > 0) {
     let recovered = 0;
@@ -794,7 +794,7 @@ function extractWithJSDOM(html, house, baseUrl, firecrawlImages) {
   // Walk each lot's card container in the DOM and collect all valid <img> sources.
   // This runs universally so every extractor gets multi-image support for free.
   // Lots that already have an `images` array (e.g. Savills) are skipped.
-  const imgCarouselSkip = /logo|icon|arrow|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|favicon|banner|btn|gallery-left|gallery-right|advert|1x1|noimage|placeholder|gavel|backdrop|maggsandallen\.co\.uk\/images\/|hollismorgan\.co\.uk\/images\//i;
+  const imgCarouselSkip = /logo|icon|arrow|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|favicon|banner|btn|gallery-left|gallery-right|advert|1x1|noimage|placeholder|gavel|backdrop|maggsandallen\.co\.uk\/images\/|hollismorgan\.co\.uk\/images\/|fssproperty\.co\.uk\/images\//i;
   let carouselLots = 0;
   for (const lot of lots) {
     if (lot.images && lot.images.length > 1) { carouselLots++; continue; } // already has multi-image
@@ -1041,7 +1041,7 @@ async function backfillImagesWithFirecrawl(catalogueUrl, lots, house) {
     const { document } = dom.window;
 
     // Build href→image map from the rendered page
-    const skip = /logo|icon|arrow|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|loading|cookie|emoji|maggsandallen\.co\.uk\/images\/|hollismorgan\.co\.uk\/images\//i;
+    const skip = /logo|icon|arrow|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|loading|cookie|emoji|maggsandallen\.co\.uk\/images\/|hollismorgan\.co\.uk\/images\/|fssproperty\.co\.uk\/images\//i;
     const hrefImageMap = {};
     const links = document.querySelectorAll('a[href]');
     for (const link of links) {
@@ -1091,7 +1091,7 @@ async function backfillImagesWithFirecrawl(catalogueUrl, lots, house) {
     const allPageImages = [];
     // Collect images from JSDOM parsing
     const allImgs = document.querySelectorAll('img[src], img[data-src]');
-    const skipFc = /logo|icon|arrow|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|1x1|favicon|banner|advert|maggsandallen\.co\.uk\/images\/|hollismorgan\.co\.uk\/images\//i;
+    const skipFc = /logo|icon|arrow|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|1x1|favicon|banner|advert|maggsandallen\.co\.uk\/images\/|hollismorgan\.co\.uk\/images\/|fssproperty\.co\.uk\/images\//i;
     for (const img of allImgs) {
       const src = img.getAttribute('src') || img.getAttribute('data-src') || '';
       if (src && src.length > 20 && !src.startsWith('data:') && !skipFc.test(src)) {
@@ -4012,6 +4012,12 @@ app.post('/api/analyse', async (req, res) => {
     ai_tier: _lastAITier,
     }, { onConflict: 'url' });
 
+    // ── Dual-write: upsert individual lots to lots table ──
+    await upsertToLotsTable(enrichedAnalysed, house, url, {
+      scrapedWith: _lastScrapeEngine,
+      extractedWith: _lastExtractorUsed,
+    });
+
     // Mark preset cache entries as partially stale (only the changed catalogue needs re-searching)
     if (catalogueChanged) {
       const { data: affected } = await supabase
@@ -4551,45 +4557,105 @@ app.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
     const includePast = req.query.includePast === 'true';
     const user = await validateUserFromReq(req);
 
-    const { data: cached } = await supabase
+    // ── Step 1: Get active catalogue URLs from cached_analyses ──
+    const { data: activeCatalogues } = await supabase
       .from('cached_analyses')
-      .select('house, url, lots, created_at')
+      .select('url, house, created_at')
       .gt('expires_at', new Date().toISOString());
 
-    if (!cached || cached.length === 0) return res.json({ lots: [], sources: [], stripeEnabled: STRIPE_ENABLED });
+    if (!activeCatalogues || activeCatalogues.length === 0) return res.json({ lots: [], sources: [], stripeEnabled: STRIPE_ENABLED });
 
-    // ── Diagnostic: raw lot count before any filtering/dedup ──
-    const rawTotal = (cached || []).reduce((s, c) => s + (Array.isArray(c.lots) ? c.lots.length : 0), 0);
-    log.info('all-lots query', { cachedRows: cached.length, rawLotCount: rawTotal });
+    const activeUrls = activeCatalogues.map(c => c.url);
 
-    const lots = [];
-    const sources = [];
-    for (const c of cached) {
-      if (!c.lots || !Array.isArray(c.lots)) continue;
-      const houseLots = c.lots.map(l => ({ ...l, _house: c.house, _sourceUrl: c.url }));
-      normaliseLotStatuses(houseLots);
+    // ── Step 2: Query individual lots from lots table ──
+    const { data: lotRows, error: lotErr } = await supabase
+      .from('lots')
+      .select('*')
+      .in('catalogue_url', activeUrls)
+      .limit(10000);
 
-      // Phase 1: Within-house dedup by URL (keep lot with richer data)
-      const byUrl = new Map();
-      for (const lot of houseLots) {
-        const url = normaliseUrl(lot.url);
-        if (url.length > 5) {
-          const existing = byUrl.get(url);
-          if (existing) {
-            // Keep the one with more data: imageUrl > more bullets
-            const richness = (l) => (l.imageUrl ? 10 : 0) + (l.bullets?.length || 0) + (l.price ? 1 : 0);
-            if (richness(lot) > richness(existing)) byUrl.set(url, lot);
-          } else {
-            byUrl.set(url, lot);
-          }
-        } else {
-          byUrl.set(`__no_url_${byUrl.size}`, lot);
-        }
-      }
+    if (lotErr) {
+      log.error('all-lots: lots table query failed', { error: lotErr.message });
+      return res.json({ lots: [], sources: [], stripeEnabled: STRIPE_ENABLED });
+    }
 
-      // Phase 2: Within-house dedup by normalised address + price
+    // ── Step 2b: Include persisted unsold lots from expired catalogues (30-day window) ──
+    // This is a key Phase 4 benefit — unsold lots stay visible even after catalogue expires
+    const unsoldCutoff = new Date(Date.now() - 30 * 86400000).toISOString();
+    const { data: unsoldRows } = await supabase
+      .from('lots')
+      .select('*')
+      .in('status', ['unsold', 'withdrawn'])
+      .gte('auction_date', unsoldCutoff.slice(0, 10))
+      .limit(2000);
+
+    // Merge unsold lots, avoiding duplicates with active catalogue lots
+    const activeLotKeys = new Set((lotRows || []).map(r => `${r.house}|${r.url}`));
+    const extraUnsold = (unsoldRows || []).filter(r => !activeLotKeys.has(`${r.house}|${r.url}`));
+
+    const allLotRows = [...(lotRows || []), ...extraUnsold];
+    const rawTotal = allLotRows.length;
+    log.info('all-lots query', { activeCatalogues: activeCatalogues.length, activeLots: (lotRows || []).length, persistedUnsold: extraUnsold.length, rawLotCount: rawTotal });
+
+    // ── Step 3: Map snake_case DB columns → camelCase frontend format ──
+    const lots = allLotRows.map(r => ({
+      _house: r.house,
+      lot: r.lot_number,
+      url: r.url,
+      _sourceUrl: r.catalogue_url,
+      address: r.address,
+      postcode: r.postcode,
+      price: r.price,
+      priceText: r.price_text,
+      propType: r.prop_type,
+      beds: r.beds,
+      tenure: r.tenure,
+      leaseLength: r.lease_length,
+      sqft: r.sqft,
+      condition: r.condition,
+      imageUrl: r.image_url,
+      bullets: r.bullets || [],
+      units: r.units || 0,
+      _auctionDate: r.auction_date,
+      status: r.status,
+      soldPrice: r.sold_price,
+      epcRating: r.epc_rating,
+      epcScore: r.epc_score,
+      epcDate: r.epc_date,
+      floodZone: r.flood_zone,
+      floodRiskLevel: r.flood_risk,
+      streetAvg: r.street_avg,
+      streetSales: r.street_sales,
+      streetSalesCount: r.street_sales_count,
+      belowMarket: r.below_market,
+      estMonthlyRent: r.est_monthly_rent,
+      estAnnualRent: r.est_annual_rent,
+      estGrossYield: r.est_gross_yield ? parseFloat(r.est_gross_yield) : null,
+      score: r.score ? parseFloat(r.score) : null,
+      scoreBreakdown: r.score_breakdown || [],
+      opps: r.opps || [],
+      risks: r.risks || [],
+      dealType: r.deal_type,
+      vacant: r.vacant,
+      titleSplit: r.title_split,
+    }));
+
+    // Normalise statuses + extract lease length from bullets (handles edge cases)
+    normaliseLotStatuses(lots);
+
+    // Within-house address dedup (URL dedup handled by lots table unique constraint)
+    // Group by house for address dedup (same logic as before, just no URL dedup needed)
+    const lotsByHouse = new Map();
+    for (const lot of lots) {
+      const h = lot._house;
+      if (!lotsByHouse.has(h)) lotsByHouse.set(h, []);
+      lotsByHouse.get(h).push(lot);
+    }
+
+    const dedupedAll = [];
+    for (const [house, houseLots] of lotsByHouse) {
       const byAddr = new Map();
-      for (const lot of byUrl.values()) {
+      for (const lot of houseLots) {
         const normAddr = (lot.address || '').toLowerCase().replace(/[\s,]+/g, ' ').replace(/^(lot\s*\d+\s*[-:]?\s*)/i, '').trim();
         const addrKey = normAddr + '|' + (lot.price || '');
         if (normAddr.length > 5) {
@@ -4604,13 +4670,28 @@ app.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
           byAddr.set(`__short_${byAddr.size}`, lot);
         }
       }
-
-      const dedupedLots = [...byAddr.values()];
-      const removed = houseLots.length - dedupedLots.length;
-      if (removed > 0) console.log(`Dedup ${c.house}: ${houseLots.length} → ${dedupedLots.length} (removed ${removed})`);
-      lots.push(...dedupedLots);
-      sources.push({ house: c.house, url: c.url, count: dedupedLots.length, updatedAt: c.created_at });
+      const deduped = [...byAddr.values()];
+      const removed = houseLots.length - deduped.length;
+      if (removed > 0) console.log(`Dedup ${house}: ${houseLots.length} → ${deduped.length} (removed ${removed})`);
+      dedupedAll.push(...deduped);
     }
+
+    // Build sources array — one entry per catalogue (matches old cached_analyses behavior)
+    const sources = [];
+    const catalogueUpdatedAt = new Map(activeCatalogues.map(c => [c.url, c.created_at]));
+    const lotsByCatalogue = new Map();
+    for (const lot of dedupedAll) {
+      const catUrl = lot._sourceUrl;
+      if (!lotsByCatalogue.has(catUrl)) lotsByCatalogue.set(catUrl, { house: lot._house, count: 0 });
+      lotsByCatalogue.get(catUrl).count++;
+    }
+    for (const [catUrl, info] of lotsByCatalogue) {
+      sources.push({ house: info.house, url: catUrl, count: info.count, updatedAt: catalogueUpdatedAt.get(catUrl) });
+    }
+
+    // Replace lots array content with deduped results
+    lots.length = 0;
+    lots.push(...dedupedAll);
 
     // ── Attach _auctionDate from calendar (DB + fallback) ──
     const urlDateMap = {};
@@ -4628,21 +4709,20 @@ app.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
       if (!urlDateMap[nu] || a.date < urlDateMap[nu]) urlDateMap[nu] = a.date;
     }
     for (const lot of lots) {
-      // Per-lot end date from bullets (EIG timed auctions) takes priority over catalogue date
+      // Per-lot end date from bullets (EIG timed auctions) takes priority
       let lotEndDate = null;
       if (lot.bullets && Array.isArray(lot.bullets)) {
         for (const b of lot.bullets) {
-          // Match "Auction Ends: DD/MM/YYYY" or "Auction End: DD/MM/YYYY"
           const m = b.match(/Auction\s*Ends?:\s*(\d{2})\/(\d{2})\/(\d{4})/i);
           if (m) { lotEndDate = m[3] + '-' + m[2] + '-' + m[1]; break; }
         }
       }
       if (lotEndDate) {
         lot._auctionDate = lotEndDate;
-      } else {
+      } else if (!lot._auctionDate) {
+        // Fallback to calendar lookup only if lots table didn't have a date
         const su = normaliseUrl(lot._sourceUrl);
         const rawDate = urlDateMap[su] || null;
-        // Sanitize sentinel dates (2099-12-31 = always-on catalogue) — show as null to frontend
         lot._auctionDate = (rawDate && rawDate > '2098-01-01') ? null : rawDate;
       }
     }
@@ -4734,7 +4814,7 @@ app.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
     // ── Diagnostic: pipeline summary ──
     log.info('all-lots pipeline', {
       rawFromDb: rawTotal,
-      afterWithinHouseDedup: lots.length,
+      afterAddressDedup: dedupedAll.length,
       afterCrossAuctionDedup: finalLots.length,
       afterJunkRemoval: cleanLots.length,
       junkRemoved: junkLotRemoved,
@@ -4846,11 +4926,12 @@ app.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
       anonGated: !isSignedIn,
       stripeEnabled: STRIPE_ENABLED,
       _debug: {
-        cachedRows: cached.length,
+        activeCatalogues: activeCatalogues.length,
         rawLotCount: rawTotal,
-        afterWithinHouseDedup: lots.length,
+        afterAddressDedup: lots.length,
         afterCrossAuctionDedup: finalLots.length,
-        afterJunkRemoval: cleanLots.length
+        afterJunkRemoval: cleanLots.length,
+        source: 'lots_table'
       }
     });
   } catch (e) {
@@ -11172,7 +11253,7 @@ async function backfillImagesFromLotPages(lots, concurrency = 5) {
   const missing = lots.filter(l => l.url && !l.imageUrl && /^https?:\/\//i.test(l.url));
   if (missing.length === 0) return 0;
   const capped = missing.slice(0, 50);
-  const junk = /logo|icon|nav|sprite|\.svg|placeholder|no-image|modal\.png|_NYC\.|_LCC\.|_BMDC\.|council|utilit|cardwell|badge|spacer|pixel|facebook|twitter|1x1|gavel|backdrop|generic[_-]?image|coming[_-]?soon|maggsandallen\.co\.uk\/images\/|hollismorgan\.co\.uk\/images\//i;
+  const junk = /logo|icon|nav|sprite|\.svg|placeholder|no-image|modal\.png|_NYC\.|_LCC\.|_BMDC\.|council|utilit|cardwell|badge|spacer|pixel|facebook|twitter|1x1|gavel|backdrop|generic[_-]?image|coming[_-]?soon|maggsandallen\.co\.uk\/images\/|hollismorgan\.co\.uk\/images\/|fssproperty\.co\.uk\/images\//i;
   let filled = 0, fcUsed = 0;
   for (let i = 0; i < capped.length; i += concurrency) {
     if (i > 0) await new Promise(r => setTimeout(r, 500));
@@ -11225,7 +11306,7 @@ async function enrichLotsFromLotPages(lots, concurrency = 5) {
   // Prioritise lots missing beds (high-value enrichment) ahead of other gaps
   targets.sort((a, b) => (!a.beds ? 0 : 1) - (!b.beds ? 0 : 1));
 
-  const junk = /logo|icon|nav|sprite|\.svg|placeholder|no-image|modal\.png|_NYC\.|_LCC\.|_BMDC\.|council|utilit|cardwell|badge|spacer|pixel|facebook|twitter|1x1|gavel|backdrop|generic[_-]?image|coming[_-]?soon|maggsandallen\.co\.uk\/images\/|hollismorgan\.co\.uk\/images\//i;
+  const junk = /logo|icon|nav|sprite|\.svg|placeholder|no-image|modal\.png|_NYC\.|_LCC\.|_BMDC\.|council|utilit|cardwell|badge|spacer|pixel|facebook|twitter|1x1|gavel|backdrop|generic[_-]?image|coming[_-]?soon|maggsandallen\.co\.uk\/images\/|hollismorgan\.co\.uk\/images\/|fssproperty\.co\.uk\/images\//i;
 
   let fcUsed = 0;
   const stats = { address: 0, image: 0, tenure: 0, condition: 0, beds: 0, leaseLength: 0, propType: 0 };
@@ -11579,7 +11660,7 @@ async function extractWithDOM(page, house) {
   }
 
   // Post-processing: filter out non-property images (logos, icons, placeholders, known junk)
-  const imgBlocklist = /logo|icon|placeholder|no-image|default|blank|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|1x1|noimage|favicon|banner|advert|sponsor|newsletter|widget|thumb_generic|modal\.png|_NYC\.|_LCC\.|_BMDC\.|Unit[ie]*d?_?Utilit|Cardwells|themes\/.*assets\/images\/|download_\(\d+\)\.|watchLIVEauction|property-top-image|auc2-logo|gavel|backdrop|generic[_-]?image|auction[_-]?house[_-]?(?:logo|image)|coming[_-]?soon|maggsandallen\.co\.uk\/images\/|hollismorgan\.co\.uk\/images\//i;
+  const imgBlocklist = /logo|icon|placeholder|no-image|default|blank|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|1x1|noimage|favicon|banner|advert|sponsor|newsletter|widget|thumb_generic|modal\.png|_NYC\.|_LCC\.|_BMDC\.|Unit[ie]*d?_?Utilit|Cardwells|themes\/.*assets\/images\/|download_\(\d+\)\.|watchLIVEauction|property-top-image|auc2-logo|gavel|backdrop|generic[_-]?image|auction[_-]?house[_-]?(?:logo|image)|coming[_-]?soon|maggsandallen\.co\.uk\/images\/|hollismorgan\.co\.uk\/images\/|fssproperty\.co\.uk\/images\//i;
   // Known non-property domains and brand names that appear as junk images
   const imgDomainBlock = /flannels|kirklees|rdw\b|council\.gov|\.gov\.uk\/|googleads|doubleclick|analytics|hotjar|intercom|crisp\.chat|tawk\.to|zendesk|hubspot|mailchimp|sendgrid/i;
   // House-specific: Hollis Morgan property photos always use /resize/ path
@@ -14123,6 +14204,158 @@ No catalogues? Return {"catalogues": []}`, { tier: 'capable', maxTokens: 1500, t
   }
 }
 
+// ═══════════════════════════════════════════════════════════════
+// LOTS TABLE: Dual-write helper — upserts individual lot rows
+// alongside the cached_analyses JSONB blob.
+// Non-fatal: errors are logged but never block the scrape pipeline.
+// ═══════════════════════════════════════════════════════════════
+const JUNK_LOT_PATTERN = /^(I'd like to|Property search|Popular|Auction Dates|Register to bid|Information|\dBid Basket|Cookie|Privacy)/i;
+
+async function upsertToLotsTable(enrichedLots, house, catalogueUrl, metadata = {}) {
+  if (!supabase || !enrichedLots || enrichedLots.length === 0) return;
+  try {
+    const now = new Date().toISOString();
+
+    // Look up auction date from calendar for this catalogue URL
+    let catalogueAuctionDate = null;
+    try {
+      const normCatUrl = normaliseUrl(catalogueUrl);
+      const { data: calRows } = await supabase
+        .from('auction_calendar')
+        .select('url, date')
+        .order('date', { ascending: true });
+      if (calRows) {
+        for (const r of calRows) {
+          if (normaliseUrl(r.url) === normCatUrl) { catalogueAuctionDate = r.date; break; }
+        }
+      }
+    } catch { /* non-fatal */ }
+
+    // Build lot rows
+    const rows = [];
+    for (const lot of enrichedLots) {
+      const addr = (lot.address || '').trim();
+      if (!addr || addr.length < 5) continue;
+      if (JUNK_LOT_PATTERN.test(addr)) continue;
+
+      let lotUrl = lot.url || null;
+      if (!lotUrl) {
+        lotUrl = `__synthetic__${house}__${addr.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 80)}__${lot.price || 0}`;
+      }
+
+      // Per-lot auction date from EIG bullets takes priority over catalogue date
+      let lotAuctionDate = catalogueAuctionDate;
+      if (lot.bullets && Array.isArray(lot.bullets)) {
+        for (const b of lot.bullets) {
+          const m = b.match(/Auction\s*Ends?:\s*(\d{2})\/(\d{2})\/(\d{4})/i);
+          if (m) { lotAuctionDate = m[3] + '-' + m[2] + '-' + m[1]; break; }
+        }
+      }
+
+      rows.push({
+        house,
+        lot_number: lot.lot || null,
+        url: lotUrl,
+        catalogue_url: normaliseUrl(catalogueUrl),
+        address: addr,
+        postcode: lot.postcode || null,
+        price: (typeof lot.price === 'number' && lot.price > 0) ? lot.price : null,
+        price_text: lot.priceText || null,
+        prop_type: lot.propType || null,
+        beds: (typeof lot.beds === 'number') ? lot.beds : null,
+        tenure: lot.tenure || null,
+        lease_length: (typeof lot.leaseLength === 'number') ? lot.leaseLength : null,
+        sqft: (typeof lot.sqft === 'number') ? lot.sqft : null,
+        condition: lot.condition || null,
+        image_url: lot.imageUrl || null,
+        bullets: lot.bullets || [],
+        units: lot.units || 0,
+        auction_date: lotAuctionDate,
+        status: lot.status || 'available',
+        sold_price: (typeof lot.soldPrice === 'number') ? lot.soldPrice : null,
+        epc_rating: lot.epcRating || null,
+        epc_score: (typeof lot.epcScore === 'number') ? lot.epcScore : null,
+        epc_date: lot.epcDate || null,
+        flood_zone: (typeof lot.floodZone === 'number') ? lot.floodZone : null,
+        flood_risk: lot.floodRiskLevel || null,
+        street_avg: (typeof lot.streetAvg === 'number') ? lot.streetAvg : null,
+        street_sales: lot.streetSales || null,
+        street_sales_count: (typeof lot.streetSalesCount === 'number') ? lot.streetSalesCount : null,
+        below_market: (typeof lot.belowMarket === 'number') ? lot.belowMarket : null,
+        est_monthly_rent: (typeof lot.estMonthlyRent === 'number') ? lot.estMonthlyRent : null,
+        est_annual_rent: (typeof lot.estAnnualRent === 'number') ? lot.estAnnualRent : null,
+        est_gross_yield: (typeof lot.estGrossYield === 'number') ? lot.estGrossYield : null,
+        score: (typeof lot.score === 'number') ? lot.score : null,
+        score_breakdown: lot.scoreBreakdown || [],
+        opps: lot.opps || [],
+        risks: lot.risks || [],
+        deal_type: lot.dealType || null,
+        vacant: lot.vacant || null,
+        title_split: lot.titleSplit || null,
+        extracted_with: metadata.extractedWith || null,
+        scraped_with: metadata.scrapedWith || null,
+        last_seen_at: now,
+        enriched_at: lot.enrichedAt || null,
+        // Note: first_seen_at deliberately omitted — uses column default (now()) on INSERT,
+        // and is not overwritten on conflict UPDATE
+      });
+    }
+
+    if (rows.length === 0) return;
+
+    // Fetch existing lots for this catalogue to detect status changes
+    const { data: existingLots } = await supabase
+      .from('lots')
+      .select('id, url, status')
+      .eq('house', house)
+      .eq('catalogue_url', normaliseUrl(catalogueUrl));
+
+    const existingMap = new Map((existingLots || []).map(l => [l.url, l]));
+
+    // Detect status changes for history tracking
+    const statusChanges = [];
+    for (const row of rows) {
+      const existing = existingMap.get(row.url);
+      if (existing && existing.status && existing.status !== row.status) {
+        statusChanges.push({
+          lot_id: existing.id,
+          old_status: existing.status,
+          new_status: row.status,
+          source: 'scrape',
+        });
+      }
+    }
+
+    // Upsert in batches of 50
+    const BATCH_SIZE = 50;
+    let upserted = 0;
+    for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+      const batch = rows.slice(i, i + BATCH_SIZE);
+      const { error } = await supabase
+        .from('lots')
+        .upsert(batch, { onConflict: 'house,url' });
+      if (error) {
+        console.warn(`LOTS: Batch upsert error for ${house}: ${error.message}`);
+      } else {
+        upserted += batch.length;
+      }
+    }
+
+    // Record status changes in history table
+    if (statusChanges.length > 0) {
+      const { error: histErr } = await supabase
+        .from('lot_status_history')
+        .insert(statusChanges);
+      if (histErr) console.warn(`LOTS: Status history insert error: ${histErr.message}`);
+      else console.log(`LOTS: ${statusChanges.length} status changes recorded for ${house}`);
+    }
+
+    console.log(`LOTS: ✓ ${house}: ${upserted}/${rows.length} lots upserted`);
+  } catch (err) {
+    console.warn(`LOTS: Failed to upsert lots for ${house}: ${err.message}`);
+  }
+}
+
 async function autoAnalyseOne(url) {
   const urlCheck = await validateUrl(url);
   if (!urlCheck.ok) { log.warn('autoAnalyseOne skipped — invalid URL', { url, reason: urlCheck.error }); return []; }
@@ -14567,6 +14800,12 @@ async function autoAnalyseOne(url) {
     extracted_with: _lastExtractorUsed,
     ai_tier: _lastAITier,
   }, { onConflict: 'url' });
+
+  // ── Dual-write: upsert individual lots to lots table ──
+  await upsertToLotsTable(lots, house, url, {
+    scrapedWith: _lastScrapeEngine,
+    extractedWith: _lastExtractorUsed,
+  });
 
   // Mark preset cache entries as partially stale (only the changed catalogue needs re-searching)
   if (catalogueChanged) {
