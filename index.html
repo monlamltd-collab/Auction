@@ -3403,6 +3403,7 @@ function renderLots(){
     return;
   }
   window._lastRenderKey=_renderKey;
+  _imgRenderCount=0;
   out.innerHTML='<div class="lots-grid'+(_viewMode==='list'?' list-view':'')+'" id="lotsGrid">'+pageItems.map(i=>i.html).join('')+'</div>';
   // Preload all images on this page into browser cache for instant re-renders
   pageItems.forEach(function(i){if(i.lot&&i.lot.imageUrl){var p=new Image();p.src=optimImg(i.lot.imageUrl,400)}});
@@ -3953,7 +3954,9 @@ function getPropertyTypeIcon(type) {
 function optimImg(url, width) {
   if (!url || typeof url !== 'string') return url;
   try {
-    return 'https://wsrv.nl/?url=' + encodeURIComponent(url) + '&w=' + (width || 400) + '&q=75&output=webp&default=1';
+    // Skip proxy for images already on CDNs that serve optimised formats
+    if (/eigcdn\.co\.uk|savills\.com\/content|cdn\.sdlauctions|auction\.assets|cloudfront\.net/i.test(url)) return url;
+    return 'https://wsrv.nl/?url=' + encodeURIComponent(url) + '&w=' + (width || 400) + '&q=75&output=webp&maxage=1d&default=1';
   } catch { return url; }
 }
 
@@ -4076,7 +4079,10 @@ function toggleScorePopup(badgeEl, idx) {
   setTimeout(() => document.addEventListener('click', close), 0);
 }
 
+var _imgRenderCount = 0; // reset per renderLots() call — first 6 images load eagerly
 function getCardImageHtml(lot) {
+  _imgRenderCount++;
+  var loadAttr = _imgRenderCount <= 6 ? 'eager' : 'lazy';
   const overlay = getStatusOverlay(lot);
   if (!lot.imageUrl || !isValidImageUrl(lot.imageUrl)) {
     return '<div class="card-image-wrapper">' +
@@ -4091,7 +4097,7 @@ function getCardImageHtml(lot) {
     var imgsHtml = '';
     var dotsHtml = '<div class="carousel-dots">';
     for (var ci = 0; ci < imgs.length; ci++) {
-      imgsHtml += '<img src="' + esc(optimImg(imgs[ci], 400)) + '" alt="' + esc((lot.address || 'Auction property') + ' ' + (ci+1)) + '" loading="lazy" decoding="async"' + (ci === 0 ? ' class="carousel-active"' : '') + ' onerror="this.remove()">';
+      imgsHtml += '<img src="' + esc(optimImg(imgs[ci], 400)) + '" alt="' + esc((lot.address || 'Auction property') + ' ' + (ci+1)) + '" loading="' + loadAttr + '" decoding="async"' + (ci === 0 ? ' class="carousel-active"' : '') + ' onerror="this.remove()">';
       dotsHtml += '<span class="carousel-dot' + (ci === 0 ? ' dot-active' : '') + '"></span>';
     }
     dotsHtml += '</div>';
@@ -4106,7 +4112,7 @@ function getCardImageHtml(lot) {
   // Single image fallback
   return '<div class="card-image-wrapper">' +
     '<div class="card-image-shimmer"></div>' +
-    '<img class="card-image" src="' + esc(optimImg(lot.imageUrl, 400)) + '" alt="' + esc((lot.address || 'Auction property') + ' — ' + (lot._house || 'auction lot')) + '" loading="lazy" decoding="async" width="400" height="300" ' +
+    '<img class="card-image" src="' + esc(optimImg(lot.imageUrl, 400)) + '" alt="' + esc((lot.address || 'Auction property') + ' — ' + (lot._house || 'auction lot')) + '" loading="' + loadAttr + '" decoding="async" width="400" height="300" ' +
     'onload="this.previousElementSibling.style.display=\'none\';if(this.naturalWidth<120||this.naturalHeight<90){this.outerHTML=getPlaceholderHtml(this.dataset.proptype)}" ' +
     'onerror="this.outerHTML=getPlaceholderHtml(this.dataset.proptype)"' +
     ' data-proptype="' + esc(lot.propType || 'house') + '">' +
