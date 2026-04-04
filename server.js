@@ -2388,7 +2388,7 @@ async function sendWelcomeEmail(email, name) {
   const html = abEmailWrap(`
     <h1 style="font-size:24px;color:#1A1A18;margin:0 0 16px;line-height:1.3;">You're in.</h1>
     <p style="font-size:16px;color:#6B6B65;line-height:1.6;margin:0 0 20px;">
-      AuctionBrain searches 168 UK auction houses so you don't have to. Every lot is scored for investment potential, with flood zone, EPC, and bridging finance data baked in.
+      AuctionBrain searches ${Object.keys(HOUSE_ROOTS).length}+ UK auction houses so you don't have to. Every lot is scored for investment potential, with flood zone, EPC, and bridging finance data baked in.
     </p>
     <p style="font-size:16px;color:#6B6B65;line-height:1.6;margin:0 0 24px;">
       Here are 3 things to try first:

@@ -1091,7 +1091,7 @@ footer .logo-f span{color:var(--green)}
           <div id="aiSuggestList"></div>
         </div>
       </div>
-      <select class="tb-select sp-per-page" id="fPerPage" onchange="savePerPage();_currentPage=1;renderLots()" aria-label="Lots per page"><option value="20">20 / page</option><option value="30" selected>30 / page</option><option value="50">50 / page</option><option value="100">100 / page</option></select>
+      <select class="tb-select sp-per-page" id="fPerPage" onchange="savePerPage();_currentPage=1;renderLots()" aria-label="Lots per page"><option value="10">10 / page</option><option value="20">20 / page</option><option value="30" selected>30 / page</option><option value="50">50 / page</option><option value="100">100 / page</option></select>
       <div class="view-toggle" id="gridListToggle">
         <button class="active" id="gridViewBtn" onclick="setView('grid')" title="Grid view"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></button>
         <button id="listViewBtn" onclick="setView('list')" title="List view"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="3" y2="6" stroke-linecap="round"/><line x1="8" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="3" y2="12" stroke-linecap="round"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="3" y2="18" stroke-linecap="round"/><line x1="8" y1="18" x2="21" y2="18"/></svg></button>
@@ -1287,7 +1287,7 @@ footer .logo-f span{color:var(--green)}
         <div class="step-num">1</div>
         <div class="step-content">
           <h3>Browse every auction</h3>
-          <p>168 UK auction houses in one place — Savills, Allsop, SDL, Network, Bond Wolfe and more. Filter by price, location, type, and condition.</p>
+          <p><span class="house-count-dynamic">150</span>+ UK auction houses in one place — Savills, Allsop, SDL, Network, Bond Wolfe and more. Filter by price, location, type, and condition.</p>
         </div>
       </div>
       <div class="step highlight">
@@ -1327,7 +1327,7 @@ footer .logo-f span{color:var(--green)}
       <div class="tool-card tool-ab">
         <div class="tool-emoji-wrap">🧠</div>
         <h3>Auction Brain</h3>
-        <p>AI-powered auction lot scoring across 168 UK auction houses. Every lot analysed for investment signals.</p>
+        <p>AI-powered auction lot scoring across <span class="house-count-dynamic">150</span>+ UK auction houses. Every lot analysed for investment signals.</p>
         <ul class="tool-features">
           <li>Title split detection</li>
           <li>Refurb opportunity flags</li>
@@ -1370,11 +1370,19 @@ footer .logo-f span{color:var(--green)}
     <div class="ec-success" id="ecSuccess">You're in! We'll send your first deal alert soon.</div>
   </section>
 
+  <!-- ═══════ CONTACT ═══════ -->
+  <section style="text-align:center;padding:32px 0 0">
+    <div class="section-label">GET IN TOUCH</div>
+    <h2 class="section-heading" style="margin-bottom:8px">Questions, feedback, or partnership enquiries?</h2>
+    <p style="color:var(--text4);font-size:.92rem;margin-bottom:16px">We'd love to hear from you.</p>
+    <a href="mailto:hello@bridgematch.co.uk" style="display:inline-block;font-size:1rem;font-weight:600;color:var(--green);text-decoration:none;padding:10px 24px;border:2px solid var(--green);border-radius:8px;transition:all .2s">hello@bridgematch.co.uk</a>
+  </section>
+
   <footer>
     <div class="logo-f" style="font-family:var(--font-main)">Auction <span>Brain</span></div>
     <div style="font-size:.72rem;color:var(--text4);margin-bottom:8px">powered by <span style="font-family:var(--font-main);font-weight:600;color:var(--text3)">Bridge<span style="color:var(--green)">match</span></span></div>
     <p>UK Property Auction Directory & Deal Analyser · Data from public auction house websites · Not financial advice</p>
-    <p style="margin-top:8px;"><a href="/privacy" style="color:inherit;text-decoration:none;margin:0 8px;">Privacy Policy</a><a href="/terms" style="color:inherit;text-decoration:none;margin:0 8px;">Terms of Service</a></p>
+    <p style="margin-top:8px;"><a href="/privacy" style="color:inherit;text-decoration:none;margin:0 8px;">Privacy Policy</a><a href="/terms" style="color:inherit;text-decoration:none;margin:0 8px;">Terms of Service</a><a href="mailto:hello@bridgematch.co.uk" style="color:inherit;text-decoration:none;margin:0 8px;">Contact</a></p>
   </footer>
 </main>
 
