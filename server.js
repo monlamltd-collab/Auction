@@ -4572,15 +4572,11 @@ app.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
 
     const activeUrls = [...new Set(activeCatalogues.map(c => normaliseUrl(c.url)))];
 
-    // ── Step 2: Query individual lots from lots table ──
-    const { data: lotRows, error: lotErr } = await supabase
-      .from('lots')
-      .select('*')
-      .in('catalogue_url', activeUrls)
-      .limit(10000);
+    // ── Step 2: Query individual lots via server-side join (avoids PostgREST URI encoding issues with .in()) ──
+    const { data: lotRows, error: lotErr } = await supabase.rpc('get_active_lots');
 
     if (lotErr) {
-      log.error('all-lots: lots table query failed', { error: lotErr.message });
+      log.error('all-lots: get_active_lots RPC failed', { error: lotErr.message });
       return res.json({ lots: [], sources: [], stripeEnabled: STRIPE_ENABLED });
     }
 
