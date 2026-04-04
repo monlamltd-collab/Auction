@@ -430,7 +430,7 @@
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 4921,
+      "[class*=\"lot\"]": 4930,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
@@ -618,14 +618,7 @@
     }
   },
   "mchughandco": {
-    "classes": [
-      "align-items-center",
-      "align-items-xs-center",
-      "auction-countdown",
-      "auction-date-calendar",
-      "nav-item",
-      "past-auctions-results-container"
-    ],
+    "classes": [],
     "selectors": {
       ".lot": 0,
       ".property": 0,
@@ -637,7 +630,7 @@
       "[class*=\"listing\"]": 0,
       "article": 0,
       ".item": 0,
-      "[class*=\"auction\"]": 4,
+      "[class*=\"auction\"]": 0,
       "[class*=\"gallery\"]": 0
     }
   },
@@ -691,7 +684,6 @@
       "card-img-top",
       "card-text",
       "card-title",
-      "cky-accordion-item",
       "dropdown-item",
       "filters-side-panel__results-count",
       "fs-filters-content-propertyTypes",
@@ -941,21 +933,13 @@
     }
   },
   "paulfosh": {
-    "classes": [
-      "active-menu-item",
-      "lot-panel",
-      "lot-panels",
-      "olark-survey-form-item",
-      "olark-survey-form-item-email",
-      "olark-survey-form-item-name",
-      "olark-survey-form-item-phone"
-    ],
+    "classes": [],
     "selectors": {
       ".lot": 0,
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 100,
+      "[class*=\"lot\"]": 0,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
@@ -1072,24 +1056,18 @@
     }
   },
   "bradleyhall": {
-    "classes": [
-      "active-menu-item",
-      "align-items-center",
-      "item",
-      "lot-panel",
-      "lot-panels"
-    ],
+    "classes": [],
     "selectors": {
       ".lot": 0,
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 50,
+      "[class*=\"lot\"]": 0,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
       "article": 0,
-      ".item": 1,
+      ".item": 0,
       "[class*=\"auction\"]": 0,
       "[class*=\"gallery\"]": 0
     }
@@ -1227,18 +1205,13 @@
     }
   },
   "landwood": {
-    "classes": [
-      "active-menu-item",
-      "lot-data-heading",
-      "lot-panel",
-      "lot-panels"
-    ],
+    "classes": [],
     "selectors": {
       ".lot": 0,
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 90,
+      "[class*=\"lot\"]": 0,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
@@ -1278,6 +1251,7 @@
       "auctions-layout-component__StyledContainer-sc-287d4542-2",
       "auctions-layout-component__StyledMain-sc-287d4542-1",
       "breadcrumb-item",
+      "leaflet-map-styles__ResultsContainer-sc-eb45f1ba-8",
       "nav-item",
       "page-item",
       "property-card-styles__Address-sc-a6233016-5",
@@ -1289,11 +1263,9 @@
       "property-card-styles__ImageContainer-sc-a6233016-0",
       "property-card-styles__LocationIcon-sc-a6233016-7",
       "property-card-styles__MakeAnOfferButton-sc-a6233016-22",
-      "property-card-styles__OrganisationLogo-sc-a6233016-11",
       "property-card-styles__Price-sc-a6233016-9",
       "property-card-styles__PropertyHeaderContainer-sc-a6233016-12",
       "property-card-styles__PropertyHeaderLeft-sc-a6233016-13",
-      "property-card-styles__PropertyHeaderRight-sc-a6233016-14",
       "property-card-styles__PropertyIconWrapper-sc-a6233016-30",
       "property-card-styles__PropertyInfoWrapper-sc-a6233016-29",
       "property-card-styles__PropertyType-sc-a6233016-10",
@@ -1303,7 +1275,9 @@
       "property-card-styles__StartingSoonTag-sc-a6233016-19",
       "property-card-styles__StyledOverlay-sc-a6233016-27",
       "property-card-styles__Title-sc-a6233016-4",
-      "tabs-styles__NavItem-sc-7966efe4-2"
+      "property-card-styles__WatchListWrapper-sc-a6233016-28",
+      "tabs-styles__NavItem-sc-7966efe4-2",
+      "watchlist-toggle-auctions-styles__WatchListToggleButton-sc-21afd301-0"
     ],
     "selectors": {
       ".lot": 0,
@@ -1311,12 +1285,12 @@
       ".card": 0,
       ".listing": 0,
       "[class*=\"lot\"]": 0,
-      "[class*=\"property\"]": 419,
-      "[class*=\"card\"]": 419,
+      "[class*=\"property\"]": 399,
+      "[class*=\"card\"]": 399,
       "[class*=\"listing\"]": 0,
       "article": 0,
       ".item": 0,
-      "[class*=\"auction\"]": 2,
+      "[class*=\"auction\"]": 62,
       "[class*=\"gallery\"]": 0
     }
   },
@@ -1413,48 +1387,19 @@
     }
   },
   "tcpa": {
-    "classes": [
-      "align-items-end",
-      "auction-dates-container",
-      "auction-dates-date",
-      "auction-dates-name",
-      "auction-dates-row",
-      "auction-dates-scroll",
-      "auction-dates-start",
-      "auction-dates-title",
-      "auctioneer-auctions-link",
-      "catalogue-link-wrapper",
-      "contact-property-links",
-      "grid-lot-panel-col",
-      "grid-lot-panel-row",
-      "lot-address",
-      "lot-auctioneer-name",
-      "lot-carousel",
-      "lot-panel",
-      "lot-panels",
-      "next-auction-wrap",
-      "offer-result-message",
-      "panel-auction-ended",
-      "panel-auction-ended-bottom",
-      "panel-auction-ended-holder",
-      "panel-auction-ended-holder-bottom",
-      "register-auction-panel",
-      "searchNextAuction",
-      "searchNextAuction-inner",
-      "spotlight-lot-panel"
-    ],
+    "classes": [],
     "selectors": {
       ".lot": 0,
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 270,
-      "[class*=\"property\"]": 50,
+      "[class*=\"lot\"]": 0,
+      "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
       "article": 0,
       ".item": 0,
-      "[class*=\"auction\"]": 399,
+      "[class*=\"auction\"]": 0,
       "[class*=\"gallery\"]": 0
     }
   },
@@ -1519,21 +1464,13 @@
     }
   },
   "firstforauctions": {
-    "classes": [
-      "align-items-center",
-      "lot-panel",
-      "lot-panels",
-      "lot-search",
-      "mobile-nav-item",
-      "nav-item",
-      "ot-cat-item"
-    ],
+    "classes": [],
     "selectors": {
       ".lot": 0,
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 101,
+      "[class*=\"lot\"]": 0,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
@@ -2088,26 +2025,19 @@
     }
   },
   "brownco": {
-    "classes": [
-      "lot-data-heading",
-      "lot-panel",
-      "lot-panels",
-      "nav-item",
-      "panel-auction-ended",
-      "panel-auction-ended-holder"
-    ],
+    "classes": [],
     "selectors": {
       ".lot": 0,
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 130,
+      "[class*=\"lot\"]": 0,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
       "article": 0,
       ".item": 0,
-      "[class*=\"auction\"]": 86,
+      "[class*=\"auction\"]": 0,
       "[class*=\"gallery\"]": 0
     }
   },
@@ -2259,13 +2189,13 @@
       ".card": 0,
       ".listing": 0,
       "[class*=\"lot\"]": 0,
-      "[class*=\"property\"]": 18,
+      "[class*=\"property\"]": 16,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
       "article": 0,
       ".item": 0,
-      "[class*=\"auction\"]": 16,
-      "[class*=\"gallery\"]": 16
+      "[class*=\"auction\"]": 14,
+      "[class*=\"gallery\"]": 14
     }
   },
   "auctionhouseeastanglia": {
@@ -2354,7 +2284,7 @@
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 2226,
+      "[class*=\"lot\"]": 2230,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
@@ -3024,7 +2954,7 @@
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 1044,
+      "[class*=\"lot\"]": 1049,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
@@ -3198,7 +3128,7 @@
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 1409,
+      "[class*=\"lot\"]": 1424,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
@@ -3209,26 +3139,19 @@
     }
   },
   "sarahmains": {
-    "classes": [
-      "active-menu-item",
-      "align-items-center",
-      "lot-panel",
-      "lot-panels",
-      "panel-auction-ended",
-      "panel-auction-ended-holder"
-    ],
+    "classes": [],
     "selectors": {
       ".lot": 0,
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 100,
+      "[class*=\"lot\"]": 0,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
       "article": 0,
       ".item": 0,
-      "[class*=\"auction\"]": 84,
+      "[class*=\"auction\"]": 0,
       "[class*=\"gallery\"]": 0
     }
   },
@@ -3792,26 +3715,13 @@
     }
   },
   "lsh": {
-    "classes": [
-      "CollapseCard",
-      "CookieCard",
-      "CybotCookiebotDialogDetailBodyContentIABv2CardIntro",
-      "CybotCookiebotDialogNavItem",
-      "CybotCookiebotDialogNavItemLink",
-      "CybotCookiebotDialogNavItems",
-      "align-items-center",
-      "align-items-end",
-      "grid-lotdates",
-      "lot-panel",
-      "lot-panels",
-      "owl-item"
-    ],
+    "classes": [],
     "selectors": {
       ".lot": 0,
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 66,
+      "[class*=\"lot\"]": 0,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
@@ -4963,29 +4873,19 @@
     }
   },
   "ahlondon": {
-    "classes": [
-      "align-items-center",
-      "align-items-end",
-      "list-group-item",
-      "lot-data-heading",
-      "lot-panel",
-      "lot-panels",
-      "panel-auction-ended",
-      "panel-auction-ended-holder",
-      "topbar-lot-info"
-    ],
+    "classes": [],
     "selectors": {
       ".lot": 0,
       ".property": 0,
       ".card": 0,
       ".listing": 0,
-      "[class*=\"lot\"]": 151,
+      "[class*=\"lot\"]": 0,
       "[class*=\"property\"]": 0,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
       "article": 0,
       ".item": 0,
-      "[class*=\"auction\"]": 64,
+      "[class*=\"auction\"]": 0,
       "[class*=\"gallery\"]": 0
     }
   },
@@ -5351,10 +5251,15 @@
   "nesbits": {
     "classes": [
       "auctions",
+      "callback-form-step-field-list-item",
+      "callback-form-step-field-list-item-label",
       "current-menu-item",
       "current_page_item",
       "menu-item",
       "menu-item-1350",
+      "menu-item-148",
+      "menu-item-1510",
+      "menu-item-1618",
       "menu-item-1725",
       "menu-item-1726",
       "menu-item-1727",
@@ -5374,16 +5279,60 @@
       "menu-item-1852",
       "menu-item-1853",
       "menu-item-1856",
+      "menu-item-1857",
+      "menu-item-1858",
+      "menu-item-1859",
+      "menu-item-1860",
+      "menu-item-1861",
+      "menu-item-1862",
+      "menu-item-1863",
+      "menu-item-1864",
+      "menu-item-1865",
+      "menu-item-1866",
+      "menu-item-1867",
+      "menu-item-1868",
+      "menu-item-1869",
+      "menu-item-1870",
+      "menu-item-1881",
+      "menu-item-1882",
+      "menu-item-1883",
+      "menu-item-1884",
+      "menu-item-1886",
+      "menu-item-1887",
+      "menu-item-1888",
+      "menu-item-2182",
+      "menu-item-2183",
       "menu-item-2184",
       "menu-item-2185",
+      "menu-item-540",
+      "menu-item-547",
+      "menu-item-549",
       "menu-item-has-children",
       "menu-item-object-custom",
       "menu-item-object-page",
       "menu-item-type-custom",
       "menu-item-type-post_type",
+      "modal-video-item__wr-iframe",
       "page-item-2044",
       "page_item",
-      "property"
+      "property",
+      "property-type",
+      "section__grid-item",
+      "section__grid-property-content",
+      "section__layouts--item",
+      "section__pagination-list-item",
+      "section__property",
+      "valuation-form-step-field-list-item",
+      "valuation-form-step-field-list-item-label",
+      "valuation-form__accordion-item",
+      "valuation-form__accordion-item--active",
+      "valuation-form__accordion-item-col",
+      "valuation-form__accordion-item-content",
+      "valuation-form__accordion-item-field-label",
+      "valuation-form__accordion-item-head",
+      "valuation-form__accordion-item-heading",
+      "valuation-form__accordion-item-row",
+      "valuation-form__accordion-item-wrapper"
     ],
     "selectors": {
       ".lot": 0,
@@ -5391,7 +5340,7 @@
       ".card": 0,
       ".listing": 0,
       "[class*=\"lot\"]": 0,
-      "[class*=\"property\"]": 1,
+      "[class*=\"property\"]": 13,
       "[class*=\"card\"]": 0,
       "[class*=\"listing\"]": 0,
       "article": 0,
@@ -5787,6 +5736,7 @@
       "card-content__text",
       "card-content__wrap",
       "card-image",
+      "card-image__content",
       "card-image__content-icon-container",
       "card-image__info",
       "card-image__info-item",
@@ -5837,8 +5787,8 @@
       ".card": 11,
       ".listing": 0,
       "[class*=\"lot\"]": 0,
-      "[class*=\"property\"]": 70,
-      "[class*=\"card\"]": 421,
+      "[class*=\"property\"]": 56,
+      "[class*=\"card\"]": 414,
       "[class*=\"listing\"]": 0,
       "article": 0,
       ".item": 0,
@@ -6284,7 +6234,12 @@
       "auction-alert-content",
       "auction-alerts-toggle-container",
       "auction-alerts-wrap",
-      "ua--bid--basket--lot--list"
+      "cky-accordion-item",
+      "ua--bid--basket--lot--list",
+      "uw-sl__item",
+      "uw-sl__item__img",
+      "uw-sl__item__left",
+      "uw-sl__item__title"
     ],
     "selectors": {
       ".lot": 0,
@@ -6345,6 +6300,23 @@
       "article": 0,
       ".item": 0,
       "[class*=\"auction\"]": 37,
+      "[class*=\"gallery\"]": 0
+    }
+  },
+  "pattinson": {
+    "classes": [],
+    "selectors": {
+      ".lot": 0,
+      ".property": 0,
+      ".card": 0,
+      ".listing": 0,
+      "[class*=\"lot\"]": 0,
+      "[class*=\"property\"]": 0,
+      "[class*=\"card\"]": 0,
+      "[class*=\"listing\"]": 0,
+      "article": 0,
+      ".item": 0,
+      "[class*=\"auction\"]": 0,
       "[class*=\"gallery\"]": 0
     }
   }
