@@ -1863,6 +1863,27 @@ function onShowPastChange(){
 }
 
 async function loadAllLots(){
+  // Restore from sessionStorage cache if less than 10 minutes old
+  const _cachedTs = parseInt(sessionStorage.getItem('ab_lots_ts') || '0');
+  const _cachedLots = sessionStorage.getItem('ab_lots_cache');
+  if (_cachedLots && (Date.now() - _cachedTs) < 600000) {
+    try {
+      ALL_LOTS = JSON.parse(_cachedLots);
+      LOTS = ALL_LOTS;
+      // Restore renderKey so the DOM dedup fires on bfcache restore
+      if (!window._lastRenderKey) {
+        window._lastRenderKey = sessionStorage.getItem('ab_render_key') || null;
+      }
+      $('resultsTitle').textContent = ALL_LOTS.length.toLocaleString() + ' auction lots';
+      buildLotFilters();
+      renderLots();
+      $('cardsView').style.display = 'block';
+      $('resultsPanel').style.display = 'block';
+      return;
+    } catch(e) {
+      sessionStorage.removeItem('ab_lots_cache');
+    }
+  }
   showSkeletonCards(12);
   try{
     const showPast=$('fShowPast')?.checked;
@@ -1874,6 +1895,11 @@ async function loadAllLots(){
     if(d.stripeEnabled!==undefined) window._stripeEnabled=d.stripeEnabled;
     ALL_LOTS=d.lots||[];
     ALL_SOURCES=d.sources||[];
+    // Persist lots to sessionStorage for bfcache / back-navigation
+    try {
+      sessionStorage.setItem('ab_lots_cache', JSON.stringify(ALL_LOTS));
+      sessionStorage.setItem('ab_lots_ts', Date.now().toString());
+    } catch(e) { /* quota exceeded — skip */ }
     if(d._debug) console.log('[BM] all-lots pipeline:',d._debug);
     // Show condition filter only for signed-in users (AI field)
     if(!d.anonGated&&$('fCondition')) $('fCondition').style.display='';
@@ -3403,6 +3429,7 @@ function renderLots(){
     return;
   }
   window._lastRenderKey=_renderKey;
+  try { sessionStorage.setItem('ab_render_key', _renderKey); } catch(e) {}
   _imgRenderCount=0;
   out.innerHTML='<div class="lots-grid'+(_viewMode==='list'?' list-view':'')+'" id="lotsGrid">'+pageItems.map(i=>i.html).join('')+'</div>';
   // Preload all images on this page into browser cache for instant re-renders
@@ -4158,6 +4185,7 @@ function expandCard(lot) {
   }
   expandedLotId = lot._idx;
   cardEl.classList.add('expanded');
+  try { sessionStorage.setItem('ab_scroll_y', window.scrollY.toString()); } catch(e) {}
 
   // Build expanded panel
   const validImg = lot.imageUrl && isValidImageUrl(lot.imageUrl);
@@ -4970,6 +4998,15 @@ function submitEmailCapture(e) {
     };
     img.src = _imgDataUrl;
   }
+
+  // Restore scroll position after bfcache restore or page revisit
+  window.addEventListener('pageshow', function(e) {
+    const savedY = parseInt(sessionStorage.getItem('ab_scroll_y') || '0');
+    if (savedY > 0) {
+      // Defer slightly so render completes before scroll
+      requestAnimationFrame(() => window.scrollTo({ top: savedY, behavior: 'instant' }));
+    }
+  });
 
   // Boot when auth state changes
   const _origSignIn = onSignIn;
