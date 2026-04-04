@@ -14968,6 +14968,7 @@ app.get('*', (req, res) => {
     if (process.env.UMAMI_WEBSITE_ID) {
       html = html.replace('data-website-id=""', `data-website-id="${process.env.UMAMI_WEBSITE_ID}"`);
     }
+    res.set('Cache-Control', 'no-cache');
     res.type('html').send(html);
   } catch (e) {
     log.error('Failed to inject config into index.html', { error: e.message });
