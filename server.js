@@ -4570,7 +4570,7 @@ app.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
 
     if (!activeCatalogues || activeCatalogues.length === 0) return res.json({ lots: [], sources: [], stripeEnabled: STRIPE_ENABLED });
 
-    const activeUrls = activeCatalogues.map(c => c.url);
+    const activeUrls = [...new Set(activeCatalogues.map(c => normaliseUrl(c.url)))];
 
     // ── Step 2: Query individual lots from lots table ──
     const { data: lotRows, error: lotErr } = await supabase
@@ -4683,7 +4683,7 @@ app.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
 
     // Build sources array — one entry per catalogue (matches old cached_analyses behavior)
     const sources = [];
-    const catalogueUpdatedAt = new Map(activeCatalogues.map(c => [c.url, c.created_at]));
+    const catalogueUpdatedAt = new Map(activeCatalogues.map(c => [normaliseUrl(c.url), c.created_at]));
     const lotsByCatalogue = new Map();
     for (const lot of dedupedAll) {
       const catUrl = lot._sourceUrl;
