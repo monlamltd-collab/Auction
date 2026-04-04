@@ -901,7 +901,7 @@ footer .logo-f span{color:var(--green)}
   <header class="hero">
     <div class="hero-badge"><span class="badge-dot"></span> Live auction data updated daily</div>
     <h1>Your unfair advantage<br> at <em>auction</em></h1>
-    <p class="hero-sub">AI scores every lot across 168 UK auction houses. Check bridging finance from <span class="lender-count-dynamic">68</span> lenders in one click. Completely free — sign in to unlock AI features.</p>
+    <p class="hero-sub">AI scores every lot across <span class="house-count-dynamic">150</span>+ UK auction houses. Check bridging finance from <span class="lender-count-dynamic">68</span> lenders in one click. Completely free — sign in to unlock AI features.</p>
     <div class="hero-ctas">
       <a href="#filterBar" class="cta-primary" onclick="event.preventDefault();document.getElementById('filterBar').scrollIntoView({behavior:'smooth'})">Browse Auction Deals →</a>
       <button class="cta-secondary" onclick="$('budgetCalcModal').classList.add('show')">Budget Calculator</button>
@@ -1408,7 +1408,8 @@ function resetSearchState(){
   _searchTimers=[];
   LOTS=[];
   SMART_RESULTS=null;
-  // Don't reset dropdown filters — they should layer on top of AI results
+  // Reset sold filter to prevent mismatch — backend already filters by soldFilter sent in request
+  if($('fSoldTop')) $('fSoldTop').value='all';
   const _rp=$('resultsPanel'); if(_rp) _rp.style.display='none';
   const _lb=$('logBox'); if(_lb) _lb.innerHTML='';
   const _mb=$('mainBtn'); if(_mb) _mb.disabled=true;
@@ -1880,6 +1881,8 @@ async function loadAllLots(){
     // Update dynamic stats
     const lsEl = document.querySelector('.ls-val[data-target="2000"]');
     if(lsEl) lsEl.dataset.target = ALL_LOTS.length;
+    // Update house count everywhere it appears
+    if(d.houseCount) document.querySelectorAll('.house-count-dynamic').forEach(el=>{el.textContent=d.houseCount});
 
     // Auto-show all lots on page load
     if(!ALL_LOTS.length){
@@ -3288,10 +3291,11 @@ function renderLots(){
   });
 
   expandedLotId = null;
-  const out=$('lotsOut');out.innerHTML='';
+  const out=$('lotsOut');
 
   // Empty state when no lots match filters
   if(lots.length===0){
+    window._lastRenderKey=null;
     const searchQ=$('smartQuery')?.value.trim()||'';
     out.innerHTML='<div style="text-align:center;padding:40px 20px;color:var(--text-muted)">'+
       '<div style="font-size:1.5rem;margin-bottom:12px">No lots found</div>'+
@@ -3336,10 +3340,10 @@ function renderLots(){
         if(!d) label='No auction date';
         allItems.push({html:divider(label,count),isDivider:true});
       }
-      allItems.push({html:card(l)});
+      allItems.push({html:card(l),idx:l._idx,lot:l});
     });
   } else if(sortVal!=='score'){
-    lots.forEach(l=>allItems.push({html:card(l)}));
+    lots.forEach(l=>allItems.push({html:card(l),idx:l._idx,lot:l}));
   } else {
     // Score sort: group by property type so land isn't mixed with houses
     const scoreThenPrice=(a,b)=>(b.score-a.score)||((a.price||Infinity)-(b.price||Infinity));
@@ -3349,7 +3353,7 @@ function renderLots(){
     const tsL=lots.filter(l=>l.titleSplit&&l.score>=2).sort(scoreThenPrice);
     const nonTS=lots.filter(l=>!(l.titleSplit&&l.score>=2));
 
-    if(tsL.length && showTSGroup){allItems.push({html:divider('Title Splits',tsL.length),isDivider:true});tsL.forEach(l=>allItems.push({html:card(l)}))}
+    if(tsL.length && showTSGroup){allItems.push({html:divider('Title Splits',tsL.length),isDivider:true});tsL.forEach(l=>allItems.push({html:card(l),idx:l._idx,lot:l}))}
 
     // Group remaining by property type, sorted by score within each
     const grouped={};
@@ -3359,13 +3363,13 @@ function renderLots(){
       grouped[t].sort(scoreThenPrice);
       const label=typeLabels[t]||t;
       allItems.push({html:divider(label,grouped[t].length),isDivider:true});
-      grouped[t].forEach(l=>allItems.push({html:card(l)}));
+      grouped[t].forEach(l=>allItems.push({html:card(l),idx:l._idx,lot:l}));
     });
     // Any types not in typeOrder
     Object.keys(grouped).filter(t=>!typeOrder.includes(t)).forEach(t=>{
       grouped[t].sort(scoreThenPrice);
       allItems.push({html:divider(t.charAt(0).toUpperCase()+t.slice(1),grouped[t].length),isDivider:true});
-      grouped[t].forEach(l=>allItems.push({html:card(l)}));
+      grouped[t].forEach(l=>allItems.push({html:card(l),idx:l._idx,lot:l}));
     });
   }
 
@@ -3391,7 +3395,17 @@ function renderLots(){
     if(lotsSeen>=pageEnd) break;
   }
 
+  // Skip DOM rebuild if same lots on same page (avoids image reload flicker)
+  var _renderKey=_currentPage+'|'+_viewMode+'|'+pageItems.filter(i=>!i.isDivider).map(i=>i.idx).join(',');
+  if(_renderKey===window._lastRenderKey&&document.getElementById('lotsGrid')){
+    if(filterCountEl) filterCountEl.textContent='Page '+_currentPage+' of '+totalPages+' · '+totalLots.toLocaleString()+' lots';
+    if(typeof syncFiltersToURL==='function') syncFiltersToURL();
+    return;
+  }
+  window._lastRenderKey=_renderKey;
   out.innerHTML='<div class="lots-grid'+(_viewMode==='list'?' list-view':'')+'" id="lotsGrid">'+pageItems.map(i=>i.html).join('')+'</div>';
+  // Preload all images on this page into browser cache for instant re-renders
+  pageItems.forEach(function(i){if(i.lot&&i.lot.imageUrl){var p=new Image();p.src=optimImg(i.lot.imageUrl,400)}});
   const renderedCount=pageItems.filter(i=>!i.isDivider).length;
 
   // Update filter count with page info

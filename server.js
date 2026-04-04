@@ -2360,6 +2360,12 @@ async function sendWelcomeEmail(email, name) {
   const resendKey = process.env.RESEND_API_KEY;
   if (!resendKey) return;
 
+  // 0) Deduplicate — if drip_log already has step 0 for this email, we already sent
+  if (supabase) {
+    const { data: existing } = await supabase.from('drip_log').select('id').eq('email', email).eq('step', 0).maybeSingle();
+    if (existing) { log.info('Welcome email already sent, skipping', { email }); return; }
+  }
+
   // 1) Add contact to Resend audience (same audience as Landing page)
   try {
     const audRes = await fetch('https://api.resend.com/audiences', {
@@ -2525,6 +2531,16 @@ async function validateUserFromReq(req) {
       if (!insertErr && newUser) {
         sendWelcomeEmail(newUser.email, newUser.name).catch(() => {});
         return newUser;
+      }
+      // Race guard: if insert failed due to unique constraint, another request already created this user — fetch and return them
+      if (insertErr && insertErr.code === '23505') {
+        log.info('User insert race — fetching existing', { email: normalEmail });
+        const { data: raceUser } = await supabase
+          .from('users')
+          .select('id, email, name, tier, analyses_count, stripe_customer_id, tier_expires_at, stripe_subscription_id, trial_started_at, trial_expires_at, trial_used, ai_searches_today, ai_searches_date')
+          .eq('email', normalEmail)
+          .single();
+        return raceUser || null;
       }
       return null;
     }
@@ -4612,10 +4628,23 @@ app.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
       if (!urlDateMap[nu] || a.date < urlDateMap[nu]) urlDateMap[nu] = a.date;
     }
     for (const lot of lots) {
-      const su = normaliseUrl(lot._sourceUrl);
-      const rawDate = urlDateMap[su] || null;
-      // Sanitize sentinel dates (2099-12-31 = always-on catalogue) — show as null to frontend
-      lot._auctionDate = (rawDate && rawDate > '2098-01-01') ? null : rawDate;
+      // Per-lot end date from bullets (EIG timed auctions) takes priority over catalogue date
+      let lotEndDate = null;
+      if (lot.bullets && Array.isArray(lot.bullets)) {
+        for (const b of lot.bullets) {
+          // Match "Auction Ends: DD/MM/YYYY" or "Auction End: DD/MM/YYYY"
+          const m = b.match(/Auction\s*Ends?:\s*(\d{2})\/(\d{2})\/(\d{4})/i);
+          if (m) { lotEndDate = m[3] + '-' + m[2] + '-' + m[1]; break; }
+        }
+      }
+      if (lotEndDate) {
+        lot._auctionDate = lotEndDate;
+      } else {
+        const su = normaliseUrl(lot._sourceUrl);
+        const rawDate = urlDateMap[su] || null;
+        // Sanitize sentinel dates (2099-12-31 = always-on catalogue) — show as null to frontend
+        lot._auctionDate = (rawDate && rawDate > '2098-01-01') ? null : rawDate;
+      }
     }
 
     // ── Server-side future-only filtering (7-day grace period) ──
@@ -4808,9 +4837,11 @@ app.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
     } else {
       for (const lot of cleanLots) { delete lot.blurred; }
     }
+    const uniqueHouses = new Set(sources.map(s => s.house));
     res.json({
       lots: cleanLots,
       sources,
+      houseCount: uniqueHouses.size,
       blurred: false,
       anonGated: !isSignedIn,
       stripeEnabled: STRIPE_ENABLED,
@@ -5309,6 +5340,60 @@ app.get('/api/diag', (req, res) => {
       landRegistry: lrBreaker.status,
     },
   });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// ENRICHMENT HEALTH — per-house EPC/flood/LR/image coverage
+// ═══════════════════════════════════════════════════════════════
+app.get('/api/diag/enrichment', async (req, res) => {
+  const adminToken = req.headers['x-admin-secret'] || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(adminToken, process.env.ADMIN_SECRET)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  try {
+    const { data: cached } = await supabase.from('cached_analyses').select('house, lots');
+    const byHouse = {};
+    for (const row of (cached || [])) {
+      const h = row.house || 'unknown';
+      if (!byHouse[h]) byHouse[h] = [];
+      byHouse[h].push(...(row.lots || []));
+    }
+    const houses = [];
+    let totalLots = 0, totalEpc = 0, totalFlood = 0, totalLr = 0, totalImg = 0;
+    for (const [house, lots] of Object.entries(byHouse)) {
+      const n = lots.length;
+      if (!n) continue;
+      const epc = lots.filter(l => l.epcRating).length;
+      const flood = lots.filter(l => l.floodZone).length;
+      const lr = lots.filter(l => l.streetAvg != null).length;
+      const img = lots.filter(l => l.imageUrl).length;
+      totalLots += n; totalEpc += epc; totalFlood += flood; totalLr += lr; totalImg += img;
+      houses.push({
+        house, lots: n,
+        epc: Math.round(epc / n * 100), flood: Math.round(flood / n * 100),
+        lr: Math.round(lr / n * 100), images: Math.round(img / n * 100),
+        gaps: [
+          epc / n < 0.3 ? 'EPC' : null, flood / n < 0.3 ? 'Flood' : null,
+          lr / n < 0.3 ? 'LR' : null, img / n < 0.3 ? 'Images' : null,
+        ].filter(Boolean),
+      });
+    }
+    houses.sort((a, b) => (a.epc + a.flood + a.lr + a.images) - (b.epc + b.flood + b.lr + b.images));
+    res.json({
+      circuitBreakers: { epc: epcBreaker.status, flood: floodBreaker.status, landRegistry: lrBreaker.status },
+      summary: {
+        totalLots,
+        epc: totalLots ? Math.round(totalEpc / totalLots * 100) : 0,
+        flood: totalLots ? Math.round(totalFlood / totalLots * 100) : 0,
+        lr: totalLots ? Math.round(totalLr / totalLots * 100) : 0,
+        images: totalLots ? Math.round(totalImg / totalLots * 100) : 0,
+      },
+      houses,
+    });
+  } catch (e) {
+    log.error('Enrichment health error', { error: e.message });
+    res.status(500).json({ error: 'Failed' });
+  }
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -7416,26 +7501,23 @@ const DOM_EXTRACTORS = {
         if (lotMatch) lotNum = parseInt(lotMatch[1]);
         if (seen.has(lotNum)) continue;
         seen.add(lotNum);
-        // Image from .auction-property-image or img
+        // Image: Auction2 CMS uses img.property-grid-image with /resize/ URLs (same as Hollis Morgan)
         let imageUrl = '';
-        const imgEl = card.querySelector('.auction-property-image, img.auction-property-image');
-        if (imgEl && imgEl.tagName === 'IMG') {
-          imageUrl = imgEl.getAttribute('src') || '';
-        } else if (imgEl) {
-          const innerImg = imgEl.querySelector('img[src]');
-          if (innerImg) imageUrl = innerImg.getAttribute('src') || '';
-          if (!imageUrl) {
-            const bg = imgEl.getAttribute('style') || '';
-            const bgMatch = bg.match(/url\\(['"]?([^'"\\)]+)/);
-            if (bgMatch) imageUrl = bgMatch[1];
+        const cardImg = card.querySelector('img.property-grid-image');
+        if (cardImg) {
+          imageUrl = cardImg.getAttribute('src') || cardImg.dataset.src || '';
+        }
+        // Fallback: any img whose src contains /resize/ (Auction2 property photo pattern)
+        if (!imageUrl) {
+          const imgs = card.querySelectorAll('img[src]');
+          for (const img of imgs) {
+            const s = img.getAttribute('src') || '';
+            if (s.includes('/resize/') && !s.includes('.svg')) { imageUrl = s; break; }
           }
         }
-        if (!imageUrl) {
-          const anyImg = card.querySelector('img[src]');
-          if (anyImg) {
-            const s = anyImg.getAttribute('src') || '';
-            if (s && !s.includes('logo') && !s.includes('icon') && s.length > 10) imageUrl = s;
-          }
+        // Filter out non-property images
+        if (imageUrl && (imageUrl.includes('.svg') || imageUrl.includes('/images/') || imageUrl.includes('logo') || imageUrl.includes('icon') || imageUrl.includes('banner'))) {
+          imageUrl = '';
         }
         // Bullets
         const bullets = [];
@@ -13068,6 +13150,7 @@ app.listen(PORT, () => {
     supabase, callAI,
     houseRoots: HOUSE_ROOTS, domExtractors: DOM_EXTRACTORS,
     healBrokenHouse,
+    getCircuitBreakers: () => ({ epc: epcBreaker.status, flood: floodBreaker.status, landRegistry: lrBreaker.status }),
   });
 
   // ── Ensure enrichment_cache table exists ──

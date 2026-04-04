@@ -416,6 +416,44 @@ tr:hover td { background: rgba(255,255,255,.02); }
       </details>
     </div>
 
+    <!-- Enrichment Health Dashboard -->
+    <div class="section" id="enrichment-health-section">
+      <details>
+        <summary style="padding:14px 18px;font-size:.88rem;font-weight:700;cursor:pointer;">
+          Enrichment Health
+          <span class="badge" id="enrichment-badge" style="font-size:.7rem;">-</span>
+        </summary>
+        <!-- Circuit breaker status -->
+        <div class="engine-bar" id="enrichment-breakers" style="margin:0 18px 12px;">
+          <div class="engine-item"><span class="engine-label">EPC</span><span class="engine-val" id="cb-epc">-</span></div>
+          <div class="engine-item"><span class="engine-label">Flood</span><span class="engine-val" id="cb-flood">-</span></div>
+          <div class="engine-item"><span class="engine-label">Land Registry</span><span class="engine-val" id="cb-lr">-</span></div>
+          <div class="engine-item"><span class="engine-label">Overall EPC</span><span class="engine-val" id="enr-epc-pct">-</span></div>
+          <div class="engine-item"><span class="engine-label">Overall Flood</span><span class="engine-val" id="enr-flood-pct">-</span></div>
+          <div class="engine-item"><span class="engine-label">Overall LR</span><span class="engine-val" id="enr-lr-pct">-</span></div>
+          <div class="engine-item"><span class="engine-label">Overall Images</span><span class="engine-val" id="enr-img-pct">-</span></div>
+        </div>
+        <div style="overflow-x:auto;">
+          <table id="enrichment-table">
+            <thead>
+              <tr>
+                <th>House</th>
+                <th title="Total lots">Lots</th>
+                <th title="% of lots with EPC rating">EPC %</th>
+                <th title="% of lots with flood zone data">Flood %</th>
+                <th title="% of lots with Land Registry comps">LR %</th>
+                <th title="% of lots with property image">Images %</th>
+                <th title="Enrichment gaps below 30% coverage">Gaps</th>
+              </tr>
+            </thead>
+            <tbody id="enrichment-tbody">
+              <tr><td colspan="7" class="loading"><span class="spinner"></span> Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </details>
+    </div>
+
     <!-- Issues and Calendar removed — data now in Attention Required + Next Auction column + Missing Catalogues -->
     <div id="issues-list" style="display:none;"></div>
     <span id="issues-badge" style="display:none;"></span>
@@ -987,6 +1025,7 @@ async function refreshAll() {
     loadFreshness(),
     loadMissingImages(),
     loadOpsHealth(),
+    loadEnrichmentHealth(),
   ]);
   updateAttentionRequired();
   updateDailyChangelog();
@@ -1939,6 +1978,44 @@ async function loadOpsHealth() {
   } catch (err) {
     console.warn('Failed to load system health:', err.message);
   }
+}
+
+async function loadEnrichmentHealth() {
+  const data = await apiFetch('/api/diag/enrichment');
+  if (data.error) return;
+  // Circuit breaker badges
+  const cbColors = { closed: 'var(--green)', open: 'var(--red)', 'half-open': 'var(--orange, #e67e22)' };
+  for (const [key, elId] of [['epc','cb-epc'],['flood','cb-flood'],['landRegistry','cb-lr']]) {
+    const el = document.getElementById(elId);
+    const st = data.circuitBreakers?.[key] || 'unknown';
+    if (el) { el.textContent = st; el.style.color = cbColors[st] || ''; }
+  }
+  // Summary percentages
+  const s = data.summary || {};
+  const pctColor = v => v >= 70 ? 'var(--green)' : v >= 40 ? 'var(--orange, #e67e22)' : 'var(--red)';
+  for (const [key, elId] of [['epc','enr-epc-pct'],['flood','enr-flood-pct'],['lr','enr-lr-pct'],['images','enr-img-pct']]) {
+    const el = document.getElementById(elId);
+    if (el) { el.textContent = (s[key] || 0) + '%'; el.style.color = pctColor(s[key] || 0); }
+  }
+  // Badge
+  const gapCount = (data.houses || []).filter(h => h.gaps && h.gaps.length > 0).length;
+  const badge = document.getElementById('enrichment-badge');
+  if (badge) {
+    badge.textContent = gapCount ? gapCount + ' houses with gaps' : 'All healthy';
+    badge.className = 'badge ' + (gapCount ? 'badge-orange' : 'badge-green');
+  }
+  // Table
+  const tbody = document.getElementById('enrichment-tbody');
+  if (!tbody) return;
+  const pctCell = v => '<td style="color:' + pctColor(v) + ';font-weight:600">' + v + '%</td>';
+  tbody.innerHTML = (data.houses || []).map(h =>
+    '<tr>' +
+      '<td>' + h.house + '</td>' +
+      '<td>' + h.lots + '</td>' +
+      pctCell(h.epc) + pctCell(h.flood) + pctCell(h.lr) + pctCell(h.images) +
+      '<td>' + (h.gaps.length ? h.gaps.map(g => '<span class="badge badge-red" style="font-size:.65rem;margin:1px">' + g + '</span>').join(' ') : '<span style="color:var(--green)">—</span>') + '</td>' +
+    '</tr>'
+  ).join('');
 }
 
 // (removed: old analytics charts, system health tab, house intelligence tab)
