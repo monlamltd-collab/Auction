@@ -76,6 +76,12 @@ None yet.
 
 None yet.
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260404-ovd | Fix image reloading on back-navigation: bfcache headers, sessionStorage lot persistence, renderKey persistence, scroll restoration, and preserve grid DOM on in-app back | 2026-04-04 | 4c1bb69 | [260404-ovd-fix-image-reloading-on-back-navigation-b](./quick/260404-ovd-fix-image-reloading-on-back-navigation-b/) |
+
 ## Session Continuity
 
 Last session: 2026-04-03T20:26:36.129Z
