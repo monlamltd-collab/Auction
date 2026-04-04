@@ -4013,6 +4013,7 @@ app.post('/api/analyse', async (req, res) => {
     }, { onConflict: 'url' });
 
     // ── Dual-write: upsert individual lots to lots table ──
+    normaliseLotStatuses(enrichedAnalysed); // Normalize before write — canonical statuses only
     await upsertToLotsTable(enrichedAnalysed, house, url, {
       scrapedWith: _lastScrapeEngine,
       extractedWith: _lastExtractorUsed,
@@ -4356,7 +4357,7 @@ app.post('/api/smart-search', async (req, res) => {
       if (c.lots && Array.isArray(c.lots)) {
         sources.push({ house: c.house, url: c.url, count: c.lots.length });
         for (const lot of c.lots) {
-          allLots.push({ ...lot, _house: c.house, _sourceUrl: c.url });
+          allLots.push({ ...lot, _house: c.house, _sourceUrl: c.url, _searchText: buildSearchText(lot) });
         }
       }
     }
@@ -4396,9 +4397,10 @@ app.post('/api/smart-search', async (req, res) => {
       ? dedupedAllLots.filter(l => l.status === 'unsold')
       : dedupedAllLots.filter(l => !l.status || l.status === 'available' || l.status === 'unsold');
 
-    // Build a compact lot summary for Gemini, prioritising query-relevant lots
+    // Build a rich lot summary for Gemini, using search_text when available
     const queryTerms = query.toLowerCase().split(/\s+/).filter(t => t.length > 2);
     const lotEntries = filteredLots.map((l, i) => {
+      // Structured fields (always included for Gemini context)
       const meta = [
         l.status && l.status !== 'available' ? `STATUS:${l.status}` : '',
         l.propType ? `Type:${l.propType}` : '',
@@ -4409,10 +4411,13 @@ app.post('/api/smart-search', async (req, res) => {
         l.estGrossYield ? `Yield:${l.estGrossYield}%` : '',
         l.belowMarket ? `${l.belowMarket}%belowMkt` : '',
         l.vacant ? 'VACANT' : '',
+        l.titleSplit ? 'TITLE_SPLIT' : '',
         l.floodZone && l.floodZone !== '1' ? `Flood:${l.floodZone}` : '',
         l.daysSinceAuction > 0 ? `${l.daysSinceAuction}d_since_auction` : '',
       ].filter(Boolean).join(' ');
-      const summary = `[${i}] ${l._house} L${l.lot}: ${l.address} | £${l.price || '?'} | Score:${l.score || 0} | ${meta} | ${l.titleSplit ? 'TITLE_SPLIT' : ''} | ${(l.bullets || []).join('; ').substring(0, 120)}`;
+      // Unstructured context: use pre-built search_text if available, else fall back to bullets+opps+risks
+      const context = l._searchText || [(l.opps || []).join(', '), (l.risks || []).join(', '), (l.bullets || []).join('; ').substring(0, 200)].filter(Boolean).join(' | ');
+      const summary = `[${i}] ${l._house} L${l.lot}: ${l.address} | £${l.price || '?'} | Score:${l.score || 0} | ${meta} | ${context}`;
       const searchText = summary.toLowerCase();
       const relevance = queryTerms.filter(t => searchText.includes(t)).length;
       return { summary, relevance };
@@ -4917,10 +4922,23 @@ app.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
     } else {
       for (const lot of cleanLots) { delete lot.blurred; }
     }
+    // ── Load house logos from house_skills ──
     const uniqueHouses = new Set(sources.map(s => s.house));
+    let houseMeta = {};
+    try {
+      const { data: skills } = await supabase
+        .from('house_skills')
+        .select('slug, logo_url')
+        .not('logo_url', 'is', null);
+      if (skills) {
+        for (const s of skills) houseMeta[s.slug] = { logoUrl: s.logo_url };
+      }
+    } catch { /* non-fatal */ }
+
     res.json({
       lots: cleanLots,
       sources,
+      houseMeta,
       houseCount: uniqueHouses.size,
       blurred: false,
       anonGated: !isSignedIn,
@@ -5432,30 +5450,38 @@ app.get('/api/diag/enrichment', async (req, res) => {
     return res.status(403).json({ error: 'Admin access required' });
   }
   try {
-    const { data: cached } = await supabase.from('cached_analyses').select('house, lots');
+    // Query lots table directly — no more JSONB blob deserialization
+    const cutoff = new Date(Date.now() - 7 * 86400000).toISOString();
+    const { data: rows, error: qErr } = await supabase.rpc('enrichment_health_by_house', {}).catch(() => ({ data: null, error: { message: 'rpc not available' } }));
+
+    // Fallback: raw SQL via aggregation on lots table
+    const { data: aggRows } = rows ? { data: rows } : await supabase
+      .from('lots')
+      .select('house, epc_rating, flood_zone, street_avg, image_url')
+      .gte('last_seen_at', cutoff);
+
     const byHouse = {};
-    for (const row of (cached || [])) {
-      const h = row.house || 'unknown';
-      if (!byHouse[h]) byHouse[h] = [];
-      byHouse[h].push(...(row.lots || []));
+    for (const r of (aggRows || [])) {
+      const h = r.house || 'unknown';
+      if (!byHouse[h]) byHouse[h] = { n: 0, epc: 0, flood: 0, lr: 0, img: 0 };
+      byHouse[h].n++;
+      if (r.epc_rating) byHouse[h].epc++;
+      if (r.flood_zone != null) byHouse[h].flood++;
+      if (r.street_avg != null) byHouse[h].lr++;
+      if (r.image_url) byHouse[h].img++;
     }
     const houses = [];
     let totalLots = 0, totalEpc = 0, totalFlood = 0, totalLr = 0, totalImg = 0;
-    for (const [house, lots] of Object.entries(byHouse)) {
-      const n = lots.length;
-      if (!n) continue;
-      const epc = lots.filter(l => l.epcRating).length;
-      const flood = lots.filter(l => l.floodZone).length;
-      const lr = lots.filter(l => l.streetAvg != null).length;
-      const img = lots.filter(l => l.imageUrl).length;
-      totalLots += n; totalEpc += epc; totalFlood += flood; totalLr += lr; totalImg += img;
+    for (const [house, d] of Object.entries(byHouse)) {
+      if (!d.n) continue;
+      totalLots += d.n; totalEpc += d.epc; totalFlood += d.flood; totalLr += d.lr; totalImg += d.img;
       houses.push({
-        house, lots: n,
-        epc: Math.round(epc / n * 100), flood: Math.round(flood / n * 100),
-        lr: Math.round(lr / n * 100), images: Math.round(img / n * 100),
+        house, lots: d.n,
+        epc: Math.round(d.epc / d.n * 100), flood: Math.round(d.flood / d.n * 100),
+        lr: Math.round(d.lr / d.n * 100), images: Math.round(d.img / d.n * 100),
         gaps: [
-          epc / n < 0.3 ? 'EPC' : null, flood / n < 0.3 ? 'Flood' : null,
-          lr / n < 0.3 ? 'LR' : null, img / n < 0.3 ? 'Images' : null,
+          d.epc / d.n < 0.3 ? 'EPC' : null, d.flood / d.n < 0.3 ? 'Flood' : null,
+          d.lr / d.n < 0.3 ? 'LR' : null, d.img / d.n < 0.3 ? 'Images' : null,
         ].filter(Boolean),
       });
     }
@@ -5486,27 +5512,26 @@ app.get('/api/diag/tenure', async (req, res) => {
     return res.status(403).json({ error: 'Admin access required' });
   }
   try {
-    const { data: cached } = await supabase
-      .from('cached_analyses')
-      .select('house, lots')
-      .gt('expires_at', new Date().toISOString());
-    if (!cached) return res.json({ error: 'no data' });
+    // Query lots table directly — no more cached_analyses JSONB blobs
+    const cutoff = new Date(Date.now() - 7 * 86400000).toISOString();
+    const { data: rows } = await supabase
+      .from('lots')
+      .select('house, tenure')
+      .gte('last_seen_at', cutoff);
+    if (!rows) return res.json({ error: 'no data' });
 
     const counts = { freehold: 0, leasehold: 0, shareOfFreehold: 0, empty: 0, total: 0 };
     const byHouse = {};
-    for (const c of cached) {
-      if (!Array.isArray(c.lots)) continue;
-      for (const l of c.lots) {
-        counts.total++;
-        const t = (l.tenure || '').trim().toLowerCase();
-        if (t === 'freehold') counts.freehold++;
-        else if (t === 'leasehold') counts.leasehold++;
-        else if (t.includes('share')) counts.shareOfFreehold++;
-        else counts.empty++;
+    for (const r of rows) {
+      counts.total++;
+      const t = (r.tenure || '').trim().toLowerCase();
+      if (t === 'freehold') counts.freehold++;
+      else if (t === 'leasehold') counts.leasehold++;
+      else if (t.includes('share')) counts.shareOfFreehold++;
+      else counts.empty++;
 
-        if (!t) {
-          byHouse[c.house] = (byHouse[c.house] || 0) + 1;
-        }
+      if (!t) {
+        byHouse[r.house] = (byHouse[r.house] || 0) + 1;
       }
     }
     const populated = counts.total - counts.empty;
@@ -14211,6 +14236,42 @@ No catalogues? Return {"catalogues": []}`, { tier: 'capable', maxTokens: 1500, t
 // ═══════════════════════════════════════════════════════════════
 const JUNK_LOT_PATTERN = /^(I'd like to|Property search|Popular|Auction Dates|Register to bid|Information|\dBid Basket|Cookie|Privacy)/i;
 
+// Build a complete natural-language snapshot of a lot for search.
+// Everything goes in — the intelligence is in the QUERY strategy, not the storage.
+// Structured queries (price, tenure, beds) hit formal columns via SQL.
+// This blob is searched only for things that don't map to columns.
+function buildSearchText(lot) {
+  const parts = [];
+
+  if (lot.address) parts.push(lot.address);
+  if (lot.postcode) parts.push(lot.postcode);
+
+  const typeDesc = [lot.beds ? `${lot.beds} bed` : '', lot.propType || '', lot.tenure || ''].filter(Boolean).join(' ');
+  if (typeDesc) parts.push(typeDesc);
+  if (lot.sqft) parts.push(`${lot.sqft} sqft`);
+  if (lot.leaseLength) parts.push(`${lot.leaseLength} year lease`);
+  if (lot.units && lot.units > 1) parts.push(`${lot.units} units`);
+  if (lot.condition) parts.push(lot.condition);
+  if (lot.vacant) parts.push('Vacant possession');
+  if (lot.dealType) parts.push(lot.dealType);
+  if (lot.price) parts.push(`Guide £${lot.price.toLocaleString()}`);
+  if (lot.streetAvg) parts.push(`Street avg £${lot.streetAvg.toLocaleString()}`);
+  if (lot.belowMarket) parts.push(`${lot.belowMarket}% below market value`);
+  if (lot.estGrossYield) parts.push(`Yield ${lot.estGrossYield}%`);
+  if (lot.titleSplit) parts.push('Title split potential');
+  if (lot.epcRating) parts.push(`EPC ${lot.epcRating}`);
+  if (lot.floodRiskLevel) parts.push(`Flood risk ${lot.floodRiskLevel}`);
+  if (lot.opps && lot.opps.length) parts.push(lot.opps.join('. '));
+  if (lot.risks && lot.risks.length) parts.push(lot.risks.join('. '));
+  if (lot.bullets && lot.bullets.length) parts.push(lot.bullets.join('. '));
+  if (lot.scoreBreakdown && lot.scoreBreakdown.length) {
+    const labels = lot.scoreBreakdown.map(s => typeof s === 'string' ? s : (s.label || s.reason || '')).filter(Boolean);
+    if (labels.length) parts.push(labels.join('. '));
+  }
+
+  return parts.join('. ').substring(0, 4000) || null;
+}
+
 async function upsertToLotsTable(enrichedLots, house, catalogueUrl, metadata = {}) {
   if (!supabase || !enrichedLots || enrichedLots.length === 0) return;
   try {
@@ -14296,6 +14357,7 @@ async function upsertToLotsTable(enrichedLots, house, catalogueUrl, metadata = {
         scraped_with: metadata.scrapedWith || null,
         last_seen_at: now,
         enriched_at: lot.enrichedAt || null,
+        search_text: buildSearchText(lot),
         // Note: first_seen_at deliberately omitted — uses column default (now()) on INSERT,
         // and is not overwritten on conflict UPDATE
       });
@@ -14802,6 +14864,7 @@ async function autoAnalyseOne(url) {
   }, { onConflict: 'url' });
 
   // ── Dual-write: upsert individual lots to lots table ──
+  normaliseLotStatuses(lots); // Normalize before write — canonical statuses only
   await upsertToLotsTable(lots, house, url, {
     scrapedWith: _lastScrapeEngine,
     extractedWith: _lastExtractorUsed,
@@ -14959,11 +15022,32 @@ async function updateHouseSkill(slug, { catalogueUrl, lotCount, imageCoverage, s
     } catch (alertErr) { console.warn('ALERT: Failed to record image coverage drop:', alertErr.message); }
   }
 
+  // Auto-detect platform family from URL patterns or extractor type
+  let platformFamily = existing?.platform_family || null;
+  if (!platformFamily) {
+    const url = (rootUrl || '').toLowerCase();
+    if (url.includes('eigonlineauctions.com') || url.includes('eigpropertyauctions.co.uk') || extractor === 'eigplatform') platformFamily = 'eig';
+    else if (url.includes('auctionhouse.co.uk') || extractor === 'auctionhouseuk') platformFamily = 'auctionhouse_uk';
+    else if (url.includes('btgeddisonspropertyauctions.com') || url.includes('sdlauctions.co.uk')) platformFamily = 'btg_sdl';
+    else if (url.includes('iamsold.co.uk')) platformFamily = 'iamsold';
+    else if (url.includes('bambooauctions.com')) platformFamily = 'bamboo';
+  }
+
+  // Auto-generate logo URL from domain (Google favicon API — free, no scraping cost)
+  let logoUrl = existing?.logo_url || null;
+  if (!logoUrl && rootUrl) {
+    try {
+      const domain = new URL(rootUrl).hostname;
+      logoUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+    } catch { /* invalid URL, skip */ }
+  }
+
   const skill = {
     slug,
     house: displayName,
     catalogue_url: rootUrl,
     extractor,
+    platform_family: platformFamily,
     last_verified: now,
     last_lot_count: lotCount,
     average_lot_count: averageLotCount,
@@ -14973,6 +15057,7 @@ async function updateHouseSkill(slug, { catalogueUrl, lotCount, imageCoverage, s
     pagination_pattern: paginationPattern,
     notes: existing?.notes || '',
     status,
+    logo_url: logoUrl,
   };
 
   const { error } = await supabase

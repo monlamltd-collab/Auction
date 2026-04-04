@@ -539,7 +539,8 @@ footer .logo-f span{color:var(--green)}
 .skel-card .skel-line{height:14px;border-radius:4px;background:linear-gradient(90deg,#eef2f7 25%,#f5f7fa 50%,#eef2f7 75%);background-size:200% 100%;animation:shimmer 1.5s infinite}
 .skel-card .skel-line.w80{width:80%}.skel-card .skel-line.w60{width:60%}.skel-card .skel-line.w40{width:40%}
 .card-badge{position:absolute;border-radius:20px;padding:4px 10px;font-family:var(--font-main);font-size:11px;font-weight:600;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
-.badge-house{top:10px;left:10px;background:rgba(255,255,255,0.92);color:#1a2a3a}
+.badge-house{top:10px;left:10px;background:rgba(255,255,255,0.92);color:#1a2a3a;display:flex;align-items:center;gap:4px}
+.badge-house-logo{width:16px;height:16px;border-radius:2px;flex-shrink:0}
 .badge-dist{bottom:10px;left:10px;background:rgba(46,125,50,0.9);color:#fff;font-size:.65rem}
 .badge-score{top:10px;right:10px;font-family:var(--font-main);font-weight:700;font-size:13px;border-radius:8px;padding:4px 10px}
 .badge-score.high{background:rgba(192,57,43,0.9);color:#fff}
@@ -1903,6 +1904,7 @@ async function loadAllLots(){
     if(d.stripeEnabled!==undefined) window._stripeEnabled=d.stripeEnabled;
     ALL_LOTS=d.lots||[];
     ALL_SOURCES=d.sources||[];
+    window._houseMeta=d.houseMeta||{};
     // Persist lots to sessionStorage for bfcache / back-navigation
     try {
       sessionStorage.setItem('ab_lots_cache', JSON.stringify(ALL_LOTS));
@@ -4013,7 +4015,11 @@ function getPlaceholderHtml(type) {
 
 function getCardImageBadges(lot) {
   let html = '';
-  if (lot._house) html += '<div class="card-badge badge-house">' + esc(lot._house) + '</div>';
+  if (lot._house) {
+    var meta = (window._houseMeta || {})[lot._house];
+    var logoImg = meta && meta.logoUrl ? '<img class="badge-house-logo" src="' + esc(meta.logoUrl) + '" width="16" height="16" alt="" onerror="this.style.display=\'none\'">' : '';
+    html += '<div class="card-badge badge-house">' + logoImg + esc(lot._house) + '</div>';
+  }
   if (_searchCentre && lot._lat && lot._lng) {
     const dist = haversine(_searchCentre.lat, _searchCentre.lng, lot._lat, lot._lng);
     html += '<div class="card-badge badge-dist">' + (dist < 1 ? dist.toFixed(1) : Math.round(dist)) + ' mi</div>';
@@ -4144,7 +4150,7 @@ function getCardImageHtml(lot) {
     var imgsHtml = '';
     var dotsHtml = '<div class="carousel-dots">';
     for (var ci = 0; ci < imgs.length; ci++) {
-      imgsHtml += '<img src="' + esc(optimImg(imgs[ci], 400)) + '" alt="' + esc((lot.address || 'Auction property') + ' ' + (ci+1)) + '" loading="' + loadAttr + '" decoding="async"' + (ci === 0 ? ' class="carousel-active"' : '') + ' onerror="this.remove()">';
+      imgsHtml += '<img src="' + esc(optimImg(imgs[ci], 400)) + '" alt="' + esc((lot.address || 'Auction property') + ' ' + (ci+1)) + '" loading="' + loadAttr + '" decoding="async"' + (ci === 0 ? ' class="carousel-active"' : '') + ' onerror="this.style.display=\'none\';this.dataset.broken=\'1\'">';
       dotsHtml += '<span class="carousel-dot' + (ci === 0 ? ' dot-active' : '') + '"></span>';
     }
     dotsHtml += '</div>';
