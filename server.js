@@ -1234,6 +1234,8 @@ const HOUSE_EXTRACTION_HINTS = {
   auctionhammermidlands:   'Auction Hammer Midlands. WordPress/Elementor site. Lot cards with LOT number heading (h4), address, guide price (£X plus fees), bedrooms/bathrooms/receptions counts, and property images.',
   sharpesauctions:         'Sharpes Auctions Bradford. PHP site. Lot cards with class products_table_items_lotnumber for lot number, guide price (£X plus fees), property images in products_table_thumb, and address links.',
   jjmorris:                'JJ Morris Pembrokeshire. Property Jungle platform. Card-based layout with address, guide price, bedrooms/bathrooms, property images with lazy loading, and More Details links.',
+  rendells:                'Rendells Devon. Bamboo Auctions platform (rendells.bambooauctions.com). Next.js SPA with __NEXT_DATA__ JSON. Property cards with title, address, guide price, image, auction type. Same structure as Hunters.',
+  pearsonferrier:          'Pearson Ferrier Manchester. WordPress + PropertyHive plugin. Lot cards in .propertyhive wrapper with .property class, .property__address, .property__price, .property__rooms, .flag-lot (lot number badge).',
 };
 
 // getExtractionModel() removed — tier selection now in callAI() callsites
@@ -1384,7 +1386,7 @@ const HOUSE_ROOTS = {
   fisherGerman:           'https://www.fishergerman.co.uk/auctions',
   woolleyandwallis:       'https://www.woolleyandwallis.co.uk/property/auction/',
   hobbsparker:            'https://www.hobbsparker.co.uk/auctioneers/',
-  arnoldskeys:            'https://www.arnoldskeys.com/auctions-2/',
+  // arnoldskeys — CONFIRMED: machinery auctions only, not property (re-verified 2026-04-05)
   // twgaze — REMOVED: antiques/chattels auctioneer, not property
   hairandson:             'https://www.hairandson.co.uk/auction',
   phillipssmithanddunn:   'https://www.phillipsland.com/auction',
@@ -1444,6 +1446,8 @@ const HOUSE_ROOTS = {
   auctionhammermidlands:  'https://auctionhammermidlands.co.uk/auction/',
   sharpesauctions:        'https://www.sharpesauctions.co.uk/current-traditional-auction.php',
   jjmorris:               'https://www.jjmorris.com/list-search-results/?auction=1&showstc=on',
+  rendells:               'https://rendells.bambooauctions.com',
+  pearsonferrier:         'https://pearsonferrier.co.uk/next-auctions/',
 };
 
 /*
@@ -6187,6 +6191,8 @@ function detectAuctionHouse(url) {
   if (u.includes('auctionhammermidlands')) return 'auctionhammermidlands';
   if (u.includes('sharpesauctions')) return 'sharpesauctions';
   if (u.includes('jjmorris.com')) return 'jjmorris';
+  if (u.includes('rendells.bambooauctions') || u.includes('rendells.co.uk')) return 'rendells';
+  if (u.includes('pearsonferrier.co.uk')) return 'pearsonferrier';
   // (Auction House UK branch patterns moved above generic catch-all)
   // ── EIG platform catch-all ──
   if (u.includes('.eigonlineauctions.com') || u.includes('eigpropertyauctions')) return 'eigplatform';
@@ -6330,6 +6336,8 @@ const HOUSE_DISPLAY_NAMES = {
   auctionhammermidlands: 'Auction Hammer Midlands',
   sharpesauctions: 'Sharpes Auctions',
   jjmorris: 'JJ Morris',
+  rendells: 'Rendells',
+  pearsonferrier: 'Pearson Ferrier',
 };
 
 function getHouseDisplayName(slug, url) {
@@ -10460,6 +10468,8 @@ DOM_EXTRACTORS['scargillmann'] = DOM_EXTRACTORS.sdl;
 DOM_EXTRACTORS['carterjonas'] = DOM_EXTRACTORS.hunters;
 // All Wales Auction uses Bamboo via The Property People
 DOM_EXTRACTORS['allwalesauction'] = DOM_EXTRACTORS.hunters;
+// Rendells Devon uses Bamboo Auctions platform (same as hunters)
+DOM_EXTRACTORS['rendells'] = DOM_EXTRACTORS.hunters;
 // Cooper and Tanner uses EIG platform for auctions
 DOM_EXTRACTORS['cooperandtanner'] = DOM_EXTRACTORS.eigplatform;
 // GOTO Properties platform is EIG-based (purplebricks.gotoproperties.co.uk)
