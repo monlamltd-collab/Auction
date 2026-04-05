@@ -2132,26 +2132,29 @@ function showResultsView(){
 }
 
 function backToAuctions(){
-  resetSearchState();
+  // Abort any pending search without clearing the visible lots/panel (prevents flicker)
+  if(_searchAbort){_searchAbort.abort();_searchAbort=null}
+  if(_searchReader){try{_searchReader.cancel()}catch(e){}_searchReader=null}
+  _searchTimers.forEach(id=>clearTimeout(id));
+  _searchTimers=[];
+  SMART_RESULTS=null;
+  if($('fSoldTop')) $('fSoldTop').value='all';
+  const _lb=$('logBox'); if(_lb) _lb.innerHTML='';
+
   document.body.classList.remove('view-results');
   $('progressPanel').style.display='none';
   $('mainBtn').disabled=false;
   $('mainBtn').textContent=$('smartQuery').value.trim()?'AI Search':'Browse';
-  // Restore all-lots view
+  // Restore all-lots view — set LOTS before render to avoid empty flash
   if(ALL_LOTS.length){
     LOTS=ALL_LOTS;
     $('resultsTitle').textContent=ALL_LOTS.length.toLocaleString()+' auction lots';
     $('viewToggle').style.display='none';
     $('reportView').style.display='none';
     $('cardsView').style.display='block';
-    // Only rebuild grid if it is empty (avoids image reload on in-app back)
-    const _grid = document.getElementById('lotsGrid');
-    const _gridHasContent = _grid && _grid.children.length > 1;
-    if (!_gridHasContent) {
-      buildLotFilters();
-      renderLots();
-    }
     $('resultsPanel').style.display='block';
+    buildLotFilters();
+    renderLots();
   }
   // Restore saved scroll or go to top
   const _savedY = parseInt(sessionStorage.getItem('ab_scroll_y') || '0');

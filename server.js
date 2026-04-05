@@ -4503,9 +4503,26 @@ Only return lots that genuinely match the query. If nothing matches well, say so
       };
     }
 
-    const rawMatchingLots = (parsed.indices || [])
+    let rawMatchingLots = (parsed.indices || [])
       .filter(i => i >= 0 && i < filteredLots.length)
       .map(i => filteredLots[i]);
+
+    // Deterministic fallback — if Gemini returned zero results but high-relevance lots exist,
+    // return those directly. Prevents zero-result failures for clear queries like "Bristol title split".
+    if (rawMatchingLots.length === 0) {
+      const maxRel = lotEntries.reduce((max, e) => Math.max(max, e.relevance), 0);
+      if (maxRel >= 2) {
+        const highRelIndices = lotEntries
+          .filter(e => e.relevance >= maxRel)
+          .map(e => parseInt(e.summary.match(/^\[(\d+)\]/)?.[1]))
+          .filter(i => !isNaN(i) && i >= 0 && i < filteredLots.length);
+        rawMatchingLots = highRelIndices.map(i => filteredLots[i]);
+        log.info('smart-search deterministic-fallback', { geminiEmpty: true, fallbackCount: rawMatchingLots.length, maxRelevance: maxRel });
+        if (!parsed.report || parsed.report.includes('could not')) {
+          parsed.report = `Found ${rawMatchingLots.length} lot${rawMatchingLots.length !== 1 ? 's' : ''} matching "${query}" via keyword matching.`;
+        }
+      }
+    }
 
     // Deduplicate by normalised address (cross-house) — keep lot with higher score/richer data
     const dedupMap = new Map();
@@ -11347,14 +11364,14 @@ async function backfillImagesFromLotPages(lots, concurrency = 5) {
         let m;
         while ((m = imgRe.exec(result.html)) !== null) {
           const src = m[1];
-          if (src && src.length > 20 && !src.startsWith('data:') && !junk.test(src)) {
-            let imgUrl = src;
-            if (!/^https?:\/\//i.test(imgUrl)) {
-              try { imgUrl = new URL(imgUrl, result.url || lot.url).href; } catch { continue; }
-            }
-            lot.imageUrl = imgUrl; filled++;
-            break;
+          if (!src || src.length <= 20 || src.startsWith('data:')) continue;
+          let imgUrl = src;
+          if (!/^https?:\/\//i.test(imgUrl)) {
+            try { imgUrl = new URL(imgUrl, result.url || lot.url).href; } catch { continue; }
           }
+          if (junk.test(imgUrl)) continue;
+          lot.imageUrl = imgUrl; filled++;
+          break;
         }
       } catch { /* skip */ }
     }));
@@ -11428,14 +11445,14 @@ async function enrichLotsFromLotPages(lots, concurrency = 5) {
           let m;
           while ((m = imgRe.exec(html)) !== null) {
             const src = m[1];
-            if (src && src.length > 20 && !src.startsWith('data:') && !junk.test(src)) {
-              let imgUrl = src;
-              if (!/^https?:\/\//i.test(imgUrl)) {
-                try { imgUrl = new URL(imgUrl, result.url || lot.url).href; } catch { continue; }
-              }
-              lot.imageUrl = imgUrl; stats.image++;
-              break;
+            if (!src || src.length <= 20 || src.startsWith('data:')) continue;
+            let imgUrl = src;
+            if (!/^https?:\/\//i.test(imgUrl)) {
+              try { imgUrl = new URL(imgUrl, result.url || lot.url).href; } catch { continue; }
             }
+            if (junk.test(imgUrl)) continue;
+            lot.imageUrl = imgUrl; stats.image++;
+            break;
           }
         }
 
