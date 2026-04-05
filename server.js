@@ -15860,7 +15860,7 @@ async function runEnrichmentWave() {
     console.log(`HYGIENE: Starting at ${new Date().toISOString()}...`);
 
     // ═══ PASS 1: Price Hunter — fetch lot pages for every lot missing price ═══
-    // Price is the #1 non-negotiable. Batch of 100 per cycle.
+    // Price is the #1 non-negotiable. 500 per cycle — Firecrawl budget has headroom.
     const { data: pricelessLots } = await supabase
       .from('lots')
       .select('*')
@@ -15868,7 +15868,7 @@ async function runEnrichmentWave() {
       .not('url', 'like', '__synthetic__%')
       .is('price_text', null) // skip lots already confirmed POA
       .order('last_seen_at', { ascending: false })
-      .limit(100);
+      .limit(500);
 
     if (pricelessLots && pricelessLots.length > 0) {
       console.log(`HYGIENE [price]: ${pricelessLots.length} lots missing prices...`);
@@ -15901,7 +15901,7 @@ async function runEnrichmentWave() {
       .is('postcode', null)
       .not('url', 'like', '__synthetic__%')
       .order('last_seen_at', { ascending: false })
-      .limit(75);
+      .limit(300);
 
     if (noPostcodeLots && noPostcodeLots.length > 0) {
       console.log(`HYGIENE [postcode]: ${noPostcodeLots.length} lots missing postcodes...`);
@@ -15925,7 +15925,7 @@ async function runEnrichmentWave() {
       .not('postcode', 'is', null)
       .or('enriched_at.is.null,epc_rating.is.null,flood_risk.is.null,street_avg.is.null,est_gross_yield.is.null')
       .order('last_seen_at', { ascending: false })
-      .limit(150);
+      .limit(500);
 
     if (needsEnrichment && needsEnrichment.length > 0) {
       console.log(`HYGIENE [enrich]: ${needsEnrichment.length} lots have postcode but missing EPC/flood/comps/yield...`);
@@ -15972,7 +15972,7 @@ async function runEnrichmentWave() {
       .not('url', 'like', '__synthetic__%')
       .or('tenure.is.null,condition.is.null,beds.is.null,image_url.is.null,prop_type.is.null,vacant.is.null')
       .order('last_seen_at', { ascending: false })
-      .limit(50);
+      .limit(300);
 
     if (needsLotPage && needsLotPage.length > 0) {
       console.log(`HYGIENE [lot-page]: ${needsLotPage.length} lots need deep enrichment from lot pages...`);
