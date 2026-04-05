@@ -9553,8 +9553,17 @@ const DOM_EXTRACTORS = {
         if (lotMatch) lotNum = parseInt(lotMatch[1]);
         // Address from [data-address-searchable] or first heading
         let address = '';
-        const addrEl = card.querySelector('[data-address-searchable], h4.grid-address, h4');
+        const addrEl = card.querySelector('[data-address-searchable], h3 a, a h3, h3, h4.grid-address, h4');
         if (addrEl) address = addrEl.textContent.trim().replace(/\\u00a0/g, ' ');
+        // Skip descriptions masquerading as addresses (e.g. "A three bedroom house" with no postcode)
+        if (address && /^A\\s+(one|two|three|four|five|six|\\d+)\\s+(bed|studio)/i.test(address)) {
+          // Try h3 which often has the real address on EIG sites like Harmanhealy
+          const h3El = card.querySelector('h3');
+          if (h3El && h3El !== addrEl) {
+            const h3Text = h3El.textContent.trim().replace(/\\u00a0/g, ' ');
+            if (h3Text && h3Text.length >= 10 && /[A-Z]{1,2}\\d/.test(h3Text)) address = h3Text;
+          }
+        }
         if (!address) {
           // Fallback: find postcode line in text
           const lines = text.split('\\n').map(s => s.trim()).filter(s => s.length > 5);
@@ -11573,13 +11582,18 @@ async function backfillImagesFromLotPages(lots, concurrency = 5) {
 // ═══════════════════════════════════════════════════════════════
 async function enrichLotsFromLotPages(lots, concurrency = 5) {
   // Target any lot with a URL that's missing ANY enrichment field
+  const addrIsDescription = a => /^A\s+(one|two|three|four|five|six|\d+)\s+(bed|studio)/i.test(a);
   const targets = lots.filter(l => {
     if (!l.url || !/^https?:\/\//i.test(l.url)) return false;
     return !l.address || l.address.trim().length < 5
+      || addrIsDescription(l.address || '')
+      || !l.postcode
       || !l.imageUrl
       || !l.tenure
       || !l.condition
       || !l.beds
+      || !l.price
+      || l.vacant == null
       || !l.propType || l.propType === 'other' || l.propType === 'unknown'
       || (l.tenure === 'Leasehold' && !l.leaseLength);
   });
@@ -11605,7 +11619,9 @@ async function enrichLotsFromLotPages(lots, concurrency = 5) {
         const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').toLowerCase();
 
         // ── Address ──
-        if (!lot.address || lot.address.trim().length < 5) {
+        // Also re-fetch if address looks like a description (no postcode, starts with "A one/two/three bed")
+        const addrLooksLikeDescription = lot.address && /^A\s+(one|two|three|four|five|six|\d+)\s+(bed|studio)/i.test(lot.address);
+        if (!lot.address || lot.address.trim().length < 5 || addrLooksLikeDescription) {
           let address = '';
           const ogMatch = html.match(/<meta[^>]+property="og:title"[^>]+content="([^"]+)"/i) ||
                            html.match(/<meta[^>]+content="([^"]+)"[^>]+property="og:title"/i);
@@ -11615,11 +11631,18 @@ async function enrichLotsFromLotPages(lots, concurrency = 5) {
             if (h1Match) address = h1Match[1].trim();
           }
           if (!address) {
+            // h2 fallback — EIG lot pages often have address in h2 (e.g. "Lot 10 - 22 Street, Town, AB1 2CD")
+            const h2Match = html.match(/<h2[^>]*>([^<]{10,})<\/h2>/i);
+            if (h2Match) address = h2Match[1].trim();
+          }
+          if (!address) {
             const titleMatch = html.match(/<title>([^<]+)<\/title>/i);
             if (titleMatch) address = titleMatch[1].replace(/\s*[-|].*$/, '').trim();
           }
           if (address) {
             address = address.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#?\w+;/g, ' ').replace(/\s+/g, ' ').trim();
+            // Strip "Lot N - " prefix from heading-derived addresses
+            address = address.replace(/^Lot\s+\d+\s*[-–—]\s*/i, '').trim();
           }
           if (address && address.length >= 5) { lot.address = address; stats.address++; }
         }
@@ -11732,6 +11755,32 @@ async function enrichLotsFromLotPages(lots, concurrency = 5) {
           else if (/\bbungalow\b/.test(text)) { lot.propType = 'house'; stats.propType++; }
           else if (/\b(?:land|plot|garage|parking\s+space|storage\s+unit)\b/.test(text)) { lot.propType = 'land'; stats.propType++; }
           else if (/\b(?:shop|retail|office|warehouse|industrial|commercial|pub|hotel|restaurant)\b/.test(text)) { lot.propType = 'commercial'; stats.propType++; }
+        }
+
+        // ── Price ──
+        if (!lot.price) {
+          // Guide Price: £165,000 / Starting Bid: £50,000 / Reserve Price: £80,000
+          const priceMatch = text.match(/(?:guide\s*price|starting\s*bid|reserve\s*price|price|asking)[^£]*£([\d,]+)/i)
+            || text.match(/£([\d,]+)\s*(?:guide|starting|reserve|plus)/i);
+          if (priceMatch) {
+            const p = parseInt(priceMatch[1].replace(/,/g, ''), 10);
+            if (p >= 1000 && p <= 50000000) { lot.price = p; if (!stats.price) stats.price = 0; stats.price++; }
+          }
+        }
+
+        // ── Vacant ──
+        if (lot.vacant == null) {
+          if (/\b(?:vacant\s+possession|sold\s+with\s+vacant|\bvp\b|vacant\s+property|with\s+vacant|currently\s+vacant|unoccupied)\b/.test(text)) {
+            lot.vacant = true; if (!stats.vacant) stats.vacant = 0; stats.vacant++;
+          } else if (/\b(?:(?:currently\s+)?(?:let|tenanted|rented|occupied)|tenant\s+in\s+situ|subject\s+to\s+tenanc|assured\s+shorthold|sitting\s+tenant|(?:rental|current)\s+income)\b/.test(text)) {
+            lot.vacant = false; if (!stats.vacant) stats.vacant = 0; stats.vacant++;
+          }
+        }
+
+        // ── Postcode re-extraction from newly fetched address ──
+        if (!lot.postcode && lot.address) {
+          const pc = extractPostcode(lot.address);
+          if (pc) lot.postcode = pc;
         }
 
       } catch { /* timeout or network error — skip */ }
@@ -12023,9 +12072,9 @@ function analyseLot(raw) {
   // Infer from property type when tenure not stated: flats are almost always leasehold, houses freehold
   if (!L.tenure && L.propType === 'flat' && /\b\d{2,3}\s*(?:year|yr)s?\b/.test(t)) L.tenure = 'Leasehold';
 
-  if (/modernis|refurbishment|renovation|updating|in need of|improvement|for improve/.test(t)) L.condition = 'needs work';
-  else if (/good order|good decorative|well maintained|recently refurbished/.test(t)) L.condition = 'good';
-  else if (/derelict|dilapidated|fire damage/.test(t)) L.condition = 'poor';
+  if (/derelict|dilapidated|fire damage|structurally unsound|uninhabitable|condemned/.test(t)) L.condition = 'poor';
+  else if (/modernis|refurbishment|renovation|updating|in need of|improvement|for improve|requires? (?:updating|work|repair)|(?:tired|dated|worn) (?:condition|decor|throughout)|cosmetic work|stripping out|(?:complete|full|extensive) refurb|fixer.upper|requires attention/.test(t)) L.condition = 'needs work';
+  else if (/good order|good decorative|well maintained|recently refurbished|well presented|good condition|excellent condition|ready to let|move.in|turnkey/.test(t)) L.condition = 'good';
 
   if (/vacant possession|\bvp\b|vacant property|\bvacant\b|with vacant|sold with vacant/.test(t)) L.vacant = true;
   else if (/tenant|let to|tenanted|occupied|sitting tenant|subject to tenancy|assured shorthold/.test(t)) L.vacant = false;
@@ -13526,6 +13575,12 @@ app.listen(PORT, () => {
   // Run 30s after startup (let everything initialise), then every 6 hours
   setTimeout(() => autoAnalyseAll(), 30000);
   setInterval(() => autoAnalyseAll(), 6 * 60 * 60 * 1000);
+
+  // ── Data hygiene engine ──
+  // Run 2 min after startup, then every 30 min. No excuses — every lot gets
+  // price, postcode, EPC, flood, comps, yield as fast as possible.
+  setTimeout(() => runEnrichmentWave(), 2 * 60 * 1000);
+  setInterval(() => runEnrichmentWave(), 30 * 60 * 1000);
 
   // ── Daily analytics snapshot at midnight ──
   function scheduleNextMidnight() {
@@ -15548,6 +15603,457 @@ app.post('/api/admin/seed-snapshot', async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// ── Rescue orphaned lots: backfill lots in cached_analyses but missing from lots table ──
+app.post('/api/admin/rescue-orphaned-lots', async (req, res) => {
+  const token = req.headers['x-admin-secret'] || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
+    return res.status(403).json({ error: 'Invalid admin token' });
+  }
+  try {
+    const dryRun = req.body?.dryRun !== false; // default to dry run
+    console.log(`RESCUE: Starting orphaned lot rescue (dryRun=${dryRun})...`);
+
+    // Fetch all cached_analyses rows with lots
+    const { data: caches, error: cacheErr } = await supabase
+      .from('cached_analyses')
+      .select('url, house, lots')
+      .not('lots', 'is', null);
+    if (cacheErr) throw new Error(`Failed to fetch cached_analyses: ${cacheErr.message}`);
+    if (!caches || caches.length === 0) return res.json({ rescued: 0, message: 'No cached analyses found' });
+
+    // Fetch all existing lot keys from the lots table
+    const { data: existingLots, error: lotsErr } = await supabase
+      .from('lots')
+      .select('house, url');
+    if (lotsErr) throw new Error(`Failed to fetch lots: ${lotsErr.message}`);
+
+    const existingKeys = new Set((existingLots || []).map(l => `${l.house}|${l.url}`));
+    console.log(`RESCUE: ${caches.length} cached catalogues, ${existingKeys.size} existing lot rows`);
+
+    let totalOrphaned = 0;
+    let totalRescued = 0;
+    const perHouse = {};
+
+    for (const cache of caches) {
+      const cachedLots = cache.lots || [];
+      if (!Array.isArray(cachedLots) || cachedLots.length === 0) continue;
+
+      const house = cache.house;
+      const catalogueUrl = cache.url;
+
+      // Find orphaned lots — in cache but not in lots table
+      const orphaned = cachedLots.filter(lot => {
+        const addr = (lot.address || '').trim();
+        if (!addr || addr.length < 5) return false;
+        if (JUNK_LOT_PATTERN.test(addr)) return false;
+
+        let lotUrl = lot.url || null;
+        if (!lotUrl) {
+          lotUrl = `__synthetic__${house}__${addr.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 80)}__${lot.price || 0}`;
+        }
+        return !existingKeys.has(`${house}|${lotUrl}`);
+      });
+
+      if (orphaned.length === 0) continue;
+      totalOrphaned += orphaned.length;
+      perHouse[house] = (perHouse[house] || 0) + orphaned.length;
+
+      if (!dryRun) {
+        normaliseLotStatuses(orphaned);
+        await upsertToLotsTable(orphaned, house, catalogueUrl, {
+          scrapedWith: 'orphan-rescue',
+        });
+        totalRescued += orphaned.length;
+      }
+    }
+
+    console.log(`RESCUE: ${dryRun ? 'Found' : 'Rescued'} ${totalOrphaned} orphaned lots across ${Object.keys(perHouse).length} houses`);
+    res.json({
+      dryRun,
+      orphaned: totalOrphaned,
+      rescued: dryRun ? 0 : totalRescued,
+      perHouse,
+      message: dryRun ? 'Dry run — POST with { "dryRun": false } to execute' : `Rescued ${totalRescued} lots`,
+    });
+  } catch (e) {
+    console.error('RESCUE: Failed:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Re-enrich lots with missing data ──
+app.post('/api/admin/re-enrich', async (req, res) => {
+  const token = req.headers['x-admin-secret'] || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
+    return res.status(403).json({ error: 'Invalid admin token' });
+  }
+  try {
+    const limit = Math.min(req.body?.limit || 200, 500);
+    const house = req.body?.house || null; // optional: target specific house
+    const dryRun = req.body?.dryRun !== false;
+
+    console.log(`RE-ENRICH: Starting (limit=${limit}, house=${house || 'all'}, dryRun=${dryRun})...`);
+
+    // Find lots needing enrichment: no enriched_at, or no score and recently seen
+    let query = supabase
+      .from('lots')
+      .select('*')
+      .or('enriched_at.is.null,score.is.null')
+      .order('last_seen_at', { ascending: false })
+      .limit(limit);
+    if (house) query = query.eq('house', house);
+
+    const { data: lots, error: lotsErr } = await query;
+    if (lotsErr) throw new Error(`Failed to fetch lots: ${lotsErr.message}`);
+    if (!lots || lots.length === 0) return res.json({ enriched: 0, message: 'No lots need enrichment' });
+
+    // Group by house + catalogue_url for batch processing
+    const groups = {};
+    for (const lot of lots) {
+      const key = `${lot.house}|${lot.catalogue_url}`;
+      if (!groups[key]) groups[key] = { house: lot.house, catalogueUrl: lot.catalogue_url, lots: [] };
+      groups[key].lots.push(lot);
+    }
+
+    if (dryRun) {
+      const perHouse = {};
+      for (const lot of lots) perHouse[lot.house] = (perHouse[lot.house] || 0) + 1;
+      const gaps = {
+        noScore: lots.filter(l => l.score == null).length,
+        noEnrichedAt: lots.filter(l => !l.enriched_at).length,
+        noPostcode: lots.filter(l => !l.postcode).length,
+        noStreetAvg: lots.filter(l => l.street_avg == null).length,
+        noYield: lots.filter(l => l.est_gross_yield == null).length,
+        noCondition: lots.filter(l => !l.condition).length,
+        noEpc: lots.filter(l => !l.epc_rating).length,
+      };
+      return res.json({ dryRun: true, found: lots.length, perHouse, gaps, message: 'POST with { "dryRun": false } to execute' });
+    }
+
+    let totalEnriched = 0;
+    for (const [, group] of Object.entries(groups)) {
+      try {
+        // Convert DB rows back to in-memory lot format for enrichment functions
+        const lotObjs = group.lots.map(dbRow => ({
+          lot: dbRow.lot_number,
+          address: dbRow.address,
+          postcode: dbRow.postcode,
+          price: dbRow.price,
+          priceText: dbRow.price_text,
+          propType: dbRow.prop_type,
+          beds: dbRow.beds,
+          tenure: dbRow.tenure,
+          leaseLength: dbRow.lease_length,
+          sqft: dbRow.sqft,
+          condition: dbRow.condition,
+          imageUrl: dbRow.image_url,
+          bullets: dbRow.bullets || [],
+          units: dbRow.units || 0,
+          status: dbRow.status || 'available',
+          soldPrice: dbRow.sold_price,
+          epcRating: dbRow.epc_rating,
+          epcScore: dbRow.epc_score,
+          epcDate: dbRow.epc_date,
+          floodZone: dbRow.flood_zone,
+          floodRiskLevel: dbRow.flood_risk,
+          streetAvg: dbRow.street_avg,
+          streetSales: dbRow.street_sales,
+          streetSalesCount: dbRow.street_sales_count,
+          belowMarket: dbRow.below_market,
+          estMonthlyRent: dbRow.est_monthly_rent,
+          estAnnualRent: dbRow.est_annual_rent,
+          estGrossYield: dbRow.est_gross_yield,
+          score: dbRow.score != null ? dbRow.score : 0,
+          scoreBreakdown: dbRow.score_breakdown || [],
+          opps: dbRow.opps || [],
+          risks: dbRow.risks || [],
+          dealType: dbRow.deal_type,
+          vacant: dbRow.vacant,
+          titleSplit: dbRow.title_split,
+          url: dbRow.url,
+          enrichedAt: dbRow.enriched_at,
+        }));
+
+        // Re-analyse lots that have no score (rebuilds scoring from scratch)
+        const needsAnalysis = lotObjs.filter(l => l.score === 0 && (!l.scoreBreakdown || l.scoreBreakdown.length === 0));
+        for (let i = 0; i < needsAnalysis.length; i++) {
+          const reanalysed = analyseLot(needsAnalysis[i]);
+          Object.assign(needsAnalysis[i], reanalysed);
+        }
+
+        // Extract postcodes for lots missing them
+        for (const lot of lotObjs) {
+          if (!lot.postcode && lot.address) {
+            lot.postcode = extractPostcode(lot.address);
+          }
+        }
+
+        // Run enrichLots for street comps, yield, EPC, flood
+        await enrichLots(lotObjs, group.house, group.catalogueUrl);
+
+        // Write enriched data back to lots table
+        normaliseLotStatuses(lotObjs);
+        await upsertToLotsTable(lotObjs, group.house, group.catalogueUrl, {
+          scrapedWith: 're-enrich',
+        });
+        totalEnriched += lotObjs.length;
+        console.log(`RE-ENRICH: ✓ ${group.house}: ${lotObjs.length} lots re-enriched`);
+      } catch (groupErr) {
+        console.warn(`RE-ENRICH: Failed for ${group.house}: ${groupErr.message}`);
+      }
+    }
+
+    console.log(`RE-ENRICH: Complete — ${totalEnriched}/${lots.length} lots enriched`);
+    res.json({ enriched: totalEnriched, total: lots.length, groups: Object.keys(groups).length });
+  } catch (e) {
+    console.error('RE-ENRICH: Failed:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// DATA HYGIENE ENGINE
+// ═══════════════════════════════════════════════════════════════
+// Runs every 30 minutes. No waiting — every cycle does EVERYTHING for every
+// lot that's missing any non-negotiable field. A lot without price/postcode/
+// address is useless. Keep hammering until 100% hygiene or explicitly POA.
+//
+// Non-negotiable fields (lot is useless without these):
+//   address, postcode, price, image, prop_type, beds
+// Free-if-we-have-postcode (no excuse not to have):
+//   EPC, flood risk, street comps, yield
+// Lot-page enrichment (fetched per-lot if still missing):
+//   tenure, condition, vacant, lease length
+
+let _enrichmentWaveRunning = false;
+
+// ── Helper: convert DB row to in-memory lot object ──
+function dbRowToLot(dbRow) {
+  return {
+    lot: dbRow.lot_number, address: dbRow.address, postcode: dbRow.postcode || extractPostcode(dbRow.address),
+    price: dbRow.price, priceText: dbRow.price_text, propType: dbRow.prop_type, beds: dbRow.beds,
+    tenure: dbRow.tenure, leaseLength: dbRow.lease_length, sqft: dbRow.sqft, condition: dbRow.condition,
+    imageUrl: dbRow.image_url, bullets: dbRow.bullets || [], units: dbRow.units || 0,
+    status: dbRow.status || 'available', soldPrice: dbRow.sold_price,
+    epcRating: dbRow.epc_rating, epcScore: dbRow.epc_score, epcDate: dbRow.epc_date,
+    floodZone: dbRow.flood_zone, floodRiskLevel: dbRow.flood_risk,
+    streetAvg: dbRow.street_avg, streetSales: dbRow.street_sales, streetSalesCount: dbRow.street_sales_count,
+    belowMarket: dbRow.below_market, estMonthlyRent: dbRow.est_monthly_rent,
+    estAnnualRent: dbRow.est_annual_rent, estGrossYield: dbRow.est_gross_yield,
+    score: dbRow.score != null ? dbRow.score : 0, scoreBreakdown: dbRow.score_breakdown || [],
+    opps: dbRow.opps || [], risks: dbRow.risks || [], dealType: dbRow.deal_type,
+    vacant: dbRow.vacant, titleSplit: dbRow.title_split, url: dbRow.url, enrichedAt: dbRow.enriched_at,
+    _dbId: dbRow.id, _house: dbRow.house, _catalogueUrl: dbRow.catalogue_url,
+  };
+}
+
+// ── Helper: group lots by house+catalogue and upsert ──
+async function upsertLotGroups(lotObjs, source) {
+  const groups = {};
+  for (const lot of lotObjs) {
+    const key = `${lot._house}|${lot._catalogueUrl}`;
+    if (!groups[key]) groups[key] = { house: lot._house, catalogueUrl: lot._catalogueUrl, lots: [] };
+    groups[key].lots.push(lot);
+  }
+  let total = 0;
+  for (const [, g] of Object.entries(groups)) {
+    normaliseLotStatuses(g.lots);
+    await upsertToLotsTable(g.lots, g.house, g.catalogueUrl, { scrapedWith: source });
+    total += g.lots.length;
+  }
+  return total;
+}
+
+// ── Price extraction from HTML (shared by price hunter + lot-page enrichment) ──
+function extractPriceFromText(text) {
+  const patterns = [
+    /(?:guide\s*price|starting\s*bid|minimum\s*opening\s*bid|reserve\s*price|current\s*bid)[^£]{0,30}£([\d,]+)/i,
+    /£([\d,]+)\s*(?:guide|starting|plus|reserve|\+)/i,
+    /(?:price|sold\s*(?:for|at|price))[^£]{0,20}£([\d,]+)/i,
+    /£([\d,]+)\s*[-–]\s*£([\d,]+)/i, // range — take lower
+  ];
+  for (const pat of patterns) {
+    const m = text.match(pat);
+    if (m) {
+      const p = parseInt(m[1].replace(/,/g, ''), 10);
+      if (p >= 500 && p <= 50000000) return { price: p, priceText: null };
+    }
+  }
+  // Fallback: any standalone £ amount
+  const allPrices = [...text.matchAll(/£([\d,]+)/g)]
+    .map(m => parseInt(m[1].replace(/,/g, ''), 10))
+    .filter(p => p >= 1000 && p <= 50000000);
+  if (allPrices.length === 1) return { price: allPrices[0], priceText: null };
+  if (allPrices.length > 1) {
+    const nonFee = allPrices.filter(p => p >= 5000);
+    if (nonFee.length > 0) return { price: nonFee[0], priceText: null };
+  }
+  // Detect explicit no-price
+  if (/\b(?:price on application|p\.?o\.?a\.?|to be advised|t\.?b\.?a\.?|refer to auctioneer|contact.*for.*price|price available on request|offers? invited|no guide|by negotiation)\b/i.test(text)) {
+    return { price: null, priceText: 'POA' };
+  }
+  return null;
+}
+
+async function runEnrichmentWave() {
+  if (_enrichmentWaveRunning) { console.log('HYGIENE: Already running, skipping'); return; }
+  _enrichmentWaveRunning = true;
+  const stats = { lotPageFetched: 0, pricesFound: 0, pricesPoa: 0, postcodeFixed: 0, enriched: 0, lotPageEnriched: 0 };
+  try {
+    console.log(`HYGIENE: Starting at ${new Date().toISOString()}...`);
+
+    // ═══ PASS 1: Price Hunter — fetch lot pages for every lot missing price ═══
+    // Price is the #1 non-negotiable. Batch of 100 per cycle.
+    const { data: pricelessLots } = await supabase
+      .from('lots')
+      .select('*')
+      .or('price.is.null,price.eq.0')
+      .not('url', 'like', '__synthetic__%')
+      .is('price_text', null) // skip lots already confirmed POA
+      .order('last_seen_at', { ascending: false })
+      .limit(100);
+
+    if (pricelessLots && pricelessLots.length > 0) {
+      console.log(`HYGIENE [price]: ${pricelessLots.length} lots missing prices...`);
+      for (let i = 0; i < pricelessLots.length; i += 5) {
+        if (i > 0) await new Promise(r => setTimeout(r, 300));
+        const batch = pricelessLots.slice(i, i + 5);
+        await Promise.allSettled(batch.map(async (dbRow) => {
+          try {
+            const result = await fetchLotPage(dbRow.url);
+            if (!result) return;
+            stats.lotPageFetched++;
+            const text = result.html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').toLowerCase();
+            const extracted = extractPriceFromText(text);
+            if (extracted) {
+              const update = {};
+              if (extracted.price) { update.price = extracted.price; stats.pricesFound++; }
+              if (extracted.priceText) { update.price_text = extracted.priceText; stats.pricesPoa++; }
+              await supabase.from('lots').update(update).eq('id', dbRow.id);
+            }
+          } catch { /* retry next cycle */ }
+        }));
+      }
+      console.log(`HYGIENE [price]: ✓ ${stats.pricesFound} found, ${stats.pricesPoa} POA`);
+    }
+
+    // ═══ PASS 2: Postcode rescue — lot-page fetch for lots with no postcode ═══
+    const { data: noPostcodeLots } = await supabase
+      .from('lots')
+      .select('*')
+      .is('postcode', null)
+      .not('url', 'like', '__synthetic__%')
+      .order('last_seen_at', { ascending: false })
+      .limit(75);
+
+    if (noPostcodeLots && noPostcodeLots.length > 0) {
+      console.log(`HYGIENE [postcode]: ${noPostcodeLots.length} lots missing postcodes...`);
+      const lotObjs = noPostcodeLots.map(dbRowToLot);
+      await enrichLotsFromLotPages(lotObjs, 3);
+      for (const lot of lotObjs) {
+        if (!lot.postcode && lot.address) {
+          lot.postcode = extractPostcode(lot.address);
+          if (lot.postcode) stats.postcodeFixed++;
+        }
+      }
+      await upsertLotGroups(lotObjs, 'hygiene-postcode');
+      console.log(`HYGIENE [postcode]: ✓ ${stats.postcodeFixed} postcodes recovered`);
+    }
+
+    // ═══ PASS 3: Full enrichment — comps, yield, EPC, flood for lots with postcode but missing data ═══
+    // No time gates. If you have a postcode and are missing EPC/flood/comps/yield, you get enriched NOW.
+    const { data: needsEnrichment } = await supabase
+      .from('lots')
+      .select('*')
+      .not('postcode', 'is', null)
+      .or('enriched_at.is.null,epc_rating.is.null,flood_risk.is.null,street_avg.is.null,est_gross_yield.is.null')
+      .order('last_seen_at', { ascending: false })
+      .limit(150);
+
+    if (needsEnrichment && needsEnrichment.length > 0) {
+      console.log(`HYGIENE [enrich]: ${needsEnrichment.length} lots have postcode but missing EPC/flood/comps/yield...`);
+      const groups = {};
+      for (const row of needsEnrichment) {
+        const key = `${row.house}|${row.catalogue_url}`;
+        if (!groups[key]) groups[key] = { house: row.house, catalogueUrl: row.catalogue_url, rows: [] };
+        groups[key].rows.push(row);
+      }
+
+      for (const [, group] of Object.entries(groups)) {
+        try {
+          const lotObjs = group.rows.map(dbRowToLot);
+          // Re-analyse unscored lots
+          for (const lot of lotObjs) {
+            if (lot.score === 0 && (!lot.scoreBreakdown || lot.scoreBreakdown.length === 0)) {
+              Object.assign(lot, analyseLot(lot));
+            }
+            // Condition inference from bullets
+            if (!lot.condition && lot.bullets && lot.bullets.length > 0) {
+              const t = lot.bullets.join(' ').toLowerCase();
+              if (/derelict|dilapidated|fire damage/.test(t)) lot.condition = 'poor';
+              else if (/modernis|refurbishment|renovation|updating|in need of|improvement|requires? (?:updating|work|repair)|fixer.upper/.test(t)) lot.condition = 'needs work';
+              else if (/good order|good decorative|well maintained|recently refurbished|good condition/.test(t)) lot.condition = 'good';
+            }
+          }
+          // enrichLots does: Land Registry comps, yield calc, EPC lookup, flood check
+          await enrichLots(lotObjs, group.house, group.catalogueUrl);
+          normaliseLotStatuses(lotObjs);
+          await upsertToLotsTable(lotObjs, group.house, group.catalogueUrl, { scrapedWith: 'hygiene-enrich' });
+          stats.enriched += lotObjs.length;
+          console.log(`HYGIENE [enrich]: ✓ ${group.house}: ${lotObjs.length} lots`);
+        } catch (e) {
+          console.warn(`HYGIENE [enrich]: Failed for ${group.house}: ${e.message}`);
+        }
+      }
+    }
+
+    // ═══ PASS 4: Lot-page deep enrichment — tenure, condition, beds, vacant, images ═══
+    // Targets any lot still missing non-negotiable fields that has a fetchable URL.
+    const { data: needsLotPage } = await supabase
+      .from('lots')
+      .select('*')
+      .not('url', 'like', '__synthetic__%')
+      .or('tenure.is.null,condition.is.null,beds.is.null,image_url.is.null,prop_type.is.null,vacant.is.null')
+      .order('last_seen_at', { ascending: false })
+      .limit(50);
+
+    if (needsLotPage && needsLotPage.length > 0) {
+      console.log(`HYGIENE [lot-page]: ${needsLotPage.length} lots need deep enrichment from lot pages...`);
+      const lotObjs = needsLotPage.map(dbRowToLot);
+      try {
+        await enrichLotsFromLotPages(lotObjs, 3);
+        await upsertLotGroups(lotObjs, 'hygiene-lotpage');
+        stats.lotPageEnriched += lotObjs.length;
+        console.log(`HYGIENE [lot-page]: ✓ ${lotObjs.length} lots enriched`);
+      } catch (e) {
+        console.warn(`HYGIENE [lot-page]: Failed: ${e.message}`);
+      }
+    }
+
+    // ═══ Summary ═══
+    const { count: remainingNoPrice } = await supabase.from('lots').select('*', { count: 'exact', head: true }).or('price.is.null,price.eq.0').is('price_text', null);
+    const { count: remainingNoPostcode } = await supabase.from('lots').select('*', { count: 'exact', head: true }).is('postcode', null).not('url', 'like', '__synthetic__%');
+    const { count: remainingNoEnrich } = await supabase.from('lots').select('*', { count: 'exact', head: true }).is('enriched_at', null).not('postcode', 'is', null);
+    console.log(`HYGIENE: Complete — prices:${stats.pricesFound}found/${stats.pricesPoa}poa, postcodes:${stats.postcodeFixed}fixed, enriched:${stats.enriched}, lotPages:${stats.lotPageEnriched}`);
+    console.log(`HYGIENE: Remaining gaps — no price:${remainingNoPrice || 0}, no postcode:${remainingNoPostcode || 0}, no enrichment:${remainingNoEnrich || 0}`);
+  } catch (e) {
+    console.error('HYGIENE: Fatal error:', e.message);
+  } finally {
+    _enrichmentWaveRunning = false;
+  }
+}
+
+// ── Manual trigger for enrichment waves ──
+app.post('/api/admin/enrich-waves', async (req, res) => {
+  const token = req.headers['x-admin-secret'] || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
+    return res.status(403).json({ error: 'Invalid admin token' });
+  }
+  if (_enrichmentWaveRunning) return res.json({ ok: false, message: 'Enrichment wave already running' });
+  runEnrichmentWave().catch(e => console.error('Manual enrichment wave failed:', e.message));
+  res.json({ ok: true, message: 'Enrichment wave started in background' });
 });
 
 // ── Lightweight event tracking for client-only actions ──
