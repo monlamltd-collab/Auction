@@ -1844,7 +1844,8 @@ app.post('/api/cron/unsold-alerts', async (req, res) => {
       const { data: unsoldRows, error: unsoldErr } = await supabase
         .from('lots')
         .select(LOTS_SELECT)
-        .or(`status.eq.unsold,and(auction_date.lt.${todayStr},or(status.eq.available,status.is.null))`);
+        .or(`status.eq.unsold,and(auction_date.lt.${todayStr},or(status.eq.available,status.is.null))`)
+        .limit(1000);
 
       if (unsoldErr || !unsoldRows) continue;
 
@@ -1919,6 +1920,10 @@ app.post('/api/cron/unsold-alerts', async (req, res) => {
 
 // GET /api/stripe/diag — check Stripe config (temporary diagnostic)
 app.get('/api/stripe/diag', (req, res) => {
+  const token = req.headers['x-admin-secret'] || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
   if (!STRIPE_ENABLED) return res.status(503).json({ error: 'payments_hibernated' });
   const key = process.env.STRIPE_SECRET_KEY || '';
   const priceId = process.env.STRIPE_MONTHLY_PRICE_ID || '';
@@ -5906,14 +5911,14 @@ app.get('/api/admin/system-health', async (req, res) => {
       for (const row of cachedMeta) {
         const slug = row.house;
         if (!houseMap[slug]) {
-          houseMap[slug] = { slug, displayName: HOUSE_DISPLAY_NAMES[slug] || slug, lotCount: 0, imageCoverage: 0, bedCoverage: 0, status: 'active', lastScraped: null, _imgCount: 0, _lotCount: 0, _bedCount: 0 };
+          houseMap[slug] = { slug, displayName: HOUSE_DISPLAY_NAMES[slug] || slug, lotCount: 0, imageCoverage: 0, bedCoverage: 0, status: 'active', lastScraped: null, _imgCount: 0, _lotCount: 0, _bedCount: 0, _hasExpiredCache: false };
         }
         const h = houseMap[slug];
         if (row.created_at && (!h.lastScraped || row.created_at > h.lastScraped)) {
           h.lastScraped = row.created_at;
         }
-        if (row.expires_at && new Date(row.expires_at) < now && h.lotCount === 0) {
-          h.status = 'stale';
+        if (row.expires_at && new Date(row.expires_at) < now) {
+          h._hasExpiredCache = true;
         }
       }
     }
@@ -5923,7 +5928,7 @@ app.get('/api/admin/system-health', async (req, res) => {
       for (const lot of lotRows) {
         const slug = lot.house;
         if (!houseMap[slug]) {
-          houseMap[slug] = { slug, displayName: HOUSE_DISPLAY_NAMES[slug] || slug, lotCount: 0, imageCoverage: 0, bedCoverage: 0, status: 'active', lastScraped: null, _imgCount: 0, _lotCount: 0, _bedCount: 0 };
+          houseMap[slug] = { slug, displayName: HOUSE_DISPLAY_NAMES[slug] || slug, lotCount: 0, imageCoverage: 0, bedCoverage: 0, status: 'active', lastScraped: null, _imgCount: 0, _lotCount: 0, _bedCount: 0, _hasExpiredCache: false };
         }
         const h = houseMap[slug];
         h.lotCount++;
@@ -5935,6 +5940,11 @@ app.get('/api/admin/system-health', async (req, res) => {
       }
     }
 
+    // Mark stale only if cache expired AND no lots (evaluated after both loops)
+    for (const h of Object.values(houseMap)) {
+      if (h._hasExpiredCache && h.lotCount === 0) h.status = 'stale';
+    }
+
     const houses = Object.values(houseMap).map(h => {
       const skill = skillMap[h.slug];
       if (skill && skill.status === 'broken') h.status = 'broken';
@@ -5944,6 +5954,7 @@ app.get('/api/admin/system-health', async (req, res) => {
       delete h._imgCount;
       delete h._bedCount;
       delete h._lotCount;
+      delete h._hasExpiredCache;
       return h;
     });
 
@@ -6014,21 +6025,24 @@ app.get('/api/admin/missing-images', async (req, res) => {
       lotQuery = lotQuery.ilike('house', `%${houseFilter}%`);
     }
 
-    const { data: missingRows, error } = await lotQuery;
-    if (error) throw error;
-
-    // Filter to active catalogues only
+    // Filter to active catalogues at DB level + apply limit
     const { data: activeCats } = await supabase
       .from('cached_analyses')
       .select('url')
       .gte('expires_at', new Date().toISOString());
-    const activeUrls = new Set((activeCats || []).map(c => c.url));
+    const activeUrls = (activeCats || []).map(c => c.url);
+    if (activeUrls.length > 0) {
+      lotQuery = lotQuery.in('catalogue_url', activeUrls);
+    }
+    lotQuery = lotQuery.limit(2000);
+
+    const { data: missingRows, error } = await lotQuery;
+    if (error) throw error;
 
     const missingLots = [];
     const houseCounts = {};
 
     for (const row of (missingRows || [])) {
-      if (!activeUrls.has(row.catalogue_url)) continue;
       missingLots.push({
         house: row.house,
         lotNumber: row.lot_number || null,
@@ -13972,7 +13986,7 @@ async function _doAutoAnalyseAll() {
         // Read lots from lots table (single source of truth)
         const { data: lotRows } = await supabase
           .from('lots')
-          .select(LOTS_SELECT + ', id')
+          .select(LOTS_SELECT)
           .eq('catalogue_url', normalisedUrl);
         const cachedLots = (lotRows || []).map(dbRowToFrontendLot);
         let needsUpdate = false;
@@ -15724,8 +15738,8 @@ function dbRowToFrontendLot(r) {
     streetSales: r.street_sales, streetSalesCount: r.street_sales_count,
     belowMarket: r.below_market, estMonthlyRent: r.est_monthly_rent,
     estAnnualRent: r.est_annual_rent,
-    estGrossYield: r.est_gross_yield ? parseFloat(r.est_gross_yield) : null,
-    score: r.score ? parseFloat(r.score) : null, scoreBreakdown: r.score_breakdown || [],
+    estGrossYield: r.est_gross_yield != null ? parseFloat(r.est_gross_yield) : null,
+    score: r.score != null ? parseFloat(r.score) : null, scoreBreakdown: r.score_breakdown || [],
     opps: r.opps || [], risks: r.risks || [], dealType: r.deal_type,
     vacant: r.vacant, titleSplit: r.title_split,
   };
