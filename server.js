@@ -7284,8 +7284,9 @@ function stripHtml(html) {
 // ═══════════════════════════════════════════════════════════════
 function normaliseLotStatuses(lots) {
   for (const lot of lots) {
-    if (!lot.status) {
-      // Check bullets for legacy status detection
+    // Also re-check 'available' status against bullets — DOM extractors often push sold/stc
+    // indicators into bullets without setting the status field, which then defaults to 'available'
+    if (!lot.status || lot.status === 'available') {
       const bulletStr = (lot.bullets || []).join(' ');
       if (/\bUNSOLD\b|\bNOT.?SOLD\b|\bPASSED\b|\bNO.?SALE\b|\bAuction\s*Ended\b/i.test(bulletStr)) lot.status = 'unsold';
       else if (/\bSOLD\b/i.test(bulletStr)) lot.status = 'sold';

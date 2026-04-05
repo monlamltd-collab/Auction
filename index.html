@@ -470,7 +470,7 @@ footer .logo-f span{color:var(--green)}
 .view-toggle svg{width:16px;height:16px}
 
 /* ── LOTS GRID ── */
-.lots-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:0}
+.lots-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;padding:0}
 .lots-grid .section-divider{grid-column:1/-1}
 
 /* ── LIST VIEW ── */
@@ -564,6 +564,8 @@ footer .logo-f span{color:var(--green)}
 .chip-neg{background:#fdf0ee;color:#c0392b}
 .chip-neu{background:#eef2f7;color:#6b7c8d}
 .chip-more{background:#eef2f7;color:#6b7c8d;cursor:help}
+.card-bullets{margin:6px 0 0;padding:0 0 0 14px;font-size:.75rem;color:var(--text2);line-height:1.45;list-style:disc outside}
+.card-bullets li{margin-bottom:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .card-footer{border-top:1px solid #f0f2f5;padding:10px 16px;display:flex;justify-content:space-between;align-items:center}
 .card-view-link{font-family:var(--font-main);font-size:13px;color:var(--green);text-decoration:underline;text-underline-offset:2px}
 .card-view-link:hover{color:var(--green2)}
@@ -573,8 +575,21 @@ footer .logo-f span{color:var(--green)}
 /* ── EXPANDED CARD PANEL ── */
 .expanded-panel{grid-column:1/-1;background:var(--white);border:1px solid #d5dde5;border-radius:0 0 var(--radius) var(--radius);padding:20px 24px;display:grid;grid-template-columns:1fr;gap:20px;animation:slideDown .25s ease;position:relative}
 .exp-top{display:grid;grid-template-columns:60% 40%;gap:24px}
-.exp-tools{display:grid;grid-template-columns:1fr;gap:16px}
-.exp-tools .finance-widget,.exp-tools .deal-stack-widget{margin-top:0}
+.exp-tools{display:grid;grid-template-columns:1fr;gap:10px}
+.exp-tool-section{border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--white)}
+.exp-tool-summary{padding:12px 16px;font-family:var(--font-main);font-size:14px;font-weight:600;color:var(--text);cursor:pointer;background:var(--bg-card);list-style:none;display:flex;align-items:center;gap:8px;user-select:none}
+.exp-tool-summary::-webkit-details-marker{display:none}
+.exp-tool-summary::after{content:'\25B6';font-size:10px;margin-left:auto;transition:transform .2s;color:var(--text3)}
+.exp-tool-section[open] .exp-tool-summary::after{transform:rotate(90deg)}
+.exp-tool-badge{font-size:10px;font-weight:500;color:#2e86c1;margin-left:4px}
+.exp-tools .finance-widget{border:none;border-radius:0;padding:14px 16px}
+.exp-tools .deal-stack-widget{padding:14px 16px}
+.ds-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.ds-label{font-size:12px;color:var(--text-muted);display:block;margin-bottom:3px}
+.ds-label-note{font-size:10px;font-weight:400;opacity:.7}
+.ds-input{width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:13px;box-sizing:border-box;font-family:var(--font-main)}
+.ds-options{display:flex;flex-wrap:wrap;gap:4px 16px;margin-bottom:10px}
+.ds-check{font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:5px;cursor:pointer}
 .exp-bottom{}
 .exp-close-btn{position:absolute;top:10px;right:10px;width:32px;height:32px;border-radius:50%;border:1px solid var(--border);background:var(--white);color:var(--text2);font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:5;transition:all .15s;line-height:1;padding:0;font-family:inherit;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 .exp-close-btn:hover{background:var(--red-light);color:var(--red);border-color:var(--red)}
@@ -607,9 +622,6 @@ footer .logo-f span{color:var(--green)}
 
 /* ── FINANCE WIDGET ── */
 .finance-widget{background:var(--white);border:1px solid #d5dde5;border-radius:var(--radius);padding:18px}
-.fw-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
-.fw-title{font-family:var(--font-main);font-weight:600;font-size:14px;color:#1a2a3a}
-.fw-powered{font-family:var(--font-main);font-size:10px;color:#2e86c1}
 .fw-prefilled{margin-bottom:14px}
 .fw-field{margin-bottom:8px}
 .fw-field-label{font-size:10px;text-transform:uppercase;color:#6b7c8d;font-family:var(--font-main);letter-spacing:.03em}
@@ -813,8 +825,7 @@ footer .logo-f span{color:var(--green)}
 
 /* FIX-06: Deal stacking widget mobile reflow */
 @media(max-width:600px){
-  .deal-stack-widget>div[style*="grid-template-columns"]{grid-template-columns:1fr !important}
-  .deal-stack-widget>div[style*="grid-template-columns"]>div[style*="grid-column"]{grid-column:auto !important}
+  .ds-grid{grid-template-columns:1fr !important}
 }
 
 /* FIX-07: Sign-in modal text overflow */
@@ -899,20 +910,6 @@ footer .logo-f span{color:var(--green)}
 
 <main class="wrap">
 
-  <header class="hero">
-    <div class="hero-badge"><span class="badge-dot"></span> Live auction data updated daily</div>
-    <h1>Your unfair advantage<br> at <em>auction</em></h1>
-    <p class="hero-sub">AI scores every lot across <span class="house-count-dynamic">150</span>+ UK auction houses. Check bridging finance from <span class="lender-count-dynamic">68</span> lenders in one click. Completely free — sign in to unlock AI features.</p>
-    <div class="hero-ctas">
-      <a href="#filterBar" class="cta-primary" onclick="event.preventDefault();document.getElementById('filterBar').scrollIntoView({behavior:'smooth'})">Browse Auction Deals →</a>
-      <button class="cta-secondary" onclick="$('budgetCalcModal').classList.add('show')">Budget Calculator</button>
-    </div>
-    <div class="trust-line">
-      <span><span class="t-icon">✓</span> Free to browse</span>
-      <span><span class="t-icon">✓</span> No account needed</span>
-      <span><span class="t-icon">✓</span> Updated daily</span>
-    </div>
-  </header>
 
   <!-- ═══════ AUTH MODAL (Magic Link) ═══════ -->
   <div class="modal-bg" id="signupModal" role="dialog" aria-modal="true" aria-labelledby="authModalTitle">
@@ -3539,9 +3536,19 @@ function card(l){
   if (l.daysSinceAuction != null && l.status === 'unsold') {
     detailPills.push({text: 'Unsold ' + l.daysSinceAuction + 'd ago', tip: 'Failed to sell at auction — vendor may accept lower offers. Longer unsold = more motivated seller'});
   }
+  if (l.estGrossYield && !l.blurred && !l.anonGated && !l._yieldEstimateWarning) {
+    const yv = l.estGrossYield;
+    const yStyle = yv >= 7 ? 'color:var(--signal-pos);font-weight:600' : yv >= 5 ? 'color:var(--accent-warn);font-weight:600' : 'color:var(--accent-danger);font-weight:600';
+    detailPills.push({text: '~' + yv.toFixed(1) + '% yield', tip: 'Estimated gross rental yield at guide price', yieldStyle: yStyle});
+  }
 
   // Signal chips (max 3 + overflow)
   const chipsHtml = getSignalChips(l);
+
+  // Bullet points (AI analysis, signed-in users only, max 2)
+  const bulletsOnCard = (!l.blurred && !l.anonGated && l.bullets && l.bullets.length)
+    ? '<ul class="card-bullets">' + l.bullets.slice(0, 2).map(b => '<li>' + esc(b) + '</li>').join('') + '</ul>'
+    : '';
 
   // Category label
   const catLabel = 'Lot ' + esc(l.lot || '—') + ' · ' + esc(l.blurred ? '—' : l.anonGated ? 'Sign up for deal type' : (l.dealType || 'Standard'));
@@ -3559,13 +3566,14 @@ function card(l){
     '<div class="card-body">' +
       '<div class="card-row1"><span class="card-lot-info">' + catLabel + '</span><span class="card-price">' + esc(priceText) + '</span></div>' +
       '<div class="card-address">' + esc(l.address || 'Address not available') + '</div>' +
-      '<div class="card-details">' + detailPills.map(d => '<span class="detail-pill' + (d.gap ? ' epd-gap-pill' : '') + (d.warn ? ' lease-warn' : '') + '" data-tip="' + esc(d.tip) + '"' + (d.warn ? ' style="color:var(--accent-danger);border:1px dashed var(--accent-danger)"' : d.gap ? ' style="color:var(--accent-warn);border:1px dashed var(--accent-warn)"' : '') + '>' + esc(d.text) + '</span>').join('') + '</div>' +
+      '<div class="card-details">' + detailPills.map(d => '<span class="detail-pill' + (d.gap ? ' epd-gap-pill' : '') + (d.warn ? ' lease-warn' : '') + '" data-tip="' + esc(d.tip) + '"' + (d.warn ? ' style="color:var(--accent-danger);border:1px dashed var(--accent-danger)"' : d.gap ? ' style="color:var(--accent-warn);border:1px dashed var(--accent-warn)"' : d.yieldStyle ? ' style="' + d.yieldStyle + '"' : '') + '>' + esc(d.text) + '</span>').join('') + '</div>' +
       (l.epcRating || (l.floodZone && l.floodZone !== '1') || l._yieldEstimateWarning ? '<div style="display:flex;gap:5px;margin-top:4px;flex-wrap:wrap">' +
         (l.epcRating ? '<span class="detail-pill" style="color:' + (/[AB]/.test(l.epcRating) ? 'var(--signal-pos)' : /[CD]/.test(l.epcRating) ? 'var(--accent-warn)' : 'var(--accent-danger)') + ';font-weight:600" data-tip="Energy Performance Certificate. A-B = efficient, C-D = average, E-G = poor. F/G cannot be legally let to tenants (MEES regulations).">EPC ' + esc(l.epcRating) + (/[FG]/i.test(l.epcRating) ? ' — Unlettable' : '') + '</span>' : '') +
         ((l.floodZone === '2' || l.floodZone === '3') ? '<span class="detail-pill" style="color:' + (l.floodZone === '3' ? 'var(--accent-danger)' : 'var(--accent-warn)') + ';font-weight:600" data-tip="' + (l.floodZone === '3' ? 'Flood Zone 3 = high probability of flooding. Insurance difficult/expensive. Some lenders won\'t fund.' : 'Flood Zone 2 = medium probability. Most lenders will fund but may affect valuation.') + '">FZ' + esc(l.floodZone) + '</span>' : '') +
         (l._yieldEstimateWarning ? '<span class="detail-pill" style="color:var(--accent-warn);font-weight:600" data-tip="Yield over 30% — likely unrealistic. Very low guide prices produce inflated yield estimates. Verify actual achievable rent independently.">Yield unverified</span>' : '') +
       '</div>' : '') +
       (chipsHtml ? '<div class="card-chips">' + chipsHtml + '</div>' : '') +
+      bulletsOnCard +
     '</div>' +
     '<div class="card-footer">' + viewLink + favBtn + '</div>' +
   '</div>';
@@ -4390,84 +4398,35 @@ function expandCard(lot) {
   })();
   // Build deal stacking calculator HTML
   var dealStackHtml = (isPremium() ? (function() {
-        var dsSDLT = lot.price ? calcSDLT(lot.price, detectCountry(lot.address || '')) : 0;
-        return '<div class="deal-stack-widget" id="deal-stack-' + lot._idx + '" style="padding:16px; background:var(--bg-card); border-radius:12px; border:1px solid rgba(0,0,0,0.08);">' +
-          '<h4 style="margin:0 0 12px; font-family:var(--font-main); font-size:15px; font-weight:600; color:var(--text);">' +
-            '\ud83d\udcca Deal Stacking Calculator' +
-          '</h4>' +
-          '<div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px;">' +
+        return '<div class="deal-stack-widget" id="deal-stack-' + lot._idx + '">' +
+          '<div class="ds-grid">' +
             '<div>' +
-              '<label style="font-size:12px; color:var(--text-muted); display:block; margin-bottom:2px;">Purchase Price</label>' +
-              '<input type="number" id="ds-price-' + lot._idx + '" value="' + (lot.price || '') + '" placeholder="e.g. 150000" ' +
-                'style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:6px; font-size:13px; box-sizing:border-box;" ' +
-                'oninput="debounceDealStack(' + lot._idx + ')">' +
+              '<label class="ds-label">Purchase Price</label>' +
+              '<input type="number" id="ds-price-' + lot._idx + '" value="' + (lot.price || '') + '" placeholder="e.g. 150000" class="ds-input" oninput="debounceDealStack(' + lot._idx + ')">' +
             '</div>' +
             '<div>' +
-              '<label style="font-size:12px; color:var(--text-muted); display:block; margin-bottom:2px;">SDLT (auto)</label>' +
-              '<input type="text" id="ds-sdlt-' + lot._idx + '" value="' + (lot.price ? '\u00a3' + dsSDLT.toLocaleString() : '') + '" disabled ' +
-                'style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:6px; background:#f0f0f0; font-size:13px; box-sizing:border-box;">' +
-              '<div style="display:flex; flex-wrap:wrap; gap:4px 12px; margin-top:4px;">' +
-                '<label style="font-size:11px; color:var(--text-muted); display:flex; align-items:center; gap:4px; cursor:pointer;">' +
-                  '<input type="checkbox" id="ds-surcharge-' + lot._idx + '" checked onchange="debounceDealStack(' + lot._idx + ')" style="margin:0;">' +
-                  'Additional property' +
-                '</label>' +
-                '<label style="font-size:11px; color:var(--text-muted); display:flex; align-items:center; gap:4px; cursor:pointer;">' +
-                  '<input type="checkbox" id="ds-commercial-' + lot._idx + '"' + ((lot.propType === 'commercial' || (lot.units && lot.units >= 6)) ? ' checked' : '') + ' onchange="debounceDealStack(' + lot._idx + ')" style="margin:0;">' +
-                  'Commercial / 6+ units' +
-                '</label>' +
-              '</div>' +
+              '<label class="ds-label">Works Cost</label>' +
+              '<input type="number" id="ds-works-' + lot._idx + '" placeholder="e.g. 30000" class="ds-input" oninput="debounceDealStack(' + lot._idx + ')">' +
             '</div>' +
             '<div>' +
-              '<label style="font-size:12px; color:var(--text-muted); display:block; margin-bottom:2px;">GDV (est. value after works)</label>' +
-              '<input type="number" id="ds-gdv-' + lot._idx + '" placeholder="e.g. 350000" ' +
-                'style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:6px; font-size:13px; box-sizing:border-box;" ' +
-                'oninput="debounceDealStack(' + lot._idx + ')">' +
+              '<label class="ds-label">GDV (after works)</label>' +
+              '<input type="number" id="ds-gdv-' + lot._idx + '" placeholder="e.g. 350000" class="ds-input" oninput="debounceDealStack(' + lot._idx + ')">' +
             '</div>' +
             '<div>' +
-              '<label style="font-size:12px; color:var(--text-muted); display:block; margin-bottom:2px;">Works Cost</label>' +
-              '<input type="number" id="ds-works-' + lot._idx + '" placeholder="e.g. 30000" ' +
-                'style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:6px; font-size:13px; box-sizing:border-box;" ' +
-                'oninput="debounceDealStack(' + lot._idx + ')">' +
-            '</div>' +
-            '<div style="grid-column: span 2;">' +
-              '<label style="font-size:12px; color:var(--text-muted); display:block; margin-bottom:2px;">Monthly Rental Income (optional, for Hold scenario)</label>' +
-              '<input type="number" id="ds-rental-' + lot._idx + '" placeholder="e.g. 1200" ' +
-                'style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:6px; font-size:13px; box-sizing:border-box;" ' +
-                'oninput="debounceDealStack(' + lot._idx + ')">' +
+              '<label class="ds-label">Monthly Rent <span class="ds-label-note">(hold scenario)</span></label>' +
+              '<input type="number" id="ds-rental-' + lot._idx + '" placeholder="e.g. 1200" class="ds-input" oninput="debounceDealStack(' + lot._idx + ')">' +
             '</div>' +
           '</div>' +
-          // ── True Acquisition Cost: additional fields (collapsible) ──
-          '<details style="margin-bottom:12px;">' +
-            '<summary style="cursor:pointer; font-size:12px; font-weight:600; color:var(--text-muted); padding:4px 0;">Auction &amp; hidden costs (tap to adjust)</summary>' +
-            '<div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px;">' +
-              '<div>' +
-                '<label style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:2px;">Buyer\'s Premium %</label>' +
-                '<input type="number" id="ds-buyerprem-' + lot._idx + '" value="0" step="0.5" min="0" max="5" ' +
-                  'style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:6px; font-size:13px; box-sizing:border-box;" ' +
-                  'oninput="debounceDealStack(' + lot._idx + ')">' +
-                '<div style="font-size:10px; color:var(--text-muted); margin-top:1px;">+VAT. Check auction T&amp;Cs</div>' +
-              '</div>' +
-              '<div>' +
-                '<label style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:2px;">Works Contingency %</label>' +
-                '<input type="number" id="ds-contingency-' + lot._idx + '" value="10" step="5" min="0" max="30" ' +
-                  'style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:6px; font-size:13px; box-sizing:border-box;" ' +
-                  'oninput="debounceDealStack(' + lot._idx + ')">' +
-                '<div style="font-size:10px; color:var(--text-muted); margin-top:1px;">10-15% typical</div>' +
-              '</div>' +
-              '<div>' +
-                '<label style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:2px;">Legal Pack Review</label>' +
-                '<input type="number" id="ds-legalpack-' + lot._idx + '" value="300" step="50" min="0" ' +
-                  'style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:6px; font-size:13px; box-sizing:border-box;" ' +
-                  'oninput="debounceDealStack(' + lot._idx + ')">' +
-              '</div>' +
-              '<div>' +
-                '<label style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:2px;">Buildings Insurance</label>' +
-                '<input type="number" id="ds-insurance-' + lot._idx + '" value="500" step="50" min="0" ' +
-                  'style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:6px; font-size:13px; box-sizing:border-box;" ' +
-                  'oninput="debounceDealStack(' + lot._idx + ')">' +
-              '</div>' +
-            '</div>' +
-          '</details>' +
+          '<div class="ds-options">' +
+            '<label class="ds-check"><input type="checkbox" id="ds-surcharge-' + lot._idx + '" checked onchange="debounceDealStack(' + lot._idx + ')"> Additional property SDLT</label>' +
+            '<label class="ds-check"><input type="checkbox" id="ds-commercial-' + lot._idx + '"' + ((lot.propType === 'commercial' || (lot.units && lot.units >= 6)) ? ' checked' : '') + ' onchange="debounceDealStack(' + lot._idx + ')"> Commercial / 6+ units</label>' +
+          '</div>' +
+          // Hidden inputs to keep debounceDealStack() working (uses fixed defaults)
+          '<input type="hidden" id="ds-sdlt-' + lot._idx + '">' +
+          '<input type="hidden" id="ds-buyerprem-' + lot._idx + '" value="0">' +
+          '<input type="hidden" id="ds-contingency-' + lot._idx + '" value="10">' +
+          '<input type="hidden" id="ds-legalpack-' + lot._idx + '" value="300">' +
+          '<input type="hidden" id="ds-insurance-' + lot._idx + '" value="500">' +
           '<div id="ds-results-' + lot._idx + '"></div>' +
         '</div>';
       })() :
@@ -4543,20 +4502,25 @@ function expandCard(lot) {
         yieldSection +
       '</div>' +
     '</div>' +
-    // ── Row 2: Tools side-by-side (50/50) ──
+    // ── Row 2: Tools (Finance + Deal Stack as accordions) ──
     '<div class="exp-tools">' +
-      '<div class="finance-widget" id="finance-widget-' + lot._idx + '">' +
-        '<div class="fw-header"><div class="fw-title">\ud83e\udde9 Finance Check</div><span class="fw-powered">Powered by BridgeMatch</span></div>' +
-        '<div class="fw-prefilled">' +
-          '<div class="fw-field"><div class="fw-field-label">PURCHASE PRICE</div><div class="fw-field-value">' + (lot.price ? '\u00a3' + lot.price.toLocaleString() : 'TBA') + '</div></div>' +
-          '<div class="fw-field"><div class="fw-field-label">PROPERTY TYPE</div><div class="fw-field-value">' + esc(lot.propType || 'Residential') + '</div></div>' +
+      '<details class="exp-tool-section" open>' +
+        '<summary class="exp-tool-summary">Finance Check <span class="exp-tool-badge">Powered by BridgeMatch</span></summary>' +
+        '<div class="finance-widget" id="finance-widget-' + lot._idx + '">' +
+          '<div class="fw-prefilled">' +
+            '<div class="fw-field"><div class="fw-field-label">PURCHASE PRICE</div><div class="fw-field-value">' + (lot.price ? '\u00a3' + lot.price.toLocaleString() : 'TBA') + '</div></div>' +
+            '<div class="fw-field"><div class="fw-field-label">PROPERTY TYPE</div><div class="fw-field-value">' + esc(lot.propType || 'Residential') + '</div></div>' +
+          '</div>' +
+          '<div class="fw-slider-row"><span class="fw-slider-label">Loan to Value</span><span class="fw-slider-value" id="ltv-val-' + lot._idx + '">70%</span></div>' +
+          '<input type="range" class="fw-range" id="ltv-slider-' + lot._idx + '" min="50" max="80" step="5" value="70" oninput="updateLTV(' + lot._idx + ',this.value)">' +
+          '<div id="fw-results-' + lot._idx + '" class="fw-empty">Adjust LTV and tap Check</div>' +
+          (lot.price ? '<button class="fw-cta" onclick="triggerFinanceCheck(' + lot._idx + ')">Check finance \u2192</button>' : '') +
         '</div>' +
-        '<div class="fw-slider-row"><span class="fw-slider-label">Loan to Value</span><span class="fw-slider-value" id="ltv-val-' + lot._idx + '">70%</span></div>' +
-        '<input type="range" class="fw-range" id="ltv-slider-' + lot._idx + '" min="50" max="80" step="5" value="70" oninput="updateLTV(' + lot._idx + ',this.value)">' +
-        '<div id="fw-results-' + lot._idx + '" class="fw-empty">Adjust LTV and tap Check</div>' +
-        (lot.price ? '<button class="fw-cta" onclick="triggerFinanceCheck(' + lot._idx + ')">Check finance \u2192</button>' : '') +
-      '</div>' +
-      dealStackHtml +
+      '</details>' +
+      '<details class="exp-tool-section">' +
+        '<summary class="exp-tool-summary">Deal Stacking Calculator</summary>' +
+        dealStackHtml +
+      '</details>' +
     '</div>' +
     // ── Row 3: Comparables (full width) ──
     '<div class="exp-bottom">' +
