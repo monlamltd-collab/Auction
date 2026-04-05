@@ -3598,35 +3598,48 @@ app.post('/api/analyse', async (req, res) => {
     });
   }
 
-  // ── Check cache ──
+  // ── Check cache (metadata only — lot data comes from lots table) ──
   const normalisedUrl = normaliseUrl(url);
   const { data: cached } = await supabase
     .from('cached_analyses')
-    .select('*')
+    .select('house, url, total_lots, title_splits, top_picks, under_100k, avg_yield, dev_potential, vacant_count, expires_at')
     .eq('url', normalisedUrl)
     .gt('expires_at', new Date().toISOString())
     .single();
 
   if (cached) {
-    console.log(`Cache hit for ${normalisedUrl}`);
-    // cached.house should be a slug; fallback handles legacy display-name entries
+    console.log(`Cache hit for ${normalisedUrl} — reading lots from lots table`);
     const cachedSlug = HOUSE_DISPLAY_NAMES[cached.house]
-      ? cached.house  // cached.house is already a slug
+      ? cached.house
       : Object.entries(HOUSE_DISPLAY_NAMES).find(([k, v]) => v === cached.house)?.[0] || cached.house;
     const cachedDisplayName = HOUSE_DISPLAY_NAMES[cachedSlug] || cached.house;
     const isPremium = userTier === 'premium';
-    const gatedLots = isPremium ? cached.lots : stripAIFields(cached.lots || []);
+
+    // Read fresh lot data from lots table (single source of truth)
+    const { data: lotRows } = await supabase
+      .from('lots')
+      .select(LOTS_SELECT)
+      .eq('catalogue_url', normalisedUrl)
+      .order('score', { ascending: false, nullsFirst: false });
+
+    const freshLots = (lotRows || []).map(dbRowToFrontendLot);
+    const gatedLots = isPremium ? freshLots : stripAIFields(freshLots);
+
+    // Recompute summary stats from fresh data
+    const lotsWithPrice = freshLots.filter(l => l.price && l.price > 0);
+    const yieldsArr = freshLots.map(l => l.estGrossYield).filter(y => y && y > 0);
+
     return res.json({
       house: cachedDisplayName,
       houseSlug: cachedSlug,
       recognised: cachedSlug !== 'unknown',
-      totalLots: cached.total_lots,
-      titleSplits: cached.title_splits,
-      topPicks: cached.top_picks,
-      under100k: cached.under_100k || 0,
-      avgYield: cached.avg_yield || null,
-      devPotential: cached.dev_potential || 0,
-      vacantCount: cached.vacant_count || 0,
+      totalLots: freshLots.length,
+      titleSplits: freshLots.filter(l => l.titleSplit).length,
+      topPicks: freshLots.filter(l => l.score >= 3).length,
+      under100k: lotsWithPrice.filter(l => l.price < 100000).length,
+      avgYield: yieldsArr.length ? +(yieldsArr.reduce((a, b) => a + b, 0) / yieldsArr.length).toFixed(1) : null,
+      devPotential: freshLots.filter(l => (l.opps || []).some(o => /development|planning|conversion/i.test(o))).length,
+      vacantCount: freshLots.filter(l => l.vacant === true).length,
       lots: gatedLots,
       cached: true,
       blurred: !isPremium,
@@ -4419,72 +4432,57 @@ app.post('/api/smart-search', async (req, res) => {
 
   // ── Deterministic preset fast path — no AI needed ──
   // Presets like "Best scoring deals", "Under £100k", "Vacant" etc. can be resolved
-  // by filtering/sorting on precomputed lot fields. Faster, more reliable, saves API credits.
+  // by filtering/sorting on precomputed lot fields. Reads from lots table (single source of truth).
   const presetFilter = presetSlug ? PRESET_FILTERS[presetSlug] : null;
   if (presetFilter) {
     try {
-      const { data: cached } = await supabase
+      // Query lots table directly — get all lots from active catalogues
+      const { data: activeCatalogues } = await supabase
         .from('cached_analyses')
-        .select('house, url, lots, total_lots')
+        .select('house, url')
         .gt('expires_at', new Date().toISOString());
 
-      if (!cached || cached.length === 0) {
+      if (!activeCatalogues || activeCatalogues.length === 0) {
         await incrementSearchCounter();
         return res.json({ results: [], report: 'No cached auction data available. Please analyse some auction catalogues first.', sources: [], totalSearched: 0, searchesUsed, searchLimit });
       }
 
-      // Gather all lots
-      const allLots = [];
+      const activeUrls = [...new Set(activeCatalogues.map(c => c.url))];
+
+      // Build status filter at DB level
+      let dbQuery = supabase.from('lots').select(LOTS_SELECT).in('catalogue_url', activeUrls);
+      if (sf === 'available') dbQuery = dbQuery.or('status.eq.available,status.is.null');
+      else if (sf === 'sold') dbQuery = dbQuery.in('status', ['sold', 'stc', 'withdrawn']);
+      else if (sf === 'unsold') dbQuery = dbQuery.eq('status', 'unsold');
+      else if (sf === 'stc') dbQuery = dbQuery.eq('status', 'stc');
+      else if (sf === 'withdrawn') dbQuery = dbQuery.eq('status', 'withdrawn');
+      else if (sf !== 'everything') dbQuery = dbQuery.or('status.eq.available,status.eq.unsold,status.is.null');
+
+      dbQuery = dbQuery.order('score', { ascending: false, nullsFirst: false }).limit(2000);
+      const { data: lotRows } = await dbQuery;
+
+      if (!lotRows || lotRows.length === 0) {
+        await incrementSearchCounter();
+        return res.json({ results: [], report: 'No lots found matching criteria.', sources: [], totalSearched: 0, searchesUsed, searchLimit });
+      }
+
+      const allLots = lotRows.map(dbRowToFrontendLot);
       const sources = [];
-      for (const c of cached) {
-        if (c.lots && Array.isArray(c.lots)) {
-          sources.push({ house: c.house, url: c.url, count: c.lots.length });
-          for (const lot of c.lots) {
-            allLots.push({ ...lot, _house: c.house, _sourceUrl: c.url });
-          }
-        }
+      const sourceMap = {};
+      for (const c of activeCatalogues) {
+        if (!sourceMap[c.url]) { sourceMap[c.url] = { house: c.house, url: c.url, count: 0 }; sources.push(sourceMap[c.url]); }
       }
-
-      // Dedup by normalised address
-      const dedupMap = new Map();
       for (const lot of allLots) {
-        const normAddr = (lot.address || '').toLowerCase().replace(/[\s,]+/g, ' ').replace(/^(lot\s*\d+\s*[-:]?\s*)/i, '').trim();
-        if (normAddr.length < 5) { dedupMap.set(`__short_${dedupMap.size}`, lot); continue; }
-        const existing = dedupMap.get(normAddr);
-        if (existing) {
-          const richness = (l) => (l.score || 0) * 10 + (l.imageUrl ? 5 : 0) + (l.bullets?.length || 0) + (l.price ? 1 : 0);
-          if (richness(lot) > richness(existing)) dedupMap.set(normAddr, lot);
-        } else {
-          dedupMap.set(normAddr, lot);
-        }
+        if (sourceMap[lot._sourceUrl]) sourceMap[lot._sourceUrl].count++;
       }
-      const dedupedLots = [...dedupMap.values()];
-
-      // Apply sold filter
-      normaliseLotStatuses(dedupedLots);
-      const filteredLots = sf === 'everything'
-        ? dedupedLots
-        : sf === 'available'
-        ? dedupedLots.filter(l => !l.status || l.status === 'available')
-        : sf === 'sold'
-        ? dedupedLots.filter(l => l.status === 'sold' || l.status === 'stc' || l.status === 'withdrawn')
-        : sf === 'unsold'
-        ? dedupedLots.filter(l => l.status === 'unsold')
-        : sf === 'stc'
-        ? dedupedLots.filter(l => l.status === 'stc')
-        : sf === 'withdrawn'
-        ? dedupedLots.filter(l => l.status === 'withdrawn')
-        : dedupedLots.filter(l => !l.status || l.status === 'available' || l.status === 'unsold');
 
       // Apply preset filter and sort
-      const matchingLots = filteredLots.filter(presetFilter.filter);
+      const matchingLots = allLots.filter(presetFilter.filter);
       matchingLots.sort(presetFilter.sort);
 
-      const report = presetFilter.report(matchingLots.length, filteredLots.length);
+      const report = presetFilter.report(matchingLots.length, allLots.length);
 
-      log.info('smart_search_deterministic', { preset: presetSlug, matches: matchingLots.length, total: filteredLots.length });
-
-      // Log activity
+      log.info('smart_search_deterministic', { preset: presetSlug, matches: matchingLots.length, total: allLots.length });
       logActivityEvent('smart_search', { query, results_count: matchingLots.length, deterministic: true }, user?.email, getClientIP(req));
 
       await incrementSearchCounter();
@@ -4492,7 +4490,7 @@ app.post('/api/smart-search', async (req, res) => {
         results: matchingLots,
         report,
         sources,
-        totalSearched: filteredLots.length,
+        totalSearched: allLots.length,
         searchesUsed, searchLimit,
       });
     } catch (err) {
@@ -4533,8 +4531,7 @@ app.post('/api/smart-search', async (req, res) => {
     const activeUrls = [...new Set(activeCatalogues.map(c => c.url))];
 
     // ── Build lots query with column filters ──
-    const lotsSelect = 'house, lot_number, url, catalogue_url, address, postcode, price, price_text, prop_type, beds, tenure, lease_length, sqft, condition, image_url, bullets, units, auction_date, status, sold_price, epc_rating, epc_score, epc_date, flood_zone, flood_risk, street_avg, street_sales, street_sales_count, below_market, est_monthly_rent, est_annual_rent, est_gross_yield, score, score_breakdown, opps, risks, deal_type, vacant, title_split, search_text';
-    let dbQuery = supabase.from('lots').select(lotsSelect);
+    let dbQuery = supabase.from('lots').select(LOTS_SELECT);
     dbQuery = dbQuery.in('catalogue_url', activeUrls);
 
     // Status: query-level override ("unsold Bristol") takes priority over dropdown filter
@@ -4581,7 +4578,7 @@ app.post('/api/smart-search', async (req, res) => {
     let unsoldExtra = [];
     if (effectiveSold === 'unsold' || effectiveSold === 'all' || sf === 'everything') {
       const unsoldCutoff = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
-      let unsoldQuery = supabase.from('lots').select(lotsSelect)
+      let unsoldQuery = supabase.from('lots').select(LOTS_SELECT)
         .in('status', ['unsold', 'withdrawn'])
         .gte('auction_date', unsoldCutoff);
       // Apply same column filters to unsold lots
@@ -4602,26 +4599,8 @@ app.post('/api/smart-search', async (req, res) => {
       return res.status(500).json({ error: 'db_error', message: 'Database query failed.' });
     }
 
-    // Map to camelCase (same format as /api/all-lots)
-    const mapRow = r => ({
-      _house: r.house, lot: r.lot_number, url: r.url, _sourceUrl: r.catalogue_url,
-      address: r.address, postcode: r.postcode, price: r.price, priceText: r.price_text,
-      propType: r.prop_type, beds: r.beds, tenure: r.tenure, leaseLength: r.lease_length,
-      sqft: r.sqft, condition: r.condition, imageUrl: r.image_url, bullets: r.bullets || [],
-      units: r.units || 0, _auctionDate: r.auction_date, status: r.status, soldPrice: r.sold_price,
-      epcRating: r.epc_rating, epcScore: r.epc_score, epcDate: r.epc_date,
-      floodZone: r.flood_zone, floodRiskLevel: r.flood_risk, streetAvg: r.street_avg,
-      streetSales: r.street_sales, streetSalesCount: r.street_sales_count,
-      belowMarket: r.below_market, estMonthlyRent: r.est_monthly_rent,
-      estAnnualRent: r.est_annual_rent,
-      estGrossYield: r.est_gross_yield ? parseFloat(r.est_gross_yield) : null,
-      score: r.score ? parseFloat(r.score) : null, scoreBreakdown: r.score_breakdown || [],
-      opps: r.opps || [], risks: r.risks || [], dealType: r.deal_type,
-      vacant: r.vacant, titleSplit: r.title_split, _searchText: r.search_text,
-    });
-
     // Merge active + persisted unsold, dedup by URL
-    const allRows = [...(lotRows || []).map(mapRow), ...unsoldExtra.map(mapRow)];
+    const allRows = [...(lotRows || []).map(dbRowToFrontendLot), ...unsoldExtra.map(dbRowToFrontendLot)];
     const dedupMap = new Map();
     for (const lot of allRows) {
       const key = lot.url || `${lot._house}|${(lot.address || '').toLowerCase().replace(/[\s,]+/g, ' ').trim()}`;
@@ -11664,14 +11643,20 @@ async function enrichLotsFromLotPages(lots, concurrency = 5) {
           }
         }
 
+        // ── Raw text capture (for Gemini fuzzy search) ──
+        if (!lot.rawText) {
+          const rawText = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '').replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+          if (rawText.length > 50) lot.rawText = rawText.slice(0, 10000); // cap at 10k chars
+        }
+
         // ── Tenure ──
         if (!lot.tenure) {
           if (/share of freehold|share\s+of\s+the\s+freehold/.test(text)) { lot.tenure = 'Share of Freehold'; stats.tenure++; }
           else if (/flying freehold/.test(text)) { lot.tenure = 'Freehold'; stats.tenure++; }
           else if (/\bfreehold\b/.test(text) && !/leasehold/.test(text)) { lot.tenure = 'Freehold'; stats.tenure++; }
           else if (/\bleasehold\b|long\s+lease|lease\s+remaining|\byears?\s+(?:remaining|unexpired|left)\b|\b\d+\s*(?:year|yr)\s*lease\b/.test(text)) { lot.tenure = 'Leasehold'; stats.tenure++; }
-          // Freehold scoring bonus
-          if (lot.tenure === 'Freehold' && lot.propType === 'house' && !(lot.opps || []).includes('Freehold')) {
+          // Freehold scoring bonus (only if not already awarded)
+          if (lot.tenure === 'Freehold' && lot.propType === 'house' && !(lot.opps || []).includes('Freehold') && !(lot.scoreBreakdown || []).some(s => s.signal === 'Freehold house')) {
             lot.score = (lot.score || 0) + 0.5;
             lot.opps = lot.opps || []; lot.opps.push('Freehold');
             lot.scoreBreakdown = lot.scoreBreakdown || [];
@@ -11715,14 +11700,14 @@ async function enrichLotsFromLotPages(lots, concurrency = 5) {
           } else if (/\b(?:good\s+(?:condition|order|decorative)|well\s+(?:maintained|presented|kept)|recently\s+(?:refurb|renovated|decorated|updated))\b/.test(text)) {
             lot.condition = 'good'; stats.condition++;
           }
-          // Condition scoring
-          if (lot.condition === 'needs modernisation' && !(lot.opps || []).includes('Needs modernisation')) {
+          // Condition scoring (only if not already awarded — prevents inflation on re-enrichment)
+          if (lot.condition === 'needs modernisation' && !(lot.opps || []).includes('Needs modernisation') && !(lot.scoreBreakdown || []).some(s => s.signal === 'Needs modernisation')) {
             lot.score = (lot.score || 0) + 2.0;
             lot.opps = lot.opps || []; lot.opps.push('Needs modernisation');
             lot.scoreBreakdown = lot.scoreBreakdown || [];
             lot.scoreBreakdown.push({ signal: 'Needs modernisation', pts: 2.0 });
             lot.score = Math.max(0, Math.min(10, Math.round(lot.score * 10) / 10));
-          } else if ((lot.condition === 'poor' || lot.condition === 'derelict') && !(lot.opps || []).includes('Poor condition')) {
+          } else if ((lot.condition === 'poor' || lot.condition === 'derelict') && !(lot.opps || []).includes('Poor condition') && !(lot.scoreBreakdown || []).some(s => /Poor.*condition/i.test(s.signal))) {
             lot.score = (lot.score || 0) + 2.5;
             lot.opps = lot.opps || []; lot.opps.push('Poor condition');
             lot.scoreBreakdown = lot.scoreBreakdown || [];
@@ -14690,6 +14675,7 @@ async function upsertToLotsTable(enrichedLots, house, catalogueUrl, metadata = {
         deal_type: lot.dealType || null,
         vacant: lot.vacant || null,
         title_split: lot.titleSplit || null,
+        raw_text: lot.rawText || null,
         extracted_with: metadata.extractedWith || null,
         scraped_with: metadata.scrapedWith || null,
         last_seen_at: now,
@@ -15800,9 +15786,33 @@ function dbRowToLot(dbRow) {
     score: dbRow.score != null ? dbRow.score : 0, scoreBreakdown: dbRow.score_breakdown || [],
     opps: dbRow.opps || [], risks: dbRow.risks || [], dealType: dbRow.deal_type,
     vacant: dbRow.vacant, titleSplit: dbRow.title_split, url: dbRow.url, enrichedAt: dbRow.enriched_at,
+    rawText: dbRow.raw_text || null,
     _dbId: dbRow.id, _house: dbRow.house, _catalogueUrl: dbRow.catalogue_url,
   };
 }
+
+// ── Helper: convert DB row to frontend-ready camelCase lot (for API responses) ──
+function dbRowToFrontendLot(r) {
+  return {
+    _house: r.house, lot: r.lot_number, url: r.url, _sourceUrl: r.catalogue_url,
+    address: r.address, postcode: r.postcode, price: r.price, priceText: r.price_text,
+    propType: r.prop_type, beds: r.beds, tenure: r.tenure, leaseLength: r.lease_length,
+    sqft: r.sqft, condition: r.condition, imageUrl: r.image_url, bullets: r.bullets || [],
+    units: r.units || 0, _auctionDate: r.auction_date, status: r.status, soldPrice: r.sold_price,
+    epcRating: r.epc_rating, epcScore: r.epc_score, epcDate: r.epc_date,
+    floodZone: r.flood_zone, floodRiskLevel: r.flood_risk, streetAvg: r.street_avg,
+    streetSales: r.street_sales, streetSalesCount: r.street_sales_count,
+    belowMarket: r.below_market, estMonthlyRent: r.est_monthly_rent,
+    estAnnualRent: r.est_annual_rent,
+    estGrossYield: r.est_gross_yield ? parseFloat(r.est_gross_yield) : null,
+    score: r.score ? parseFloat(r.score) : null, scoreBreakdown: r.score_breakdown || [],
+    opps: r.opps || [], risks: r.risks || [], dealType: r.deal_type,
+    vacant: r.vacant, titleSplit: r.title_split,
+  };
+}
+
+// ── Helper: standard lots select columns for DB queries ──
+const LOTS_SELECT = 'house, lot_number, url, catalogue_url, address, postcode, price, price_text, prop_type, beds, tenure, lease_length, sqft, condition, image_url, bullets, units, auction_date, status, sold_price, epc_rating, epc_score, epc_date, flood_zone, flood_risk, street_avg, street_sales, street_sales_count, below_market, est_monthly_rent, est_annual_rent, est_gross_yield, score, score_breakdown, opps, risks, deal_type, vacant, title_split, search_text';
 
 // ── Helper: group lots by house+catalogue and upsert ──
 async function upsertLotGroups(lotObjs, source) {
@@ -15882,10 +15892,17 @@ async function runEnrichmentWave() {
             stats.lotPageFetched++;
             const text = result.html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').toLowerCase();
             const extracted = extractPriceFromText(text);
+            const update = {};
             if (extracted) {
-              const update = {};
               if (extracted.price) { update.price = extracted.price; stats.pricesFound++; }
               if (extracted.priceText) { update.price_text = extracted.priceText; stats.pricesPoa++; }
+            }
+            // Capture raw_text while we have the page
+            if (!dbRow.raw_text) {
+              const rawText = result.html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '').replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+              if (rawText.length > 50) update.raw_text = rawText.slice(0, 10000);
+            }
+            if (Object.keys(update).length > 0) {
               await supabase.from('lots').update(update).eq('id', dbRow.id);
             }
           } catch { /* retry next cycle */ }
