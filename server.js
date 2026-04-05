@@ -4572,23 +4572,42 @@ app.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
 
     const activeUrls = [...new Set(activeCatalogues.map(c => normaliseUrl(c.url)))];
 
-    // ── Step 2: Query individual lots via server-side join (avoids PostgREST URI encoding issues with .in()) ──
-    const { data: lotRows, error: lotErr } = await supabase.rpc('get_active_lots');
+    // ── Step 2: Query individual lots via paginated RPC (PostgREST caps at 1000 rows per request) ──
+    const lotRows = [];
+    const PAGE_SIZE = 1000;
+    for (let offset = 0; ; offset += PAGE_SIZE) {
+      const { data: page, error: lotErr } = await supabase
+        .rpc('get_active_lots')
+        .range(offset, offset + PAGE_SIZE - 1);
+      if (lotErr) {
+        log.error('all-lots: get_active_lots RPC failed', { error: lotErr.message, offset });
+        break;
+      }
+      if (!page || page.length === 0) break;
+      lotRows.push(...page);
+      if (page.length < PAGE_SIZE) break; // last page
+    }
 
-    if (lotErr) {
-      log.error('all-lots: get_active_lots RPC failed', { error: lotErr.message });
+    if (lotRows.length === 0) {
       return res.json({ lots: [], sources: [], stripeEnabled: STRIPE_ENABLED });
     }
 
     // ── Step 2b: Include persisted unsold lots from expired catalogues (30-day window) ──
     // This is a key Phase 4 benefit — unsold lots stay visible even after catalogue expires
     const unsoldCutoff = new Date(Date.now() - 30 * 86400000).toISOString();
-    const { data: unsoldRows } = await supabase
-      .from('lots')
-      .select('*')
-      .in('status', ['unsold', 'withdrawn'])
-      .gte('auction_date', unsoldCutoff.slice(0, 10))
-      .limit(2000);
+    const unsoldPages = [];
+    for (let offset = 0; ; offset += PAGE_SIZE) {
+      const { data: page } = await supabase
+        .from('lots')
+        .select('*')
+        .in('status', ['unsold', 'withdrawn'])
+        .gte('auction_date', unsoldCutoff.slice(0, 10))
+        .range(offset, offset + PAGE_SIZE - 1);
+      if (!page || page.length === 0) break;
+      unsoldPages.push(...page);
+      if (page.length < PAGE_SIZE) break;
+    }
+    const unsoldRows = unsoldPages;
 
     // Merge unsold lots, avoiding duplicates with active catalogue lots
     const activeLotKeys = new Set((lotRows || []).map(r => `${r.house}|${r.url}`));
