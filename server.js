@@ -15735,59 +15735,14 @@ app.post('/api/admin/re-enrich', async (req, res) => {
     let totalEnriched = 0;
     for (const [, group] of Object.entries(groups)) {
       try {
-        // Convert DB rows back to in-memory lot format for enrichment functions
-        const lotObjs = group.lots.map(dbRow => ({
-          lot: dbRow.lot_number,
-          address: dbRow.address,
-          postcode: dbRow.postcode,
-          price: dbRow.price,
-          priceText: dbRow.price_text,
-          propType: dbRow.prop_type,
-          beds: dbRow.beds,
-          tenure: dbRow.tenure,
-          leaseLength: dbRow.lease_length,
-          sqft: dbRow.sqft,
-          condition: dbRow.condition,
-          imageUrl: dbRow.image_url,
-          bullets: dbRow.bullets || [],
-          units: dbRow.units || 0,
-          status: dbRow.status || 'available',
-          soldPrice: dbRow.sold_price,
-          epcRating: dbRow.epc_rating,
-          epcScore: dbRow.epc_score,
-          epcDate: dbRow.epc_date,
-          floodZone: dbRow.flood_zone,
-          floodRiskLevel: dbRow.flood_risk,
-          streetAvg: dbRow.street_avg,
-          streetSales: dbRow.street_sales,
-          streetSalesCount: dbRow.street_sales_count,
-          belowMarket: dbRow.below_market,
-          estMonthlyRent: dbRow.est_monthly_rent,
-          estAnnualRent: dbRow.est_annual_rent,
-          estGrossYield: dbRow.est_gross_yield,
-          score: dbRow.score != null ? dbRow.score : 0,
-          scoreBreakdown: dbRow.score_breakdown || [],
-          opps: dbRow.opps || [],
-          risks: dbRow.risks || [],
-          dealType: dbRow.deal_type,
-          vacant: dbRow.vacant,
-          titleSplit: dbRow.title_split,
-          url: dbRow.url,
-          enrichedAt: dbRow.enriched_at,
-        }));
+        // Convert DB rows back to in-memory lot format (includes postcode extraction + metadata)
+        const lotObjs = group.lots.map(dbRowToLot);
 
         // Re-analyse lots that have no score (rebuilds scoring from scratch)
         const needsAnalysis = lotObjs.filter(l => l.score === 0 && (!l.scoreBreakdown || l.scoreBreakdown.length === 0));
         for (let i = 0; i < needsAnalysis.length; i++) {
           const reanalysed = analyseLot(needsAnalysis[i]);
           Object.assign(needsAnalysis[i], reanalysed);
-        }
-
-        // Extract postcodes for lots missing them
-        for (const lot of lotObjs) {
-          if (!lot.postcode && lot.address) {
-            lot.postcode = extractPostcode(lot.address);
-          }
         }
 
         // Run enrichLots for street comps, yield, EPC, flood
