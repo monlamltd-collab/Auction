@@ -1876,10 +1876,8 @@ async function loadAllLots(){
     try {
       ALL_LOTS = JSON.parse(_cachedLots);
       LOTS = ALL_LOTS;
-      // Restore renderKey so the DOM dedup fires on bfcache restore
-      if (!window._lastRenderKey) {
-        window._lastRenderKey = sessionStorage.getItem('ab_render_key') || null;
-      }
+      // Clear render key so renderLots() doesn't short-circuit against stale skeleton DOM
+      window._lastRenderKey = null;
       $('resultsTitle').textContent = ALL_LOTS.length.toLocaleString() + ' auction lots';
       buildLotFilters();
       renderLots();
@@ -1924,6 +1922,7 @@ async function loadAllLots(){
     }
     if(ALL_LOTS.length && !document.body.classList.contains('view-results')){
       LOTS=ALL_LOTS;
+      window._lastRenderKey=null; // Clear so renderLots() doesn't skip against skeleton DOM
       $('resultsTitle').textContent=ALL_LOTS.length.toLocaleString()+' auction lots';
       $('viewToggle').style.display='none';
       $('reportView').style.display='none';
