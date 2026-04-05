@@ -4199,7 +4199,99 @@ function isPresetQuery(query) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// SMART SEARCH: Claude-powered filtering across cached analyses
+// SMART SEARCH QUERY PARSER — extracts structured column filters
+// from natural language queries so the lots table can be queried
+// with SQL before sending the narrowed set to Gemini.
+// ═══════════════════════════════════════════════════════════════
+function parseSmartSearchQuery(query) {
+  const result = { filters: {}, locationTerms: [], freeText: [], original: query };
+  let q = query.toLowerCase().trim();
+
+  // ── Bigrams / phrases (extract before splitting into words) ──
+  if (/title\s+split/i.test(q)) { result.filters.title_split = true; q = q.replace(/title\s+splits?/gi, '').trim(); }
+  if (/needs?\s+work/i.test(q)) { result.filters.condition = ['needs work', 'poor']; q = q.replace(/needs?\s+work/gi, '').trim(); }
+  if (/poor\s+condition/i.test(q)) { result.filters.condition = ['needs work', 'poor']; q = q.replace(/poor\s+condition/gi, '').trim(); }
+  if (/good\s+condition/i.test(q)) { result.filters.condition = ['good']; q = q.replace(/good\s+condition/gi, '').trim(); }
+  if (/share\s+of\s+freehold/i.test(q)) { result.filters.tenure = 'Share of Freehold'; q = q.replace(/share\s+of\s+freehold/gi, '').trim(); }
+
+  // ── Price patterns ──
+  const underMatch = q.match(/(?:under|below|max|up\s+to|less\s+than)\s*£?\s*(\d[\d,]*)\s*k?\b/i);
+  if (underMatch) {
+    let price = parseInt(underMatch[1].replace(/,/g, ''));
+    if (price < 10000) price *= 1000;
+    result.filters.maxPrice = price;
+    q = q.replace(underMatch[0], '').trim();
+  }
+  const overMatch = q.match(/(?:over|above|min|more\s+than|from)\s*£?\s*(\d[\d,]*)\s*k?\b/i);
+  if (overMatch) {
+    let price = parseInt(overMatch[1].replace(/,/g, ''));
+    if (price < 10000) price *= 1000;
+    result.filters.minPrice = price;
+    q = q.replace(overMatch[0], '').trim();
+  }
+
+  // ── Beds ──
+  const bedMatch = q.match(/(\d+)\s*(?:bed(?:room)?s?\b)/i);
+  if (bedMatch) { result.filters.beds = parseInt(bedMatch[1]); q = q.replace(bedMatch[0], '').trim(); }
+
+  // ── Single-word keywords ──
+  const propTypes = { house: 'house', houses: 'house', flat: 'flat', flats: 'flat', apartment: 'flat', apartments: 'flat', land: 'land', commercial: 'commercial', garage: 'garage', bungalow: 'bungalow' };
+  const conditionWords = { refurb: ['needs work', 'poor'], refurbishment: ['needs work', 'poor'], derelict: ['poor'], dilapidated: ['poor'] };
+
+  // Known UK cities/towns for location detection (most common — not exhaustive, remaining words also checked via ILIKE)
+  const knownLocations = new Set([
+    'london','manchester','birmingham','leeds','sheffield','liverpool','bristol','newcastle','nottingham',
+    'cardiff','edinburgh','glasgow','belfast','bradford','leicester','coventry','hull','wolverhampton',
+    'stoke','derby','swansea','southampton','portsmouth','plymouth','exeter','reading','oxford','cambridge',
+    'brighton','bournemouth','bath','york','chester','lancaster','durham','norwich','ipswich','luton',
+    'sunderland','middlesbrough','blackpool','bolton','burnley','rochdale','wigan','warrington','crewe',
+    'gloucester','cheltenham','swindon','taunton','peterborough','northampton','lincoln','doncaster',
+    'halifax','huddersfield','wakefield','barnsley','rotherham','harrogate','scarborough','carlisle',
+    'preston','accrington','salford','oldham','stockport','macclesfield','stafford','tamworth',
+    'shrewsbury','telford','hereford','worcester','redditch','nuneaton','rugby','solihull',
+    'walsall','dudley','kidderminster','chesterfield','mansfield','grantham','loughborough','corby',
+    'kettering','wellingborough','buxton','matlock','colchester','chelmsford','southend','basildon',
+    'stevenage','watford','hertford','st albans','hastings','eastbourne','crawley','chichester',
+    'basingstoke','winchester','folkestone','margate','dover','ashford','woking','guildford','maidstone',
+    'canterbury','tunbridge','chatham','dartford','gravesend','poole','weymouth','dorchester','barnstaple',
+    'yeovil','bridgwater','salisbury','chippenham','truro','penzance','newquay','falmouth',
+    'carmarthen','wrexham','bangor','newport','llandudno','aberystwyth','barry','bridgend','neath',
+    'llanelli','haverfordwest','pembroke','brecon','aberdeen','dundee','inverness','stirling','perth',
+    'falkirk','paisley','kilmarnock','ayr','dumfries','dunfermline','livingston',
+  ]);
+
+  const words = q.split(/\s+/).filter(w => w.length > 1);
+  const consumed = new Set();
+  for (const word of words) {
+    const w = word.replace(/[^a-z0-9-]/g, '');
+    if (!w) continue;
+    if (w === 'freehold' && !result.filters.tenure) { result.filters.tenure = 'Freehold'; consumed.add(word); }
+    else if (w === 'leasehold' && !result.filters.tenure) { result.filters.tenure = 'Leasehold'; consumed.add(word); }
+    else if (w === 'vacant') { result.filters.vacant = true; consumed.add(word); }
+    else if (w === 'development') { result.freeText.push(w); consumed.add(word); }
+    else if (w === 'hmo') { result.freeText.push(w); consumed.add(word); }
+    else if (w === 'repossession' || w === 'repossessed') { result.freeText.push(w); consumed.add(word); }
+    else if (propTypes[w]) { result.filters.prop_type = propTypes[w]; consumed.add(word); }
+    else if (conditionWords[w] && !result.filters.condition) { result.filters.condition = conditionWords[w]; consumed.add(word); }
+    else if (knownLocations.has(w)) { result.locationTerms.push(w); consumed.add(word); }
+    // Postcode prefix (e.g. BS1, M1, LS2)
+    else if (/^[a-z]{1,2}\d{1,2}[a-z]?$/i.test(w)) { result.locationTerms.push(w.toUpperCase()); consumed.add(word); }
+  }
+
+  // Remaining unconsumed words — treat short ones as potential locations, longer ones as free text
+  for (const word of words) {
+    if (consumed.has(word)) continue;
+    const w = word.replace(/[^a-z0-9-]/g, '');
+    if (!w || w.length < 3) continue;
+    // Default: treat as location search (most natural for auction searches)
+    result.locationTerms.push(w);
+  }
+
+  return result;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SMART SEARCH: Column-filtered database query + AI analysis
 // ═══════════════════════════════════════════════════════════════
 app.post('/api/smart-search', async (req, res) => {
   const { query, soldFilter } = req.body || {};
@@ -4356,224 +4448,206 @@ app.post('/api/smart-search', async (req, res) => {
     log.warn('smart-search: blocked by creditExhausted flag', { exhaustedMinutesAgo: exhaustedAgo });
     return res.status(503).json({ error: 'ai_quota_exhausted', message: `Gemini API rate limit hit ${exhaustedAgo}min ago. Auto-resets after 1 hour. Try again soon.`, exhaustedMinutesAgo: exhaustedAgo });
   }
-  // Pre-flight: log which key/model will be used
   const keyPrefix = (process.env.GEMINI_API_KEY || '').substring(0, 10);
   log.info('smart-search pre-flight', { tier: 'fast', keyPrefix: keyPrefix + '...', query: query.substring(0, 60) });
 
   try {
-    // Get all cached analyses
-    const { data: cached } = await supabase
+    // ═══════════════════════════════════════════════════════════
+    // LAYER 1: Parse query into structured column filters
+    // ═══════════════════════════════════════════════════════════
+    const sqParsed = parseSmartSearchQuery(query);
+    log.info('smart-search parsed', sqParsed);
+
+    // ── Get active catalogue URLs for freshness gate ──
+    const { data: activeCatalogues } = await supabase
       .from('cached_analyses')
-      .select('house, url, lots, total_lots')
+      .select('url, house')
       .gt('expires_at', new Date().toISOString());
 
-    if (!cached || cached.length === 0) {
+    if (!activeCatalogues || activeCatalogues.length === 0) {
       await incrementSearchCounter();
-      return res.json({ results: [], report: 'No cached auction data available. Please analyse some auction catalogues first.', sources: [], searchesUsed, searchLimit });
+      return res.json({ results: [], report: 'No active auction data available.', sources: [], totalSearched: 0, searchesUsed, searchLimit });
+    }
+    const activeUrls = [...new Set(activeCatalogues.map(c => c.url))];
+
+    // ── Build lots query with column filters ──
+    let dbQuery = supabase.from('lots').select(
+      'house, lot_number, url, catalogue_url, address, postcode, price, price_text, prop_type, beds, tenure, lease_length, sqft, condition, image_url, bullets, units, auction_date, status, sold_price, epc_rating, epc_score, epc_date, flood_zone, flood_risk, street_avg, street_sales, street_sales_count, below_market, est_monthly_rent, est_annual_rent, est_gross_yield, score, score_breakdown, opps, risks, deal_type, vacant, title_split, search_text'
+    );
+    dbQuery = dbQuery.in('catalogue_url', activeUrls);
+
+    // Sold filter
+    if (sf === 'available') dbQuery = dbQuery.or('status.eq.available,status.is.null');
+    else if (sf === 'sold') dbQuery = dbQuery.in('status', ['sold', 'stc', 'withdrawn']);
+    else if (sf === 'unsold') dbQuery = dbQuery.eq('status', 'unsold');
+    else if (sf === 'stc') dbQuery = dbQuery.eq('status', 'stc');
+    else if (sf === 'withdrawn') dbQuery = dbQuery.eq('status', 'withdrawn');
+    else if (sf !== 'everything') dbQuery = dbQuery.or('status.eq.available,status.eq.unsold,status.is.null');
+
+    // Apply parsed column filters
+    if (sqParsed.filters.title_split) dbQuery = dbQuery.eq('title_split', true);
+    if (sqParsed.filters.vacant) dbQuery = dbQuery.eq('vacant', true);
+    if (sqParsed.filters.tenure) dbQuery = dbQuery.ilike('tenure', sqParsed.filters.tenure);
+    if (sqParsed.filters.maxPrice) dbQuery = dbQuery.lte('price', sqParsed.filters.maxPrice);
+    if (sqParsed.filters.minPrice) dbQuery = dbQuery.gte('price', sqParsed.filters.minPrice);
+    if (sqParsed.filters.beds) dbQuery = dbQuery.gte('beds', sqParsed.filters.beds);
+    if (sqParsed.filters.prop_type) dbQuery = dbQuery.eq('prop_type', sqParsed.filters.prop_type);
+    if (sqParsed.filters.condition) dbQuery = dbQuery.in('condition', sqParsed.filters.condition);
+    for (const loc of sqParsed.locationTerms) {
+      dbQuery = dbQuery.ilike('address', `%${loc}%`);
     }
 
-    // Gather all lots from all cached analyses
-    const allLots = [];
-    const sources = [];
-    for (const c of cached) {
-      if (c.lots && Array.isArray(c.lots)) {
-        sources.push({ house: c.house, url: c.url, count: c.lots.length });
-        for (const lot of c.lots) {
-          allLots.push({ ...lot, _house: c.house, _sourceUrl: c.url, _searchText: buildSearchText(lot) });
-        }
-      }
+    // Full-text search for remaining unstructured terms
+    if (sqParsed.freeText.length > 0) {
+      const tsQuery = sqParsed.freeText.map(t => t.replace(/[^a-z0-9]/gi, '')).filter(Boolean).join(' & ');
+      if (tsQuery) dbQuery = dbQuery.textSearch('search_vector', tsQuery);
     }
 
-    if (allLots.length === 0) {
+    dbQuery = dbQuery.order('score', { ascending: false }).limit(500);
+    const { data: lotRows, error: lotErr } = await dbQuery;
+
+    if (lotErr) {
+      log.error('smart-search lots query failed', { error: lotErr.message });
+      return res.status(500).json({ error: 'db_error', message: 'Database query failed.' });
+    }
+
+    // Map to camelCase (same format as /api/all-lots)
+    const filteredLots = (lotRows || []).map(r => ({
+      _house: r.house, lot: r.lot_number, url: r.url, _sourceUrl: r.catalogue_url,
+      address: r.address, postcode: r.postcode, price: r.price, priceText: r.price_text,
+      propType: r.prop_type, beds: r.beds, tenure: r.tenure, leaseLength: r.lease_length,
+      sqft: r.sqft, condition: r.condition, imageUrl: r.image_url, bullets: r.bullets || [],
+      units: r.units || 0, _auctionDate: r.auction_date, status: r.status, soldPrice: r.sold_price,
+      epcRating: r.epc_rating, epcScore: r.epc_score, epcDate: r.epc_date,
+      floodZone: r.flood_zone, floodRiskLevel: r.flood_risk, streetAvg: r.street_avg,
+      streetSales: r.street_sales, streetSalesCount: r.street_sales_count,
+      belowMarket: r.below_market, estMonthlyRent: r.est_monthly_rent,
+      estAnnualRent: r.est_annual_rent,
+      estGrossYield: r.est_gross_yield ? parseFloat(r.est_gross_yield) : null,
+      score: r.score ? parseFloat(r.score) : null, scoreBreakdown: r.score_breakdown || [],
+      opps: r.opps || [], risks: r.risks || [], dealType: r.deal_type,
+      vacant: r.vacant, titleSplit: r.title_split, _searchText: r.search_text,
+    }));
+
+    // Build sources summary
+    const sourceMap = new Map();
+    for (const lot of filteredLots) {
+      if (!sourceMap.has(lot._sourceUrl)) sourceMap.set(lot._sourceUrl, { house: lot._house, url: lot._sourceUrl, count: 0 });
+      sourceMap.get(lot._sourceUrl).count++;
+    }
+    const sources = [...sourceMap.values()];
+
+    const totalSearched = filteredLots.length;
+    log.info('smart-search layer1', { query, columnFilters: sqParsed.filters, locations: sqParsed.locationTerms, freeText: sqParsed.freeText, results: totalSearched });
+
+    // ═══════════════════════════════════════════════════════════
+    // LAYER 2: Send matching lots' search_text to Gemini
+    // ═══════════════════════════════════════════════════════════
+    // If column filters narrowed to 0, return early
+    if (filteredLots.length === 0) {
       await incrementSearchCounter();
-      return res.json({ results: [], report: 'No lot data in cache. Please analyse auction catalogues first.', sources: [], searchesUsed, searchLimit });
+      const filterDesc = [
+        ...sqParsed.locationTerms,
+        sqParsed.filters.title_split ? 'title split' : '',
+        sqParsed.filters.vacant ? 'vacant' : '',
+        sqParsed.filters.tenure || '',
+        sqParsed.filters.prop_type || '',
+        sqParsed.filters.maxPrice ? `under £${sqParsed.filters.maxPrice.toLocaleString()}` : '',
+        ...sqParsed.freeText,
+      ].filter(Boolean).join(', ');
+      return res.json({ results: [], report: `No lots found matching: ${filterDesc}. Try broadening your search.`, sources: [], totalSearched: 0, searchesUsed, searchLimit });
     }
 
-    // Pre-dedup: remove cross-house duplicates before sending to Gemini (saves tokens)
-    const preDedupMap = new Map();
-    for (const lot of allLots) {
-      const normAddr = (lot.address || '').toLowerCase().replace(/[\s,]+/g, ' ').replace(/^(lot\s*\d+\s*[-:]?\s*)/i, '').trim();
-      if (normAddr.length < 5) { preDedupMap.set(`__short_${preDedupMap.size}`, lot); continue; }
-      const existing = preDedupMap.get(normAddr);
-      if (existing) {
-        const richness = (l) => (l.score || 0) * 10 + (l.imageUrl ? 5 : 0) + (l.bullets?.length || 0) + (l.price ? 1 : 0);
-        if (richness(lot) > richness(existing)) preDedupMap.set(normAddr, lot);
-      } else {
-        preDedupMap.set(normAddr, lot);
-      }
-    }
-    const dedupedAllLots = [...preDedupMap.values()];
-    if (dedupedAllLots.length < allLots.length) {
-      log.info('smart-search pre-dedup', { before: allLots.length, after: dedupedAllLots.length });
+    // If column filters gave a small, precise set (≤30), return directly with a simple report — no AI needed
+    if (filteredLots.length <= 30 && (sqParsed.locationTerms.length > 0 || Object.keys(sqParsed.filters).length >= 2)) {
+      await incrementSearchCounter();
+      logActivityEvent('smart_search', { query, results_count: filteredLots.length, mode: 'column_only' }, user?.email, getClientIP(req));
+      return res.json({
+        results: filteredLots,
+        report: `Found ${filteredLots.length} lot${filteredLots.length !== 1 ? 's' : ''} matching "${query}". Results sorted by investment score.`,
+        sources, totalSearched, searchesUsed, searchLimit,
+      });
     }
 
-    // Apply sold filter before sending to Gemini (prefer lot.status, fallback to bullets regex)
-    normaliseLotStatuses(dedupedAllLots);
-    const filteredLots = soldFilter === 'everything'
-      ? dedupedAllLots
-      : soldFilter === 'available'
-      ? dedupedAllLots.filter(l => !l.status || l.status === 'available')
-      : soldFilter === 'sold'
-      ? dedupedAllLots.filter(l => l.status === 'sold' || l.status === 'stc' || l.status === 'withdrawn')
-      : soldFilter === 'unsold'
-      ? dedupedAllLots.filter(l => l.status === 'unsold')
-      : dedupedAllLots.filter(l => !l.status || l.status === 'available' || l.status === 'unsold');
-
-    // Build a rich lot summary for Gemini, using search_text when available
-    const queryTerms = query.toLowerCase().split(/\s+/).filter(t => t.length > 2);
-    const lotEntries = filteredLots.map((l, i) => {
-      // Structured fields (always included for Gemini context)
+    // For larger result sets, send search_text to Gemini for ranking + commentary
+    // Cap at 200 lots for Gemini context (sorted by score)
+    const geminiLots = filteredLots.slice(0, 200);
+    const lotSummaries = geminiLots.map((l, i) => {
       const meta = [
         l.status && l.status !== 'available' ? `STATUS:${l.status}` : '',
         l.propType ? `Type:${l.propType}` : '',
         l.tenure ? `Tenure:${l.tenure}` : '',
         l.beds ? `${l.beds}bed` : '',
         l.condition ? `Cond:${l.condition}` : '',
-        l.epcRating ? `EPC:${l.epcRating}` : '',
         l.estGrossYield ? `Yield:${l.estGrossYield}%` : '',
         l.belowMarket ? `${l.belowMarket}%belowMkt` : '',
         l.vacant ? 'VACANT' : '',
         l.titleSplit ? 'TITLE_SPLIT' : '',
-        l.floodZone && l.floodZone !== '1' ? `Flood:${l.floodZone}` : '',
-        l.daysSinceAuction > 0 ? `${l.daysSinceAuction}d_since_auction` : '',
       ].filter(Boolean).join(' ');
-      // Unstructured context: use pre-built search_text if available, else fall back to bullets+opps+risks
-      const context = l._searchText || [(l.opps || []).join(', '), (l.risks || []).join(', '), (l.bullets || []).join('; ').substring(0, 200)].filter(Boolean).join(' | ');
-      const summary = `[${i}] ${l._house} L${l.lot}: ${l.address} | £${l.price || '?'} | Score:${l.score || 0} | ${meta} | ${context}`;
-      const searchText = summary.toLowerCase();
-      const relevance = queryTerms.filter(t => searchText.includes(t)).length;
-      return { summary, relevance };
-    });
+      const context = (l._searchText || '').substring(0, 500);
+      return `[${i}] ${l._house} L${l.lot}: ${l.address} | £${l.price || '?'} | Score:${l.score || 0} | ${meta} | ${context}`;
+    }).join('\n');
 
-    // Sort: query-relevant lots first, then by original order
-    lotEntries.sort((a, b) => b.relevance - a.relevance);
+    const soldInstruction = sf === 'available' ? '\nIMPORTANT: Showing only available (unsold) lots.' :
+      sf === 'sold' ? '\nIMPORTANT: Showing sold/STC/withdrawn lots only.' :
+      sf === 'unsold' ? '\nIMPORTANT: Showing unsold (failed at auction) lots only.' : '';
 
-    // Build context string with 120K char budget (fits within Gemini's context)
-    const CONTEXT_LIMIT = 120000;
-    let lotSummaries = '';
-    let included = 0;
-    for (const entry of lotEntries) {
-      if (lotSummaries.length + entry.summary.length + 1 > CONTEXT_LIMIT) break;
-      lotSummaries += entry.summary + '\n';
-      included++;
-    }
-    const omitted = filteredLots.length - included;
-
-    const soldInstruction = soldFilter === 'available' ? '\nIMPORTANT: The user has filtered to show only available (unsold) lots. All sold/STC/withdrawn lots have already been excluded.' :
-      soldFilter === 'sold' ? '\nIMPORTANT: The user is specifically looking at sold/STC/withdrawn lots only.' : '';
-
-    const responseText = await callAI(`You are a UK property investment analyst. A user has searched across ${filteredLots.length} auction lots from ${sources.length} auction house catalogues.${soldInstruction}
-
-CONTEXT: Each lot has structured metadata including STATUS (available/unsold/sold/withdrawn/stc), Type, Tenure, EPC rating, Yield estimate, Condition, and below-market percentage. Lots marked STATUS:unsold are properties that FAILED to sell at auction — these are valuable for post-auction negotiation strategies. When users ask about "unsold", "failed", or "didn't sell", prioritise lots with STATUS:unsold. The "Xd_since_auction" field shows days since the auction failed.
+    const responseText = await callAI(`You are a UK property investment analyst. A user has searched across auction lots and the database returned ${totalSearched} matches (showing top ${geminiLots.length} by score).${soldInstruction}
 
 Their search query: "${query}"
 
-Here are ${included} lots${omitted > 0 ? ` (${omitted} lower-relevance lots omitted for brevity)` : ''}, sorted by relevance to the query (index, house, lot number, address, price, score, title split status, key features):
+These lots already match the user's filters. Your job is to:
+1. Rank and select the BEST matches — the lots most relevant to the user's intent
+2. Write a brief investment report (2-3 paragraphs) with actionable insights
 
+Lots (pre-filtered by database, sorted by score):
 ${lotSummaries}
-
-TASK:
-1. Identify the lots that best match the user's query. Return the indices of matching lots.
-2. Write a brief investment report (2-3 paragraphs) summarising what you found.
 
 Respond in this exact JSON format:
 {"indices":[0,5,12],"report":"Your report here..."}
 
-Only return lots that genuinely match the query. If nothing matches well, say so in the report and return an empty indices array.`, { tier: 'fast', maxTokens: 4000, taskType: 'search' });
-    log.info('smart_search_full', { tier: 'fast' });
-    let parsed;
+Return the indices of the best matching lots. If ALL lots are relevant, return all indices. Focus your report on investment insights, not just listing addresses.`, { tier: 'fast', maxTokens: 4000, taskType: 'search' });
+    log.info('smart_search_full', { tier: 'fast', preFiltered: totalSearched, sentToAI: geminiLots.length });
+
+    let aiParsed;
     try {
-      // Strip markdown code fences if present
       let cleaned = responseText.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
-      // Extract JSON object from response
       const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        parsed = JSON.parse(jsonMatch[0]);
-      } else {
-        parsed = JSON.parse(cleaned);
-      }
+      aiParsed = jsonMatch ? JSON.parse(jsonMatch[0]) : JSON.parse(cleaned);
     } catch (e) {
       console.log('Smart search JSON parse failed:', e.message, 'Raw:', responseText.substring(0, 200));
-      // Try to extract report text even if JSON parsing fails
       const reportMatch = responseText.match(/"report"\s*:\s*"([\s\S]*?)(?:"\s*[,}])/);
       const indicesMatch = responseText.match(/"indices"\s*:\s*\[([\d,\s]*)\]/);
-      parsed = {
+      aiParsed = {
         indices: indicesMatch ? indicesMatch[1].split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n)) : [],
-        report: reportMatch ? reportMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"') : responseText.replace(/\{[\s\S]*\}/, '').trim() || 'Search completed but could not parse results.'
+        report: reportMatch ? reportMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"') : 'Search completed.'
       };
     }
 
-    let rawMatchingLots = (parsed.indices || [])
-      .filter(i => i >= 0 && i < filteredLots.length)
-      .map(i => filteredLots[i]);
+    let matchingLots = (aiParsed.indices || [])
+      .filter(i => i >= 0 && i < geminiLots.length)
+      .map(i => geminiLots[i]);
 
-    // Deterministic fallback — if Gemini returned zero results but high-relevance lots exist,
-    // return those directly. Prevents zero-result failures for clear queries like "Bristol title split".
-    if (rawMatchingLots.length === 0) {
-      const maxRel = lotEntries.reduce((max, e) => Math.max(max, e.relevance), 0);
-      if (maxRel >= 2) {
-        const highRelIndices = lotEntries
-          .filter(e => e.relevance >= maxRel)
-          .map(e => parseInt(e.summary.match(/^\[(\d+)\]/)?.[1]))
-          .filter(i => !isNaN(i) && i >= 0 && i < filteredLots.length);
-        rawMatchingLots = highRelIndices.map(i => filteredLots[i]);
-        log.info('smart-search deterministic-fallback', { geminiEmpty: true, fallbackCount: rawMatchingLots.length, maxRelevance: maxRel });
-        if (!parsed.report || parsed.report.includes('could not')) {
-          parsed.report = `Found ${rawMatchingLots.length} lot${rawMatchingLots.length !== 1 ? 's' : ''} matching "${query}" via keyword matching.`;
-        }
+    // Fallback: if Gemini returned nothing, return all pre-filtered lots (they already match)
+    if (matchingLots.length === 0) {
+      matchingLots = geminiLots;
+      log.info('smart-search ai-empty-fallback', { returning: matchingLots.length });
+      if (!aiParsed.report || aiParsed.report === 'Search completed.') {
+        aiParsed.report = `Found ${totalSearched} lot${totalSearched !== 1 ? 's' : ''} matching "${query}". Sorted by investment score.`;
       }
     }
 
-    // Deduplicate by normalised address (cross-house) — keep lot with higher score/richer data
-    const dedupMap = new Map();
-    for (const lot of rawMatchingLots) {
-      const normAddr = (lot.address || '').toLowerCase().replace(/[\s,]+/g, ' ').replace(/^(lot\s*\d+\s*[-:]?\s*)/i, '').trim();
-      if (normAddr.length < 5) { dedupMap.set(`__short_${dedupMap.size}`, lot); continue; }
-      const existing = dedupMap.get(normAddr);
-      if (existing) {
-        const richness = (l) => (l.score || 0) * 10 + (l.imageUrl ? 5 : 0) + (l.bullets?.length || 0) + (l.price ? 1 : 0);
-        if (richness(lot) > richness(existing)) dedupMap.set(normAddr, lot);
-      } else {
-        dedupMap.set(normAddr, lot);
-      }
-    }
-    const matchingLots = [...dedupMap.values()];
-    if (matchingLots.length < rawMatchingLots.length) {
-      log.info('smart-search dedup', { before: rawMatchingLots.length, after: matchingLots.length, removed: rawMatchingLots.length - matchingLots.length });
-    }
-
-    // Smart search is premium-only (free/anon blocked at top of endpoint)
-    const gatedResults = matchingLots;
-
-    const response = {
-      results: gatedResults,
-      report: parsed.report || '',
-      sources,
-      totalSearched: filteredLots.length,
-      searchesUsed, searchLimit,
-    };
-
-    // Log smart search activity
-    logActivityEvent('smart_search', { query, results_count: matchingLots.length }, user?.email, getClientIP(req));
-
-    // Cache preset query results (1-hour TTL)
-    if (presetSlug) {
-      const cacheKey = `${presetSlug}:${sf}`;
-      await supabase.from('smart_search_cache').upsert({
-        query_key: cacheKey,
-        results: matchingLots,
-        report: parsed.report || '',
-        sources,
-        source_urls: sources.map(s => s.url),
-        total_searched: filteredLots.length,
-        sold_filter: sf,
-        cached_at: new Date().toISOString(),
-        expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-      }, { onConflict: 'query_key' });
-    }
+    // Strip _searchText from response (large, not needed by frontend)
+    for (const lot of matchingLots) delete lot._searchText;
 
     await incrementSearchCounter();
-    return res.json(response);
+    logActivityEvent('smart_search', { query, results_count: matchingLots.length, mode: 'db_plus_ai', preFiltered: totalSearched }, user?.email, getClientIP(req));
+
+    return res.json({
+      results: matchingLots,
+      report: aiParsed.report || '',
+      sources, totalSearched, searchesUsed, searchLimit,
+    });
   } catch (err) {
     const msg = err.message || String(err);
     log.error('Smart search error', { error: msg, status: err.status, stack: err.stack?.split('\n').slice(0, 3).join(' | ') });
@@ -4584,7 +4658,7 @@ Only return lots that genuinely match the query. If nothing matches well, say so
     if (err.status === 401 || err.status === 403 || /invalid.api.key|unauthorized|forbidden/i.test(msg)) {
       return res.status(500).json({ error: 'key_invalid', message: 'AI API key is invalid or expired. Check environment variables in Railway.', provider: process.env.AI_PROVIDER || 'gemini' });
     }
-    return res.status(500).json({ error: 'api_error', message: 'Smart search failed — AI API error.', detail: msg, provider: process.env.AI_PROVIDER || 'gemini', tier: 'fast' });
+    return res.status(500).json({ error: 'api_error', message: 'Smart search failed.', detail: msg, provider: process.env.AI_PROVIDER || 'gemini', tier: 'fast' });
   }
 });
 
