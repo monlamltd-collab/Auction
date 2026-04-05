@@ -1225,6 +1225,15 @@ const HOUSE_EXTRACTION_HINTS = {
   // ── Regional/independent houses (batch 6, March 2026) ──
   underthehammer:          'Under The Hammer. Next.js React SPA (underthehammer.com). Property cards at /for-auction/properties with title, address, guide price, bedrooms, property type, images on blob.core.windows.net, and detail links to /for-auction/slug.',
   lsk:                     'Lacy Scott & Knight Suffolk. Bamboo Auctions platform (lacyscottandknight.bambooauctions.com). React SPA with property cards showing title, address, guide price, bedrooms, property type, and detail links. Same structure as Hunters.',
+  // ── GOTO Properties platform (EIG-based) ──
+  purplebricksgoto:        'Purplebricks via GOTO Properties. EIG platform (purplebricks.gotoproperties.co.uk). Standard EIG lot-panel cards with h3.list-address, guide price in list-guideprice, img.list-image, and /lot/details/ links. Paginated search with pagesize=48.',
+  // ── Verified EIG subdomains (April 2026) ──
+  groundrentauctions:      'Ground Rent Auctions. EIG platform (groundrentauctions.eigonlineauctions.com). Specialist ground rent lots. Standard EIG lot-panel cards.',
+  benjaminstevens:         'Benjamin Stevens Auctions. EIG platform (online.benjaminstevensauctions.co.uk). Standard EIG lot-panel cards.',
+  // ── New houses from own websites (April 2026) ──
+  auctionhammermidlands:   'Auction Hammer Midlands. WordPress/Elementor site. Lot cards with LOT number heading (h4), address, guide price (£X plus fees), bedrooms/bathrooms/receptions counts, and property images.',
+  sharpesauctions:         'Sharpes Auctions Bradford. PHP site. Lot cards with class products_table_items_lotnumber for lot number, guide price (£X plus fees), property images in products_table_thumb, and address links.',
+  jjmorris:                'JJ Morris Pembrokeshire. Property Jungle platform. Card-based layout with address, guide price, bedrooms/bathrooms, property images with lazy loading, and More Details links.',
 };
 
 // getExtractionModel() removed — tier selection now in callAI() callsites
@@ -1375,7 +1384,7 @@ const HOUSE_ROOTS = {
   fisherGerman:           'https://www.fishergerman.co.uk/auctions',
   woolleyandwallis:       'https://www.woolleyandwallis.co.uk/property/auction/',
   hobbsparker:            'https://www.hobbsparker.co.uk/auctioneers/',
-  // arnoldskeys — REMOVED: machinery auctions only, not property
+  arnoldskeys:            'https://www.arnoldskeys.com/auctions-2/',
   // twgaze — REMOVED: antiques/chattels auctioneer, not property
   hairandson:             'https://www.hairandson.co.uk/auction',
   phillipssmithanddunn:   'https://www.phillipsland.com/auction',
@@ -1426,6 +1435,15 @@ const HOUSE_ROOTS = {
   // hackneyandleigh — REMOVED: site down (ECONNREFUSED)
   // Scotland
   // onlinepropertyauctionsscotland — REMOVED: site down (ECONNREFUSED)
+  // ── GOTO Properties platform (EIG-based, April 2026) ──
+  purplebricksgoto:       'https://purplebricks.gotoproperties.co.uk/search?pagesize=48',
+  // ── Verified EIG subdomains (April 2026) ──
+  groundrentauctions:     'https://groundrentauctions.eigonlineauctions.com/search',
+  benjaminstevens:        'https://online.benjaminstevensauctions.co.uk/search',
+  // ── New houses from own websites (April 2026) ──
+  auctionhammermidlands:  'https://auctionhammermidlands.co.uk/auction/',
+  sharpesauctions:        'https://www.sharpesauctions.co.uk/current-traditional-auction.php',
+  jjmorris:               'https://www.jjmorris.com/list-search-results/?auction=1&showstc=on',
 };
 
 /*
@@ -6160,6 +6178,15 @@ function detectAuctionHouse(url) {
   if (u.includes('wrightmarshall.co.uk')) return 'wrightmarshall';
   if (u.includes('hackneyandleigh.co.uk')) return 'hackneyandleigh';
   if (u.includes('onlinepropertyauctionsscotland.co.uk')) return 'onlinepropertyauctionsscotland';
+  // ── GOTO Properties platform (EIG-based) ──
+  if (u.includes('purplebricks.gotoproperties')) return 'purplebricksgoto';
+  if (u.includes('gotoproperties.co.uk')) return 'gotoproperties';
+  if (u.includes('groundrentauctions.eigonlineauctions')) return 'groundrentauctions';
+  if (u.includes('benjaminstevensauctions')) return 'benjaminstevens';
+  // ── New houses from own websites (April 2026) ──
+  if (u.includes('auctionhammermidlands')) return 'auctionhammermidlands';
+  if (u.includes('sharpesauctions')) return 'sharpesauctions';
+  if (u.includes('jjmorris.com')) return 'jjmorris';
   // (Auction House UK branch patterns moved above generic catch-all)
   // ── EIG platform catch-all ──
   if (u.includes('.eigonlineauctions.com') || u.includes('eigpropertyauctions')) return 'eigplatform';
@@ -6294,6 +6321,15 @@ const HOUSE_DISPLAY_NAMES = {
   wrightmarshall: 'Wright Marshall',
   hackneyandleigh: 'Hackney & Leigh',
   onlinepropertyauctionsscotland: 'Online Property Auctions Scotland',
+  // ── GOTO Properties platform (April 2026) ──
+  purplebricksgoto: 'Purplebricks (GOTO Properties)',
+  // ── Verified EIG subdomains (April 2026) ──
+  groundrentauctions: 'Ground Rent Auctions',
+  benjaminstevens: 'Benjamin Stevens Auctions',
+  // ── New houses from own websites (April 2026) ──
+  auctionhammermidlands: 'Auction Hammer Midlands',
+  sharpesauctions: 'Sharpes Auctions',
+  jjmorris: 'JJ Morris',
 };
 
 function getHouseDisplayName(slug, url) {
@@ -6659,6 +6695,11 @@ async function rewriteUrl(url, house) {
     return { baseUrl: url, isApi: false, paginateAs: null, preferPuppeteer: true };
   }
 
+  // GOTO Properties / Purplebricks: EIG platform, server-rendered, paginated (?page=N, 48/page)
+  if (house === 'purplebricksgoto') {
+    return { baseUrl: url, isApi: false, paginateAs: 'pugh_pages', preferPuppeteer: false };
+  }
+
   // Unknown houses: prefer Puppeteer since most modern auction sites are JS-rendered
   if (house === 'unknown') {
     return { baseUrl: url, isApi: false, paginateAs: null, preferPuppeteer: true };
@@ -6921,6 +6962,7 @@ function buildPageUrl(baseUrl, page, house) {
     }
     case 'buttersjohnbee': return clean.includes('?') ? `${clean}&page=${page}` : `${clean}?page=${page}`;
     case 'brownco': return clean.includes('?') ? `${clean}&page=${page}` : `${clean}?page=${page}`;
+    case 'purplebricksgoto': return clean.includes('?') ? `${clean}&page=${page}` : `${clean}?page=${page}`;
     case 'iamsold': return clean.includes('?') ? `${clean}&page=${page}` : `${clean}?page=${page}`;
     case 'andrewcraig': return clean.includes('?') ? `${clean}&page=${page}` : `${clean}?page=${page}`;
     default:
@@ -10400,7 +10442,7 @@ DOM_EXTRACTORS['bagshaws'] = `
 `;
 
 // Wire up EIG house aliases to the shared eigplatform extractor
-for (const slug of ['astleys', 'henrysykes', 'clarkesimpson', 'brownco', 'cheffinstimed', 'romanway', 'hammerprice', 'sarahmains', 'sageandco', 'auctiontrade', 'brggibson', 'higginsdrysdale', 'martinpole', 'jonespeckover', 'thepropertyauctionhouse', 'propertyauctionagent', 'lot9', 'auctionnorth', 'bowensonandwatson', 'sheldonbosley', 'nationalpropertyauctions', 'ahlondon', 'starpropertyonline', 'brggibsondublin', 'lsh']) {
+for (const slug of ['astleys', 'henrysykes', 'clarkesimpson', 'brownco', 'cheffinstimed', 'romanway', 'hammerprice', 'sarahmains', 'sageandco', 'auctiontrade', 'brggibson', 'higginsdrysdale', 'martinpole', 'jonespeckover', 'thepropertyauctionhouse', 'propertyauctionagent', 'lot9', 'auctionnorth', 'bowensonandwatson', 'sheldonbosley', 'nationalpropertyauctions', 'ahlondon', 'starpropertyonline', 'brggibsondublin', 'lsh', 'groundrentauctions', 'benjaminstevens']) {
   DOM_EXTRACTORS[slug] = DOM_EXTRACTORS.eigplatform;
 }
 // Wire up Bamboo Auctions platform houses to the shared hunters extractor
@@ -10420,6 +10462,8 @@ DOM_EXTRACTORS['carterjonas'] = DOM_EXTRACTORS.hunters;
 DOM_EXTRACTORS['allwalesauction'] = DOM_EXTRACTORS.hunters;
 // Cooper and Tanner uses EIG platform for auctions
 DOM_EXTRACTORS['cooperandtanner'] = DOM_EXTRACTORS.eigplatform;
+// GOTO Properties platform is EIG-based (purplebricks.gotoproperties.co.uk)
+DOM_EXTRACTORS['purplebricksgoto'] = DOM_EXTRACTORS.eigplatform;
 // GTH (Greenslade Taylor Hunt) uses Homeflow SPA platform (same as stags)
 DOM_EXTRACTORS['gth'] = DOM_EXTRACTORS.stags;
 // Clee Tompkinson Francis also uses Homeflow (same tag/auction URL pattern)
@@ -15043,7 +15087,7 @@ async function updateHouseSkill(slug, { catalogueUrl, lotCount, imageCoverage, s
   let platformFamily = existing?.platform_family || null;
   if (!platformFamily) {
     const url = (rootUrl || '').toLowerCase();
-    if (url.includes('eigonlineauctions.com') || url.includes('eigpropertyauctions.co.uk') || extractor === 'eigplatform') platformFamily = 'eig';
+    if (url.includes('eigonlineauctions.com') || url.includes('eigpropertyauctions.co.uk') || url.includes('gotoproperties.co.uk') || extractor === 'eigplatform') platformFamily = 'eig';
     else if (url.includes('auctionhouse.co.uk') || extractor === 'auctionhouseuk') platformFamily = 'auctionhouse_uk';
     else if (url.includes('btgeddisonspropertyauctions.com') || url.includes('sdlauctions.co.uk')) platformFamily = 'btg_sdl';
     else if (url.includes('iamsold.co.uk')) platformFamily = 'iamsold';
