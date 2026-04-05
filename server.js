@@ -413,7 +413,7 @@ function isValidImageUrl(url) {
 // Returns { lots, alerts, rejected } where rejected=true means batch is
 // too poor to cache and should be discarded.
 // ═══════════════════════════════════════════════════════════════════════════
-function qualityGate(lots, house, prevCached) {
+function qualityGate(lots, house, prevCached, prevLots) {
   const alerts = [];
   const before = lots.length;
 
@@ -462,8 +462,8 @@ function qualityGate(lots, house, prevCached) {
     }
 
     // Image coverage regression — if previous had >50% images and new has <20%, flag it
-    if (Array.isArray(prevCached.lots)) {
-      const prevImgCount = prevCached.lots.filter(l => l.imageUrl).length;
+    if (Array.isArray(prevLots) && prevLots.length > 0) {
+      const prevImgCount = prevLots.filter(l => l.imageUrl || l.image_url).length;
       const prevImgPct = prevImgCount / prevCached.total_lots;
       const newImgCount = lots.filter(l => l.imageUrl).length;
       const newImgPct = lots.length > 0 ? newImgCount / lots.length : 0;
@@ -1839,26 +1839,16 @@ app.post('/api/cron/unsold-alerts', async (req, res) => {
       const { data: user, error: userErr } = await supabase.from('users').select('email, name').eq('id', alert.user_id).single();
       if (userErr || !user?.email) continue;
 
-      // Get all cached lots and find unsold ones
-      const { data: caches, error: cachesErr } = await supabase
-        .from('cached_analyses')
-        .select('lots, house')
-        .gt('expires_at', now.toISOString());
-
-      if (cachesErr || !caches) continue;
-
+      // Get unsold lots from lots table
       const todayStr = now.toISOString().slice(0, 10);
-      let unsoldLots = [];
-      for (const cache of caches) {
-        const lots = typeof cache.lots === 'string' ? JSON.parse(cache.lots) : cache.lots;
-        if (!Array.isArray(lots)) continue;
-        for (const lot of lots) {
-          if (lot.status === 'unsold' || (lot._auctionDate && lot._auctionDate < todayStr && (!lot.status || lot.status === 'available'))) {
-            lot._house = lot._house || cache.house;
-            unsoldLots.push(lot);
-          }
-        }
-      }
+      const { data: unsoldRows, error: unsoldErr } = await supabase
+        .from('lots')
+        .select(LOTS_SELECT)
+        .or(`status.eq.unsold,and(auction_date.lt.${todayStr},or(status.eq.available,status.is.null))`);
+
+      if (unsoldErr || !unsoldRows) continue;
+
+      let unsoldLots = unsoldRows.map(dbRowToFrontendLot);
 
       // Apply user's saved filters (price, type, location)
       const f = alert.filters || {};
@@ -3979,13 +3969,12 @@ app.post('/api/analyse', async (req, res) => {
     await enrichLotsFromLotPages(analysed);
 
     // ── Harness enrichment: gap-filling, cross-lot inference, cache carry-forward ──
-    const { data: prevCachedForEnrich } = await supabase
-      .from('cached_analyses')
-      .select('lots')
-      .eq('url', normalisedUrl)
-      .single();
+    const { data: prevLotRows } = await supabase
+      .from('lots')
+      .select(LOTS_SELECT)
+      .eq('catalogue_url', normalisedUrl);
     const harnessResult = enrichBatch(analysed, house, {
-      previousCache: prevCachedForEnrich?.lots || [],
+      previousCache: (prevLotRows || []).map(dbRowToFrontendLot),
     });
     const enrichedAnalysed = harnessResult.lots;
     if (harnessResult.stats.enriched > 0) {
@@ -4009,12 +3998,13 @@ app.post('/api/analyse', async (req, res) => {
     // Check if catalogue data actually changed before invalidating preset cache
     const { data: prevCached } = await supabase
       .from('cached_analyses')
-      .select('total_lots, top_picks, title_splits, lots')
+      .select('total_lots, top_picks, title_splits')
       .eq('url', normalisedUrl)
       .single();
 
     // ── Quality gate — validate batch before caching ──
-    const qg = qualityGate(enrichedAnalysed, house, prevCached);
+    // prevLotRows already fetched above for enrichBatch
+    const qg = qualityGate(enrichedAnalysed, house, prevCached, (prevLotRows || []).map(dbRowToFrontendLot));
     // For manual analyses, log but don't reject — user explicitly asked for this
     if (qg.alerts.length > 0) {
       for (const a of qg.alerts) sseWrite(res, 'warn', { message: a });
@@ -4038,7 +4028,6 @@ app.post('/api/analyse', async (req, res) => {
       avg_yield: yieldsArr.length ? +(yieldsArr.reduce((a, b) => a + b, 0) / yieldsArr.length).toFixed(1) : null,
       dev_potential: enrichedAnalysed.filter(l => (l.opps || []).some(o => /development|planning|conversion/i.test(o))).length,
       vacant_count: enrichedAnalysed.filter(l => l.vacant === true).length,
-      lots: enrichedAnalysed,
       created_at: new Date().toISOString(),
       expires_at: expiresAt,
       last_scraped_at: new Date().toISOString(),
@@ -4047,7 +4036,7 @@ app.post('/api/analyse', async (req, res) => {
     ai_tier: _lastAITier,
     }, { onConflict: 'url' });
 
-    // ── Dual-write: upsert individual lots to lots table ──
+    // ── Upsert individual lots to lots table (single source of truth) ──
     normaliseLotStatuses(enrichedAnalysed); // Normalize before write — canonical statuses only
     await upsertToLotsTable(enrichedAnalysed, house, url, {
       scrapedWith: _lastScrapeEngine,
@@ -5230,16 +5219,22 @@ app.post('/api/admin/backfill-images', async (req, res) => {
   }
 
   try {
-    const { data: cached } = await supabase
+    // Get active catalogues (metadata only)
+    const { data: activeCats } = await supabase
       .from('cached_analyses')
-      .select('url, house, lots')
+      .select('url, house')
       .gt('expires_at', new Date().toISOString());
 
-    if (!cached || cached.length === 0) return res.json({ message: 'No cached catalogues found', results: [] });
+    if (!activeCats || activeCats.length === 0) return res.json({ message: 'No cached catalogues found', results: [] });
 
     const results = [];
-    for (const entry of cached) {
-      const lots = entry.lots || [];
+    for (const entry of activeCats) {
+      // Read lots from lots table
+      const { data: lotRows } = await supabase
+        .from('lots')
+        .select(LOTS_SELECT)
+        .eq('catalogue_url', entry.url);
+      const lots = (lotRows || []).map(dbRowToFrontendLot);
       const missingImages = lots.filter(l => !l.imageUrl).length;
       if (missingImages === 0) {
         results.push({ house: entry.house, url: entry.url, total: lots.length, missing: 0, gained: 0, status: 'skipped — all have images' });
@@ -5278,7 +5273,9 @@ app.post('/api/admin/backfill-images', async (req, res) => {
       }
 
       if (gained > 0) {
-        await supabase.from('cached_analyses').update({ lots }).eq('url', entry.url);
+        // Write enriched lots back to lots table
+        normaliseLotStatuses(lots);
+        await upsertToLotsTable(lots, entry.house, entry.url, { scrapedWith: 'image-backfill' });
         results.push({ house: entry.house, url: entry.url, total: lots.length, missing: missingImages, gained, status: 'updated' });
       } else {
         results.push({ house: entry.house, url: entry.url, total: lots.length, missing: missingImages, gained: 0, status: 'no matches found' });
@@ -5286,7 +5283,7 @@ app.post('/api/admin/backfill-images', async (req, res) => {
     }
 
     const totalGained = results.reduce((s, r) => s + r.gained, 0);
-    res.json({ message: `Backfill complete. ${totalGained} images added across ${cached.length} catalogues.`, results });
+    res.json({ message: `Backfill complete. ${totalGained} images added across ${activeCats.length} catalogues.`, results });
   } catch (err) {
     log.error('Image backfill error', { error: err.message });
     res.status(500).json({ error: 'Image backfill failed. Check server logs.' });
@@ -5887,12 +5884,11 @@ app.get('/api/admin/system-health', async (req, res) => {
     };
 
     // 3. Coverage — per-house lot counts and image coverage
-    const { data: cached } = await supabase
-      .from('cached_analyses')
-      .select('house, lots, expires_at, created_at');
-    const { data: skills } = await supabase
-      .from('house_skills')
-      .select('slug, status, last_scraped');
+    const [{ data: cachedMeta }, { data: lotRows }, { data: skills }] = await Promise.all([
+      supabase.from('cached_analyses').select('house, expires_at, created_at'),
+      supabase.from('lots').select('house, image_url, beds'),
+      supabase.from('house_skills').select('slug, status, last_scraped'),
+    ]);
 
     const skillMap = {};
     if (skills) {
@@ -5905,31 +5901,37 @@ app.get('/api/admin/system-health', async (req, res) => {
     let totalImages = 0;
     let totalLotsForImg = 0;
 
-    if (cached) {
-      for (const row of cached) {
+    // Build house metadata from cached_analyses (staleness, last scraped)
+    if (cachedMeta) {
+      for (const row of cachedMeta) {
         const slug = row.house;
         if (!houseMap[slug]) {
           houseMap[slug] = { slug, displayName: HOUSE_DISPLAY_NAMES[slug] || slug, lotCount: 0, imageCoverage: 0, bedCoverage: 0, status: 'active', lastScraped: null, _imgCount: 0, _lotCount: 0, _bedCount: 0 };
         }
         const h = houseMap[slug];
-        const lots = Array.isArray(row.lots) ? row.lots : [];
-        h.lotCount += lots.length;
-        totalLots += lots.length;
-        for (const lot of lots) {
-          h._lotCount++;
-          totalLotsForImg++;
-          if (lot.imageUrl) { h._imgCount++; totalImages++; }
-          if (lot.beds != null) { h._bedCount++; }
-        }
         if (row.created_at && (!h.lastScraped || row.created_at > h.lastScraped)) {
           h.lastScraped = row.created_at;
         }
-        // A house is stale only if it has no lots AND its cache has expired.
-        // Houses with lots are always "active" — cache expiry just means
-        // the data should be refreshed, not that the house is inactive.
         if (row.expires_at && new Date(row.expires_at) < now && h.lotCount === 0) {
           h.status = 'stale';
         }
+      }
+    }
+
+    // Build lot coverage from lots table
+    if (lotRows) {
+      for (const lot of lotRows) {
+        const slug = lot.house;
+        if (!houseMap[slug]) {
+          houseMap[slug] = { slug, displayName: HOUSE_DISPLAY_NAMES[slug] || slug, lotCount: 0, imageCoverage: 0, bedCoverage: 0, status: 'active', lastScraped: null, _imgCount: 0, _lotCount: 0, _bedCount: 0 };
+        }
+        const h = houseMap[slug];
+        h.lotCount++;
+        h._lotCount++;
+        totalLots++;
+        totalLotsForImg++;
+        if (lot.image_url) { h._imgCount++; totalImages++; }
+        if (lot.beds != null) { h._bedCount++; }
       }
     }
 
@@ -6002,36 +6004,39 @@ app.get('/api/admin/missing-images', async (req, res) => {
     const limit = Math.min(parseInt(req.query.limit) || 100, 500);
     const offset = parseInt(req.query.offset) || 0;
 
-    // Fetch future/current catalogues only
-    let query = supabase
-      .from('cached_analyses')
-      .select('house, url, lots, created_at')
-      .gte('expires_at', new Date().toISOString());
+    // Query lots table for lots missing images (from active catalogues)
+    let lotQuery = supabase
+      .from('lots')
+      .select('house, lot_number, address, catalogue_url, auction_date, image_url')
+      .or('image_url.is.null,image_url.eq.');
 
     if (houseFilter) {
-      query = query.ilike('house', `%${houseFilter}%`);
+      lotQuery = lotQuery.ilike('house', `%${houseFilter}%`);
     }
 
-    const { data: catalogues, error } = await query;
+    const { data: missingRows, error } = await lotQuery;
     if (error) throw error;
+
+    // Filter to active catalogues only
+    const { data: activeCats } = await supabase
+      .from('cached_analyses')
+      .select('url')
+      .gte('expires_at', new Date().toISOString());
+    const activeUrls = new Set((activeCats || []).map(c => c.url));
 
     const missingLots = [];
     const houseCounts = {};
 
-    for (const cat of (catalogues || [])) {
-      const lots = cat.lots || [];
-      for (const lot of lots) {
-        if (!lot.imageUrl || lot.imageUrl === '') {
-          missingLots.push({
-            house: cat.house,
-            lotNumber: lot.lot || lot.lotNumber || null,
-            address: lot.address || '',
-            catalogueUrl: cat.url,
-            auctionDate: cat.created_at || null,
-          });
-          houseCounts[cat.house] = (houseCounts[cat.house] || 0) + 1;
-        }
-      }
+    for (const row of (missingRows || [])) {
+      if (!activeUrls.has(row.catalogue_url)) continue;
+      missingLots.push({
+        house: row.house,
+        lotNumber: row.lot_number || null,
+        address: row.address || '',
+        catalogueUrl: row.catalogue_url,
+        auctionDate: row.auction_date || null,
+      });
+      houseCounts[row.house] = (houseCounts[row.house] || 0) + 1;
     }
 
     // Apply pagination
@@ -6104,52 +6109,51 @@ app.get('/api/quality-report', async (req, res) => {
     return res.status(403).json({ error: 'Invalid admin token' });
   }
   try {
-    const { data: cached } = await supabase.from('cached_analyses').select('house, lots, expires_at, created_at, content_hash');
+    // Get cache metadata (no lots JSONB) and lots from lots table
+    const [{ data: cached }, { data: lotRows }] = await Promise.all([
+      supabase.from('cached_analyses').select('house, url, expires_at, created_at, content_hash'),
+      supabase.from('lots').select(LOTS_SELECT),
+    ]);
+
     const now = new Date();
     const report = { houses: [], issues: [], summary: {} };
-    let totalLots = 0, housesWithZero = 0, staleHouses = 0, totalDupes = 0;
+    let totalLots = 0, housesWithZero = 0, staleHouses = 0;
 
-    // Deduplicate by house — merge all cached URLs per house into one report entry
-    const byHouse = {};
+    // Group cache metadata by house
+    const cacheByHouse = {};
     for (const row of (cached || [])) {
       const h = row.house || 'unknown';
-      if (!byHouse[h]) byHouse[h] = { lots: [], isStale: true, created_at: null };
-      const lots = row.lots || [];
-      byHouse[h].lots.push(...lots);
+      if (!cacheByHouse[h]) cacheByHouse[h] = { urls: [], isStale: true, created_at: null };
+      cacheByHouse[h].urls.push(row.url);
       const isStale = row.expires_at && new Date(row.expires_at) < now;
-      if (!isStale) byHouse[h].isStale = false; // fresh if ANY URL is fresh
-      if (!byHouse[h].created_at || (row.created_at && new Date(row.created_at) > new Date(byHouse[h].created_at))) {
-        byHouse[h].created_at = row.created_at;
+      if (!isStale) cacheByHouse[h].isStale = false;
+      if (!cacheByHouse[h].created_at || (row.created_at && new Date(row.created_at) > new Date(cacheByHouse[h].created_at))) {
+        cacheByHouse[h].created_at = row.created_at;
       }
     }
 
-    for (const [house, data] of Object.entries(byHouse)) {
-      const rawLots = data.lots;
-      const isStale = data.isStale;
-      const ageHours = data.created_at ? Math.round((now - new Date(data.created_at)) / 3600000) : null;
+    // Group lots by house
+    const lotsByHouse = {};
+    for (const row of (lotRows || [])) {
+      const h = row.house || 'unknown';
+      if (!lotsByHouse[h]) lotsByHouse[h] = [];
+      lotsByHouse[h].push(row);
+    }
 
-      // Deduplicate lots across URLs — keep richest version of each lot
-      const lotMap = new Map();
-      let dupes = 0;
-      for (const l of rawLots) {
-        const key = l.url || (l.address ? l.address.toLowerCase().replace(/[\s,]+/g, ' ').trim() : null);
-        if (!key || key.length < 5) { lotMap.set(`__nokey_${lotMap.size}`, l); continue; }
-        if (lotMap.has(key)) {
-          dupes++;
-          const existing = lotMap.get(key);
-          const richness = (lot) => (lot.score || 0) * 10 + (lot.imageUrl ? 5 : 0) + (lot.bullets?.length || 0) + (lot.price ? 1 : 0);
-          if (richness(l) > richness(existing)) lotMap.set(key, l);
-        } else {
-          lotMap.set(key, l);
-        }
-      }
-      const lots = [...lotMap.values()];
+    // Merge: all houses from cache metadata + any houses only in lots table
+    const allHouses = new Set([...Object.keys(cacheByHouse), ...Object.keys(lotsByHouse)]);
+
+    for (const house of allHouses) {
+      const cache = cacheByHouse[house] || { urls: [], isStale: true, created_at: null };
+      const rows = lotsByHouse[house] || [];
+      const lots = rows.map(dbRowToFrontendLot);
+      const isStale = cache.isStale;
+      const ageHours = cache.created_at ? Math.round((now - new Date(cache.created_at)) / 3600000) : null;
 
       const withImage = lots.filter(l => l.imageUrl).length;
       const imgCoverage = lots.length ? Math.round((withImage / lots.length) * 100) : 0;
 
       totalLots += lots.length;
-      totalDupes += dupes;
       if (lots.length === 0) housesWithZero++;
       if (isStale) staleHouses++;
 
@@ -6158,16 +6162,15 @@ app.get('/api/quality-report', async (req, res) => {
         ({ fieldCoverage } = validateBatch(lots, house));
       } catch (_e) { /* non-fatal */ }
 
-      const entry = { house, lots: lots.length, rawLots: rawLots.length, images: withImage, imgCoverage, dupes, ageHours, stale: !!isStale, fieldCoverage };
+      const entry = { house, lots: lots.length, images: withImage, imgCoverage, ageHours, stale: !!isStale, fieldCoverage };
       report.houses.push(entry);
 
       if (lots.length === 0) report.issues.push({ severity: 'critical', house, msg: 'Zero lots — extractor may be broken' });
-      if (dupes > 0) report.issues.push({ severity: 'warn', house, msg: `${dupes} duplicate lots` });
       if (imgCoverage < 30 && lots.length > 0) report.issues.push({ severity: 'warn', house, msg: `Low image coverage: ${imgCoverage}%` });
       if (isStale) report.issues.push({ severity: 'info', house, msg: `Cache stale (${ageHours}h old)` });
     }
 
-    report.summary = { totalHouses: Object.keys(byHouse).length, totalLots, housesWithZero, staleHouses, totalDupes };
+    report.summary = { totalHouses: allHouses.size, totalLots, housesWithZero, staleHouses };
     res.json(report);
   } catch (e) {
     log.error('Quality report error', { error: e.message });
@@ -13467,15 +13470,13 @@ app.get('/api/enrichment/report', async (req, res) => {
     return res.status(401).json({ error: 'Unauthorized' });
   }
   const house = req.query.house || null;
-  // Get cached lots for the house to generate report
+  // Get lots from lots table to generate report
   if (house) {
-    const { data } = await supabase.from('cached_analyses')
-      .select('lots, house')
-      .eq('house', house)
-      .limit(1)
-      .maybeSingle();
-    if (data?.lots) {
-      return res.json(getEnrichmentReport(data.lots, house));
+    const { data: lotRows } = await supabase.from('lots')
+      .select(LOTS_SELECT)
+      .eq('house', house);
+    if (lotRows && lotRows.length > 0) {
+      return res.json(getEnrichmentReport(lotRows.map(dbRowToFrontendLot), house));
     }
   }
   res.json({ message: 'Provide ?house=slug for per-house report' });
@@ -13962,13 +13963,18 @@ async function _doAutoAnalyseAll() {
       // Check if we already have a fresh cache
       const { data: cached } = await supabase
         .from('cached_analyses')
-        .select('url, total_lots, created_at, lots')
+        .select('url, total_lots, created_at')
         .eq('url', normalisedUrl)
         .gt('expires_at', new Date().toISOString())
         .single();
 
       if (cached && cached.total_lots > 0) {
-        const cachedLots = cached.lots || [];
+        // Read lots from lots table (single source of truth)
+        const { data: lotRows } = await supabase
+          .from('lots')
+          .select(LOTS_SELECT + ', id')
+          .eq('catalogue_url', normalisedUrl);
+        const cachedLots = (lotRows || []).map(dbRowToFrontendLot);
         let needsUpdate = false;
 
         // Allsop-specific: fix broken lot URLs and enrich with API data (including images)
@@ -13998,7 +14004,7 @@ async function _doAutoAnalyseAll() {
           }
         }
 
-        // Backfill images for cached lots that are missing them
+        // Backfill images for lots that are missing them
         const totalMissingImages = cachedLots.filter(l => !l.imageUrl).length;
         if (totalMissingImages > 0) {
           const lotsWithUrl = cachedLots.filter(l => l.url && !l.imageUrl).length;
@@ -14037,11 +14043,7 @@ async function _doAutoAnalyseAll() {
         }
 
         if (needsUpdate) {
-          await supabase.from('cached_analyses').update({ lots: cachedLots }).eq('url', normalisedUrl);
-          // ── Sync enriched lots to lots table (closes write gap) ──
-          // Allsop URL fixes, image backfill, and lot-page enrichments mutate cachedLots
-          // but previously only wrote to cached_analyses. Search queries read from the
-          // lots table, so enrichments were invisible to smart-search.
+          // Write enriched lots back to lots table (single source of truth)
           normaliseLotStatuses(cachedLots);
           await upsertToLotsTable(cachedLots, auction.house, auction.url, {
             scrapedWith: 'cache-enrichment',
@@ -15092,14 +15094,14 @@ async function autoAnalyseOne(url) {
   const expiresAt = new Date(Date.now() + getCacheTTL(house)).toISOString();
 
   // Check if catalogue data actually changed + quality gate
-  const { data: prevCached } = await supabase
-    .from('cached_analyses')
-    .select('total_lots, top_picks, title_splits, lots')
-    .eq('url', normalisedUrl)
-    .single();
+  const [{ data: prevCached }, { data: prevLotRows }] = await Promise.all([
+    supabase.from('cached_analyses').select('total_lots, top_picks, title_splits').eq('url', normalisedUrl).single(),
+    supabase.from('lots').select(LOTS_SELECT).eq('catalogue_url', normalisedUrl),
+  ]);
+  const prevLots = (prevLotRows || []).map(dbRowToFrontendLot);
 
   // ── Quality gate — reject bad batches before caching ──
-  const qg = qualityGate(lots, house, prevCached);
+  const qg = qualityGate(lots, house, prevCached, prevLots);
   if (qg.rejected) {
     console.log(`AUTO: ⚠ ${house} quality gate REJECTED batch. Keeping old data.`);
     // Record alert for monitoring
@@ -15122,7 +15124,7 @@ async function autoAnalyseOne(url) {
     const harnessBaseline = getBaseline(house);
     const harnessValidated = validateBatch(lots, house, { averageLotCount: harnessBaseline.averageLotCount });
     const harnessEnriched = enrichBatch(lots, house, {
-      previousCache: prevCached?.lots || [],
+      previousCache: prevLots,
     });
     lots = harnessEnriched.lots;
     if (harnessEnriched.stats.enriched > 0) {
@@ -15176,7 +15178,6 @@ async function autoAnalyseOne(url) {
     avg_yield: yieldsArr.length ? +(yieldsArr.reduce((a, b) => a + b, 0) / yieldsArr.length).toFixed(1) : null,
     dev_potential: lots.filter(l => (l.opps || []).some(o => /development|planning|conversion/i.test(o))).length,
     vacant_count: lots.filter(l => l.vacant === true).length,
-    lots,
     created_at: new Date().toISOString(),
     expires_at: expiresAt,
     content_hash: autoAnalyseOne._lastContentHash || null,
@@ -15186,7 +15187,7 @@ async function autoAnalyseOne(url) {
     ai_tier: _lastAITier,
   }, { onConflict: 'url' });
 
-  // ── Dual-write: upsert individual lots to lots table ──
+  // ── Upsert individual lots to lots table (single source of truth) ──
   normaliseLotStatuses(lots); // Normalize before write — canonical statuses only
   await upsertToLotsTable(lots, house, url, {
     scrapedWith: _lastScrapeEngine,
@@ -15213,7 +15214,7 @@ async function autoAnalyseOne(url) {
   console.log(`AUTO: ✓ ${house}: ${newTotalLots} lots cached (${newTitleSplits} title splits, ${newTopPicks} top picks)${catalogueChanged ? ' [CHANGED]' : ' [unchanged]'}`);
 
   // ── Compute per-scrape diff summary ──
-  const scrapeDiff = computeScrapeDiff(prevCached?.lots, lots);
+  const scrapeDiff = computeScrapeDiff(prevLots, lots);
   try {
     await supabase.from('house_skills')
       .update({ last_diff: scrapeDiff })
@@ -15405,16 +15406,14 @@ async function saveDailySnapshot() {
     .eq('date', today)
     .maybeSingle();
 
-  // Gather current state from cached_analyses
-  const { data: cached } = await supabase
-    .from('cached_analyses')
-    .select('house, total_lots, lots, scraped_with')
-    .gt('expires_at', new Date().toISOString());
+  // Gather current state from cached_analyses (metadata) + lots table (image coverage)
+  const [{ data: cached }, { data: imgStats }] = await Promise.all([
+    supabase.from('cached_analyses').select('house, total_lots, scraped_with').gt('expires_at', new Date().toISOString()),
+    supabase.from('lots').select('house, image_url'),
+  ]);
 
   const houses = cached || [];
   let totalLots = 0;
-  let totalWithImages = 0;
-  let totalLotsForImages = 0;
   const lotsByHouse = {};
   const engineCounts = { firecrawl: 0, puppeteer: 0, http: 0 };
 
@@ -15424,11 +15423,10 @@ async function saveDailySnapshot() {
     if (h.scraped_with && engineCounts[h.scraped_with] !== undefined) {
       engineCounts[h.scraped_with]++;
     }
-    const lots = h.lots || [];
-    totalLotsForImages += lots.length;
-    totalWithImages += lots.filter(l => l.imageUrl).length;
   }
 
+  const totalLotsForImages = (imgStats || []).length;
+  const totalWithImages = (imgStats || []).filter(l => l.image_url).length;
   const imageCoveragePct = totalLotsForImages > 0 ? Math.round(totalWithImages / totalLotsForImages * 100) : 0;
 
   // Read skill health status from Supabase
@@ -15591,7 +15589,8 @@ app.post('/api/admin/seed-snapshot', async (req, res) => {
   }
 });
 
-// ── Rescue orphaned lots: backfill lots in cached_analyses but missing from lots table ──
+// ── Rescue orphaned lots: backfill lots from legacy cached_analyses.lots JSONB into lots table ──
+// NOTE: Legacy migration tool — new analyses no longer write lots to cached_analyses
 app.post('/api/admin/rescue-orphaned-lots', async (req, res) => {
   const token = req.headers['x-admin-secret'] || '';
   if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
