@@ -13998,6 +13998,15 @@ async function _doAutoAnalyseAll() {
 
         if (needsUpdate) {
           await supabase.from('cached_analyses').update({ lots: cachedLots }).eq('url', normalisedUrl);
+          // ── Sync enriched lots to lots table (closes write gap) ──
+          // Allsop URL fixes, image backfill, and lot-page enrichments mutate cachedLots
+          // but previously only wrote to cached_analyses. Search queries read from the
+          // lots table, so enrichments were invisible to smart-search.
+          normaliseLotStatuses(cachedLots);
+          await upsertToLotsTable(cachedLots, auction.house, auction.url, {
+            scrapedWith: 'cache-enrichment',
+          });
+          console.log(`AUTO: ✓ ${auction.house} — synced enriched lots to lots table`);
         }
         return 'skipped';
       }
