@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-04-04T05:55:19.455Z",
+  "timestamp": "2026-04-05T06:14:52.059Z",
   "results": [
     {
       "house": "savills",
@@ -27,18 +27,13 @@
       "house": "sdl",
       "extractorLots": 3,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": 67,
       "issues": [
         {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
-        },
-        {
-          "type": "MISSING_FROM_CACHE",
+          "type": "CACHE_STALE",
           "severity": "WARNING",
-          "detail": "3 live lots but missing from production cache"
+          "detail": "Cached 14 vs live 3 (79% drift)"
         }
       ]
     },
@@ -113,7 +108,7 @@
         {
           "type": "EXTRACTOR_BROKEN",
           "severity": "BROKEN",
-          "detail": "DOM extractor returns 0, but 798 prices on page"
+          "detail": "DOM extractor returns 0, but 801 prices on page"
         }
       ]
     },
@@ -166,9 +161,9 @@
           "detail": "Image coverage 0% (0/113)"
         },
         {
-          "type": "CACHE_STALE",
+          "type": "MISSING_FROM_CACHE",
           "severity": "WARNING",
-          "detail": "Cached 247 vs live 113 (54% drift)"
+          "detail": "113 live lots but missing from production cache"
         }
       ]
     },
@@ -177,20 +172,31 @@
       "extractorLots": 26,
       "universalLots": 0,
       "httpStatus": 200,
-      "imgCoverage": 100,
-      "issues": []
+      "imgCoverage": 0,
+      "issues": [
+        {
+          "type": "LOW_IMAGES",
+          "severity": "WARNING",
+          "detail": "Image coverage 0% (0/26)"
+        },
+        {
+          "type": "MISSING_FROM_CACHE",
+          "severity": "WARNING",
+          "detail": "26 live lots but missing from production cache"
+        }
+      ]
     },
     {
       "house": "mchughandco",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": [
         {
           "type": "SITE_REDESIGNED",
           "severity": "BROKEN",
-          "detail": "Structure drift 75/100 + extractor returns 0"
+          "detail": "Structure drift 100/100 + extractor returns 0"
         }
       ]
     },
@@ -213,6 +219,11 @@
           "type": "BLOCKED",
           "severity": "BROKEN",
           "detail": "Bot detection (Cloudflare) — 403"
+        },
+        {
+          "type": "EXTRACTOR_ERROR",
+          "severity": "BROKEN",
+          "detail": "Protocol error (Runtime.callFunctionOn): Execution context was destroyed."
         }
       ]
     },
@@ -260,15 +271,15 @@
     },
     {
       "house": "paulfosh",
-      "extractorLots": 0,
+      "extractorLots": 50,
       "universalLots": 0,
-      "httpStatus": null,
-      "imgCoverage": null,
+      "httpStatus": 200,
+      "imgCoverage": 100,
       "issues": [
         {
-          "type": "SITE_REDESIGNED",
-          "severity": "BROKEN",
-          "detail": "Structure drift 75/100 + extractor returns 0"
+          "type": "MISSING_FROM_CACHE",
+          "severity": "WARNING",
+          "detail": "50 live lots but missing from production cache"
         }
       ]
     },
@@ -304,11 +315,30 @@
     },
     {
       "house": "bradleyhall",
+      "extractorLots": 25,
+      "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": 100,
+      "issues": [
+        {
+          "type": "MISSING_FROM_CACHE",
+          "severity": "WARNING",
+          "detail": "25 live lots but missing from production cache"
+        }
+      ]
+    },
+    {
+      "house": "connectuk",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 508,
       "imgCoverage": null,
       "issues": [
+        {
+          "type": "SERVER_ERROR",
+          "severity": "BROKEN",
+          "detail": "HTTP 508"
+        },
         {
           "type": "SITE_REDESIGNED",
           "severity": "BROKEN",
@@ -317,32 +347,30 @@
       ]
     },
     {
-      "house": "connectuk",
-      "extractorLots": 0,
-      "universalLots": 0,
-      "httpStatus": 200,
-      "imgCoverage": null,
-      "issues": []
-    },
-    {
       "house": "auctionestates",
       "extractorLots": 55,
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": 100,
-      "issues": []
+      "issues": [
+        {
+          "type": "MISSING_FROM_CACHE",
+          "severity": "WARNING",
+          "detail": "55 live lots but missing from production cache"
+        }
+      ]
     },
     {
       "house": "landwood",
-      "extractorLots": 0,
+      "extractorLots": 30,
       "universalLots": 0,
-      "httpStatus": null,
-      "imgCoverage": null,
+      "httpStatus": 200,
+      "imgCoverage": 100,
       "issues": [
         {
-          "type": "SITE_REDESIGNED",
-          "severity": "BROKEN",
-          "detail": "Structure drift 75/100 + extractor returns 0"
+          "type": "MISSING_FROM_CACHE",
+          "severity": "WARNING",
+          "detail": "30 live lots but missing from production cache"
         }
       ]
     },
@@ -405,15 +433,15 @@
     },
     {
       "house": "tcpa",
-      "extractorLots": 0,
+      "extractorLots": 34,
       "universalLots": 0,
-      "httpStatus": null,
-      "imgCoverage": null,
+      "httpStatus": 200,
+      "imgCoverage": 100,
       "issues": [
         {
-          "type": "SITE_REDESIGNED",
-          "severity": "BROKEN",
-          "detail": "Structure drift 100/100 + extractor returns 0"
+          "type": "CACHE_STALE",
+          "severity": "WARNING",
+          "detail": "Cached 232 vs live 34 (85% drift)"
         }
       ]
     },
@@ -447,43 +475,43 @@
     },
     {
       "house": "firstforauctions",
-      "extractorLots": 0,
+      "extractorLots": 50,
       "universalLots": 0,
-      "httpStatus": null,
-      "imgCoverage": null,
+      "httpStatus": 200,
+      "imgCoverage": 100,
       "issues": [
         {
-          "type": "SITE_REDESIGNED",
-          "severity": "BROKEN",
-          "detail": "Structure drift 75/100 + extractor returns 0"
+          "type": "MISSING_FROM_CACHE",
+          "severity": "WARNING",
+          "detail": "50 live lots but missing from production cache"
         }
       ]
     },
     {
       "house": "harmanhealy",
-      "extractorLots": 0,
+      "extractorLots": 79,
       "universalLots": 0,
-      "httpStatus": null,
-      "imgCoverage": null,
+      "httpStatus": 200,
+      "imgCoverage": 39,
       "issues": [
         {
-          "type": "EXTRACTOR_ERROR",
-          "severity": "BROKEN",
-          "detail": "Execution context was destroyed, most likely because of a navigation."
+          "type": "CACHE_STALE",
+          "severity": "WARNING",
+          "detail": "Cached 592 vs live 79 (87% drift)"
         }
       ]
     },
     {
       "house": "seelauctions",
-      "extractorLots": 0,
+      "extractorLots": 9,
       "universalLots": 0,
-      "httpStatus": null,
-      "imgCoverage": null,
+      "httpStatus": 200,
+      "imgCoverage": 100,
       "issues": [
         {
-          "type": "EXTRACTOR_ERROR",
-          "severity": "BROKEN",
-          "detail": "Execution context was destroyed, most likely because of a navigation."
+          "type": "MISSING_FROM_CACHE",
+          "severity": "WARNING",
+          "detail": "9 live lots but missing from production cache"
         }
       ]
     },
@@ -498,6 +526,11 @@
           "type": "TIMEOUT",
           "severity": "BROKEN",
           "detail": "HTTP request timed out (10s)"
+        },
+        {
+          "type": "MISSING_FROM_CACHE",
+          "severity": "WARNING",
+          "detail": "40 live lots but missing from production cache"
         }
       ]
     },
@@ -505,13 +538,13 @@
       "house": "astleys",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": [
         {
-          "type": "EXTRACTOR_ERROR",
-          "severity": "BROKEN",
-          "detail": "Execution context was destroyed, most likely because of a navigation."
+          "type": "NO_EXTRACTOR",
+          "severity": "WARNING",
+          "detail": "No custom extractor — universal finds 0 but 85 prices on page"
         }
       ]
     },
@@ -519,13 +552,13 @@
       "house": "henrysykes",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": [
         {
-          "type": "EXTRACTOR_ERROR",
-          "severity": "BROKEN",
-          "detail": "Execution context was destroyed, most likely because of a navigation."
+          "type": "NO_EXTRACTOR",
+          "severity": "WARNING",
+          "detail": "No custom extractor — universal finds 0 but 65 prices on page"
         }
       ]
     },
@@ -533,13 +566,13 @@
       "house": "clarkesimpson",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": [
         {
-          "type": "EXTRACTOR_ERROR",
-          "severity": "BROKEN",
-          "detail": "Execution context was destroyed, most likely because of a navigation."
+          "type": "NO_EXTRACTOR",
+          "severity": "WARNING",
+          "detail": "No custom extractor — universal finds 0 but 31 prices on page"
         }
       ]
     },
@@ -547,15 +580,9 @@
       "house": "durrants",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
-      "issues": [
-        {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "dawsons",
@@ -563,13 +590,7 @@
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": 100,
-      "issues": [
-        {
-          "type": "MISSING_FROM_CACHE",
-          "severity": "WARNING",
-          "detail": "9 live lots but missing from production cache"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "goldings",
@@ -589,9 +610,14 @@
       "house": "auctionhousescotland",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": [
+        {
+          "type": "TIMEOUT",
+          "severity": "BROKEN",
+          "detail": "HTTP request timed out (10s)"
+        },
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
@@ -631,14 +657,9 @@
       "house": "andrewcraig",
       "extractorLots": 24,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": 100,
       "issues": [
-        {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
-        },
         {
           "type": "PAGINATION_MISSED",
           "severity": "WARNING",
@@ -674,13 +695,18 @@
       "house": "brownco",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": [
         {
+          "type": "NO_EXTRACTOR",
+          "severity": "WARNING",
+          "detail": "No custom extractor — universal finds 0 but 84 prices on page"
+        },
+        {
           "type": "SITE_REDESIGNED",
           "severity": "BROKEN",
-          "detail": "Structure drift 90/100 + extractor returns 0"
+          "detail": "Structure drift 100/100 + extractor returns 0"
         }
       ]
     },
@@ -690,7 +716,13 @@
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": 100,
-      "issues": []
+      "issues": [
+        {
+          "type": "MISSING_FROM_CACHE",
+          "severity": "WARNING",
+          "detail": "10 live lots but missing from production cache"
+        }
+      ]
     },
     {
       "house": "cheffinstimed",
@@ -795,7 +827,7 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 330 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 332 prices on page"
         }
       ]
     },
@@ -945,21 +977,27 @@
       "house": "romanway",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 404,
       "imgCoverage": null,
-      "issues": []
+      "issues": [
+        {
+          "type": "URL_DEAD",
+          "severity": "BROKEN",
+          "detail": "HTTP 404 — page not found"
+        }
+      ]
     },
     {
       "house": "hammerprice",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 404,
       "imgCoverage": null,
       "issues": [
         {
-          "type": "EXTRACTOR_ERROR",
+          "type": "URL_DEAD",
           "severity": "BROKEN",
-          "detail": "Execution context was destroyed, most likely because of a navigation."
+          "detail": "HTTP 404 — page not found"
         }
       ]
     },
@@ -978,7 +1016,7 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 1321 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 1322 prices on page"
         }
       ]
     },
@@ -1334,7 +1372,7 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 346 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 349 prices on page"
         }
       ]
     },
@@ -1342,13 +1380,18 @@
       "house": "sarahmains",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": [
         {
+          "type": "NO_EXTRACTOR",
+          "severity": "WARNING",
+          "detail": "No custom extractor — universal finds 0 but 70 prices on page"
+        },
+        {
           "type": "SITE_REDESIGNED",
           "severity": "BROKEN",
-          "detail": "Structure drift 90/100 + extractor returns 0"
+          "detail": "Structure drift 100/100 + extractor returns 0"
         }
       ]
     },
@@ -1356,13 +1399,13 @@
       "house": "sageandco",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": [
         {
-          "type": "EXTRACTOR_ERROR",
-          "severity": "BROKEN",
-          "detail": "Execution context was destroyed, most likely because of a navigation."
+          "type": "NO_EXTRACTOR",
+          "severity": "WARNING",
+          "detail": "No custom extractor — universal finds 0 but 33 prices on page"
         }
       ]
     },
@@ -1370,13 +1413,13 @@
       "house": "auctiontrade",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 404,
       "imgCoverage": null,
       "issues": [
         {
-          "type": "EXTRACTOR_ERROR",
+          "type": "URL_DEAD",
           "severity": "BROKEN",
-          "detail": "Execution context was destroyed, most likely because of a navigation."
+          "detail": "HTTP 404 — page not found"
         }
       ]
     },
@@ -1384,13 +1427,13 @@
       "house": "brggibson",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 404,
       "imgCoverage": null,
       "issues": [
         {
-          "type": "EXTRACTOR_ERROR",
+          "type": "URL_DEAD",
           "severity": "BROKEN",
-          "detail": "Execution context was destroyed, most likely because of a navigation."
+          "detail": "HTTP 404 — page not found"
         }
       ]
     },
@@ -1398,13 +1441,13 @@
       "house": "higginsdrysdale",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": [
         {
-          "type": "EXTRACTOR_ERROR",
-          "severity": "BROKEN",
-          "detail": "Execution context was destroyed, most likely because of a navigation."
+          "type": "NO_EXTRACTOR",
+          "severity": "WARNING",
+          "detail": "No custom extractor — universal finds 0 but 35 prices on page"
         }
       ]
     },
@@ -1412,13 +1455,13 @@
       "house": "martinpole",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": [
         {
-          "type": "EXTRACTOR_ERROR",
-          "severity": "BROKEN",
-          "detail": "Execution context was destroyed, most likely because of a navigation."
+          "type": "NO_EXTRACTOR",
+          "severity": "WARNING",
+          "detail": "No custom extractor — universal finds 0 but 35 prices on page"
         }
       ]
     },
@@ -1426,13 +1469,13 @@
       "house": "jonespeckover",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": [
         {
-          "type": "EXTRACTOR_ERROR",
-          "severity": "BROKEN",
-          "detail": "Execution context was destroyed, most likely because of a navigation."
+          "type": "NO_EXTRACTOR",
+          "severity": "WARNING",
+          "detail": "No custom extractor — universal finds 0 but 36 prices on page"
         }
       ]
     },
@@ -1440,13 +1483,13 @@
       "house": "thepropertyauctionhouse",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": [
         {
-          "type": "EXTRACTOR_ERROR",
-          "severity": "BROKEN",
-          "detail": "Execution context was destroyed, most likely because of a navigation."
+          "type": "NO_EXTRACTOR",
+          "severity": "WARNING",
+          "detail": "No custom extractor — universal finds 0 but 71 prices on page"
         }
       ]
     },
@@ -1454,13 +1497,13 @@
       "house": "propertyauctionagent",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": [
         {
-          "type": "EXTRACTOR_ERROR",
-          "severity": "BROKEN",
-          "detail": "Execution context was destroyed, most likely because of a navigation."
+          "type": "NO_EXTRACTOR",
+          "severity": "WARNING",
+          "detail": "No custom extractor — universal finds 0 but 16 prices on page"
         }
       ]
     },
@@ -1472,9 +1515,14 @@
       "imgCoverage": null,
       "issues": [
         {
-          "type": "EXTRACTOR_ERROR",
+          "type": "TIMEOUT",
           "severity": "BROKEN",
-          "detail": "Execution context was destroyed, most likely because of a navigation."
+          "detail": "HTTP request timed out (10s)"
+        },
+        {
+          "type": "NO_EXTRACTOR",
+          "severity": "WARNING",
+          "detail": "No custom extractor — universal finds 0 but 45 prices on page"
         }
       ]
     },
@@ -1486,9 +1534,14 @@
       "imgCoverage": null,
       "issues": [
         {
-          "type": "EXTRACTOR_ERROR",
+          "type": "TIMEOUT",
           "severity": "BROKEN",
-          "detail": "Execution context was destroyed, most likely because of a navigation."
+          "detail": "HTTP request timed out (10s)"
+        },
+        {
+          "type": "NO_EXTRACTOR",
+          "severity": "WARNING",
+          "detail": "No custom extractor — universal finds 0 but 55 prices on page"
         }
       ]
     },
@@ -1500,9 +1553,14 @@
       "imgCoverage": null,
       "issues": [
         {
-          "type": "EXTRACTOR_ERROR",
+          "type": "TIMEOUT",
           "severity": "BROKEN",
-          "detail": "Execution context was destroyed, most likely because of a navigation."
+          "detail": "HTTP request timed out (10s)"
+        },
+        {
+          "type": "NO_EXTRACTOR",
+          "severity": "WARNING",
+          "detail": "No custom extractor — universal finds 0 but 26 prices on page"
         }
       ]
     },
@@ -1510,13 +1568,13 @@
       "house": "sheldonbosley",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": [
         {
-          "type": "EXTRACTOR_ERROR",
-          "severity": "BROKEN",
-          "detail": "Execution context was destroyed, most likely because of a navigation."
+          "type": "NO_EXTRACTOR",
+          "severity": "WARNING",
+          "detail": "No custom extractor — universal finds 0 but 9 prices on page"
         }
       ]
     },
@@ -1524,13 +1582,13 @@
       "house": "nationalpropertyauctions",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 404,
       "imgCoverage": null,
       "issues": [
         {
-          "type": "EXTRACTOR_ERROR",
+          "type": "URL_DEAD",
           "severity": "BROKEN",
-          "detail": "Execution context was destroyed, most likely because of a navigation."
+          "detail": "HTTP 404 — page not found"
         }
       ]
     },
@@ -1610,15 +1668,9 @@
       "house": "johnpye",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
-      "issues": [
-        {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "symondsandsampson",
@@ -1652,13 +1704,18 @@
       "house": "lsh",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": [
         {
+          "type": "NO_EXTRACTOR",
+          "severity": "WARNING",
+          "detail": "No custom extractor — universal finds 0 but 24 prices on page"
+        },
+        {
           "type": "SITE_REDESIGNED",
           "severity": "BROKEN",
-          "detail": "Structure drift 75/100 + extractor returns 0"
+          "detail": "Structure drift 100/100 + extractor returns 0"
         }
       ]
     },
@@ -1693,15 +1750,9 @@
       "house": "halls",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": 401,
+      "httpStatus": 200,
       "imgCoverage": null,
-      "issues": [
-        {
-          "type": "EXTRACTOR_ERROR",
-          "severity": "BROKEN",
-          "detail": "Protocol error (Runtime.callFunctionOn): Execution context was destroyed."
-        }
-      ]
+      "issues": []
     },
     {
       "house": "walkersingleton",
@@ -1737,9 +1788,15 @@
       "house": "robinjessop",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": 401,
+      "httpStatus": null,
       "imgCoverage": null,
-      "issues": []
+      "issues": [
+        {
+          "type": "TIMEOUT",
+          "severity": "BROKEN",
+          "detail": "HTTP request timed out (10s)"
+        }
+      ]
     },
     {
       "house": "cleetompkinson",
@@ -1756,7 +1813,7 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 43 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 44 prices on page"
         }
       ]
     },
@@ -1764,15 +1821,9 @@
       "house": "mccartneys",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
-      "issues": [
-        {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "bramleys",
@@ -1844,6 +1895,14 @@
       "house": "hairandson",
       "extractorLots": 0,
       "universalLots": 0,
+      "httpStatus": 200,
+      "imgCoverage": null,
+      "issues": []
+    },
+    {
+      "house": "phillipssmithanddunn",
+      "extractorLots": 0,
+      "universalLots": 0,
       "httpStatus": null,
       "imgCoverage": null,
       "issues": [
@@ -1853,14 +1912,6 @@
           "detail": "HTTP request timed out (10s)"
         }
       ]
-    },
-    {
-      "house": "phillipssmithanddunn",
-      "extractorLots": 0,
-      "universalLots": 0,
-      "httpStatus": 401,
-      "imgCoverage": null,
-      "issues": []
     },
     {
       "house": "webbers",
@@ -1880,13 +1931,18 @@
       "house": "ahlondon",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": [
         {
+          "type": "NO_EXTRACTOR",
+          "severity": "WARNING",
+          "detail": "No custom extractor — universal finds 0 but 17 prices on page"
+        },
+        {
           "type": "SITE_REDESIGNED",
           "severity": "BROKEN",
-          "detail": "Structure drift 90/100 + extractor returns 0"
+          "detail": "Structure drift 100/100 + extractor returns 0"
         }
       ]
     },
@@ -1894,13 +1950,13 @@
       "house": "starpropertyonline",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": [
         {
-          "type": "EXTRACTOR_ERROR",
-          "severity": "BROKEN",
-          "detail": "Execution context was destroyed, most likely because of a navigation."
+          "type": "NO_EXTRACTOR",
+          "severity": "WARNING",
+          "detail": "No custom extractor — universal finds 0 but 41 prices on page"
         }
       ]
     },
@@ -1908,13 +1964,13 @@
       "house": "brggibsondublin",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 404,
       "imgCoverage": null,
       "issues": [
         {
-          "type": "EXTRACTOR_ERROR",
+          "type": "URL_DEAD",
           "severity": "BROKEN",
-          "detail": "Execution context was destroyed, most likely because of a navigation."
+          "detail": "HTTP 404 — page not found"
         }
       ]
     },
@@ -1955,14 +2011,9 @@
       "house": "markjenkinson",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": [
-        {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
-        },
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
@@ -2021,14 +2072,9 @@
       "house": "pearsons",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": [
-        {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
-        },
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
@@ -2096,13 +2142,13 @@
       "house": "luscombemaye",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 404,
       "imgCoverage": null,
       "issues": [
         {
-          "type": "TIMEOUT",
+          "type": "URL_DEAD",
           "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
+          "detail": "HTTP 404 — page not found"
         },
         {
           "type": "EXTRACTOR_ERROR",
@@ -2236,14 +2282,6 @@
       "house": "howkinsandharrison",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": 401,
-      "imgCoverage": null,
-      "issues": []
-    },
-    {
-      "house": "scargillmann",
-      "extractorLots": 0,
-      "universalLots": 0,
       "httpStatus": null,
       "imgCoverage": null,
       "issues": [
@@ -2251,6 +2289,20 @@
           "type": "TIMEOUT",
           "severity": "BROKEN",
           "detail": "HTTP request timed out (10s)"
+        }
+      ]
+    },
+    {
+      "house": "scargillmann",
+      "extractorLots": 0,
+      "universalLots": 0,
+      "httpStatus": 404,
+      "imgCoverage": null,
+      "issues": [
+        {
+          "type": "URL_DEAD",
+          "severity": "BROKEN",
+          "detail": "HTTP 404 — page not found"
         }
       ]
     },
@@ -2258,28 +2310,17 @@
       "house": "mellerbraggins",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
-      "issues": [
-        {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "smithandsons",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": [
-        {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
-        },
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
