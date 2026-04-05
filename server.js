@@ -13635,11 +13635,27 @@ async function _doAutoAnalyseAll() {
     }
   }
 
+  // ── Boost never-scraped houses to the front of the queue ──
+  // Houses that have never been scraped (no cached_analyses entry) should be
+  // processed first so they don't languish behind already-cached re-checks.
+  const { data: cachedHouses } = await supabase
+    .from('cached_analyses')
+    .select('house');
+  const cachedHouseSet = new Set((cachedHouses || []).map(r => r.house));
+  for (const auction of [...domHouses, ...geminiHouses]) {
+    const slug = auction._slug || detectAuctionHouse(auction.url);
+    if (!cachedHouseSet.has(slug)) {
+      // Never-scraped houses get top priority (below explicit manager priorities)
+      auction._priority = Math.min(auction._priority, 1);
+    }
+  }
+
   // Sort by manager priority (lower = higher priority)
   domHouses.sort((a, b) => a._priority - b._priority);
   geminiHouses.sort((a, b) => a._priority - b._priority);
 
-  console.log(`AUTO: Partitioned — ${domHouses.length} DOM houses, ${geminiHouses.length} Gemini houses, ${skippedByManager.length} skipped by manager`);
+  const neverScrapedCount = [...domHouses, ...geminiHouses].filter(a => a._priority <= 1).length;
+  console.log(`AUTO: Partitioned — ${domHouses.length} DOM houses, ${geminiHouses.length} Gemini houses, ${skippedByManager.length} skipped by manager, ${neverScrapedCount} never-scraped boosted`);
 
   // ── Per-auction processing function (same logic as before, no 5s pause) ──
   async function processAuction(auction) {
