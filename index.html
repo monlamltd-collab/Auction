@@ -573,7 +573,7 @@ footer .logo-f span{color:var(--green)}
 /* ── EXPANDED CARD PANEL ── */
 .expanded-panel{grid-column:1/-1;background:var(--white);border:1px solid #d5dde5;border-radius:0 0 var(--radius) var(--radius);padding:20px 24px;display:grid;grid-template-columns:1fr;gap:20px;animation:slideDown .25s ease;position:relative}
 .exp-top{display:grid;grid-template-columns:60% 40%;gap:24px}
-.exp-tools{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.exp-tools{display:grid;grid-template-columns:1fr;gap:16px}
 .exp-tools .finance-widget,.exp-tools .deal-stack-widget{margin-top:0}
 .exp-bottom{}
 .exp-close-btn{position:absolute;top:10px;right:10px;width:32px;height:32px;border-radius:50%;border:1px solid var(--border);background:var(--white);color:var(--text2);font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:5;transition:all .15s;line-height:1;padding:0;font-family:inherit;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
@@ -3571,42 +3571,87 @@ function card(l){
   '</div>';
 }
 
-// SDLT/LBTT/LTT calculator (investor rates 2025/26 — England, Scotland & Wales)
-function calcSDLT(price, country){
+// SDLT/LBTT/LTT calculator (2025/26 — England, Scotland & Wales)
+// surcharge=true adds additional property / investment surcharge (default: true)
+// commercial=true uses non-residential/mixed-use rates (6+ units or commercial property)
+function calcSDLT(price, country, surcharge, commercial){
   if(!country) country='england';
+  if(surcharge===undefined) surcharge=true;
+  if(commercial){
+    // Non-residential / mixed-use SDLT (no surcharge applies)
+    switch(country){
+      case 'scotland': {
+        let lbtt=0;
+        if(price>150000) lbtt+=(Math.min(price,250000)-150000)*0.01;
+        if(price>250000) lbtt+=(price-250000)*0.05;
+        return Math.round(lbtt);
+      }
+      case 'wales': {
+        let ltt=0;
+        if(price>225000) ltt+=(Math.min(price,250000)-225000)*0.01;
+        if(price>250000) ltt+=(Math.min(price,1000000)-250000)*0.05;
+        if(price>1000000) ltt+=(price-1000000)*0.06;
+        return Math.round(ltt);
+      }
+      default: {
+        let sdlt=0;
+        if(price>150000) sdlt+=(Math.min(price,250000)-150000)*0.02;
+        if(price>250000) sdlt+=(price-250000)*0.05;
+        return Math.round(sdlt);
+      }
+    }
+  }
   switch(country){
     case 'scotland': {
-      // LBTT bands + 6% ADS (Additional Dwelling Supplement) on full price
-      const ads=price*0.06;
+      // LBTT bands
       let lbtt=0;
       if(price>145000) lbtt+=(Math.min(price,250000)-145000)*0.02;
       if(price>250000) lbtt+=(Math.min(price,325000)-250000)*0.05;
       if(price>325000) lbtt+=(Math.min(price,750000)-325000)*0.10;
       if(price>750000) lbtt+=(price-750000)*0.12;
-      return Math.round(ads+lbtt);
+      // 6% ADS (Additional Dwelling Supplement) on full price
+      if(surcharge) lbtt+=price*0.06;
+      return Math.round(lbtt);
     }
     case 'wales': {
-      // LTT higher rates (replace standard rates for additional dwellings)
       let ltt=0;
-      if(price<=180000) ltt=price*0.04;
-      else{
-        ltt=180000*0.04;
-        ltt+=(Math.min(price,250000)-180000)*0.075;
-        if(price>250000) ltt+=(Math.min(price,400000)-250000)*0.09;
-        if(price>400000) ltt+=(Math.min(price,750000)-400000)*0.115;
-        if(price>750000) ltt+=(Math.min(price,1500000)-750000)*0.14;
-        if(price>1500000) ltt+=(price-1500000)*0.16;
+      if(surcharge){
+        // LTT higher rates (replace standard rates for additional dwellings)
+        if(price<=180000) ltt=price*0.04;
+        else{
+          ltt=180000*0.04;
+          ltt+=(Math.min(price,250000)-180000)*0.075;
+          if(price>250000) ltt+=(Math.min(price,400000)-250000)*0.09;
+          if(price>400000) ltt+=(Math.min(price,750000)-400000)*0.115;
+          if(price>750000) ltt+=(Math.min(price,1500000)-750000)*0.14;
+          if(price>1500000) ltt+=(price-1500000)*0.16;
+        }
+      } else {
+        // LTT standard rates
+        if(price>225000) ltt+=(Math.min(price,400000)-225000)*0.06;
+        if(price>400000) ltt+=(Math.min(price,750000)-400000)*0.075;
+        if(price>750000) ltt+=(Math.min(price,1500000)-750000)*0.10;
+        if(price>1500000) ltt+=(price-1500000)*0.12;
       }
       return Math.round(ltt);
     }
     default: {
-      // England SDLT with 5% surcharge
-      if(price<=250000) return Math.round(price*0.05);
-      let sdlt=250000*0.05;
-      if(price<=925000) sdlt+=(price-250000)*0.1;
-      else{sdlt+=(925000-250000)*0.1;sdlt+=(Math.min(price,1500000)-925000)*0.15;}
-      if(price>1500000) sdlt+=(price-1500000)*0.17;
-      return Math.round(sdlt);
+      if(surcharge){
+        // England SDLT with 5% additional property surcharge
+        if(price<=250000) return Math.round(price*0.05);
+        let sdlt=250000*0.05;
+        if(price<=925000) sdlt+=(price-250000)*0.1;
+        else{sdlt+=(925000-250000)*0.1;sdlt+=(Math.min(price,1500000)-925000)*0.15;}
+        if(price>1500000) sdlt+=(price-1500000)*0.17;
+        return Math.round(sdlt);
+      } else {
+        // England SDLT standard rates (no surcharge)
+        let sdlt=0;
+        if(price>250000) sdlt+=(Math.min(price,925000)-250000)*0.05;
+        if(price>925000) sdlt+=(Math.min(price,1500000)-925000)*0.10;
+        if(price>1500000) sdlt+=(price-1500000)*0.12;
+        return Math.round(sdlt);
+      }
     }
   }
 }
@@ -3638,6 +3683,8 @@ function calcDealStack(purchasePrice, gdv, worksCost, rentalIncome, ltvPct, addr
   var contingencyPct = (opts.contingencyPct || 10) / 100; // e.g. 10 → 0.10
   var legalPackCost = opts.legalPackCost != null ? opts.legalPackCost : 300;
   var insuranceCost = opts.insuranceCost != null ? opts.insuranceCost : 500;
+  var surcharge = opts.surcharge !== undefined ? opts.surcharge : true;
+  var commercial = opts.commercial || false;
 
   // Lender matching — find best rate from LENDER_DATA
   let bestLender = null;
@@ -3667,7 +3714,7 @@ function calcDealStack(purchasePrice, gdv, worksCost, rentalIncome, ltvPct, addr
 
   // Acquisition costs
   const country = detectCountry(address);
-  const sdlt = calcSDLT(purchasePrice, country);
+  const sdlt = calcSDLT(purchasePrice, country, surcharge, commercial);
   const buyerPremium = Math.round(purchasePrice * buyerPremPct * 1.2); // +VAT
   const worksContingency = Math.round(worksCost * contingencyPct);
   const totalWorks = worksCost + worksContingency;
@@ -3750,12 +3797,27 @@ function debounceDealStack(idx) {
 
 function runDealStack(idx) {
   var lot = LOTS.find(function(l) { return l._idx === idx; });
-  // Edge case: £0, missing, NaN, or "TBA" lots
-  if (!lot || !lot.price || lot.price <= 0 || isNaN(lot.price)) {
+  if (!lot) return;
+
+  // Read editable purchase price (falls back to lot.price)
+  var priceInput = document.getElementById('ds-price-' + idx);
+  var purchasePrice = priceInput ? (parseFloat(priceInput.value) || 0) : (lot.price || 0);
+  if (purchasePrice <= 0) {
     var resEl = document.getElementById('ds-results-' + idx);
-    if (resEl) resEl.innerHTML = '<p style="color:var(--text-muted); font-size:13px; text-align:center; padding:12px 0;">Guide price not available \u2014 deal stacking requires a price</p>';
+    if (resEl) resEl.innerHTML = '<p style="color:var(--text-muted); font-size:13px; text-align:center; padding:12px 0;">Enter a purchase price to see your deal stack</p>';
     return;
   }
+
+  // Read SDLT checkboxes
+  var surchargeEl = document.getElementById('ds-surcharge-' + idx);
+  var surcharge = surchargeEl ? surchargeEl.checked : true;
+  var commercialEl = document.getElementById('ds-commercial-' + idx);
+  var commercial = commercialEl ? commercialEl.checked : false;
+
+  // Commercial overrides surcharge (commercial rates have no surcharge)
+  var sdltVal = calcSDLT(purchasePrice, detectCountry(lot.address || ''), surcharge, commercial);
+  var sdltEl = document.getElementById('ds-sdlt-' + idx);
+  if (sdltEl) sdltEl.value = '\u00a3' + sdltVal.toLocaleString();
 
   var gdv = parseFloat(document.getElementById('ds-gdv-' + idx)?.value) || 0;
   var works = parseFloat(document.getElementById('ds-works-' + idx)?.value) || 0;
@@ -3776,9 +3838,10 @@ function runDealStack(idx) {
     return;
   }
 
-  var result = calcDealStack(lot.price, gdv, works, rental, ltv, lot.address || '', {
+  var result = calcDealStack(purchasePrice, gdv, works, rental, ltv, lot.address || '', {
     buyerPremPct: buyerPrem, contingencyPct: contingency,
-    legalPackCost: legalPack, insuranceCost: insurance
+    legalPackCost: legalPack, insuranceCost: insurance,
+    surcharge: surcharge, commercial: commercial
   });
   if (!result) {
     document.getElementById('ds-results-' + idx).innerHTML =
@@ -4335,13 +4398,24 @@ function expandCard(lot) {
           '<div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px;">' +
             '<div>' +
               '<label style="font-size:12px; color:var(--text-muted); display:block; margin-bottom:2px;">Purchase Price</label>' +
-              '<input type="text" id="ds-price-' + lot._idx + '" value="' + (lot.price ? '\u00a3' + lot.price.toLocaleString() : '') + '" disabled ' +
-                'style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:6px; background:#f0f0f0; font-size:13px; box-sizing:border-box;">' +
+              '<input type="number" id="ds-price-' + lot._idx + '" value="' + (lot.price || '') + '" placeholder="e.g. 150000" ' +
+                'style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:6px; font-size:13px; box-sizing:border-box;" ' +
+                'oninput="debounceDealStack(' + lot._idx + ')">' +
             '</div>' +
             '<div>' +
               '<label style="font-size:12px; color:var(--text-muted); display:block; margin-bottom:2px;">SDLT (auto)</label>' +
               '<input type="text" id="ds-sdlt-' + lot._idx + '" value="' + (lot.price ? '\u00a3' + dsSDLT.toLocaleString() : '') + '" disabled ' +
                 'style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:6px; background:#f0f0f0; font-size:13px; box-sizing:border-box;">' +
+              '<div style="display:flex; flex-wrap:wrap; gap:4px 12px; margin-top:4px;">' +
+                '<label style="font-size:11px; color:var(--text-muted); display:flex; align-items:center; gap:4px; cursor:pointer;">' +
+                  '<input type="checkbox" id="ds-surcharge-' + lot._idx + '" checked onchange="debounceDealStack(' + lot._idx + ')" style="margin:0;">' +
+                  'Additional property' +
+                '</label>' +
+                '<label style="font-size:11px; color:var(--text-muted); display:flex; align-items:center; gap:4px; cursor:pointer;">' +
+                  '<input type="checkbox" id="ds-commercial-' + lot._idx + '"' + ((lot.propType === 'commercial' || (lot.units && lot.units >= 6)) ? ' checked' : '') + ' onchange="debounceDealStack(' + lot._idx + ')" style="margin:0;">' +
+                  'Commercial / 6+ units' +
+                '</label>' +
+              '</div>' +
             '</div>' +
             '<div>' +
               '<label style="font-size:12px; color:var(--text-muted); display:block; margin-bottom:2px;">GDV (est. value after works)</label>' +
@@ -4637,10 +4711,9 @@ async function fetchLenderSummary(lot) {
 function renderLenderSummary(el, data, lot) {
   const count = data.summary?.eligible || data.eligible?.length || 0;
   const lenders = data.eligible || [];
-  const bestRate = lenders.length ? lenders.reduce((min, l) => {
-    const rate = parseFloat((l.interest_rate_band || '').match(/[\d.]+/)?.[0] || 999);
-    return rate < min ? rate : min;
-  }, 999) : null;
+  // Compute typical rate range (median of low ends, not the absolute minimum)
+  const rates = lenders.map(l => parseFloat((l.interest_rate_band || '').match(/[\d.]+/)?.[0] || 0)).filter(r => r > 0).sort((a, b) => a - b);
+  const typicalRate = rates.length >= 3 ? rates[Math.floor(rates.length * 0.25)] : (rates[0] || null); // 25th percentile
   const maxLtv = lenders.length ? lenders.reduce((max, l) => {
     const ltv = parseFloat(l.max_gross_ltv || 0);
     return ltv > max ? ltv : max;
@@ -4655,7 +4728,7 @@ function renderLenderSummary(el, data, lot) {
     '<div class="ls-count">' + count + '</div>' +
     '<div class="ls-text">' +
       '<strong>bridging lender' + (count !== 1 ? 's' : '') + ' match</strong> at 70% LTV' +
-      (bestRate && bestRate < 999 ? ' · best rate <strong>' + bestRate.toFixed(2) + '%</strong>/mo' : '') +
+      (typicalRate ? ' · rates from <strong>' + typicalRate.toFixed(2) + '%</strong>/mo' : '') +
       (maxLtv && maxLtv > 0 ? ' · up to <strong>' + maxLtv + '%</strong> LTV' : '') +
     '</div>';
 }
