@@ -1885,15 +1885,17 @@ async function loadAllLots(opts){
   if (_cachedLots && (Date.now() - _cachedTs) < 600000) {
     try {
       ALL_LOTS = JSON.parse(_cachedLots);
-      LOTS = ALL_LOTS;
       _lotsLoadedAt = _cachedTs;
-      // Clear render key so renderLots() doesn't short-circuit against stale skeleton DOM
-      window._lastRenderKey = null;
-      $('resultsTitle').textContent = ALL_LOTS.length.toLocaleString() + ' auction lots';
-      buildLotFilters();
-      renderLots();
-      $('cardsView').style.display = 'block';
-      $('resultsPanel').style.display = 'block';
+      // Only render if not in search results view
+      if (!document.body.classList.contains('view-results') && !SMART_RESULTS) {
+        LOTS = ALL_LOTS;
+        window._lastRenderKey = null;
+        $('resultsTitle').textContent = ALL_LOTS.length.toLocaleString() + ' auction lots';
+        buildLotFilters();
+        renderLots();
+        $('cardsView').style.display = 'block';
+        $('resultsPanel').style.display = 'block';
+      }
       return;
     } catch(e) {
       sessionStorage.removeItem('ab_lots_cache');
@@ -2421,8 +2423,12 @@ function initAuth() {
       else onSignOut();
     });
     supabaseClient.auth.onAuthStateChange((event, session) => {
-      if (session && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION')) {
+      if (session && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
         onSignIn(session);
+      } else if (session && event === 'TOKEN_REFRESHED') {
+        // Update session/token without re-fetching lots
+        currentSession = session;
+        currentUser = session.user;
       } else if (event === 'SIGNED_OUT') {
         onSignOut();
       }
