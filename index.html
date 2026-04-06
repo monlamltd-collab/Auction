@@ -1914,7 +1914,7 @@ async function loadAllLots(opts){
     ALL_SOURCES=d.sources||[];
     window._houseMeta=d.houseMeta||{};
     _lotsLoadedAt = Date.now();
-    _browseSnapshot = null; // invalidate — lots changed
+    if (!SMART_RESULTS) _browseSnapshot = null; // invalidate — lots changed (preserve during search)
     // Persist lots to sessionStorage for bfcache / back-navigation
     try {
       sessionStorage.setItem('ab_lots_cache', JSON.stringify(ALL_LOTS));
@@ -1935,7 +1935,7 @@ async function loadAllLots(opts){
       const out=$('lotsGrid');
       if(out)out.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:3rem 1rem;color:#6b7c8d"><div style="font-size:1.2rem">No auction lots currently available</div><div>Check back soon for new listings.</div></div>';
     }
-    if(ALL_LOTS.length && !document.body.classList.contains('view-results')){
+    if(ALL_LOTS.length && !document.body.classList.contains('view-results') && !SMART_RESULTS){
       LOTS=ALL_LOTS;
       window._lastRenderKey=null; // Clear so renderLots() doesn't skip against skeleton DOM
       $('resultsTitle').textContent=ALL_LOTS.length.toLocaleString()+' auction lots';
@@ -4273,7 +4273,7 @@ function getCardImageHtml(lot) {
     var imgsHtml = '';
     var dotsHtml = '<div class="carousel-dots">';
     for (var ci = 0; ci < imgs.length; ci++) {
-      imgsHtml += '<img src="' + esc(optimImg(imgs[ci], 400)) + '" alt="' + esc((lot.address || 'Auction property') + ' ' + (ci+1)) + '" loading="' + loadAttr + '" decoding="async"' + (ci === 0 ? ' class="carousel-active"' : '') + ' onerror="this.style.display=\'none\';this.dataset.broken=\'1\'">';
+      imgsHtml += '<img src="' + esc(optimImg(imgs[ci], 400)) + '" alt="' + esc((lot.address || 'Auction property') + ' ' + (ci+1)) + '" loading="' + loadAttr + '" decoding="async"' + (ci === 0 ? ' class="carousel-active"' : '') + ' onerror="if(document.hidden){this.dataset.needsReload=1}else{this.style.display=\'none\';this.dataset.broken=\'1\'}">';
       dotsHtml += '<span class="carousel-dot' + (ci === 0 ? ' dot-active' : '') + '"></span>';
     }
     dotsHtml += '</div>';
@@ -4290,7 +4290,7 @@ function getCardImageHtml(lot) {
     '<div class="card-image-shimmer"></div>' +
     '<img class="card-image" src="' + esc(optimImg(lot.imageUrl, 400)) + '" alt="' + esc((lot.address || 'Auction property') + ' — ' + (lot._house || 'auction lot')) + '" loading="' + loadAttr + '" decoding="async" width="400" height="300" ' +
     'onload="this.previousElementSibling.style.display=\'none\';if(this.naturalWidth<120||this.naturalHeight<90){this.outerHTML=getPlaceholderHtml(this.dataset.proptype)}" ' +
-    'onerror="this.outerHTML=getPlaceholderHtml(this.dataset.proptype)"' +
+    'onerror="if(document.hidden){this.dataset.needsReload=1}else{this.outerHTML=getPlaceholderHtml(this.dataset.proptype)}"' +
     ' data-proptype="' + esc(lot.propType || 'house') + '">' +
     overlay +
     getCardImageBadges(lot) +
@@ -5120,6 +5120,30 @@ function submitEmailCapture(e) {
     if (savedY > 0) {
       // Defer slightly so render completes before scroll
       requestAnimationFrame(() => window.scrollTo({ top: savedY, behavior: 'instant' }));
+    }
+  });
+
+  // ── Fix Edge/Chrome sleeping-tab image intervention ──
+  // When a tab is backgrounded, Edge replaces lazy images with placeholders.
+  // onerror handlers now set data-needsReload=1 instead of destroying the element.
+  // On return, restore those images or force a full re-render if needed.
+  document.addEventListener('visibilitychange', function() {
+    if (document.hidden) return;
+    var grid = document.getElementById('lotsOut');
+    if (!grid) return;
+    var broken = grid.querySelectorAll('img[data-needs-reload="1"]');
+    if (broken.length > 0) {
+      // Try restoring each image by re-setting src
+      broken.forEach(function(img) {
+        img.removeAttribute('data-needs-reload');
+        var src = img.getAttribute('src');
+        if (src) { img.src = ''; img.src = src; }
+      });
+      // If too many broke, just re-render the whole grid
+      if (broken.length > 5) {
+        window._lastRenderKey = null;
+        renderLots();
+      }
     }
   });
 
