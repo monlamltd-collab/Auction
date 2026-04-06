@@ -3221,18 +3221,22 @@ function renderLots(){
   const floc=$('fLocation')?.value||'';
   const fpc=$('fPostcode')?.value.trim().toUpperCase()||'';
 
-  if(minP) lots=lots.filter(l=>!l.price||l.price>=minP);
-  if(maxP) lots=lots.filter(l=>!l.price||l.price<=maxP);
-  if(minBeds) lots=lots.filter(l=>!l.beds||l.beds>=minBeds);
-  if(ft) lots=lots.filter(l=>l.propType===ft);
-  if(fd) lots=lots.filter(l=>l.dealType===fd);
-  if(ften) lots=lots.filter(l=>l.tenure===ften);
+  // Debug: track which filter kills results (remove after debugging)
+  const _dbg=SMART_RESULTS&&LOTS.length<500;
+  let _pre=lots.length;
+  if(minP){lots=lots.filter(l=>!l.price||l.price>=minP);if(_dbg&&lots.length<_pre)console.log('[DBG] minP:',_pre,'→',lots.length);_pre=lots.length}
+  if(maxP){lots=lots.filter(l=>!l.price||l.price<=maxP);if(_dbg&&lots.length<_pre)console.log('[DBG] maxP:',_pre,'→',lots.length);_pre=lots.length}
+  if(minBeds){lots=lots.filter(l=>!l.beds||l.beds>=minBeds);if(_dbg&&lots.length<_pre)console.log('[DBG] beds:',_pre,'→',lots.length);_pre=lots.length}
+  if(ft){lots=lots.filter(l=>l.propType===ft);if(_dbg&&lots.length<_pre)console.log('[DBG] type "'+ft+'":',_pre,'→',lots.length);_pre=lots.length}
+  if(fd){lots=lots.filter(l=>l.dealType===fd);if(_dbg&&lots.length<_pre)console.log('[DBG] deal "'+fd+'":',_pre,'→',lots.length);_pre=lots.length}
+  if(ften){lots=lots.filter(l=>l.tenure===ften);if(_dbg&&lots.length<_pre)console.log('[DBG] tenure "'+ften+'":',_pre,'→',lots.length);_pre=lots.length}
   if(fco==='needs work') lots=lots.filter(l=>l.condition==='needs work'||l.condition==='poor');
   else if(fco==='good') lots=lots.filter(l=>l.condition==='good');
   else if(fco==='vacant') lots=lots.filter(l=>l.vacant);
   else if(fco==='tenanted') lots=lots.filter(l=>l.vacant===false);
   else if(fco==='repossession') lots=lots.filter(l=>(l.bullets||[]).join(' ').toLowerCase().match(/\b(repossess(?:ion|ed)?|receivership|lpa receiver|mortgagee.?(?:sale|possess)|bank.?sale)\b/i)||(l.opps||[]).join(' ').toLowerCase().match(/repossess|receivership/i));
-  if(floc) lots=lots.filter(l=>matchesRegion(l.address, floc));
+  if(_dbg&&lots.length<_pre){console.log('[DBG] condition "'+fco+'":',_pre,'→',lots.length);_pre=lots.length}
+  if(floc){lots=lots.filter(l=>matchesRegion(l.address, floc));if(_dbg&&lots.length<_pre)console.log('[DBG] location "'+floc+'":',_pre,'→',lots.length);_pre=lots.length}
   const fradius=+($('fRadius')?.value||0);
   if(fpc&&_searchCentre&&fradius){
     // Radius search: filter by distance from geocoded centre
@@ -3255,7 +3259,9 @@ function renderLots(){
   if(fa==='full_finance'&&fp.cash) lots=lots.filter(l=>l._affTag==='full_finance');
   const _today=new Date().toISOString().slice(0,10);
   const _notEnded=l=>!l._auctionDate||l._auctionDate>=_today;
+  if(_dbg&&lots.length<_pre){console.log('[DBG] postcode/radius:',_pre,'→',lots.length);_pre=lots.length}
   // Skip status/date filtering for AI search results — backend already filtered these
+  if(_dbg) console.log('[DBG] pre-status:',lots.length,'SMART_RESULTS:',!!SMART_RESULTS,'fsold:',fsold);
   if(SMART_RESULTS){
     // Only apply explicit user-selected status overrides, not the default date gate
     if(fsold==='available') lots=lots.filter(l=>(l.status==='available'||!l.status));
@@ -3278,8 +3284,10 @@ function renderLots(){
     const favKeys=getFavourites();
     lots=lots.filter(l=>favKeys.indexOf(getFavKey(l))!==-1);
   }
+  if(_dbg&&lots.length<_pre){console.log('[DBG] status/date:',_pre,'→',lots.length);_pre=lots.length}
   // Local text filter — skip for AI search results (backend already filtered by query)
-  if(fs&&!SMART_RESULTS) lots=lots.filter(l=>(l.address||'').toLowerCase().includes(fs)||(l.bullets||[]).join(' ').toLowerCase().includes(fs)||(l.opps||[]).join(' ').toLowerCase().includes(fs)||(l.risks||[]).join(' ').toLowerCase().includes(fs)||(l.dealType||'').toLowerCase().includes(fs)||(l.propType||'').toLowerCase().includes(fs)||(l._house||'').toLowerCase().includes(fs)||(l.tenure||'').toLowerCase().includes(fs));
+  if(fs&&!SMART_RESULTS){lots=lots.filter(l=>(l.address||'').toLowerCase().includes(fs)||(l.bullets||[]).join(' ').toLowerCase().includes(fs)||(l.opps||[]).join(' ').toLowerCase().includes(fs)||(l.risks||[]).join(' ').toLowerCase().includes(fs)||(l.dealType||'').toLowerCase().includes(fs)||(l.propType||'').toLowerCase().includes(fs)||(l._house||'').toLowerCase().includes(fs)||(l.tenure||'').toLowerCase().includes(fs))}
+  if(_dbg&&lots.length<_pre){console.log('[DBG] textFilter "'+fs.substring(0,30)+'":',_pre,'→',lots.length);_pre=lots.length}
 
   // House filter
   const selectedHouses=getSelectedHouses();
@@ -3288,6 +3296,7 @@ function renderLots(){
   // Exclude POA
   if($('fExcludePOA') && $('fExcludePOA').value==='yes') lots=lots.filter(l=>l.price>0);
 
+  if(_dbg&&lots.length<_pre){console.log('[DBG] house/POA:',_pre,'→',lots.length);_pre=lots.length}
   // Lookahead filter — limit to N upcoming auctions per house (skip for AI search results)
   const fLook=$('fLookahead')?.value||'all';
   if(fLook!=='all'&&!SMART_RESULTS){
