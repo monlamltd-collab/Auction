@@ -4351,7 +4351,7 @@ function expandCard(lot) {
     }
     imgHtml += '</div></div>';
   } else if (validImg) {
-    imgHtml = '<img class="exp-large-img" src="' + esc(optimImg(lot.imageUrl, 600)) + '" alt="' + esc(lot.address || 'Auction property') + '" decoding="async" onerror="this.outerHTML=\'<div class=exp-large-img-placeholder>' + getPropertyTypeIcon(lot.propType) + '</div>\'">';
+    imgHtml = '<img class="exp-large-img" src="' + esc(optimImg(lot.imageUrl, 600)) + '" alt="' + esc(lot.address || 'Auction property') + '" decoding="async" onerror="this.outerHTML=getPlaceholderHtml(\'' + esc(lot.propType || 'house') + '\').replace(\'card-image-placeholder\',\'exp-large-img-placeholder\')">';
   } else {
     imgHtml = '<div class="exp-large-img-placeholder">' + getPropertyTypeIcon(lot.propType) + '</div>';
   }
