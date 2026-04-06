@@ -517,9 +517,11 @@ function matchLenders(price,cash,propType,isRefurb,works,gdv,addlVal,addlMort,lo
   // not just when they're short of cash.
   let loanNeeded,cashForDeposit;
   if(cash>=price){
-    // Investor has enough cash — assume they want leverage at ~75% LTV
+    // Investor has enough cash — assume they want leverage at a typical LTV
     // so they keep cash available for works + costs + contingency
-    const leverageLTV=0.75;
+    // Vary by property type: commercial/land lenders advance less
+    const leverageLTVs={resi:0.75,semi:0.65,comm:0.60,land_with_pp:0.55,land_no_pp:0.45};
+    const leverageLTV=leverageLTVs[propType]||0.75;
     loanNeeded=Math.round(price*leverageLTV);
     cashForDeposit=price-loanNeeded;
   }else{
