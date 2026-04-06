@@ -2322,7 +2322,7 @@ app.post('/api/leads', rateLimit(60000, 10), async (req, res) => {
         headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           from: 'AuctionBrain <hello@auctionbrain.co.uk>',
-          to: ['hello@bridgematch.co.uk'],
+          to: ['hello@bridgematch.co.uk', 'simon@brunel-bridging.co.uk'],
           subject: `🏠 New lead: ${safeName} — ${escHtml(propertyPrice || 'price TBC')}`,
           html,
         }),
