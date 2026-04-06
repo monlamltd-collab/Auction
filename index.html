@@ -1908,6 +1908,7 @@ async function loadAllLots(opts){
     ALL_SOURCES=d.sources||[];
     window._houseMeta=d.houseMeta||{};
     _lotsLoadedAt = Date.now();
+    _browseSnapshot = null; // invalidate — lots changed
     // Persist lots to sessionStorage for bfcache / back-navigation
     try {
       sessionStorage.setItem('ab_lots_cache', JSON.stringify(ALL_LOTS));
@@ -2138,6 +2139,7 @@ function showResultsView(){
   window.scrollTo({top:0,behavior:'smooth'});
 }
 
+let _browseSnapshot=null; // cached DOM + state for instant back-navigation
 function backToAuctions(){
   // Abort any pending search without clearing the visible lots/panel (prevents flicker)
   if(_searchAbort){_searchAbort.abort();_searchAbort=null}
@@ -2152,7 +2154,7 @@ function backToAuctions(){
   $('progressPanel').style.display='none';
   $('mainBtn').disabled=false;
   $('mainBtn').textContent=$('smartQuery').value.trim()?'AI Search':'Browse';
-  // Restore all-lots view — set LOTS before render to avoid empty flash
+  // Restore all-lots view
   if(ALL_LOTS.length){
     LOTS=ALL_LOTS;
     $('resultsTitle').textContent=ALL_LOTS.length.toLocaleString()+' auction lots';
@@ -2160,8 +2162,18 @@ function backToAuctions(){
     $('reportView').style.display='none';
     $('cardsView').style.display='block';
     $('resultsPanel').style.display='block';
-    buildLotFilters();
-    renderLots();
+    // Restore cached browse DOM if available (instant, no re-render)
+    if(_browseSnapshot&&_browseSnapshot.lotCount===ALL_LOTS.length){
+      const out=$('lotsOut');
+      if(out) out.innerHTML=_browseSnapshot.html;
+      window._lastRenderKey=_browseSnapshot.renderKey;
+      $('statsRow').innerHTML=_browseSnapshot.statsHtml;
+      if($('filterBarCount')) $('filterBarCount').textContent=_browseSnapshot.filterCount;
+      startCardCarousels();
+    } else {
+      buildLotFilters();
+      renderLots();
+    }
   }
   // Restore saved scroll or go to top
   const _savedY = parseInt(sessionStorage.getItem('ab_scroll_y') || '0');
@@ -2932,6 +2944,14 @@ async function runSmartSearch(query) {
     $('signupModal').classList.add('show');
     return;
   }
+  // Snapshot current browse view DOM for instant restore on back-navigation
+  try {
+    const out=$('lotsOut');
+    if(out&&ALL_LOTS.length&&!SMART_RESULTS){
+      _browseSnapshot={html:out.innerHTML,renderKey:window._lastRenderKey,lotCount:ALL_LOTS.length,
+        statsHtml:$('statsRow')?.innerHTML||'',filterCount:$('filterBarCount')?.textContent||''};
+    }
+  } catch(e){}
 
   // Pre-confirmation: show remaining credits before consuming one
   if (window._aiSearchLimit && window._aiSearchLimit !== 'unlimited') {
