@@ -1868,7 +1868,13 @@ function onShowPastChange(){
   loadAllLots();
 }
 
-async function loadAllLots(){
+let _lotsLoadedAt=0; // timestamp of last successful load
+async function loadAllLots(opts){
+  const force = opts?.force;
+  // Skip if lots were loaded very recently (e.g. auth callback re-triggering)
+  if (!force && ALL_LOTS.length > 0 && (Date.now() - _lotsLoadedAt) < 5000) {
+    return;
+  }
   // Restore from sessionStorage cache if less than 10 minutes old
   const _cachedTs = parseInt(sessionStorage.getItem('ab_lots_ts') || '0');
   const _cachedLots = sessionStorage.getItem('ab_lots_cache');
@@ -1876,6 +1882,7 @@ async function loadAllLots(){
     try {
       ALL_LOTS = JSON.parse(_cachedLots);
       LOTS = ALL_LOTS;
+      _lotsLoadedAt = _cachedTs;
       // Clear render key so renderLots() doesn't short-circuit against stale skeleton DOM
       window._lastRenderKey = null;
       $('resultsTitle').textContent = ALL_LOTS.length.toLocaleString() + ' auction lots';
@@ -1900,10 +1907,11 @@ async function loadAllLots(){
     ALL_LOTS=d.lots||[];
     ALL_SOURCES=d.sources||[];
     window._houseMeta=d.houseMeta||{};
+    _lotsLoadedAt = Date.now();
     // Persist lots to sessionStorage for bfcache / back-navigation
     try {
       sessionStorage.setItem('ab_lots_cache', JSON.stringify(ALL_LOTS));
-      sessionStorage.setItem('ab_lots_ts', Date.now().toString());
+      sessionStorage.setItem('ab_lots_ts', _lotsLoadedAt.toString());
     } catch(e) { /* quota exceeded — skip */ }
     if(d._debug) console.log('[BM] all-lots pipeline:',d._debug);
     // Show condition filter only for signed-in users (AI field)
@@ -3227,12 +3235,23 @@ function renderLots(){
   if(fa==='full_finance'&&fp.cash) lots=lots.filter(l=>l._affTag==='full_finance');
   const _today=new Date().toISOString().slice(0,10);
   const _notEnded=l=>!l._auctionDate||l._auctionDate>=_today;
-  if(!fsold||fsold==='all') lots=lots.filter(l=>(!l.status||l.status==='available'||l.status==='unsold')&&_notEnded(l));
-  else if(fsold==='available') lots=lots.filter(l=>(l.status==='available'||!l.status)&&_notEnded(l));
-  else if(fsold==='unsold') lots=lots.filter(l=>l.status==='unsold');
-  else if(fsold==='sold') lots=lots.filter(l=>l.status==='sold');
-  else if(fsold==='stc') lots=lots.filter(l=>l.status==='stc');
-  else if(fsold==='withdrawn') lots=lots.filter(l=>l.status==='withdrawn');
+  // Skip status/date filtering for AI search results — backend already filtered these
+  if(SMART_RESULTS){
+    // Only apply explicit user-selected status overrides, not the default date gate
+    if(fsold==='available') lots=lots.filter(l=>(l.status==='available'||!l.status));
+    else if(fsold==='unsold') lots=lots.filter(l=>l.status==='unsold');
+    else if(fsold==='sold') lots=lots.filter(l=>l.status==='sold');
+    else if(fsold==='stc') lots=lots.filter(l=>l.status==='stc');
+    else if(fsold==='withdrawn') lots=lots.filter(l=>l.status==='withdrawn');
+    // 'all' or 'everything' → show all AI results as-is
+  } else {
+    if(!fsold||fsold==='all') lots=lots.filter(l=>(!l.status||l.status==='available'||l.status==='unsold')&&_notEnded(l));
+    else if(fsold==='available') lots=lots.filter(l=>(l.status==='available'||!l.status)&&_notEnded(l));
+    else if(fsold==='unsold') lots=lots.filter(l=>l.status==='unsold');
+    else if(fsold==='sold') lots=lots.filter(l=>l.status==='sold');
+    else if(fsold==='stc') lots=lots.filter(l=>l.status==='stc');
+    else if(fsold==='withdrawn') lots=lots.filter(l=>l.status==='withdrawn');
+  }
   // fsold==='everything' → no filter, show all including sold
   // Favourites view filter
   if(typeof _favViewActive!=='undefined'&&_favViewActive){
@@ -3248,9 +3267,9 @@ function renderLots(){
   // Exclude POA
   if($('fExcludePOA') && $('fExcludePOA').value==='yes') lots=lots.filter(l=>l.price>0);
 
-  // Lookahead filter — limit to N upcoming auctions per house
+  // Lookahead filter — limit to N upcoming auctions per house (skip for AI search results)
   const fLook=$('fLookahead')?.value||'all';
-  if(fLook!=='all'){
+  if(fLook!=='all'&&!SMART_RESULTS){
     const maxAuctions=parseInt(fLook)||1;
     // Build per-house sorted list of unique auction dates
     const houseDates={};
