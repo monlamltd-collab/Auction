@@ -1027,42 +1027,66 @@ footer .logo-f span{color:var(--green)}
   <!-- ═══════ ONBOARDING MODAL ═══════ -->
   <div class="modal-bg" id="onboardingModal" role="dialog" aria-modal="true">
     <div class="modal" style="max-width:440px">
-      <div class="ob-progress" id="obProgress"><span class="ob-dot active"></span><span class="ob-dot"></span><span class="ob-dot"></span></div>
-      <!-- Step 1: Experience -->
+      <div class="ob-progress" id="obProgress"><span class="ob-dot active"></span><span class="ob-dot"></span><span class="ob-dot"></span><span class="ob-dot"></span></div>
+      <!-- Step 1: Attribution -->
       <div class="ob-step active" id="obStep1">
         <h2 style="font-size:1.3rem;margin-bottom:4px">Welcome to Auction Brain</h2>
-        <p style="color:var(--text2);font-size:.88rem;margin-bottom:4px">Let's set things up so we show you the most useful stuff first.</p>
-        <p style="font-size:.82rem;font-weight:600;color:var(--text)">How much auction experience do you have?</p>
+        <p style="color:var(--text2);font-size:.88rem;margin-bottom:4px">Quick question before we get started — how did you find us?</p>
+        <div class="ob-options" id="obRefOptions">
+          <button class="ob-opt" data-val="google" onclick="obSelect('referral',this)">Google search</button>
+          <button class="ob-opt" data-val="social" onclick="obSelect('referral',this)">Social media<div class="ob-opt-sub">Twitter/X, LinkedIn, Instagram</div></button>
+          <button class="ob-opt" data-val="forum" onclick="obSelect('referral',this)">Property forum<div class="ob-opt-sub">Property Hub, Property Tribes, etc.</div></button>
+          <button class="ob-opt" data-val="word_of_mouth" onclick="obSelect('referral',this)">Word of mouth / friend</button>
+          <button class="ob-opt" data-val="youtube" onclick="obSelect('referral',this)">YouTube</button>
+          <button class="ob-opt" data-val="other" onclick="obSelect('referral',this)">Other</button>
+        </div>
+        <input class="ob-other-input" id="obRefOther" placeholder="Where did you hear about us?" style="display:none;margin-top:8px;width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;font-size:.85rem">
+      </div>
+      <!-- Step 2: Experience -->
+      <div class="ob-step" id="obStep2">
+        <h2 style="font-size:1.3rem;margin-bottom:4px">How experienced are you?</h2>
+        <p style="color:var(--text2);font-size:.85rem;margin-bottom:4px">We'll tailor the experience to your level.</p>
         <div class="ob-options" id="obExpOptions">
           <button class="ob-opt" data-val="first_time" onclick="obSelect('exp',this)">Never bought at auction<div class="ob-opt-sub">I'll explain everything as we go</div></button>
-          <button class="ob-opt" data-val="1_to_3" onclick="obSelect('exp',this)">Bought 1–3 properties<div class="ob-opt-sub">You know the basics, I'll skip the obvious</div></button>
-          <button class="ob-opt" data-val="experienced" onclick="obSelect('exp',this)">4+ properties or professional<div class="ob-opt-sub">Power user — just the data, no hand-holding</div></button>
+          <button class="ob-opt" data-val="1_to_3" onclick="obSelect('exp',this)">Bought 1–2 properties<div class="ob-opt-sub">You know the basics, I'll skip the obvious</div></button>
+          <button class="ob-opt" data-val="experienced" onclick="obSelect('exp',this)">Experienced (3–10)<div class="ob-opt-sub">Just the data, minimal hand-holding</div></button>
+          <button class="ob-opt" data-val="professional" onclick="obSelect('exp',this)">Professional investor / portfolio<div class="ob-opt-sub">Power user — show me everything</div></button>
         </div>
       </div>
-      <!-- Step 2: Budget -->
-      <div class="ob-step" id="obStep2">
-        <h2 style="font-size:1.3rem;margin-bottom:4px">What's your budget?</h2>
-        <p style="color:var(--text2);font-size:.85rem;margin-bottom:4px">We'll highlight lots in your range. You can change this anytime.</p>
-        <div class="ob-options" id="obBudgetOptions">
-          <button class="ob-opt" data-val="100000" onclick="obSelect('budget',this)">Up to £100k<div class="ob-opt-sub">First-time investor or cash buyer</div></button>
-          <button class="ob-opt" data-val="250000" onclick="obSelect('budget',this)">Up to £250k<div class="ob-opt-sub">Most auction stock falls here</div></button>
-          <button class="ob-opt" data-val="500000" onclick="obSelect('budget',this)">Up to £500k<div class="ob-opt-sub">Larger projects and portfolios</div></button>
-          <button class="ob-opt" data-val="999999999" onclick="obSelect('budget',this)">No limit<div class="ob-opt-sub">Show me everything</div></button>
-        </div>
-      </div>
-      <!-- Step 3: Interests -->
+      <!-- Step 3: Strategy -->
       <div class="ob-step" id="obStep3">
-        <h2 style="font-size:1.3rem;margin-bottom:4px">What are you looking for?</h2>
+        <h2 style="font-size:1.3rem;margin-bottom:4px">What's your investment strategy?</h2>
         <p style="color:var(--text2);font-size:.85rem">Pick any that apply — we'll tailor your feed.</p>
         <div class="ob-interests" id="obInterests">
           <button class="ob-int" data-val="btl" onclick="obToggleInt(this)">Buy-to-let</button>
           <button class="ob-int" data-val="flip" onclick="obToggleInt(this)">Flip / refurb</button>
           <button class="ob-int" data-val="development" onclick="obToggleInt(this)">Development</button>
-          <button class="ob-int" data-val="hmo" onclick="obToggleInt(this)">HMO</button>
+          <button class="ob-int" data-val="hmo" onclick="obToggleInt(this)">HMO conversion</button>
+          <button class="ob-int" data-val="title_split" onclick="obToggleInt(this)">Title splitting</button>
           <button class="ob-int" data-val="commercial" onclick="obToggleInt(this)">Commercial</button>
           <button class="ob-int" data-val="land" onclick="obToggleInt(this)">Land</button>
           <button class="ob-int" data-val="unsold" onclick="obToggleInt(this)">Unsold bargains</button>
-          <button class="ob-int" data-val="title_split" onclick="obToggleInt(this)">Title splits</button>
+          <button class="ob-int" data-val="browsing" onclick="obToggleInt(this)">Just browsing / learning</button>
+        </div>
+        <button class="btn-main" style="width:100%;padding:12px;margin-top:16px" onclick="obNext(4)">Next →</button>
+      </div>
+      <!-- Step 4: Location -->
+      <div class="ob-step" id="obStep4">
+        <h2 style="font-size:1.3rem;margin-bottom:4px">Where are you looking?</h2>
+        <p style="color:var(--text2);font-size:.85rem">Pick regions you're interested in. Optional — skip if you're open to anywhere.</p>
+        <div class="ob-interests" id="obRegions">
+          <button class="ob-int" data-val="north_west" onclick="obToggleRegion(this)">North West</button>
+          <button class="ob-int" data-val="north_east" onclick="obToggleRegion(this)">North East</button>
+          <button class="ob-int" data-val="yorkshire" onclick="obToggleRegion(this)">Yorkshire</button>
+          <button class="ob-int" data-val="west_midlands" onclick="obToggleRegion(this)">West Midlands</button>
+          <button class="ob-int" data-val="east_midlands" onclick="obToggleRegion(this)">East Midlands</button>
+          <button class="ob-int" data-val="east" onclick="obToggleRegion(this)">East of England</button>
+          <button class="ob-int" data-val="london" onclick="obToggleRegion(this)">London</button>
+          <button class="ob-int" data-val="south_east" onclick="obToggleRegion(this)">South East</button>
+          <button class="ob-int" data-val="south_west" onclick="obToggleRegion(this)">South West</button>
+          <button class="ob-int" data-val="wales" onclick="obToggleRegion(this)">Wales</button>
+          <button class="ob-int" data-val="scotland" onclick="obToggleRegion(this)">Scotland</button>
+          <button class="ob-int" data-val="anywhere" onclick="obToggleRegion(this)">Anywhere</button>
         </div>
         <button class="btn-main" style="width:100%;padding:12px;margin-top:16px" onclick="obFinish()">Let's go →</button>
         <button style="display:block;margin:8px auto 0;background:none;border:none;color:var(--text3);font-size:.78rem;cursor:pointer;font-family:inherit" onclick="obSkip()">Skip for now</button>
@@ -1727,18 +1751,26 @@ async function deleteSavedSearch(id) {
 // ═══════════════════════════════
 // ONBOARDING FLOW (Item 10)
 // ═══════════════════════════════
-let _obData = { experience: '', budget: 0, interests: [] };
+let _obData = { referral: '', referral_other: '', experience: '', interests: [], regions: [] };
 
 function obSelect(type, btn) {
   const parent = btn.parentElement;
   parent.querySelectorAll('.ob-opt').forEach(b => b.classList.remove('selected'));
   btn.classList.add('selected');
-  if (type === 'exp') {
-    _obData.experience = btn.dataset.val;
-    // Auto-advance after short delay
+  if (type === 'referral') {
+    _obData.referral = btn.dataset.val;
+    const otherInput = $('obRefOther');
+    if (btn.dataset.val === 'other') {
+      otherInput.style.display = '';
+      otherInput.focus();
+      // Don't auto-advance — wait for them to type + press Next or just advance
+      otherInput.onkeydown = function(e) { if (e.key === 'Enter') { _obData.referral_other = otherInput.value.trim(); setTimeout(() => obNext(2), 150); } };
+      return;
+    }
+    otherInput.style.display = 'none';
     setTimeout(() => obNext(2), 300);
-  } else if (type === 'budget') {
-    _obData.budget = parseInt(btn.dataset.val) || 0;
+  } else if (type === 'exp') {
+    _obData.experience = btn.dataset.val;
     setTimeout(() => obNext(3), 300);
   }
 }
@@ -1748,11 +1780,29 @@ function obToggleInt(btn) {
   _obData.interests = Array.from($('obInterests').querySelectorAll('.selected')).map(b => b.dataset.val);
 }
 
+function obToggleRegion(btn) {
+  if (btn.dataset.val === 'anywhere') {
+    // Deselect all others, select only "Anywhere"
+    $('obRegions').querySelectorAll('.ob-int').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+  } else {
+    // Deselect "Anywhere" if selecting a specific region
+    const anyBtn = $('obRegions').querySelector('[data-val="anywhere"]');
+    if (anyBtn) anyBtn.classList.remove('selected');
+    btn.classList.toggle('selected');
+  }
+  _obData.regions = Array.from($('obRegions').querySelectorAll('.selected')).map(b => b.dataset.val);
+}
+
 function obNext(step) {
+  // Capture "other" text if leaving step 1
+  if (step === 2 && _obData.referral === 'other') {
+    _obData.referral_other = ($('obRefOther')?.value || '').trim();
+  }
   // Update progress dots
   $('obProgress').querySelectorAll('.ob-dot').forEach((d, i) => d.classList.toggle('active', i < step));
   // Show/hide steps
-  for (let i = 1; i <= 3; i++) {
+  for (let i = 1; i <= 4; i++) {
     const el = $('obStep' + i);
     if (el) el.classList.toggle('active', i === step);
   }
@@ -1762,12 +1812,6 @@ async function obFinish() {
   $('onboardingModal').classList.remove('show');
   localStorage.setItem('bm_onboarding_done', '1');
 
-  // Apply preferences to filters
-  if (_obData.budget && _obData.budget < 999999999) {
-    $('fMaxPrice').value = _obData.budget;
-    updatePriceBtn();
-  }
-
   // Save to server
   if (currentSession) {
     try {
@@ -1776,11 +1820,24 @@ async function obFinish() {
         headers: getAuthHeaders(),
         body: JSON.stringify({
           experience_level: _obData.experience,
-          budget_max: _obData.budget || null,
-          interests: _obData.interests
+          interests: _obData.interests,
+          referral_source: _obData.referral === 'other' ? ('other: ' + _obData.referral_other) : _obData.referral,
+          preferred_regions: _obData.regions
         })
       });
     } catch {}
+  }
+
+  // Apply region to location filter if exactly one region selected
+  if (_obData.regions.length === 1 && _obData.regions[0] !== 'anywhere') {
+    const regionMap = { north_west: 'North West', north_east: 'North East', yorkshire: 'Yorkshire', west_midlands: 'West Midlands', east_midlands: 'East Midlands', east: 'East of England', london: 'London', south_east: 'South East', south_west: 'South West', wales: 'Wales', scotland: 'Scotland' };
+    const label = regionMap[_obData.regions[0]];
+    if (label && $('fLocation')) {
+      // Set location filter if the option exists
+      const opts = Array.from($('fLocation').options);
+      const match = opts.find(o => o.textContent.includes(label) || o.value === label);
+      if (match) { $('fLocation').value = match.value; }
+    }
   }
 
   renderLots();
@@ -1793,7 +1850,7 @@ function obSkip() {
     fetch('/api/auth/onboarding', {
       method: 'POST',
       headers: getAuthHeaders(),
-      body: JSON.stringify({ experience_level: null, budget_max: null, interests: [] })
+      body: JSON.stringify({ experience_level: null, interests: [], referral_source: null, preferred_regions: [] })
     }).catch(() => {});
   }
 }

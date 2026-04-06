@@ -1676,11 +1676,13 @@ app.post('/api/auth/onboarding', async (req, res) => {
   const user = await validateUserFromReq(req);
   if (!user) return res.status(401).json({ error: 'Authentication required' });
 
-  const { experience_level, budget_max, interests } = req.body || {};
+  const { experience_level, budget_max, interests, referral_source, preferred_regions } = req.body || {};
   const updates = { onboarding_complete: true };
   if (typeof experience_level === 'string') updates.experience_level = experience_level;
   if (typeof budget_max === 'number' && budget_max > 0) updates.budget_max = budget_max;
   if (Array.isArray(interests)) updates.interests = interests.slice(0, 10);
+  if (typeof referral_source === 'string') updates.referral_source = referral_source.substring(0, 200);
+  if (Array.isArray(preferred_regions)) updates.preferred_regions = preferred_regions.slice(0, 12);
 
   try {
     await supabase.from('users').update(updates).eq('id', user.id);
