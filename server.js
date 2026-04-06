@@ -4211,17 +4211,50 @@ function isPresetQuery(query) {
 // with SQL before sending the narrowed set to Gemini.
 // ═══════════════════════════════════════════════════════════════
 function parseSmartSearchQuery(query) {
-  const result = { filters: {}, locationTerms: [], freeText: [], intentWords: [], original: query };
+  const result = { filters: {}, softFilters: {}, locationTerms: [], freeText: [], intentWords: [], concepts: [], original: query };
   let q = query.toLowerCase().trim();
 
+  // ── Concept detection — compound intents that shouldn't be split into individual hard filters ──
+  // "block(s) of flats" / "blocks of apartments" → multi-unit freehold concept
+  if (/blocks?\s+of\s+(?:flats?|apartments?)/i.test(q)) {
+    result.concepts.push('multi_unit_freehold');
+    q = q.replace(/blocks?\s+of\s+(?:flats?|apartments?)/gi, '').trim();
+  }
+  // "could title split" / "title split potential" / "potential to title split"
+  if (/(?:could|potential\s+to)\s+title\s+split/i.test(q)) {
+    result.concepts.push('title_split_potential');
+    q = q.replace(/(?:could|potential\s+to)\s+title\s+split/gi, '').trim();
+  }
+  // "HMO conversion" / "convert to HMO"
+  if (/(?:hmo\s+conversion|convert(?:ed)?\s+to\s+hmo)/i.test(q)) {
+    result.concepts.push('hmo_conversion');
+    q = q.replace(/(?:hmo\s+conversion|convert(?:ed)?\s+to\s+hmo)/gi, '').trim();
+  }
+  // "development site" / "development opportunity"
+  if (/development\s+(?:site|opportunity|potential|plot)/i.test(q)) {
+    result.concepts.push('development');
+    q = q.replace(/development\s+(?:site|opportunity|potential|plot)/gi, '').trim();
+  }
+  // "flip" / "buy to flip" / "quick flip"
+  if (/(?:buy\s+to\s+|quick\s+)?flip/i.test(q)) {
+    result.concepts.push('flip');
+    q = q.replace(/(?:buy\s+to\s+|quick\s+)?flip/gi, '').trim();
+  }
+  // "buy to let" / "BTL" / "rental"
+  if (/(?:buy\s+to\s+let|btl|rental\s+(?:investment|property|yield))/i.test(q)) {
+    result.concepts.push('buy_to_let');
+    q = q.replace(/(?:buy\s+to\s+let|btl|rental\s+(?:investment|property|yield))/gi, '').trim();
+  }
+
   // ── Multi-word phrases (extract before splitting into words) ──
-  if (/title\s+split/i.test(q)) { result.filters.title_split = true; q = q.replace(/title\s+splits?/gi, '').trim(); }
-  if (/needs?\s+work/i.test(q)) { result.filters.condition = ['needs work', 'poor']; q = q.replace(/needs?\s+work/gi, '').trim(); }
-  if (/poor\s+condition/i.test(q)) { result.filters.condition = ['needs work', 'poor']; q = q.replace(/poor\s+condition/gi, '').trim(); }
+  // title_split as standalone phrase (not part of a concept) → soft filter
+  if (/title\s+split/i.test(q)) { result.softFilters.title_split = true; q = q.replace(/title\s+splits?/gi, '').trim(); }
+  if (/need(?:s|ing)?\s+work/i.test(q)) { result.softFilters.condition = ['needs work', 'poor']; q = q.replace(/need(?:s|ing)?\s+(?:of\s+)?work/gi, '').trim(); }
+  if (/poor\s+condition/i.test(q)) { result.softFilters.condition = ['needs work', 'poor']; q = q.replace(/poor\s+condition/gi, '').trim(); }
   if (/good\s+condition/i.test(q)) { result.filters.condition = ['good']; q = q.replace(/good\s+condition/gi, '').trim(); }
   if (/share\s+of\s+freehold/i.test(q)) { result.filters.tenure = 'Share of Freehold'; q = q.replace(/share\s+of\s+freehold/gi, '').trim(); }
   if (/high\s+yield/i.test(q)) { result.filters.sortBy = 'yield'; q = q.replace(/high\s+yield/gi, '').trim(); }
-  if (/deal\s+stack/i.test(q)) { result.freeText.push('title split'); result.filters.condition = result.filters.condition || ['needs work', 'poor']; q = q.replace(/deal\s+stack(?:ing)?/gi, '').trim(); }
+  if (/deal\s+stack/i.test(q)) { result.concepts.push('deal_stack'); q = q.replace(/deal\s+stack(?:ing)?/gi, '').trim(); }
 
   // ── Multi-word location names (must extract before splitting) ──
   const multiWordLocations = {
@@ -4333,14 +4366,14 @@ function parseSmartSearchQuery(query) {
     if (!w) continue;
     if (w === 'freehold' && !result.filters.tenure) { result.filters.tenure = 'Freehold'; consumed.add(word); }
     else if (w === 'leasehold' && !result.filters.tenure) { result.filters.tenure = 'Leasehold'; consumed.add(word); }
-    else if (w === 'vacant') { result.filters.vacant = true; consumed.add(word); }
+    else if (w === 'vacant') { result.softFilters.vacant = true; consumed.add(word); }
     else if (w === 'unsold' || w === 'failed') { result.filters.statusOverride = 'unsold'; consumed.add(word); }
     else if (w === 'development') { result.freeText.push(w); consumed.add(word); }
     else if (w === 'hmo') { result.freeText.push(w); consumed.add(word); }
     else if (w === 'repossession' || w === 'repossessed' || w === 'receivership') { result.freeText.push(w); consumed.add(word); }
     else if (w === 'yield') { result.filters.sortBy = result.filters.sortBy || 'yield'; consumed.add(word); }
-    else if (propTypes[w] !== undefined) { if (propTypes[w]) result.filters.prop_type = propTypes[w]; consumed.add(word); }
-    else if (conditionWords[w] && !result.filters.condition) { result.filters.condition = conditionWords[w]; consumed.add(word); }
+    else if (propTypes[w] !== undefined) { if (propTypes[w]) result.softFilters.prop_type = propTypes[w]; consumed.add(word); }
+    else if (conditionWords[w] && !result.softFilters.condition) { result.softFilters.condition = conditionWords[w]; consumed.add(word); }
     else if (knownLocations.has(w)) { result.locationTerms.push(w); consumed.add(word); }
     // Postcode prefix (e.g. BS1, M1, LS2)
     else if (/^[a-z]{1,2}\d{1,2}[a-z]?$/i.test(w)) { result.locationTerms.push(w.toUpperCase()); consumed.add(word); }
@@ -4537,14 +4570,11 @@ app.post('/api/smart-search', async (req, res) => {
     else if (effectiveSold === 'withdrawn') dbQuery = dbQuery.eq('status', 'withdrawn');
     else if (effectiveSold !== 'everything') dbQuery = dbQuery.or('status.eq.available,status.eq.unsold,status.is.null');
 
-    // Apply parsed column filters
-    if (sqParsed.filters.title_split) dbQuery = dbQuery.eq('title_split', true);
-    if (sqParsed.filters.vacant) dbQuery = dbQuery.eq('vacant', true);
+    // ── Hard filters: price, location, tenure, beds — things the user definitely wants to constrain ──
     if (sqParsed.filters.tenure) dbQuery = dbQuery.ilike('tenure', sqParsed.filters.tenure);
     if (sqParsed.filters.maxPrice) dbQuery = dbQuery.lte('price', sqParsed.filters.maxPrice);
     if (sqParsed.filters.minPrice) dbQuery = dbQuery.gte('price', sqParsed.filters.minPrice);
     if (sqParsed.filters.beds) dbQuery = dbQuery.gte('beds', sqParsed.filters.beds);
-    if (sqParsed.filters.prop_type) dbQuery = dbQuery.eq('prop_type', sqParsed.filters.prop_type);
     if (sqParsed.filters.condition) dbQuery = dbQuery.in('condition', sqParsed.filters.condition);
 
     // Location: address ILIKE for city/town names
@@ -4557,10 +4587,72 @@ app.post('/api/smart-search', async (req, res) => {
       dbQuery = dbQuery.or(pcOr);
     }
 
-    // Full-text search for remaining unstructured terms
+    // ── Concept-based broadening — build OR conditions for semantic intent ──
+    const conceptOrClauses = [];
+    for (const concept of sqParsed.concepts) {
+      if (concept === 'multi_unit_freehold') {
+        // A "block of flats" could be listed as any prop_type, but will have units > 1 or
+        // mention flats/apartments in search_text. Tenure freehold is handled as hard filter above.
+        conceptOrClauses.push('units.gt.1');
+        conceptOrClauses.push('title_split.eq.true');
+        conceptOrClauses.push('search_text.ilike.%flats%');
+        conceptOrClauses.push('search_text.ilike.%apartments%');
+        conceptOrClauses.push('search_text.ilike.%block%');
+        conceptOrClauses.push('search_text.ilike.%units%');
+        conceptOrClauses.push('prop_type.eq.flat');
+      } else if (concept === 'title_split_potential') {
+        conceptOrClauses.push('title_split.eq.true');
+        conceptOrClauses.push('units.gt.1');
+        conceptOrClauses.push('search_text.ilike.%title split%');
+        conceptOrClauses.push('search_text.ilike.%flats%');
+        conceptOrClauses.push('search_text.ilike.%block%');
+      } else if (concept === 'hmo_conversion') {
+        conceptOrClauses.push('search_text.ilike.%hmo%');
+        conceptOrClauses.push('beds.gte.4');
+        conceptOrClauses.push('search_text.ilike.%conversion%');
+      } else if (concept === 'development') {
+        conceptOrClauses.push('search_text.ilike.%development%');
+        conceptOrClauses.push('search_text.ilike.%planning%');
+        conceptOrClauses.push('prop_type.eq.land');
+        conceptOrClauses.push('deal_type.ilike.%development%');
+      } else if (concept === 'flip') {
+        conceptOrClauses.push('condition.in.(needs work,poor)');
+        conceptOrClauses.push('below_market.gt.10');
+        conceptOrClauses.push('search_text.ilike.%modernisation%');
+        conceptOrClauses.push('search_text.ilike.%refurb%');
+      } else if (concept === 'buy_to_let') {
+        conceptOrClauses.push('est_gross_yield.gt.5');
+        conceptOrClauses.push('search_text.ilike.%tenant%');
+        conceptOrClauses.push('search_text.ilike.%rental%');
+        conceptOrClauses.push('search_text.ilike.%let%');
+      } else if (concept === 'deal_stack') {
+        conceptOrClauses.push('title_split.eq.true');
+        conceptOrClauses.push('condition.in.(needs work,poor)');
+        conceptOrClauses.push('below_market.gt.15');
+      }
+    }
+
+    // ── Soft filters — OR-based signals that widen the net, not hard constraints ──
+    // These get added to the concept OR clauses so the DB returns candidates matching ANY signal
+    const softOrClauses = [];
+    if (sqParsed.softFilters.title_split) softOrClauses.push('title_split.eq.true', 'search_text.ilike.%title split%', 'units.gt.1');
+    if (sqParsed.softFilters.vacant) softOrClauses.push('vacant.eq.true', 'search_text.ilike.%vacant%');
+    if (sqParsed.softFilters.prop_type) softOrClauses.push(`prop_type.eq.${sqParsed.softFilters.prop_type}`, `search_text.ilike.%${sqParsed.softFilters.prop_type}%`);
+    if (sqParsed.softFilters.condition) {
+      softOrClauses.push(`condition.in.(${sqParsed.softFilters.condition.join(',')})`);
+      softOrClauses.push('search_text.ilike.%refurb%', 'search_text.ilike.%modernisation%');
+    }
+
+    // Combine concept + soft clauses into one big OR
+    const allOrClauses = [...conceptOrClauses, ...softOrClauses];
+    if (allOrClauses.length > 0) {
+      dbQuery = dbQuery.or(allOrClauses.join(','));
+    }
+
+    // Full-text search for remaining unstructured terms (use OR not AND for broader results)
     if (sqParsed.freeText.length > 0) {
       const tsTerms = sqParsed.freeText.map(t => t.replace(/[^a-z0-9]/gi, '')).filter(Boolean);
-      if (tsTerms.length) dbQuery = dbQuery.textSearch('search_vector', tsTerms.join(' & '));
+      if (tsTerms.length) dbQuery = dbQuery.textSearch('search_vector', tsTerms.join(' | '));
     }
 
     // Sort by yield if requested, otherwise by score
@@ -4575,14 +4667,14 @@ app.post('/api/smart-search', async (req, res) => {
       let unsoldQuery = supabase.from('lots').select(LOTS_SELECT)
         .in('status', ['unsold', 'withdrawn'])
         .gte('auction_date', unsoldCutoff);
-      // Apply same column filters to unsold lots
-      if (sqParsed.filters.title_split) unsoldQuery = unsoldQuery.eq('title_split', true);
-      if (sqParsed.filters.vacant) unsoldQuery = unsoldQuery.eq('vacant', true);
+      // Apply same hard filters to unsold lots
       if (sqParsed.filters.tenure) unsoldQuery = unsoldQuery.ilike('tenure', sqParsed.filters.tenure);
       if (sqParsed.filters.maxPrice) unsoldQuery = unsoldQuery.lte('price', sqParsed.filters.maxPrice);
       if (sqParsed.filters.minPrice) unsoldQuery = unsoldQuery.gte('price', sqParsed.filters.minPrice);
       for (const loc of sqParsed.locationTerms) unsoldQuery = unsoldQuery.ilike('address', `%${loc}%`);
       if (sqParsed.filters.regionPostcodes) unsoldQuery = unsoldQuery.or(sqParsed.filters.regionPostcodes.map(p => `postcode.ilike.${p}%`).join(','));
+      // Apply same concept/soft OR clauses
+      if (allOrClauses.length > 0) unsoldQuery = unsoldQuery.or(allOrClauses.join(','));
       unsoldQuery = unsoldQuery.order(sortCol, { ascending: false, nullsFirst: false }).limit(200);
       const { data: unsoldRows } = await unsoldQuery;
       unsoldExtra = unsoldRows || [];
@@ -4617,7 +4709,7 @@ app.post('/api/smart-search', async (req, res) => {
     const sources = [...sourceMap.values()];
 
     const totalSearched = filteredLots.length;
-    log.info('smart-search layer1', { query, columnFilters: sqParsed.filters, locations: sqParsed.locationTerms, freeText: sqParsed.freeText, results: totalSearched });
+    log.info('smart-search layer1', { query, columnFilters: sqParsed.filters, softFilters: sqParsed.softFilters, concepts: sqParsed.concepts, locations: sqParsed.locationTerms, freeText: sqParsed.freeText, results: totalSearched });
 
     // ═══════════════════════════════════════════════════════════
     // LAYER 2: Send matching lots' search_text to Gemini
@@ -4627,12 +4719,13 @@ app.post('/api/smart-search', async (req, res) => {
       await incrementSearchCounter();
       const filterDesc = [
         ...sqParsed.locationTerms,
-        sqParsed.filters.title_split ? 'title split' : '',
-        sqParsed.filters.vacant ? 'vacant' : '',
+        sqParsed.softFilters.title_split ? 'title split' : '',
+        sqParsed.softFilters.vacant ? 'vacant' : '',
         sqParsed.filters.tenure || '',
-        sqParsed.filters.prop_type || '',
+        sqParsed.softFilters.prop_type || '',
         sqParsed.filters.maxPrice ? `under £${sqParsed.filters.maxPrice.toLocaleString()}` : '',
         ...sqParsed.freeText,
+        ...sqParsed.concepts.map(c => c.replace(/_/g, ' ')),
       ].filter(Boolean).join(', ');
       return res.json({ results: [], report: `No lots found matching: ${filterDesc}. Try broadening your search.`, sources: [], totalSearched: 0, searchesUsed, searchLimit });
     }
@@ -4664,33 +4757,49 @@ app.post('/api/smart-search', async (req, res) => {
     const appliedFilters = [
       ...sqParsed.locationTerms.map(l => `location: ${l}`),
       sqParsed.filters.regionName ? `region: ${sqParsed.filters.regionName}` : '',
-      sqParsed.filters.title_split ? 'title split potential' : '',
-      sqParsed.filters.vacant ? 'vacant' : '',
+      sqParsed.softFilters.title_split ? 'title split potential (soft)' : '',
+      sqParsed.softFilters.vacant ? 'vacant (soft)' : '',
       sqParsed.filters.tenure ? `tenure: ${sqParsed.filters.tenure}` : '',
-      sqParsed.filters.prop_type ? `type: ${sqParsed.filters.prop_type}` : '',
+      sqParsed.softFilters.prop_type ? `type: ${sqParsed.softFilters.prop_type} (soft)` : '',
       sqParsed.filters.beds ? `${sqParsed.filters.beds}+ beds` : '',
       sqParsed.filters.maxPrice ? `under £${sqParsed.filters.maxPrice.toLocaleString()}` : '',
       sqParsed.filters.minPrice ? `over £${sqParsed.filters.minPrice.toLocaleString()}` : '',
-      sqParsed.filters.condition ? `condition: ${sqParsed.filters.condition.join('/')}` : '',
+      (sqParsed.softFilters.condition || sqParsed.filters.condition) ? `condition: ${(sqParsed.softFilters.condition || sqParsed.filters.condition).join('/')}` : '',
       ...sqParsed.freeText.map(t => `keyword: ${t}`),
+      ...sqParsed.concepts.map(c => `concept: ${c.replace(/_/g, ' ')}`),
     ].filter(Boolean);
     const filterNote = appliedFilters.length ? `\nDatabase pre-filters applied: ${appliedFilters.join(', ')}` : '';
 
-    const responseText = await callAI(`You are a UK property investment analyst. A user has searched across auction lots and the database returned ${totalSearched} matches (showing top ${geminiLots.length} by score).${soldInstruction}${filterNote}
+    // Build concept explanation for Gemini
+    const conceptExplanations = {
+      multi_unit_freehold: 'The user wants freehold buildings containing multiple flats/units that could be sold individually — look for blocks of flats, multi-unit properties, properties with 2+ units.',
+      title_split_potential: 'The user wants properties where individual units could be split onto separate titles — look for multi-unit freehold properties, blocks of flats, houses converted to flats.',
+      hmo_conversion: 'The user wants properties suitable for conversion to Houses in Multiple Occupation — look for large houses (4+ beds), existing HMOs, properties with conversion potential.',
+      development: 'The user wants development opportunities — look for land, properties with planning permission, sites with development potential.',
+      flip: 'The user wants properties to buy, refurbish, and sell quickly — look for below market value properties in poor condition with good locations.',
+      buy_to_let: 'The user wants rental investment properties — look for good yields, existing tenancies, properties in rental demand areas.',
+      deal_stack: 'The user wants properties with multiple value-add angles — look for title split potential combined with refurbishment needs and below market value.',
+    };
+    const conceptNote = sqParsed.concepts.length > 0
+      ? '\n\nSEARCH CONCEPTS:\n' + sqParsed.concepts.map(c => `- ${conceptExplanations[c] || c}`).join('\n')
+      : '';
+
+    const responseText = await callAI(`You are a UK property investment analyst. A user has searched across auction lots and the database returned ${totalSearched} candidate lots (showing top ${geminiLots.length} by score).${soldInstruction}${filterNote}${conceptNote}
 
 Their search query: "${query}"
 
-These lots already match the user's filters. Your job is to:
-1. Rank and select the BEST matches — the lots most relevant to the user's intent
-2. Write a brief investment report (2-3 paragraphs) with actionable insights
+These lots were retrieved using broad matching to avoid missing relevant results. Your job is to:
+1. CAREFULLY rank and select lots that genuinely match the user's intent — read the search_text context for each lot
+2. Be generous but not indiscriminate — include lots that COULD match even if not perfectly tagged
+3. Write a brief investment report (2-3 paragraphs) with actionable insights
 
-Lots (pre-filtered by database, sorted by score):
+Lots (broad database matches, sorted by score):
 ${lotSummaries}
 
 Respond in this exact JSON format:
 {"indices":[0,5,12],"report":"Your report here..."}
 
-Return the indices of the best matching lots. If ALL lots are relevant, return all indices. Focus your report on investment insights, not just listing addresses.`, { tier: 'fast', maxTokens: 4000, taskType: 'search' });
+Return the indices of the best matching lots. If few lots match well, that's fine — quality over quantity. Focus your report on investment insights specific to the user's search intent.`, { tier: 'fast', maxTokens: 4000, taskType: 'search' });
     log.info('smart_search_full', { tier: 'fast', preFiltered: totalSearched, sentToAI: geminiLots.length });
 
     let aiParsed;
@@ -15742,6 +15851,7 @@ function dbRowToFrontendLot(r) {
     score: r.score != null ? parseFloat(r.score) : null, scoreBreakdown: r.score_breakdown || [],
     opps: r.opps || [], risks: r.risks || [], dealType: r.deal_type,
     vacant: r.vacant, titleSplit: r.title_split,
+    _searchText: r.search_text || '',
   };
 }
 
