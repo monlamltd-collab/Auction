@@ -510,11 +510,23 @@ function calcSDLT(price, country){
 function matchLenders(price,cash,propType,isRefurb,works,gdv,addlVal,addlMort,loanTermMonths,country){
   if(!loanTermMonths)loanTermMonths=12;
   if(!country) country='england';
-  // Day-1 loan calculation: pure purchase price minus cash deposit
-  // SDLT, legal fees, works costs are the investor's responsibility — not factored into loan requirement
-  const loanNeeded=Math.max(0,price-cash);
+  // Smart loan calculation: if investor has enough cash to cover purchase,
+  // they still likely want leverage. Calculate a sensible loan based on
+  // what a typical lender would advance (75% LTV), leaving cash free for
+  // works, fees, and contingency. Investors use bridging for leverage,
+  // not just when they're short of cash.
+  let loanNeeded,cashForDeposit;
+  if(cash>=price){
+    // Investor has enough cash — assume they want leverage at ~75% LTV
+    // so they keep cash available for works + costs + contingency
+    const leverageLTV=0.75;
+    loanNeeded=Math.round(price*leverageLTV);
+    cashForDeposit=price-loanNeeded;
+  }else{
+    loanNeeded=Math.max(0,price-cash);
+    cashForDeposit=Math.min(cash,price);
+  }
   const ltv=price>0?(loanNeeded/price)*100:0;
-  const cashForDeposit=Math.min(cash,price);
   let stampDuty=calcSDLT(price,country);
   const estCosts=price*0.04;
   const totalCashNeeded=stampDuty+estCosts;
