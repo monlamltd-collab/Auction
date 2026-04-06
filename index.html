@@ -3092,6 +3092,8 @@ async function runSmartSearch(query) {
       const remaining = Math.max(0, data.searchLimit - (data.searchesUsed || 0));
       $('statsRow').insertAdjacentHTML('afterend', '<div class="search-counter">' + remaining + ' AI search' + (remaining !== 1 ? 'es' : '') + ' left today</div>');
     }
+    // Non-determinism note
+    $('statsRow').insertAdjacentHTML('afterend', '<div style="text-align:center;font-size:.72rem;color:var(--text3);margin-top:6px">AI searches are non-deterministic — running the same search twice may return different results.</div>');
     // Update stored counters
     if (data.searchesUsed != null) window._aiSearchesUsed = data.searchesUsed;
   } catch (e) {
