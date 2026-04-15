@@ -18,7 +18,6 @@ Bridgematch is a UK property auction directory and AI-powered catalogue analyser
 server.js (Express, ~131K)
 ├── GET  /api/auctions        → Returns upcoming auction dates (curated list)
 ├── POST /api/analyse          → Scrapes catalogue URL, Gemini extracts lots, scores them
-├── GET  /api/diag             → Temporary diagnostics (uptime, credit status, flags)
 ├── GET  /api/cost-monitor     → Firecrawl credit usage stats
 ├── POST /api/admin/calendar   → Add auction URLs (x-admin-secret auth)
 ├── GET  /auctions             → Serves index.html (directory view)
@@ -58,7 +57,7 @@ admin.html
 - **Primary:** DOM extractors — custom per-house selectors that parse HTML directly via JSDOM
 - **Fallback:** Gemini API extraction — when DOM extractors return < 3 lots, the stripped HTML is sent to Gemini with structured extraction prompts
 - **DOM→Gemini merge:** When Gemini fallback is triggered, the DOM extractor is re-run on the raw HTML to harvest URLs and images, which are then merged into Gemini's lot data by lot number (with position-based fallback). This prevents the "cascading image loss" problem where Gemini extraction strips URLs/images from the HTML.
-- **Models:** `gemini-2.0-flash` for known houses (fast, free), `gemini-2.5-pro` for unknown houses and PDF extraction
+- **Models:** `gemini-2.5-flash-lite` for known houses (fast tier), `gemini-2.5-pro` for unknown houses and PDF extraction (capable tier). Defined in `lib/ai-provider.js`.
 - **Rate limiting:** Built-in 4.1s gap between calls to stay under Gemini free tier 15 RPM limit
 
 ### Image Extraction Pipeline
@@ -159,6 +158,49 @@ Title split detection covers 7 pattern types. Budget filtering has separate limi
 
 ---
 
+## Self-Healing Harness (`lib/harness/`)
+
+The harness is the pipeline orchestration and quality assurance layer. It runs during `autoAnalyseAll()` and manages house health, data quality, and self-healing.
+
+### Components
+
+| File | Size | Purpose |
+|------|------|---------|
+| `manager.js` | 23.8KB | Orchestrates all harness components — entry point for pipeline runs |
+| `alert-router.js` | 3.9KB | Pipeline alerts + resolution tracking (e.g. `extractor_regression`, `url_healed`) |
+| `house-health.js` | 8.7KB | Per-house health tracking + circuit breakers (consecutive failures → auto-skip) |
+| `quality-gate.js` | 3.2KB | Pass/fail criteria for batches (minimum lot count, field coverage thresholds) |
+| `regression-detector.js` | 3.5KB | Detects 0-lot regressions vs previous successful scrape |
+| `extractor-generator.js` | 11.6KB | AI-powered DOM extractor generation (Gemini creates selectors from HTML) |
+| `house-discovery.js` | 9.6KB | Automatic new auction house discovery via web search |
+| `data-contract.js` | 8.9KB | Schema validation + lot quality scoring (field completeness, data integrity) |
+| `enrichment-engine.js` | 6.7KB | EPC/flood/Land Registry/image coverage enrichment orchestration |
+| `sub-agents.js` | 10KB | Data quality audits + calendar staleness checks |
+
+### How They Fit Together
+
+```
+manager.js
+├── house-health.js      → Should we scrape this house? (circuit breaker check)
+├── regression-detector.js → Did we get fewer lots than last time?
+│   └── alert-router.js   → Log the regression alert
+├── quality-gate.js       → Did the batch pass quality checks?
+├── data-contract.js      → Are the lot fields valid and complete?
+├── enrichment-engine.js  → Backfill EPC/flood/LR/images
+├── extractor-generator.js → Generate new DOM extractor if needed
+├── house-discovery.js    → Find new auction houses to add
+└── sub-agents.js         → Periodic audits and staleness checks
+```
+
+### Key Patterns
+
+- **Circuit breakers** (`house-health.js`): 3 consecutive failures → house is auto-skipped for increasing cooldown periods
+- **Alert lifecycle** (`alert-router.js`): `opened` → `acknowledged` → `resolved` (or `auto_resolved`)
+- **Regression detection** (`regression-detector.js`): Compares current lot count against last successful scrape; 0 lots triggers healing
+- **Quality gates** (`quality-gate.js`): Minimum 3 lots per house, minimum 60% field coverage for core fields (address, price)
+
+---
+
 ## Auction Houses
 
 ### Currently Working (~21 houses, ~2,364 lots)
@@ -210,8 +252,8 @@ These are computed from lot data fields: `price`, `estGrossYield`, `opportunitie
 4. **Cascading image loss** — If DOM extractor returns < 3 lots → Gemini fallback strips HTML → lots get empty URLs/images → backfill can't match. Fixed by DOM→Gemini merge but monitor image coverage for regressions.
 5. **Firecrawl lazy-load images** — Firecrawl's `rawHtml` doesn't reliably capture lazy-loaded images. Mitigated with `executeJavascript` action + `images` format + two-pass backfill.
 6. **Pagination** — Each auction house has different pagination patterns; these are handled per-house in server.js
-7. **vercel.json still present** — Legacy from when this was on Vercel; now on Railway with Express. The vercel.json is vestigial
-8. **`/api/diag` endpoint** — Temporary debugging endpoint, remove after Firecrawl integration is stable
+7. ~~**vercel.json still present**~~ — **RESOLVED**: Deleted (was legacy Vercel config, now on Railway)
+8. ~~**`/api/diag` endpoint**~~ — **RESOLVED**: Deleted (was temporary debugging endpoint)
 
 ---
 
@@ -348,7 +390,7 @@ Must check before changes:
 Owns: extractLotsWithAI(), callGemini(), batch logic, prompt templates
 Must check before changes:
 - Batch size: keep batches to ≤ 3 pages or ≤ 21000 chars
-- Model: use gemini-2.0-flash for known houses, gemini-2.5-pro for unknown/PDF
+- Model: use gemini-2.5-flash-lite for known houses (fast tier), gemini-2.5-pro for unknown/PDF (capable tier)
 - Rate limit guard: check creditExhausted flag before every batch (triggers on 429 / quota errors)
 - Structured output: validate response has expected lot fields before caching
 - Rate limiting: callGemini() enforces 4.1s gap between calls (15 RPM safe margin)
