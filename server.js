@@ -34,6 +34,7 @@ import { enrichBatch, getEnrichmentReport } from './lib/harness/enrichment-engin
 import { initDiscovery, discoverNewHouses, getDiscoveryQueue, approveCandidate, getDiscoveryBudget } from './lib/harness/house-discovery.js';
 import { initGenerator } from './lib/harness/extractor-generator.js';
 import { initManager, runManagerCycle, getManagerReport, getManagerDirectives, setManagerConfig, getManagerConfig } from './lib/harness/manager.js';
+import { enrichLotsWithFundability } from './lib/fundability.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -3991,6 +3992,13 @@ app.post('/api/analyse', async (req, res) => {
     for (const lot of enrichedAnalysed) {
       const rescored = analyseLot(lot);
       Object.assign(lot, rescored);
+    }
+
+    // ── Fundability badges — fire-and-forget, never blocks pipeline ──
+    try {
+      await enrichLotsWithFundability(enrichedAnalysed);
+    } catch (e) {
+      console.warn('Fundability enrichment failed (non-fatal):', e.message);
     }
 
     // ── Cache results ──
@@ -15079,6 +15087,13 @@ async function autoAnalyseOne(url) {
     if (stillMissing > 0 && puppeteer) {
       await backfillImagesWithPuppeteer(url, lots, house);
     }
+  }
+
+  // ── Fundability badges — fire-and-forget, never blocks pipeline ──
+  try {
+    await enrichLotsWithFundability(lots);
+  } catch (e) {
+    console.warn('Fundability enrichment failed (non-fatal):', e.message);
   }
 
   const expiresAt = new Date(Date.now() + getCacheTTL(house)).toISOString();

@@ -32,6 +32,11 @@ index.html (~79K)
 
 admin.html
 └── Admin dashboard — auction management, calendar, "Add Auction URL" form, backfill triggers
+
+lib/fundability.js
+└── Fundability Badge — maps lot data to BridgeMatch DealEssentials, calls /api/filter,
+    caches results (1hr TTL, max 5000 entries). Exports: mapLotToDeal(), getFundabilityBadge(),
+    enrichLotsWithFundability(), buildBridgematchUrl()
 ```
 
 ### Key Dependencies
@@ -269,6 +274,7 @@ These are computed from lot data fields: `price`, `estGrossYield`, `opportunitie
 | `PORT` | Server port (Railway sets this) |
 | `SUPABASE_URL` | Supabase project URL (future auth) |
 | `SUPABASE_ANON_KEY` | Supabase anon key (future auth) |
+| `BRIDGEMATCH_API_URL` | BridgeMatch API base URL for fundability badge (default: `https://www.bridgematch.co.uk`) |
 
 ---
 
@@ -403,6 +409,7 @@ Must check before changes:
 - Yield calculation: uses guide price, not sold price
 - Score capping: score range 0-10, never exceed
 - EPC lookups: only call if not already cached
+- Fundability badge: mapLotToDeal() maps propType/condition/price to BridgeMatch DealEssentials. Cache key is price+type+refurb. Never blocks analysis pipeline.
 
 ### DI Manager (coordination)
 Reviews output of all other agents. Produces weekly quality report covering:
