@@ -12,17 +12,19 @@ if (process.env.SENTRY_DSN) {
 import express from 'express';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { randomBytes, timingSafeEqual, createHash } from 'crypto';
+import { randomBytes, createHash } from 'crypto';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { createClient } from '@supabase/supabase-js';
-import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { readFileSync } from 'fs';
-import { lookup } from 'dns/promises';
 import { JSDOM } from 'jsdom';
 let puppeteer = null;
 try { puppeteer = (await import('puppeteer')).default; } catch {}
 import Stripe from 'stripe';
 import { callAI, initAI, getAICostSummary } from './lib/ai-provider.js';
+import { log, sseWrite, requestLoggerMiddleware } from './lib/logging.js';
+import { validateEnv, STRIPE_ENABLED, RATE_LIMIT_PER_DAY, CACHE_DAYS, CACHE_TIERS, getCacheTTL, HEADERS, MAX_PAGES, MAX_PUPPETEER_PAGES, MAX_LOTS_PER_SCRAPE, MAX_AUCTIONS_PER_HOUSE, TIMEOUT, ALLOWED_ORIGINS, FREE_SCAN_LIMIT, FREE_PREVIEW_LOTS, resolveEffectiveTier, getAISearchLimit, truncateAddress, stripAIFields } from './lib/config.js';
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY, AUTH_ENABLED, SUPABASE_JWT_SECRET } from './lib/supabase.js';
+import { securityHeaders, csrfCheck, validateUrl } from './lib/security.js';
+import { verifySupabaseToken, safeCompare, getClientIP, rateLimit } from './lib/auth.js';
 
 // ── Harness modules (adaptive resilience framework) ──
 import { initAlerts, fireAlert as harnessFireAlert, resolveAlert as harnessResolveAlert, getUnresolved as harnessGetUnresolved } from './lib/harness/alert-router.js';
@@ -38,28 +40,13 @@ import { enrichLotsWithFundability } from './lib/fundability.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// ═══════════════════════════════════════════════════════════════
-// ENV VAR VALIDATION
-// ═══════════════════════════════════════════════════════════════
-const REQUIRED_ENV = ['GEMINI_API_KEY', 'SUPABASE_URL', 'SUPABASE_SERVICE_KEY'];
-const RECOMMENDED_ENV = ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'SUPABASE_ANON_KEY', 'SUPABASE_JWT_SECRET', 'ADMIN_SECRET', 'RESEND_API_KEY', 'FIRECRAWL_API_KEY'];
-for (const key of REQUIRED_ENV) {
-  if (!process.env[key]) {
-    console.error(`FATAL: Required environment variable ${key} is not set. Server cannot start.`);
-    process.exit(1);
-  }
-}
-for (const key of RECOMMENDED_ENV) {
-  if (!process.env[key]) console.warn(`WARNING: Recommended env var ${key} is not set — some features will be disabled.`);
-}
+validateEnv();
 
 function escHtml(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 
 // URL normalisation — single source of truth for comparing / deduplicating URLs
 const normaliseUrl = u => (u || '').trim().replace(/\/+$/, '').replace(/^http:\/\//i, 'https://').replace(/^(https:\/\/)www\./i, '$1').toLowerCase();
 
-// ── Stripe feature flag: defaults to false (free-first), set STRIPE_ENABLED=true to reinstate payments ──
-const STRIPE_ENABLED = process.env.STRIPE_ENABLED === 'true';
 const stripe = STRIPE_ENABLED && process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -73,9 +60,8 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json({ limit: '100kb' }));
 
 // ═══════════════════════════════════════════════════════════════
-// CORS
+// CORS (ALLOWED_ORIGINS from lib/config.js)
 // ═══════════════════════════════════════════════════════════════
-const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://auctions.bridgematch.co.uk,https://www.bridgematch.co.uk,https://bridgematch.co.uk').split(',');
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (origin && ALLOWED_ORIGINS.includes(origin)) {
@@ -87,15 +73,6 @@ app.use((req, res, next) => {
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
-
-// Timing-safe string comparison for auth tokens
-function safeCompare(a, b) {
-  if (typeof a !== 'string' || typeof b !== 'string') return false;
-  const bufA = Buffer.from(a);
-  const bufB = Buffer.from(b);
-  if (bufA.length !== bufB.length) return false;
-  return timingSafeEqual(bufA, bufB);
-}
 
 // ═══════════════════════════════════════════════════════════════
 // BROKEN EXTRACTOR TRACKING (auto-populated by audit, persisted to Supabase)
@@ -125,154 +102,16 @@ async function loadBrokenExtractors() {
 // Fire-and-forget on startup (don't block server startup)
 loadBrokenExtractors();
 
-// ═══════════════════════════════════════════════════════════════
-// SECURITY HEADERS
-// ═══════════════════════════════════════════════════════════════
-app.use((req, res, next) => {
-  const stripeSrc = STRIPE_ENABLED ? ' https://checkout.stripe.com' : '';
-  res.setHeader('Content-Security-Policy',
-    "default-src 'self'; " +
-    "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://cloud.umami.is; " +
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
-    "font-src 'self' https://fonts.gstatic.com; " +
-    "img-src 'self' data: https:; " +
-    `connect-src 'self' https://*.supabase.co https://www.bridgematch.co.uk https://cloud.umami.is https://api.umami.is${stripeSrc}; ` +
-    (STRIPE_ENABLED ? "frame-src https://checkout.stripe.com; " : "frame-src 'none'; ") +
-    "frame-ancestors 'none'; " +
-    "form-action 'self'; " +
-    "upgrade-insecure-requests"
-  );
-  res.setHeader('Strict-Transport-Security', 'max-age=63072000; includeSubDomains');
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(self)');
-  res.setHeader('X-XSS-Protection', '1; mode=block');
-  next();
-});
-
-// ═══════════════════════════════════════════════════════════════
-// CSRF ORIGIN VALIDATION
-// ═══════════════════════════════════════════════════════════════
-function csrfCheck(req, res, next) {
-  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
-  if (req.path === '/api/stripe/webhook') return next(); // Stripe uses its own signature verification
-  const origin = (req.headers.origin || req.headers.referer || '').replace(/\/+$/, '');
-  if (origin && ALLOWED_ORIGINS.some(a => origin === a || origin === a + '/')) {
-    return next();
-  }
-  return res.status(403).json({ error: 'Forbidden — missing or invalid Origin header' });
-}
+// ── Security middleware (from lib/security.js) ──
+app.use(securityHeaders);
 app.use(csrfCheck);
 
-// ═══════════════════════════════════════════════════════════════
-// SUPABASE CLIENT
-// ═══════════════════════════════════════════════════════════════
-const supabase = createClient(
-  process.env.SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_KEY || ''
-);
+// ── Request logging (from lib/logging.js) ──
+app.use(requestLoggerMiddleware(getClientIP));
 
-// ═══════════════════════════════════════════════════════════════
-// SUPABASE AUTH (JWT verification)
-// ═══════════════════════════════════════════════════════════════
-const SUPABASE_URL = process.env.SUPABASE_URL || '';
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || '';
-const SUPABASE_JWT_SECRET = process.env.SUPABASE_JWT_SECRET || '';
-const AUTH_ENABLED = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
-
-let jwks = null;
-if (SUPABASE_URL) {
-  try {
-    jwks = createRemoteJWKSet(new URL(SUPABASE_URL.replace(/\/$/, '') + '/auth/v1/.well-known/jwks.json'));
-    console.log('[AUTH] JWKS client created for ES256 verification');
-  } catch (e) {
-    console.warn('[AUTH] Failed to create JWKS client:', e.message);
-  }
-}
-
-async function verifySupabaseToken(token) {
-  // Try ES256 via JWKS first (Supabase default)
-  if (jwks) {
-    try {
-      const { payload } = await jwtVerify(token, jwks, { audience: 'authenticated' });
-      return payload;
-    } catch (e) {
-      if (e.code === 'ERR_JWT_EXPIRED') return { error: 'Session expired — please sign in again' };
-      // Fall through to HS256
-    }
-  }
-  // Fallback: HS256 with JWT secret
-  if (SUPABASE_JWT_SECRET) {
-    try {
-      const secret = new TextEncoder().encode(SUPABASE_JWT_SECRET);
-      const { payload } = await jwtVerify(token, secret, { audience: 'authenticated' });
-      return payload;
-    } catch (e) {
-      if (e.code === 'ERR_JWT_EXPIRED') return { error: 'Session expired — please sign in again' };
-      return { error: 'Invalid token' };
-    }
-  }
-  return { error: 'Auth not configured' };
-}
-
-// ═══════════════════════════════════════════════════════════════
-// STRUCTURED LOGGING
-// ═══════════════════════════════════════════════════════════════
-function log(level, message, meta = {}) {
-  const entry = { ts: new Date().toISOString(), level, msg: message, ...meta };
-  const line = JSON.stringify(entry);
-  if (level === 'error') console.error(line);
-  else if (level === 'warn') console.warn(line);
-  else console.log(line);
-}
-log.info = (msg, meta) => log('info', msg, meta);
-log.warn = (msg, meta) => log('warn', msg, meta);
-log.error = (msg, meta) => log('error', msg, meta);
-
-// SSE helper for streaming progress events
-function sseWrite(res, event, data) {
-  res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-}
-
-// Request logging middleware
-app.use((req, res, next) => {
-  if (req.path === '/health') return next();
-  const start = Date.now();
-  res.on('finish', () => {
-    log.info('request', { method: req.method, path: req.path, status: res.statusCode, ms: Date.now() - start, ip: getClientIP(req) });
-  });
-  next();
-});
-
-// ═══════════════════════════════════════════════════════════════
-// CONFIG
-// ═══════════════════════════════════════════════════════════════
-const RATE_LIMIT = STRIPE_ENABLED ? 5 : 50; // 50/day for signed-in users when Stripe disabled
-const CACHE_DAYS = 7; // fallback default
-const CACHE_TIERS = {
-  high:   { houses: ['allsop','savills','sdl','network','bidx1'], ttlHours: 12 },
-  medium: { houses: ['cliveemson','edwardmellor','bondwolfe','strettons','countrywide','suttonkersh','tcpa','futureauctions','firstforauctions','harmanhealy','astleys','henrysykes','clarkesimpson','durrants','dawsons','goldings','auctionhousescotland','austingray','auctionhouseeastanglia','auctionhousenorthwest','auctionhousenortheast','auctionhousewales','auctionhousebirmingham','auctionhousekent','iamsold','buttersjohnbee','brownco','fssproperty','auctionhousedevon','auctionhouseeastmidlands','auctionhousewestmidlands','auctionhouseessex','auctionhousemanchester','romanway','hammerprice'], ttlHours: 18 },
-  low:    { houses: [], ttlHours: 24 }  // everything else
-};
-function getCacheTTL(houseKey) {
-  if (CACHE_TIERS.high.houses.includes(houseKey)) return CACHE_TIERS.high.ttlHours * 3600000;
-  if (CACHE_TIERS.medium.houses.includes(houseKey)) return CACHE_TIERS.medium.ttlHours * 3600000;
-  return CACHE_TIERS.low.ttlHours * 3600000;
-}
-const HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-  'Accept-Language': 'en-GB,en;q=0.9',
-};
-const MAX_PAGES = 40;
-const MAX_PUPPETEER_PAGES = 15;
-const MAX_LOTS_PER_SCRAPE = 5000;
-const MAX_AUCTIONS_PER_HOUSE = 2;
-const TIMEOUT = 25000;
+// ── Config constants from lib/config.js ──
+const RATE_LIMIT = RATE_LIMIT_PER_DAY;
 // Houses where catalogue pages are JS-rendered — need Puppeteer for image backfill
-// All houses get rendered image backfill — every DOM extractor has image selectors.
-// Previously limited to 14 houses, leaving ~24 houses with no backfill.
 // Populated after HOUSE_ROOTS is defined (see below).
 let PUPPETEER_IMAGE_HOUSES = null;
 
@@ -1476,86 +1315,6 @@ const HOUSE_ROOTS = {
 // Now that HOUSE_ROOTS is defined, populate the image backfill set
 PUPPETEER_IMAGE_HOUSES = new Set(Object.keys(HOUSE_ROOTS));
 
-function getClientIP(req) {
-  return req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';
-}
-
-// ═══════════════════════════════════════════════════════════════
-// SIMPLE IN-MEMORY RATE LIMITER
-// ═══════════════════════════════════════════════════════════════
-const _rlBuckets = new Map();
-function rateLimit(windowMs, maxHits) {
-  return (req, res, next) => {
-    const ip = getClientIP(req);
-    const key = `${req.route?.path || req.path}:${ip}`;
-    const now = Date.now();
-    let bucket = _rlBuckets.get(key);
-    if (!bucket || now - bucket.start > windowMs) {
-      bucket = { start: now, count: 0 };
-      _rlBuckets.set(key, bucket);
-    }
-    bucket.count++;
-    if (bucket.count > maxHits) {
-      return res.status(429).json({ error: 'Too many requests. Please try again later.' });
-    }
-    next();
-  };
-}
-// Clean up stale rate-limit buckets every 10 minutes (5-min TTL)
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, bucket] of _rlBuckets) {
-    if (now - bucket.start > 300000) _rlBuckets.delete(key); // 5 min TTL
-  }
-}, 600000);
-
-// ═══════════════════════════════════════════════════════════════
-// URL VALIDATION — prevent SSRF via user-supplied URLs
-// ═══════════════════════════════════════════════════════════════
-const BLOCKED_HOST_PATTERNS = [
-  /^localhost$/,
-  /^127\./,
-  /^10\./,
-  /^172\.(1[6-9]|2\d|3[01])\./,
-  /^192\.168\./,
-  /^169\.254\./,
-  /^0\./,
-  /^\[?::1\]?$/,
-  /^\[?fe80:/i,
-  /^\[?fc00:/i,
-  /^\[?fd/i,
-  /\.local$/,
-  /\.internal$/,
-  /\.railway\.internal$/,
-];
-
-function isPrivateIP(ip) {
-  return BLOCKED_HOST_PATTERNS.some(pat => pat.test(ip));
-}
-
-async function validateUrl(raw) {
-  let parsed;
-  try { parsed = new URL(raw); } catch { return { ok: false, error: 'Invalid URL' }; }
-  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
-    return { ok: false, error: 'Only http/https URLs are allowed' };
-  }
-  const hostname = parsed.hostname.toLowerCase();
-  // Block by hostname pattern
-  if (isPrivateIP(hostname)) {
-    return { ok: false, error: 'URL points to a private/internal address' };
-  }
-  // DNS resolution check to prevent DNS rebinding
-  try {
-    const { address } = await lookup(hostname);
-    if (isPrivateIP(address)) {
-      return { ok: false, error: 'URL resolves to a private/internal address' };
-    }
-  } catch {
-    return { ok: false, error: 'Cannot resolve hostname' };
-  }
-  return { ok: true, url: parsed.href };
-}
-
 // ═══════════════════════════════════════════════════════════════
 // STATIC FILES
 // ═══════════════════════════════════════════════════════════════
@@ -2577,60 +2336,6 @@ async function validateUserFromReq(req) {
   }
 
   return null;
-}
-
-const FREE_SCAN_LIMIT = 3;
-
-const FREE_PREVIEW_LOTS = 6; // Show full AI data on first N lots even for free users over limit
-
-// ── Centralised tier resolution ──
-const SIGNED_IN_DAILY_LIMIT = 50;  // Daily AI search limit for signed-in users when Stripe disabled
-
-function resolveEffectiveTier(user) {
-  if (!user) return 'anon';
-  if (!STRIPE_ENABLED) return 'premium'; // All signed-in users are premium when Stripe hibernated
-  const tier = user.tier || 'free';
-  if (tier === 'premium') return 'premium';
-  if (user.trial_expires_at && new Date(user.trial_expires_at) > new Date()) return 'premium';
-  return tier;
-}
-
-// ── AI Search tier limits ──
-const ANON_AI_SEARCH_LIMIT = 3;   // Anonymous users: 3 AI searches/day by IP
-const FREE_AI_SEARCH_LIMIT = 5;   // Free registered users: 5 AI searches/day
-
-function getAISearchLimit(user) {
-  if (!user) return ANON_AI_SEARCH_LIMIT;
-  if (!STRIPE_ENABLED) return SIGNED_IN_DAILY_LIMIT; // 50/day for all signed-in users when Stripe disabled
-  const tier = user.tier || 'free';
-  if (tier === 'premium') return Infinity;
-  if (user.trial_expires_at && new Date(user.trial_expires_at) > new Date()) return Infinity;
-  return FREE_AI_SEARCH_LIMIT;
-}
-
-function truncateAddress(address) {
-  if (!address) return 'Address available with upgrade';
-  // Show only area/town — strip street number and name, keep postcode area + town
-  const parts = address.split(',').map(s => s.trim());
-  if (parts.length >= 3) return parts.slice(-2).join(', '); // Last 2 parts (town, county/postcode)
-  if (parts.length === 2) return parts[1]; // Just the town/area
-  // Single part — try to extract just the town/postcode area
-  const pcMatch = address.match(/[A-Z]{1,2}\d/);
-  if (pcMatch) return pcMatch[0] + '*** area';
-  return 'Location available with upgrade';
-}
-
-function stripAIFields(lots) {
-  return lots.map((lot, i) => {
-    if (i < FREE_PREVIEW_LOTS) return lot; // Let them see the value
-    return {
-      ...lot,
-      score: null, opps: [], risks: [], scoreBreakdown: [], bullets: [], dealType: null,
-      url: null,                              // Hide auction house link
-      address: truncateAddress(lot.address),   // Truncate to area only
-      blurred: true
-    };
-  });
 }
 
 // ═══════════════════════════════════════════════════════════════
