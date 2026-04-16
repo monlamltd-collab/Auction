@@ -17,10 +17,26 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { readFileSync } from 'fs';
 import { JSDOM } from 'jsdom';
 import { DOM_EXTRACTORS, UNIVERSAL_DOM_EXTRACTOR, extractWithJSDOM, initExtractors, getLastExtractorUsed, setLastExtractorUsed } from './lib/extractors.js';
-let puppeteer = null;
-try { puppeteer = (await import('puppeteer')).default; } catch {}
 import Stripe from 'stripe';
 import { callAI, initAI, getAICostSummary } from './lib/ai-provider.js';
+import {
+  initScraper, FIRECRAWL_API_KEY, FIRECRAWL_SKIP,
+  scrapeWithFirecrawl, scrapeRenderedPage, scrapePageWithFirecrawl,
+  fetchPage, scrapeAllPages, scrapeAllsopApi, extractAllsopLotsFromJson, enrichAllsopLots,
+  detectTotalPages, buildPageUrl, scrapeWithPuppeteer,
+  acquirePage, getBrowser, hasPuppeteer, puppeteer,
+  extractLotsWithAI, extractLotsFromPdf, isPdfUrl, stripHtml,
+  backfillImages, backfillImagesWithFirecrawl, backfillImagesWithPuppeteer,
+  backfillImagesFromLotPages, fetchLotPage, enrichLotsFromLotPages,
+  normaliseLotStatuses, isValidImageUrl, IMG_EXTENSIONS, IMG_CDN_DOMAINS,
+  HOUSE_EXTRACTION_HINTS,
+  getFirecrawlStatus, getFcCreditsUsed, isFcCreditExhausted, getFcExhaustedAt,
+  getFcFallbackCount, getFcErrorCount, getFcRequestCount,
+  isFcTemporarilyDown, getFcDownAt, getFcConsecutive5xx, getFcLastError, getFcLastErrorAt,
+  setFcCreditExhausted, setFcExhaustedAt, setFcCreditsUsed,
+  setFcTemporarilyDown, setFcDownAt, setFcConsecutive5xx,
+  getLastScrapeEngine, setLastScrapeEngine, getLastAITier, setLastAITier,
+} from './lib/scraper.js';
 import { log, sseWrite, requestLoggerMiddleware } from './lib/logging.js';
 import { validateEnv, STRIPE_ENABLED, RATE_LIMIT_PER_DAY, CACHE_DAYS, CACHE_TIERS, getCacheTTL, HEADERS, MAX_PAGES, MAX_PUPPETEER_PAGES, MAX_LOTS_PER_SCRAPE, MAX_AUCTIONS_PER_HOUSE, TIMEOUT, ALLOWED_ORIGINS, FREE_SCAN_LIMIT, FREE_PREVIEW_LOTS, resolveEffectiveTier, getAISearchLimit, truncateAddress, stripAIFields } from './lib/config.js';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY, AUTH_ENABLED, SUPABASE_JWT_SECRET } from './lib/supabase.js';
@@ -128,131 +144,12 @@ initDiscovery(supabase, callAI);
 initGenerator(supabase, callAI);
 // Manager init deferred to after HOUSE_ROOTS and DOM_EXTRACTORS are defined (see below)
 
-// ── Firecrawl rate limiter & credit tracking ──
-const FIRECRAWL_API_KEY = process.env.FIRECRAWL_API_KEY || '';
-const FIRECRAWL_MONTHLY_BUDGET = parseInt(process.env.FIRECRAWL_MONTHLY_BUDGET || '15000');
-const FIRECRAWL_SKIP = new Set((process.env.FIRECRAWL_SKIP_HOUSES || '').split(',').filter(Boolean));
-let _fcLastCall = 0;
-const FC_MIN_GAP = parseInt(process.env.FIRECRAWL_MIN_GAP_MS || '300');
-async function firecrawlRateLimited(fn) {
-  const now = Date.now();
-  const earliest = _fcLastCall + FC_MIN_GAP;
-  const wait = Math.max(0, earliest - now);
-  _fcLastCall = now + wait;
-  if (wait > 0) await new Promise(r => setTimeout(r, wait));
-  return fn();
-}
-
-let fcCreditsUsed = 0;
-let fcCreditExhausted = false;
-let fcExhaustedAt = 0;
-let fcFallbackCount = 0;
-let fcErrorCount = 0;
-let fcRequestCount = 0;
-let fcTemporarilyDown = false;
-let fcDownAt = 0;
-let fcConsecutive5xx = 0;
-let fcLastError = null;
-let fcLastErrorAt = null;
-
-async function scrapeWithFirecrawl(url, options = {}) {
-  if (!FIRECRAWL_API_KEY) throw new Error('FIRECRAWL_API_KEY not set');
-  if (fcCreditExhausted) throw new Error('Firecrawl credits exhausted');
-  if (fcTemporarilyDown && Date.now() - fcDownAt < 600000) throw new Error('Firecrawl temporarily down');
-
-  const formats = options.formats || ['markdown', 'rawHtml'];
-  const body = {
-    url,
-    formats,
-  };
-  if (options.waitFor) body.waitFor = options.waitFor;
-  if (options.actions) body.actions = options.actions;
-
-  const doFetch = async () => {
-    const resp = await fetch('https://api.firecrawl.dev/v2/scrape', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${FIRECRAWL_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(60000),
-    });
-
-    if (resp.status === 402 || resp.status === 429) {
-      fcCreditExhausted = true;
-      fcExhaustedAt = Date.now();
-      console.log('Firecrawl: credit/rate limit hit — switching to fallback');
-      throw new Error(`Firecrawl ${resp.status}: credits/rate exhausted`);
-    }
-
-    if (resp.status >= 500) {
-      fcConsecutive5xx++;
-      if (fcConsecutive5xx >= 3) {
-        fcTemporarilyDown = true;
-        fcDownAt = Date.now();
-        console.log('Firecrawl: 3 consecutive 5xx — marking temporarily down for 10min');
-      }
-      throw new Error(`Firecrawl ${resp.status}: server error`);
-    }
-
-    if (!resp.ok) throw new Error(`Firecrawl ${resp.status}: ${await resp.text().catch(() => 'unknown')}`);
-
-    fcConsecutive5xx = 0;
-    const data = await resp.json();
-    if (!data.success) throw new Error(`Firecrawl returned success=false: ${data.error || 'unknown'}`);
-
-    fcCreditsUsed++;
-    fcRequestCount++;
-    return {
-      html: data.data?.rawHtml || data.data?.html || '',
-      markdown: data.data?.markdown || '',
-      sourceURL: data.data?.metadata?.sourceURL || url,
-      images: data.data?.images || [],
-    };
-  };
-
-  // 1 retry on 5xx/timeout with 2s backoff
-  try {
-    return await firecrawlRateLimited(doFetch);
-  } catch (err) {
-    if (/5\d\d|timeout|abort/i.test(err.message)) {
-      console.log(`Firecrawl: retrying after error: ${err.message}`);
-      await new Promise(r => setTimeout(r, 2000));
-      try {
-        return await firecrawlRateLimited(doFetch);
-      } catch (retryErr) {
-        fcErrorCount++;
-        fcLastError = retryErr.message;
-        fcLastErrorAt = new Date().toISOString();
-        throw retryErr;
-      }
-    }
-    fcErrorCount++;
-    fcLastError = err.message;
-    fcLastErrorAt = new Date().toISOString();
-    throw err;
-  }
-}
-
 // Inject server-level dependencies into lib/houses.js (rewriteUrl needs these)
 initHouses({
   firecrawlApiKey: FIRECRAWL_API_KEY,
-  getFcCreditExhausted: () => fcCreditExhausted,
+  getFcCreditExhausted: isFcCreditExhausted,
   scrapeWithFirecrawlFn: scrapeWithFirecrawl,
 });
-
-// Validate image URLs — must be https and either have a known image extension or come from a known CDN
-const IMG_EXTENSIONS = /\.(jpe?g|png|webp)(\?.*)?$/i;
-const IMG_CDN_DOMAINS = /cloudinary\.com|imgix\.net|cdn\.sanity\.io|images\.unsplash\.com|ik\.imagekit\.io|res\.cloudinary\.com|s3\.amazonaws\.com|amazonaws\.com\/.*\.(jpe?g|png|webp)|cdn\.shopify\.com|akamaized\.net|cloudfront\.net|twimg\.com|fbcdn\.net|googleusercontent\.com|wp-content\/uploads|supabase\.co\/storage|i\.imgur\.com|eigpropertyauctions\.co\.uk|auction|property|lot|catalogue|catalog/i;
-
-function isValidImageUrl(url) {
-  if (!url || typeof url !== 'string') return false;
-  if (!/^https:\/\//i.test(url)) return false;
-  if (IMG_EXTENSIONS.test(url)) return true;
-  if (IMG_CDN_DOMAINS.test(url)) return true;
-  return false;
-}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // QUALITY GATE — runs before caching to reject bad batches and clean data.
@@ -335,352 +232,11 @@ function qualityGate(lots, house, prevCached, prevLots) {
 }
 
 
-// Track which scraping engine and extractor were last used (for cache metadata)
-let _lastScrapeEngine = 'http';
 // _lastExtractorUsed is now in lib/extractors.js — use getLastExtractorUsed()/setLastExtractorUsed()
-let _lastAITier = null; // 'fast' or 'capable' — set by extractLotsWithAI()
+// getLastScrapeEngine(), getLastAITier() now in lib/scraper.js — use getLastScrapeEngine()/getLastAITier()
 
-async function scrapeRenderedPage(url, house, options = {}) {
-  // Tier 1: Firecrawl (if available and not skipped/exhausted)
-  if (FIRECRAWL_API_KEY && !fcCreditExhausted && !FIRECRAWL_SKIP.has(house)) {
-    if (!(fcTemporarilyDown && Date.now() - fcDownAt < 600000)) {
-      try {
-        const fcActions = [
-          // Scroll down in stages to trigger intersection observers for lazy-loaded content
-          { type: 'scroll', direction: 'down' },
-          { type: 'wait', milliseconds: 1500 },
-          { type: 'scroll', direction: 'down' },
-          { type: 'wait', milliseconds: 1500 },
-          { type: 'scroll', direction: 'down' },
-          { type: 'wait', milliseconds: 1500 },
-          { type: 'scroll', direction: 'down' },
-          { type: 'wait', milliseconds: 1000 },
-          // Force lazy-loaded images: swap data-src/data-lazy-src → src
-          { type: 'executeJavascript', script: `document.querySelectorAll('img[data-src], img[data-lazy-src], img[data-original]').forEach(img => { const src = img.getAttribute('data-src') || img.getAttribute('data-lazy-src') || img.getAttribute('data-original'); if (src && !img.getAttribute('src')?.startsWith('http')) img.setAttribute('src', src); });` },
-          { type: 'wait', milliseconds: 500 },
-          // Scroll back to top to capture any fixed-position images
-          { type: 'scroll', direction: 'up' },
-          { type: 'scroll', direction: 'up' },
-          { type: 'scroll', direction: 'up' },
-          { type: 'scroll', direction: 'up' },
-        ];
-        const result = await scrapeWithFirecrawl(url, {
-          waitFor: options.waitFor || 3000,
-          actions: options.actions || fcActions,
-          formats: ['markdown', 'rawHtml', 'images'],
-        });
-        if (result.html && result.html.length > 500) {
-          console.log(`Firecrawl: got ${result.html.length} chars for ${house}`);
-          _lastScrapeEngine = 'firecrawl';
-          return result;
-        }
-        console.log(`Firecrawl: empty/short response for ${house}, falling back`);
-      } catch (err) {
-        console.log(`Firecrawl failed for ${house}: ${err.message}, falling back`);
-        fcFallbackCount++;
-      }
-    }
-  }
-
-  // Tier 2: Puppeteer (if available)
-  if (puppeteer) {
-    try {
-      const page = await acquirePage();
-      try {
-        await page.setUserAgent(HEADERS['User-Agent']);
-        await page.setViewport({ width: 1280, height: 900 });
-        await page.setRequestInterception(true);
-        page.on('request', req => {
-          const type = req.resourceType();
-          if (['image', 'font', 'media'].includes(type)) req.abort();
-          else req.continue();
-        });
-        await page.goto(url, { waitUntil: 'networkidle2', timeout: 45000 });
-        await new Promise(r => setTimeout(r, options.waitFor || 3000));
-        await page.evaluate(async () => {
-          for (let i = 0; i < 15; i++) { window.scrollBy(0, window.innerHeight); await new Promise(r => setTimeout(r, 500)); }
-          window.scrollTo(0, 0);
-        });
-        await new Promise(r => setTimeout(r, 2000));
-        const html = await page.content();
-        const sourceURL = page.url();
-        _lastScrapeEngine = 'puppeteer';
-        return { html, sourceURL };
-      } finally {
-        await page.close();
-      }
-    } catch (err) {
-      console.log(`Puppeteer fallback failed for ${house}: ${err.message}`);
-    }
-  }
-
-  // Tier 3: Plain HTTP (last resort)
-  try {
-    const html = await fetchPage(url);
-    _lastScrapeEngine = 'http';
-    return { html, sourceURL: url };
-  } catch (err) {
-    throw new Error(`All scraping methods failed for ${url}: ${err.message}`);
-  }
-}
-
-async function scrapePageWithFirecrawl(url, house) {
-  const result = await scrapeRenderedPage(url, house);
-  if (!result.html) return [];
-  const pages = [{ page: 1, html: result.html, markdown: result.markdown }];
-
-  // Detect total pages from first page HTML
-  const totalPages = detectTotalPages(result.html, url, house);
-  if (totalPages > 1) {
-    const pageCap = Math.min(totalPages, MAX_PUPPETEER_PAGES);
-    console.log(`[PAGINATION] ${house}: ${totalPages} pages detected, loading up to ${pageCap}`);
-    for (let p = 2; p <= pageCap; p++) {
-      if (fcCreditExhausted) { console.log(`Firecrawl: credits exhausted at page ${p}, stopping`); break; }
-      const pageUrl = buildPageUrl(url, p, house);
-      try {
-        const pageResult = await scrapeRenderedPage(pageUrl, house);
-        if (pageResult.html && pageResult.html.length > 500) {
-          pages.push({ page: p, html: pageResult.html, markdown: pageResult.markdown });
-        } else {
-          console.log(`Firecrawl: page ${p} empty for ${house}, stopping`);
-          break;
-        }
-      } catch (err) {
-        console.log(`Firecrawl: page ${p} failed for ${house}: ${err.message}`);
-        break;
-      }
-    }
-  }
-  return pages;
-}
-
-async function backfillImagesWithFirecrawl(catalogueUrl, lots, house) {
-  try {
-    const result = await scrapeRenderedPage(catalogueUrl, house, {
-      actions: [
-        // Aggressive scrolling to trigger all lazy-load observers
-        { type: 'scroll', direction: 'down' },
-        { type: 'wait', milliseconds: 1500 },
-        { type: 'scroll', direction: 'down' },
-        { type: 'wait', milliseconds: 1500 },
-        { type: 'scroll', direction: 'down' },
-        { type: 'wait', milliseconds: 1500 },
-        { type: 'scroll', direction: 'down' },
-        { type: 'wait', milliseconds: 1000 },
-        // Force lazy-loaded images: swap data-src → src
-        { type: 'executeJavascript', script: `document.querySelectorAll('img[data-src], img[data-lazy-src], img[data-original]').forEach(img => { const src = img.getAttribute('data-src') || img.getAttribute('data-lazy-src') || img.getAttribute('data-original'); if (src && !img.getAttribute('src')?.startsWith('http')) img.setAttribute('src', src); });` },
-        { type: 'wait', milliseconds: 1000 },
-        { type: 'scroll', direction: 'up' },
-        { type: 'scroll', direction: 'up' },
-        { type: 'scroll', direction: 'up' },
-        { type: 'scroll', direction: 'up' },
-      ],
-    });
-    if (!result.html) return 0;
-
-    const dom = new JSDOM(result.html, { url: catalogueUrl });
-    const { document } = dom.window;
-
-    // Build href→image map from the rendered page
-    const skip = /logo|icon|arrow|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|loading|cookie|emoji|maggsandallen\.co\.uk\/images\/|hollismorgan\.co\.uk\/images\/|fssproperty\.co\.uk\/images\//i;
-    const hrefImageMap = {};
-    const links = document.querySelectorAll('a[href]');
-    for (const link of links) {
-      const rawHref = link.getAttribute('href') || '';
-      let absHref;
-      try { absHref = new URL(rawHref, catalogueUrl).href; } catch { absHref = rawHref; }
-      if (!rawHref || rawHref === '#') continue;
-      if (hrefImageMap[rawHref] || hrefImageMap[absHref]) continue;
-
-      let imgSrc = '';
-      let img = link.querySelector('img');
-      if (!img) {
-        let el = link;
-        for (let depth = 0; depth < 5; depth++) {
-          el = el.parentElement;
-          if (!el) break;
-          img = el.querySelector('img');
-          if (img) break;
-        }
-      }
-      if (img) {
-        imgSrc = img.getAttribute('src') || img.getAttribute('data-src')
-          || img.getAttribute('data-lazy-src') || img.getAttribute('data-original')
-          || (img.getAttribute('srcset') ? img.getAttribute('srcset').split(',')[0].trim().split(/\s+/)[0] : '');
-      }
-      if (!imgSrc || imgSrc.startsWith('data:') || imgSrc.length < 10 || skip.test(imgSrc)) continue;
-      hrefImageMap[rawHref] = imgSrc;
-      hrefImageMap[absHref] = imgSrc;
-    }
-
-    // Match images to lots via href→image map
-    let updated = 0;
-    for (const lot of lots) {
-      if (lot.imageUrl) continue;
-      const imgSrc = hrefImageMap[lot.url];
-      if (imgSrc) {
-        let imgUrl = imgSrc;
-        if (!/^https?:\/\//i.test(imgUrl)) {
-          try { imgUrl = new URL(imgUrl, catalogueUrl).href; } catch {}
-        }
-        lot.imageUrl = imgUrl;
-        updated++;
-      }
-    }
-
-    // Fallback: use Firecrawl's images array + JSDOM-extracted images for remaining imageless lots
-    const allPageImages = [];
-    // Collect images from JSDOM parsing
-    const allImgs = document.querySelectorAll('img[src], img[data-src]');
-    const skipFc = /logo|icon|arrow|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|1x1|favicon|banner|advert|maggsandallen\.co\.uk\/images\/|hollismorgan\.co\.uk\/images\/|fssproperty\.co\.uk\/images\//i;
-    for (const img of allImgs) {
-      const src = img.getAttribute('src') || img.getAttribute('data-src') || '';
-      if (src && src.length > 20 && !src.startsWith('data:') && !skipFc.test(src)) {
-        let abs = src;
-        if (!/^https?:\/\//i.test(abs)) { try { abs = new URL(abs, catalogueUrl).href; } catch { continue; } }
-        allPageImages.push(abs);
-      }
-    }
-    // Also add Firecrawl's images array
-    if (result.images && result.images.length > 0) {
-      for (const img of result.images) {
-        if (img && img.length > 20 && /^https?:\/\//i.test(img) && !skipFc.test(img)) allPageImages.push(img);
-      }
-    }
-    // Deduplicate
-    const uniquePageImages = [...new Set(allPageImages)];
-    if (uniquePageImages.length > 0) {
-      const usedImgs = new Set(lots.filter(l => l.imageUrl).map(l => l.imageUrl));
-      const available = uniquePageImages.filter(i => !usedImgs.has(i));
-      // Try lot number matching first
-      for (const lot of lots) {
-        if (lot.imageUrl) continue;
-        const lotNum = String(lot.lot || lot.lotNumber || '').replace(/\D/g, '');
-        if (lotNum) {
-          const match = available.find(img => !usedImgs.has(img) && (
-            img.includes(`/${lotNum}/`) || img.includes(`/${lotNum}.`) || img.includes(`-${lotNum}.`)
-            || img.includes(`_${lotNum}.`) || img.includes(`lot${lotNum}`)
-          ));
-          if (match) { lot.imageUrl = match; usedImgs.add(match); updated++; }
-        }
-      }
-      // Position-based matching for remaining
-      const stillMissing = lots.filter(l => !l.imageUrl);
-      const unusedImgs = available.filter(i => !usedImgs.has(i));
-      if (stillMissing.length > 0 && unusedImgs.length >= stillMissing.length * 0.3) {
-        let idx = 0;
-        for (const lot of stillMissing) {
-          if (idx >= unusedImgs.length) break;
-          lot.imageUrl = unusedImgs[idx++];
-          updated++;
-        }
-      }
-    }
-    // Image dedup guard — same as extractWithJSDOM harness
-    if (lots.length >= 3) {
-      const imgCounts = {};
-      for (const lot of lots) {
-        if (lot.imageUrl) imgCounts[lot.imageUrl] = (imgCounts[lot.imageUrl] || 0) + 1;
-      }
-      for (const [img, count] of Object.entries(imgCounts)) {
-        if (count > lots.length * 0.5) {
-          console.log(`[IMG-BACKFILL] ${house}: stripped duplicate image on ${count}/${lots.length} lots: ${img.substring(0, 80)}`);
-          for (const lot of lots) {
-            if (lot.imageUrl === img) { lot.imageUrl = null; updated--; }
-          }
-        }
-      }
-      if (updated < 0) updated = 0;
-    }
-    dom.window.close();
-    console.log(`Firecrawl image backfill for ${house}: ${updated}/${lots.length} lots got images`);
-    return updated;
-  } catch (err) {
-    log.warn('Firecrawl image backfill error', { house, catalogueUrl, error: err.message });
-    return 0;
-  }
-}
-
-// callGemini() removed — all AI calls now route through callAI() from lib/ai-provider.js
-
-// One-line structural hints for known houses — injected into Haiku prompts
-// to compensate for smaller model capacity. Each describes the HTML/JSON shape.
-const HOUSE_EXTRACTION_HINTS = {
-  // Static HTML / SKIP_PUPPETEER houses (always reach Claude)
-  allsop:        'Allsop API returns JSON with properties array. Each has address, guide_price, lot_number, slug, features, auction_type fields.',
-  knightfrank:   'EIG auction platform. Lots in cards/rows with lot number, address, guide price, and detail links under knightfrankauctions.com.',
-  paulfosh:      'EIG online auction platform (paulfosh.eigonlineauctions.com). Lot panels with lot number, address, guide price, images, and detail links.',
-  cottons:       'EIG embed auction platform. Lot containers with lot number, address, guide/sold price, images, and lot detail links with lid= parameter.',
-  dedmangray:    'EIG embed platform (tenant 33). Table-based layout with table.lotdetails, td.lotnum, td.lottag (address), td.lotimagecol img, and Guide Price text.',
-  barnettross:   'PHP table layout. table.auction-archive-table with tr rows: td (lot number), td.address, td (location), td.guide (price). Row onclick has /property.php?id= URL.',
-  philliparnold: 'Auction catalogue cards with lot number, address, guide price, property type, and detail URLs under philliparnoldauctions.co.uk.',
-  bidx1:         'Online auction platform. Lot cards with lot number, address, guide price, property type, closing date, and detail links under bidx1.com.',
-  edwardmellor:  'Auction lots listed with lot number, full address, guide price, tenure, bedrooms, and detail page links.',
-  bradleyhall:   'Property cards on auction.bradleyhall.co.uk with lot number, address, guide price, and search result links.',
-  connectuk:     'https://connectukgroup.co.uk/auctions/',
-  auctionestates:'Lot cards with lot number, address, guide price, property type, tenure, and detail page URLs.',
-  landwood:      'EIG OAS platform (tenant 188) in LIST view. Lot panels (.lot-panel) with h3.list-address, .list-guideprice strong, img.list-image, and /lot/details/ links.',
-  loveitts:      'Auction catalogue with lot number, address, guide price, property description, tenure, and links.',
-  hunters:       'Bamboo Auctions platform (hunters.bambooauctions.com). React SPA with property cards showing title, address, guide price, bedrooms, property type, and detail links.',
-  // preferPuppeteer houses (Claude fallback when DOM extraction fails)
-  network:            'Network Auctions. EIG platform. Lot divs with class current-lots-single, lot-number span, guide-price paragraph, and detail links.',
-  pattinson:          'Pattinson React SPA. Property cards with lot number, address, starting/current bid price, and auction detail links.',
-  savills:            'Savills auctions. Lot cards with lot number, address, guide price, tenure, property type, and detail links on auctions.savills.co.uk.',
-  sdl:                'BTG Eddisons Property Auctions (formerly SDL). Tailwind property-card divs with lot number, address, guide price, auction type/date, and links to /properties/ detail pages.',
-  bondwolfe:          'Bond Wolfe auctions. Lot listings with lot number, address, guide price, property type, tenure, and detail page links.',
-  barnardmarcus:      'Barnard Marcus auctions. Property cards with lot number, address, guide price, property type, and detail links.',
-  auctionhouselondon: 'Auction House London. Lot listings with lot number, address, guide price, property type, tenure, and detail links.',
-  cliveemson:         'Clive Emson land and property auctions. Lots with lot number, address, guide price, property type, acreage, tenure, and links.',
-  strettons:          'Strettons auctions. Commercial/residential lot cards with lot number, address, guide price, property type, and detail links.',
-  acuitus:            'Acuitus commercial auctions. Lot listings with lot number, address, guide price, yield, tenant info, and detail links.',
-  hollismorgan:       'Hollis Morgan auctions. Lot cards with lot number, address, guide price, property type, tenure, and detail links.',
-  maggsandallen:      'Maggs & Allen auctions. Lot listings with lot number, address, guide price, property type, and detail page URLs.',
-  mchughandco:        'EIG OAS platform. Lot panels (.lot-panel) with h4.grid-address, .grid-guideprice b, img.grid-img, and /lot/details/ links. Large catalogue (200+ lots).',
-  auctionhouse:       'Auction House UK. Lot listings with lot number, address, guide price, property type, auction date, and detail links.',
-  probateauction:     'Probate Auction. WordPress site. Lots in div.property-list-card containers within a div.property-list-grid. Each card has a Swiper image gallery, lot number, address, guide price (e.g. £280,000+), description paragraph, and a "Property Details" link.',
-  countrywide:        'Countrywide/Sutton Kersh. Bootstrap cards div.property-gallery with h2.property-gallery__title (guide price), h3.property-gallery__address (full address), and image in div.property-gallery__image.',
-  venmore:            'Venmore Auctions Liverpool. Cards in div.property-strip-block with lot number, address in span.f-body-copy, guide price in span.p-text-green, and detail links to Property-Details?property_reference=X.',
-  tcpa:               'Town & Country Property Auctions. EIG platform. Cards in div.lot-panel with span.lot-address, span.price, time.text-success for auction end, and EIG CDN images.',
-  futureauctions:     'Future Property Auctions. ASP site. Cards are a[href*="property_details.asp"] with lot numbers, addresses with postcodes, opening bid prices, and images from /upload/ directory.',
-  kivells:            'Kivells Devon/Cornwall. Tailwind site. Cards in div.bg-listing-item-background with h2 address, h3 price, and images from /media/Properties/.',
-  firstforauctions:   'First For Auctions. EIG platform. Cards in div.lot-panel with h4.grid-address, guide price in div.grid-guideprice b, and EIG CDN images.',
-  harmanhealy:        'Harman Healy. EIG platform. Cards with [data-lot-item-toggle] or lot-panel divs, [data-address-searchable] for address, guide price in text.',
-  seelauctions:       'Seel & Co Cardiff. EIG platform. Cards are a[href*="/lot/details/"] with h4 address, Guide Price text, and EIG CDN images.',
-  robinsonhall:       'Robinson & Hall. WordPress/Elementor + EIG. Cards in article.ae-post-item with a.ae-element-custom-field (address), .guide-price (price), and EIG CDN images.',
-  astleys:            'Astleys Swansea. EIG platform (astleys.eigonlineauctions.com). Standard EIG lot-panel cards with h3.list-address, guide price in list-guideprice, and EIG CDN images.',
-  henrysykes:         'Henry Sykes Auctions. EIG platform (onlineauctions.henrysykes.co.uk). Standard EIG lot-panel cards with h3.list-address, guide price in list-guideprice, and EIG CDN images.',
-  clarkesimpson:      'Clarke & Simpson. EIG platform (clarke-simpson.eigonlineauctions.com). Standard EIG lot-panel cards with h3.list-address, guide price in list-guideprice, and EIG CDN images.',
-  durrants:           'Durrants Norfolk/Suffolk. EIG platform (auctions.durrants.com). Standard EIG lot-panel cards with h3.list-address, guide price in list-guideprice, and EIG CDN images.',
-  dawsons:            'Dawsons South Wales. EIG platform (dawsonsproperty.co.uk). Standard EIG lot-panel cards with h3.list-address, guide price in list-guideprice, and EIG CDN images.',
-  goldings:           'Goldings Ipswich. EIG platform (goldingsauctions.co.uk). Standard EIG lot-panel cards with h3.list-address, guide price in list-guideprice, and EIG CDN images.',
-  auctionhousescotland: 'Auction House Scotland. Auction House UK network (auctionhouse.co.uk/scotland). Cards in div.lot-search-result with p.grid-address, guide price in div.grid-view-guide, img.lot-image.',
-  austingray:         'Austin Gray / Auction House Sussex & Hampshire. Auction House UK network (auctionhouse.co.uk/sussexandhampshire). Cards in div.lot-search-result with p.grid-address, guide price in div.grid-view-guide, img.lot-image.',
-  // ── Batch 4 (March 2026) ──
-  auctionhousedevon:       'Auction House Devon & Cornwall. Auction House UK network (auctionhouse.co.uk/devonandcornwall). Cards in div.lot-search-result with p.grid-address, guide price in div.grid-view-guide, img.lot-image.',
-  auctionhouseeastmidlands:'Auction House East Midlands. Auction House UK network (auctionhouse.co.uk/eastmidlands). Cards in div.lot-search-result with p.grid-address, guide price in div.grid-view-guide, img.lot-image.',
-  auctionhousewestmidlands:'Auction House West Midlands. Auction House UK network (auctionhouse.co.uk/westmidlands). Cards in div.lot-search-result with p.grid-address, guide price in div.grid-view-guide, img.lot-image.',
-  auctionhouseessex:       'Auction House Essex. Auction House UK network (auctionhouse.co.uk/essex). Cards in div.lot-search-result with p.grid-address, guide price in div.grid-view-guide, img.lot-image.',
-  auctionhousemanchester:  'Auction House Manchester. Auction House UK network (auctionhouse.co.uk/manchester). Cards in div.lot-search-result with p.grid-address, guide price in div.grid-view-guide, img.lot-image.',
-  romanway:                'Roman Way Auctions. EIG platform (romanway.eigonlineauctions.com). Standard EIG lot-panel cards with h3.list-address, guide price in list-guideprice, and EIG CDN images.',
-  hammerprice:             'Hammer Price Auctions. EIG platform (hammerprice.eigonlineauctions.com). Standard EIG lot-panel cards with h3.list-address, guide price in list-guideprice, and EIG CDN images.',
-  // ── Regional/independent houses (batch 6, March 2026) ──
-  underthehammer:          'Under The Hammer. Next.js React SPA (underthehammer.com). Property cards at /for-auction/properties with title, address, guide price, bedrooms, property type, images on blob.core.windows.net, and detail links to /for-auction/slug.',
-  lsk:                     'Lacy Scott & Knight Suffolk. Bamboo Auctions platform (lacyscottandknight.bambooauctions.com). React SPA with property cards showing title, address, guide price, bedrooms, property type, and detail links. Same structure as Hunters.',
-  // ── GOTO Properties platform (EIG-based) ──
-  purplebricksgoto:        'Purplebricks via GOTO Properties. EIG platform (purplebricks.gotoproperties.co.uk). Standard EIG lot-panel cards with h3.list-address, guide price in list-guideprice, img.list-image, and /lot/details/ links. Paginated search with pagesize=48.',
-  // ── Verified EIG subdomains (April 2026) ──
-  groundrentauctions:      'Ground Rent Auctions. EIG platform (groundrentauctions.eigonlineauctions.com). Specialist ground rent lots. Standard EIG lot-panel cards.',
-  benjaminstevens:         'Benjamin Stevens Auctions. EIG platform (online.benjaminstevensauctions.co.uk). Standard EIG lot-panel cards.',
-  // ── New houses from own websites (April 2026) ──
-  auctionhammermidlands:   'Auction Hammer Midlands. WordPress/Elementor site. Lot cards with LOT number heading (h4), address, guide price (£X plus fees), bedrooms/bathrooms/receptions counts, and property images.',
-  sharpesauctions:         'Sharpes Auctions Bradford. PHP site. Lot cards with class products_table_items_lotnumber for lot number, guide price (£X plus fees), property images in products_table_thumb, and address links.',
-  jjmorris:                'JJ Morris Pembrokeshire. Property Jungle platform. Card-based layout with address, guide price, bedrooms/bathrooms, property images with lazy loading, and More Details links.',
-  rendells:                'Rendells Devon. Bamboo Auctions platform (rendells.bambooauctions.com). Next.js SPA with __NEXT_DATA__ JSON. Property cards with title, address, guide price, image, auction type. Same structure as Hunters.',
-  pearsonferrier:          'Pearson Ferrier Manchester. WordPress + PropertyHive plugin. Lot cards in .propertyhive wrapper with .property class, .property__address, .property__price, .property__rooms, .flag-lot (lot number badge).',
-};
-
-// getExtractionModel() removed — tier selection now in callAI() callsites
-
+// scrapeRenderedPage, scrapePageWithFirecrawl, backfillImagesWithFirecrawl,
+// HOUSE_EXTRACTION_HINTS — all moved to lib/scraper.js
 // HOUSE_ROOTS, PUPPETEER_IMAGE_HOUSES, detectAuctionHouse, HOUSE_DISPLAY_NAMES, getHouseDisplayName, rewriteUrl
 // now imported from lib/houses.js
 
@@ -3120,15 +2676,15 @@ app.post('/api/analyse', async (req, res) => {
       created_at: new Date().toISOString(),
       expires_at: expiresAt,
       last_scraped_at: new Date().toISOString(),
-      scraped_with: _lastScrapeEngine,
+      scraped_with: getLastScrapeEngine(),
     extracted_with: getLastExtractorUsed(),
-    ai_tier: _lastAITier,
+    ai_tier: getLastAITier(),
     }, { onConflict: 'url' });
 
     // ── Upsert individual lots to lots table (single source of truth) ──
     normaliseLotStatuses(enrichedAnalysed); // Normalize before write — canonical statuses only
     await upsertToLotsTable(enrichedAnalysed, house, url, {
-      scrapedWith: _lastScrapeEngine,
+      scrapedWith: getLastScrapeEngine(),
       extractedWith: getLastExtractorUsed(),
     });
 
@@ -4460,7 +4016,7 @@ app.post('/api/admin/backfill-images', async (req, res) => {
       const stillNoImages = lots.filter(l => !l.imageUrl).length;
       if (stillNoImages > 0 && PUPPETEER_IMAGE_HOUSES.has(entry.house)) {
         // Pass 1: Firecrawl
-        if (FIRECRAWL_API_KEY && !fcCreditExhausted) {
+        if (FIRECRAWL_API_KEY && !isFcCreditExhausted()) {
           gained += await backfillImagesWithFirecrawl(entry.url, lots, entry.house);
         }
         // Pass 2: Puppeteer for remaining
@@ -4695,7 +4251,7 @@ app.post('/api/admin/test-extractor', rateLimit(60000, 5), async (req, res) => {
       lotsWithUrls: hasUrls,
       sampleLots: lots ? lots.slice(0, 3) : [],
       selectorMatches,
-      scrapedWith: FIRECRAWL_API_KEY && !fcCreditExhausted && !FIRECRAWL_SKIP.has(house) ? 'firecrawl' : (puppeteer ? 'puppeteer' : 'http'),
+      scrapedWith: FIRECRAWL_API_KEY && !isFcCreditExhausted() && !FIRECRAWL_SKIP.has(house) ? 'firecrawl' : (puppeteer ? 'puppeteer' : 'http'),
     });
   } catch (err) {
     res.status(500).json({ error: err.message, house });
@@ -5033,10 +4589,10 @@ app.get('/api/admin/system-health', async (req, res) => {
     // 4. Pipeline health
     const pipeline = {
       firecrawl: {
-        status: fcCreditExhausted ? 'exhausted' : fcTemporarilyDown ? 'down' : 'ok',
-        creditsUsed: fcCreditsUsed,
-        creditBudget: FIRECRAWL_MONTHLY_BUDGET,
-        exhausted: fcCreditExhausted,
+        status: isFcCreditExhausted() ? 'exhausted' : isFcTemporarilyDown() ? 'down' : 'ok',
+        creditsUsed: getFcCreditsUsed(),
+        creditBudget: getFirecrawlStatus().monthlyBudget,
+        exhausted: isFcCreditExhausted(),
       },
       gemini: {
         status: creditExhausted ? 'exhausted' : 'ok',
@@ -5154,13 +4710,7 @@ app.get('/api/cost-monitor', async (req, res) => {
       },
       firecrawl: {
         enabled: !!FIRECRAWL_API_KEY,
-        creditsUsed: fcCreditsUsed,
-        creditExhausted: fcCreditExhausted,
-        temporarilyDown: fcTemporarilyDown,
-        fallbackCount: fcFallbackCount,
-        errorCount: fcErrorCount,
-        requestCount: fcRequestCount,
-        monthlyBudget: FIRECRAWL_MONTHLY_BUDGET,
+        ...getFirecrawlStatus(),
         skipHouses: [...FIRECRAWL_SKIP],
       },
       puppeteerSkipList: SKIP_PUPPETEER_LIST,
@@ -5250,1322 +4800,12 @@ app.get('/api/quality-report', async (req, res) => {
   }
 });
 
-// ═══════════════════════════════════════════════════════════════
-// SCRAPING
-// ═══════════════════════════════════════════════════════════════
-async function fetchPage(url) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), TIMEOUT);
-  try {
-    const resp = await fetch(url, { headers: HEADERS, signal: controller.signal });
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    return await resp.text();
-  } finally {
-    clearTimeout(timeout);
-  }
-}
 
-async function scrapeAllPages(baseUrl, house) {
-  const pages = [];
-  const html1 = await fetchPage(baseUrl);
-  pages.push({ page: 1, html: html1 });
-  const totalPages = detectTotalPages(html1, baseUrl, house);
-  const pageCap = Math.min(totalPages, MAX_PAGES);
-  for (let pg = 2; pg <= pageCap; pg++) {
-    const pageUrl = buildPageUrl(baseUrl, pg, house);
-    try {
-      const html = await fetchPage(pageUrl);
-      if (html.length > 1000) { pages.push({ page: pg, html }); }
-      else { break; }
-      await new Promise(r => setTimeout(r, 300));
-    } catch (e) { break; }
-  }
-  if (totalPages > MAX_PAGES) console.log(`${house} pagination cap reached at ${MAX_PAGES} pages`);
-  return pages;
-}
-
-// Allsop JSON API pagination
-async function scrapeAllsopApi(baseUrl) {
-  const pages = [];
-  for (let pg = 1; pg <= MAX_PAGES; pg++) {
-    const pageUrl = baseUrl.replace(/page=\d+/, `page=${pg}`);
-    try {
-      const html = await fetchPage(pageUrl);
-      if (html.length < 100 || html.includes('"data":[]') || html.includes('"template":"404"')) {
-        console.log(`Allsop API: page ${pg} empty, stopping`);
-        break;
-      }
-      pages.push({ page: pg, html });
-      console.log(`Allsop API: got ${html.length} chars from page ${pg}`);
-      await new Promise(r => setTimeout(r, 300));
-    } catch (e) {
-      console.log(`Allsop API: page ${pg} failed: ${e.message}`);
-      break;
-    }
-  }
-  return pages;
-}
-
-// Parse Allsop JSON API pages directly into lot objects (bypasses Gemini entirely)
-function extractAllsopLotsFromJson(pages) {
-  setLastExtractorUsed('api');
-  const lots = [];
-  const seen = new Set();
-  for (const p of pages) {
-    try {
-      const json = JSON.parse(p.html);
-      const results = json?.data?.results || json?.results || [];
-      for (const item of results) {
-        const ref = item.reference || '';
-        if (seen.has(ref) && ref) continue;
-        if (ref) seen.add(ref);
-
-        // Address — allsop_address is most complete, fall back to address1+postcode
-        const address = (item.allsop_address ||
-          [item.address1, item.address2, item.address3, item.county, item.postcode].filter(Boolean).join(', ')
-        ).trim();
-        if (!address || address.length < 3) continue;
-
-        // Lot number — API doesn't provide lot numbers, use positional
-        const lotNum = lots.length + 1;
-
-        // Price — numeric string like "19117000.00" or null
-        let price = null;
-        const priceText = item.price || item.price_description || '';
-        const pm = String(priceText).replace(/,/g, '').match(/(\d+)/);
-        if (pm) price = parseInt(pm[1]);
-
-        // URL — construct from reference
-        const slug = (address.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')).substring(0, 60);
-        const url = ref ? `https://www.allsop.co.uk/lot-overview/${slug}/${ref}`
-                       : `https://www.allsop.co.uk/find-a-property/`;
-
-        // Image — S3 bucket pattern
-        let imageUrl = '';
-        const imgId = item.image_file_id;
-        if (imgId) {
-          imageUrl = `https://as-prod-bau-object-storage.s3.eu-west-2.amazonaws.com/image_cache/${imgId}---auto--.jpg`;
-        }
-
-        // Bullets — property types, status, byline
-        const bullets = [];
-        if (item.property_types && item.property_types.length > 0) {
-          bullets.push(item.property_types.join(', '));
-        }
-        if (item.sales_status && item.sales_status !== 'For Sale') {
-          bullets.push(item.sales_status.toUpperCase());
-        }
-        if (item.price_description) bullets.push(item.price_description);
-        if (item.department) bullets.push(item.department === 'RES' ? 'Residential' : item.department === 'COM' ? 'Commercial' : item.department);
-
-        lots.push({
-          lot: lotNum,
-          address,
-          price,
-          url,
-          imageUrl: imageUrl || undefined,
-          bullets,
-          reference: ref,
-          allsopPropertyId: item.allsop_property_id || item.property_id,
-          propType: (item.property_types || [])[0] || undefined,
-        });
-      }
-    } catch (e) {
-      console.log(`Allsop JSON parse error on page ${p.page}: ${e.message}`);
-    }
-  }
-  console.log(`Allsop direct JSON extraction: ${lots.length} lots from ${pages.length} pages`);
-  return lots;
-}
-
-// Enrich Allsop lots with reference and image data from raw API JSON
-function enrichAllsopLots(lots, pages) {
-  // Parse all API results from raw JSON pages
-  const apiItems = [];
-  for (const p of pages) {
-    try {
-      const json = JSON.parse(p.html);
-      const results = json?.data?.results || [];
-      apiItems.push(...results);
-    } catch {}
-  }
-  if (apiItems.length === 0) return;
-
-  // Build lookup by postcode (most reliable match field)
-  const byPostcode = {};
-  for (const item of apiItems) {
-    const pc = (item.postcode || '').trim().toUpperCase();
-    if (pc) {
-      if (!byPostcode[pc]) byPostcode[pc] = [];
-      byPostcode[pc].push(item);
-    }
-  }
-
-  // Track which API items have been matched to prevent double-matching
-  const usedApiIds = new Set();
-
-  let matched = 0;
-  for (const lot of lots) {
-    let match = null;
-
-    // Strategy 1: Match by postcode (most reliable)
-    const pcMatch = (lot.address || '').match(/[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}/i);
-    if (pcMatch) {
-      // Normalise postcode: "EC4A3DQ" -> "EC4A 3DQ"
-      const rawPc = pcMatch[0].toUpperCase().replace(/\s+/g, '');
-      const lotPc = rawPc.slice(0, -3) + ' ' + rawPc.slice(-3);
-      const candidates = (byPostcode[lotPc] || byPostcode[rawPc] || []).filter(c => !usedApiIds.has(c.property_id));
-      // If only one property at this postcode, it's a match
-      match = candidates.length === 1 ? candidates[0] : null;
-      // If multiple, try matching by address text
-      if (!match && candidates.length > 1) {
-        const lotAddr = (lot.address || '').toLowerCase();
-        match = candidates.find(c => {
-          const apiAddr = (c.allsop_address || c.address1 || '').toLowerCase();
-          return lotAddr.includes(apiAddr.split(',')[0]) || apiAddr.includes(lotAddr.split(',')[0]);
-        });
-      }
-    }
-
-    // Strategy 2: Fuzzy address match across ALL API items (for lots without postcodes)
-    if (!match) {
-      const lotAddr = (lot.address || '').toLowerCase().replace(/[,.\s]+/g, ' ').trim();
-      if (lotAddr.length > 5) {
-        // Extract street number + name for matching
-        const streetMatch = lotAddr.match(/(\d+[a-z]?)\s+(\w+)/);
-        if (streetMatch) {
-          const streetNum = streetMatch[1];
-          const streetWord = streetMatch[2];
-          match = apiItems.find(c => {
-            if (usedApiIds.has(c.property_id)) return false;
-            const apiAddr = (c.allsop_address || c.address1 || '').toLowerCase();
-            return apiAddr.includes(streetNum) && apiAddr.includes(streetWord);
-          });
-        }
-        // Try matching by first significant word in both addresses
-        if (!match) {
-          match = apiItems.find(c => {
-            if (usedApiIds.has(c.property_id)) return false;
-            const apiAddr = (c.allsop_address || c.address1 || '').toLowerCase().replace(/[,.\s]+/g, ' ').trim();
-            // Both addresses must share at least the first meaningful segment
-            const lotFirst = lotAddr.split(' ').filter(w => w.length > 2).slice(0, 3).join(' ');
-            const apiFirst = apiAddr.split(' ').filter(w => w.length > 2).slice(0, 3).join(' ');
-            return lotFirst.length > 5 && apiFirst.length > 5 &&
-              (lotAddr.includes(apiFirst) || apiAddr.includes(lotFirst));
-          });
-        }
-      }
-    }
-
-    if (match) {
-      usedApiIds.add(match.property_id);
-      lot.reference = match.reference;
-      lot.allsopPropertyId = match.allsop_property_id;
-      lot.imageFileId = match.image_file_id;
-      // Construct image URL from image_file_id
-      if (match.image_file_id && !lot.imageUrl) {
-        lot.imageUrl = `https://as-prod-bau-object-storage.s3.eu-west-2.amazonaws.com/image_cache/${match.image_file_id}---auto--.jpg`;
-      }
-      matched++;
-    }
-  }
-  console.log(`Allsop enrichment: matched ${matched}/${lots.length} lots with API data`);
-}
-
-function detectTotalPages(html, url, house) {
-  const pageMatches = [...html.matchAll(/page[=-](\d+)/gi)];
-  if (pageMatches.length > 0) return Math.max(...pageMatches.map(m => parseInt(m[1])));
-  const ofMatch = html.match(/page\s+\d+\s+of\s+(\d+)/i);
-  if (ofMatch) return parseInt(ofMatch[1]);
-  const numMatches = [...html.matchAll(/<a[^>]*>\s*(\d{1,3})\s*<\/a>/g)];
-  const nums = numMatches.map(m => parseInt(m[1])).filter(n => n >= 2 && n <= 100);
-  if (nums.length) return Math.max(...nums);
-  return 1;
-}
-
-function buildPageUrl(baseUrl, page, house) {
-  const clean = baseUrl.replace(/\/page[-=]\d+/i, '').replace(/[?&]page=\d+/i, '');
-  switch (house) {
-    case 'savills': return `${clean}/page-${page}`;
-    case 'allsop': return `${clean}?page=${page}`;
-    case 'sdl': return clean.includes('?') ? `${clean}&page=${page}` : `${clean}?page=${page}`;
-    case 'pugh': return clean.includes('?') ? `${clean}&page=${page}` : `${clean}?page=${page}`;
-    case 'network': return `${clean}?page=${page}`;
-    case 'bondwolfe': return clean.includes('?') ? `${clean}&page=${page}` : `${clean}?page=${page}`;
-    case 'barnardmarcus': return clean.includes('?') ? `${clean}&page=${page}` : `${clean}?page=${page}`;
-    case 'acuitus': return clean.includes('?') ? `${clean}&page=${page}` : `${clean}?page=${page}`;
-    // ── New houses (pagination) ──
-    case 'agentsproperty': return `${clean.replace(/\/page\/\d+\/?/, '')}/page/${page}/`;
-    case 'suttonkersh': {
-      const skClean = clean.replace(/[?&]start=\d+/i, '');
-      const offset = (page - 1) * 16;
-      return skClean.includes('?') ? `${skClean}&start=${offset}` : `${skClean}?start=${offset}`;
-    }
-    case 'buttersjohnbee': return clean.includes('?') ? `${clean}&page=${page}` : `${clean}?page=${page}`;
-    case 'brownco': return clean.includes('?') ? `${clean}&page=${page}` : `${clean}?page=${page}`;
-    case 'purplebricksgoto': return clean.includes('?') ? `${clean}&page=${page}` : `${clean}?page=${page}`;
-    case 'iamsold': return clean.includes('?') ? `${clean}&page=${page}` : `${clean}?page=${page}`;
-    case 'andrewcraig': return clean.includes('?') ? `${clean}&page=${page}` : `${clean}?page=${page}`;
-    default:
-      if (baseUrl.includes('/page-')) return `${clean}/page-${page}`;
-      return clean.includes('?') ? `${clean}&page=${page}` : `${clean}?page=${page}`;
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════
-// PUPPETEER SCRAPING (for JS-rendered sites)
-// ═══════════════════════════════════════════════════════════════
-let browserInstance = null;
-let browserUseCount = 0;
-const BROWSER_MAX_USES = 10;
-const MAX_CONCURRENT_PAGES = 3;
-let activePagesCount = 0;
-
-async function acquirePage() {
-  if (!puppeteer) throw new Error('Puppeteer not available');
-  // Wait for a slot if at max concurrency
-  while (activePagesCount >= MAX_CONCURRENT_PAGES) {
-    await new Promise(r => setTimeout(r, 500));
-  }
-  activePagesCount++;
-  let browser, page;
-  try {
-    browser = await getBrowser();
-    page = await browser.newPage();
-  } catch (err) {
-    activePagesCount = Math.max(0, activePagesCount - 1);
-    throw new Error(`Puppeteer page creation failed: ${err.message}`);
-  }
-  const origClose = page.close.bind(page);
-  page.close = async () => { activePagesCount = Math.max(0, activePagesCount - 1); return origClose(); };
-  return page;
-}
-
-async function getBrowser() {
-  if (!puppeteer) throw new Error('Puppeteer not available');
-  // Restart browser after N uses to prevent memory bloat
-  if (browserInstance && browserUseCount >= BROWSER_MAX_USES) {
-    console.log(`Puppeteer: recycling browser after ${browserUseCount} uses`);
-    try { await browserInstance.close(); } catch (e) { /* ignore */ }
-    browserInstance = null;
-    browserUseCount = 0;
-  }
-  if (browserInstance && browserInstance.isConnected()) {
-    browserUseCount++;
-    return browserInstance;
-  }
-  browserInstance = await puppeteer.launch({
-    headless: 'new',
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-gpu',
-      '--single-process',
-      '--no-zygote',
-    ],
-  });
-  browserUseCount = 1;
-  return browserInstance;
-}
-
-async function scrapeWithPuppeteer(url, house) {
-  const pages = [];
-  try {
-    const page = await acquirePage();
-    await page.setUserAgent(HEADERS['User-Agent']);
-    await page.setViewport({ width: 1280, height: 900 });
-
-    // Block images/fonts/media to speed up loading
-    await page.setRequestInterception(true);
-    page.on('request', req => {
-      const type = req.resourceType();
-      if (['image', 'font', 'media', 'stylesheet'].includes(type)) req.abort();
-      else req.continue();
-    });
-
-    console.log(`Puppeteer: loading ${url}`);
-    await page.goto(url, { waitUntil: 'networkidle2', timeout: 45000 });
-
-    // Wait a bit more for dynamic content to render
-    await new Promise(r => setTimeout(r, 3000));
-
-    // Scroll down to trigger lazy loading
-    await page.evaluate(async () => {
-      for (let i = 0; i < 5; i++) {
-        window.scrollBy(0, window.innerHeight);
-        await new Promise(r => setTimeout(r, 800));
-      }
-      window.scrollTo(0, 0);
-    });
-
-    await new Promise(r => setTimeout(r, 2000));
-
-    const html = await page.content();
-    pages.push({ page: 1, html });
-    console.log(`Puppeteer: got ${html.length} chars from page 1`);
-
-    // Check for pagination and scrape more pages
-    const totalPages = detectTotalPages(html, url, house);
-    const puppeteerPageCap = Math.min(totalPages, MAX_PUPPETEER_PAGES);
-    for (let pg = 2; pg <= puppeteerPageCap; pg++) {
-      try {
-        const pageUrl = buildPageUrl(url, pg, house);
-        await page.goto(pageUrl, { waitUntil: 'networkidle2', timeout: 30000 });
-        await new Promise(r => setTimeout(r, 3000));
-
-        // Scroll to trigger lazy loading
-        await page.evaluate(async () => {
-          for (let i = 0; i < 3; i++) {
-            window.scrollBy(0, window.innerHeight);
-            await new Promise(r => setTimeout(r, 600));
-          }
-        });
-        await new Promise(r => setTimeout(r, 1500));
-
-        const pgHtml = await page.content();
-        if (pgHtml.length > 2000) {
-          pages.push({ page: pg, html: pgHtml });
-          console.log(`Puppeteer: got ${pgHtml.length} chars from page ${pg}`);
-        } else { break; }
-      } catch (e) {
-        console.log(`Puppeteer: page ${pg} failed: ${e.message}`);
-        break;
-      }
-    }
-    if (totalPages > MAX_PUPPETEER_PAGES) console.log(`${house} pagination cap reached at ${MAX_PUPPETEER_PAGES} pages`);
-
-    await page.close();
-  } catch (err) {
-    console.error(`Puppeteer scrape failed: ${err.message}`);
-  }
-  return pages;
-}
-
-// ═══════════════════════════════════════════════════════════════
-// AI EXTRACTION (Gemini)
-// ═══════════════════════════════════════════════════════════════
-async function extractLotsWithAI(pages, house, onProgress, catalogueUrl) {
-  setLastExtractorUsed('gemini');
-  const extractionTier = house === 'unknown' ? 'capable' : 'fast';
-  _lastAITier = extractionTier;
-  const allLots = [];
-  const seenLots = new Set();
-  const batchSize = 3;
-  for (let i = 0; i < pages.length; i += batchSize) {
-    if (creditExhausted) { console.log('Skipping remaining batches — API rate limited'); break; }
-    if (allLots.length >= MAX_LOTS_PER_SCRAPE) { console.log(`${house} lots cap reached at ${MAX_LOTS_PER_SCRAPE}`); break; }
-    const batch = pages.slice(i, i + batchSize);
-    // Prefer markdown for AI extraction when available (Gemini handles it natively)
-    const strippedBatch = batch.map(p => ({
-      page: p.page,
-      content: (p.markdown && p.markdown.length > 200) ? p.markdown : stripHtml(p.html),
-      usedMarkdown: !!(p.markdown && p.markdown.length > 200)
-    }));
-    const totalStrippedLen = strippedBatch.reduce((sum, p) => sum + p.content.length, 0);
-    const mdCount = strippedBatch.filter(p => p.usedMarkdown).length;
-    const hint = HOUSE_EXTRACTION_HINTS[house];
-    console.log(`Batch ${Math.floor(i/batchSize)+1}: ${strippedBatch.length} page(s), ${totalStrippedLen} chars${mdCount > 0 ? ` (${mdCount} from markdown)` : ' after stripping'}, tier: ${extractionTier}`);
-    const prompt = `You are extracting property auction lot data from a UK auction house catalogue (${house}).
-${hint ? `\nStructure hint: ${hint}\n` : ''}
-Below are ${strippedBatch.length} page(s) of catalogue content. Extract EVERY auction lot you find.
-
-For each lot, return a JSON object with these fields:
-- lot: number (the lot number)
-- address: string (full address including postcode)
-- price: number or null (guide price in pounds, null if TBA/not stated)
-- url: string (detail page URL if found, empty string if not)
-- tenure: string or null — one of "Freehold", "Leasehold", "Share of Freehold", or null. Look for: freehold, leasehold, share of freehold, flying freehold, long leasehold, years remaining/unexpired. If not explicitly stated, infer from context (e.g. "125 year lease" = Leasehold, ground rent mentioned = Leasehold). Only return null if there is genuinely no indication.
-- beds: number or null — number of bedrooms. Extract from descriptions like "3 bed", "three bedroom", "studio" (=0). For multi-unit properties, total beds across all units. null if not stated.
-- status: string — one of "available", "sold", "unsold", "stc", "withdrawn". Default "available" if not stated. "unsold" means the auction took place but the lot did not sell (no bids met the reserve). Look for: SOLD, STC, Sale Agreed, Withdrawn, Under Offer, Prior to Auction, UNSOLD, Not Sold, Passed, No Sale.
-- bullets: array of strings (key features/description points - condition, sq ft, special circumstances etc)
-
-Return ONLY a JSON array of lot objects, no other text. If a page has no lots, return an empty array.
-
-Important:
-- Extract the COMPLETE address including postcode
-- Guide prices may be shown as "Guide Price £X" or "Guide £X" or just "£X"
-- Tenure is a PRIORITY field — always look for it in the description, legal pack summary, and property details
-- Beds is a PRIORITY field — always look for bedroom count in the title, description, or property details. "2/3 bed" should return 3 (maximum). "Studio" = 0.
-- Status field: check for sold/STC/withdrawn markers, badges, labels, or overlays on the lot listing. "Unsold" or "Not Sold" or "Passed" means the auction happened but the lot didn't sell — these are distinct from "available" (not yet auctioned).
-- Bullet points include things like: property type, condition, sq ft, vacant/tenanted, executor sale, development potential, completion terms
-- Include ALL lots, even commercial ones or land
-
-${strippedBatch.map(p => `=== PAGE ${p.page} ===\n${p.content}`).join('\n\n')}
-
-Return ONLY the JSON array:`;
-    try {
-      apiCallCount++;
-      const text = await callAI(prompt, { tier: extractionTier, maxTokens: 16000, taskType: 'extraction' });
-      log.info('ai_extraction', { house, tier: extractionTier, batch: Math.floor(i/batchSize)+1 });
-      const jsonMatch = text.match(/\[[\s\S]*\]/);
-      if (jsonMatch) {
-        const lots = JSON.parse(jsonMatch[0]);
-        for (const lot of lots) {
-          if (!lot.lot) continue;
-          // Deduplicate by lot number AND by normalised address
-          const addrKey = (lot.address || '').toLowerCase().replace(/[\s,]+/g, ' ').trim();
-          if (seenLots.has(lot.lot) || (addrKey.length > 10 && seenLots.has(addrKey))) continue;
-          seenLots.add(lot.lot);
-          if (addrKey.length > 10) seenLots.add(addrKey);
-          allLots.push({
-            lot: lot.lot, address: lot.address || '',
-            price: lot.price || null,
-            priceText: lot.price ? `£${lot.price.toLocaleString()}` : 'TBA',
-            url: lot.url || '', bullets: lot.bullets || [],
-            status: lot.status || 'available',
-          });
-        }
-      }
-      if (onProgress) onProgress(Math.floor(i/batchSize)+1, Math.ceil(pages.length/batchSize), allLots.length);
-    } catch (err) {
-      console.error(`Gemini extraction failed for batch starting at page ${batch[0].page}:`, err.message);
-      if (err.status === 429 || /quota|rate.limit|resource.exhausted/i.test(err.message)) {
-        creditExhausted = true; creditExhaustedAt = Date.now();
-        console.error('Gemini API rate limited — stopping all extraction');
-        break;
-      }
-    }
-  }
-  // Resolve relative URLs to absolute using the catalogue URL as base
-  if (catalogueUrl) {
-    for (const lot of allLots) {
-      if (lot.url && !/^https?:\/\//i.test(lot.url)) {
-        try { lot.url = new URL(lot.url, catalogueUrl).href; } catch {}
-      }
-    }
-  }
-  return allLots;
-}
-
-// ═══════════════════════════════════════════════════════════════
-// PDF EXTRACTION — Send PDF directly to Claude for lot extraction
-// ═══════════════════════════════════════════════════════════════
-function isPdfUrl(url) {
-  return /\.pdf(\?|$|#)/i.test(url) || /content-type=application\/pdf/i.test(url);
-}
-
-async function extractLotsFromPdf(url) {
-  log.info('pdf_download', { url });
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 60000);
-  let pdfBuffer;
-  try {
-    const resp = await fetch(url, { headers: HEADERS, signal: controller.signal });
-    clearTimeout(timeout);
-    if (!resp.ok) throw new Error(`PDF download failed: HTTP ${resp.status}`);
-    pdfBuffer = Buffer.from(await resp.arrayBuffer());
-  } catch (e) {
-    clearTimeout(timeout);
-    throw new Error(`Couldn't download PDF: ${e.message}`);
-  }
-
-  const pdfBase64 = pdfBuffer.toString('base64');
-  const sizeMB = (pdfBuffer.length / 1024 / 1024).toFixed(1);
-  log.info('pdf_loaded', { sizeMB, bytes: pdfBuffer.length });
-
-  // Gemini supports PDFs up to 20MB inline
-  if (pdfBuffer.length > 20 * 1024 * 1024) {
-    throw new Error('PDF is too large (over 20MB). Try a smaller catalogue.');
-  }
-
-  const allLots = [];
-  const seenLots = new Set();
-
-  const prompt = `You are extracting property auction lot data from a UK auction house catalogue PDF.
-
-Extract EVERY auction lot you find in this PDF document.
-
-For each lot, return a JSON object with these fields:
-- lot: number (the lot number)
-- address: string (full address including postcode)
-- price: number or null (guide price in pounds, null if TBA/not stated)
-- url: string (empty string — PDFs don't have lot URLs)
-- tenure: string or null — one of "Freehold", "Leasehold", "Share of Freehold", or null. Look for: freehold, leasehold, share of freehold, flying freehold, long leasehold, years remaining/unexpired. If not explicitly stated, infer from context (e.g. "125 year lease" = Leasehold, ground rent mentioned = Leasehold). Only return null if there is genuinely no indication.
-- beds: number or null — number of bedrooms. Extract from descriptions like "3 bed", "three bedroom", "studio" (=0). For multi-unit properties, total beds across all units. null if not stated.
-- status: string — one of "available", "sold", "unsold", "stc", "withdrawn". Default "available" if not stated. "unsold" means the auction took place but the lot did not sell (no bids met the reserve). Look for: UNSOLD, Not Sold, Passed, No Sale.
-- bullets: array of strings (key features/description points - condition, sq ft, special circumstances etc)
-
-Return ONLY a JSON array of lot objects, no other text.
-
-Important:
-- Extract the COMPLETE address including postcode
-- Guide prices may be shown as "Guide Price £X" or "Guide £X" or just "£X"
-- Tenure is a PRIORITY field — always look for it in the description, legal pack summary, and property details
-- Beds is a PRIORITY field — always look for bedroom count in the title, description, or property details. "2/3 bed" should return 3 (maximum). "Studio" = 0.
-- Bullet points include things like: property type, condition, sq ft, vacant/tenanted, executor sale, development potential, completion terms
-- Include ALL lots, even commercial ones or land
-- Do NOT include terms & conditions, legal text, or non-lot pages
-
-Return ONLY the JSON array:`;
-
-  try {
-    // PDFs always use Gemini capable tier (callAI forces Gemini when pdfBase64 is provided)
-    const text = await callAI(prompt, { tier: 'capable', maxTokens: 32000, pdfBase64, taskType: 'extraction' });
-    log.info('ai_pdf_extraction', { tier: 'capable' });
-    const jsonMatch = text.match(/\[[\s\S]*\]/);
-    if (jsonMatch) {
-      const lots = JSON.parse(jsonMatch[0]);
-      for (const lot of lots) {
-        if (lot.lot && !seenLots.has(lot.lot)) {
-          seenLots.add(lot.lot);
-          allLots.push({
-            lot: lot.lot, address: lot.address || '',
-            price: lot.price || null,
-            priceText: lot.price ? `£${lot.price.toLocaleString()}` : 'TBA',
-            url: '', bullets: lot.bullets || [],
-            status: lot.status || 'available',
-          });
-        }
-      }
-    }
-    log.info('pdf_extracted', { lots: allLots.length });
-  } catch (err) {
-    log.error('pdf_extraction_failed', { error: err.message });
-    throw new Error(`PDF extraction failed: ${err.message}`);
-  }
-
-  return allLots;
-}
-
-function stripHtml(html) {
-  let text = html
-    .replace(/<script[\s\S]*?<\/script>/gi, '')
-    .replace(/<style[\s\S]*?<\/style>/gi, '')
-    .replace(/<nav[\s\S]*?<\/nav>/gi, '')
-    .replace(/<header[\s\S]*?<\/header>/gi, '')
-    .replace(/<footer[\s\S]*?<\/footer>/gi, '')
-    .replace(/<aside[\s\S]*?<\/aside>/gi, '')
-    .replace(/<form[\s\S]*?<\/form>/gi, '')
-    .replace(/<noscript[\s\S]*?<\/noscript>/gi, '')
-    .replace(/<img[^>]*>/gi, '')
-    .replace(/<svg[\s\S]*?<\/svg>/gi, '')
-    .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
-    // Remove common noise sections by class/id patterns
-    .replace(/<div[^>]*class="[^"]*(?:testimonial|review|cookie|consent|modal|popup|newsletter|sidebar|social|share|footer|banner|advert)[^"]*"[\s\S]*?<\/div>/gi, '')
-    .replace(/<section[^>]*class="[^"]*(?:testimonial|review|cookie|consent|modal|popup|newsletter)[^"]*"[\s\S]*?<\/section>/gi, '')
-    .replace(/<[^>]+>/g, '\n')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&#\d+;/g, '')
-    // Remove repeated whitespace more aggressively
-    .replace(/[ \t]+/g, ' ')
-    .replace(/\n /g, '\n')
-    .replace(/ \n/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-  // Allow up to 120k for large catalogues (Claude can handle it)
-  if (text.length > 120000) text = text.substring(0, 120000);
-  return text;
-}
-
-// ═══════════════════════════════════════════════════════════════
-// LOT STATUS NORMALISATION
-// ═══════════════════════════════════════════════════════════════
-function normaliseLotStatuses(lots) {
-  for (const lot of lots) {
-    // Also re-check 'available' status against bullets — DOM extractors often push sold/stc
-    // indicators into bullets without setting the status field, which then defaults to 'available'
-    if (!lot.status || lot.status === 'available') {
-      const bulletStr = (lot.bullets || []).join(' ');
-      if (/\bUNSOLD\b|\bNOT.?SOLD\b|\bPASSED\b|\bNO.?SALE\b|\bAuction\s*Ended\b/i.test(bulletStr)) lot.status = 'unsold';
-      else if (/\bSOLD\b/i.test(bulletStr)) lot.status = 'sold';
-      else if (/\bSTC\b|\bSALE.?AGREED\b|\bUNDER.?OFFER\b/i.test(bulletStr)) lot.status = 'stc';
-      else if (/\bWITHDRAWN\b|\bPOSTPONED\b/i.test(bulletStr)) lot.status = 'withdrawn';
-      else lot.status = 'available';
-    }
-    // Normalise any non-standard values
-    const s = (lot.status || '').toLowerCase().trim();
-    if (/unsold|not.?sold|passed|no.?sale/i.test(s)) lot.status = 'unsold';
-    else if (/sold/i.test(s) && !/stc|agreed/i.test(s)) lot.status = 'sold';
-    else if (/stc|agreed|under.?offer/i.test(s)) lot.status = 'stc';
-    else if (/withdrawn|postponed/i.test(s)) lot.status = 'withdrawn';
-    else if (s !== 'sold' && s !== 'stc' && s !== 'withdrawn' && s !== 'unsold') lot.status = 'available';
-
-    // ── Lease length from bullets (fallback when lot page enrichment misses it) ──
-    if (lot.tenure === 'Leasehold' && !lot.leaseLength) {
-      const bulletStr = (lot.bullets || []).join(' ').toLowerCase();
-      const lm = bulletStr.match(/\b(\d{2,4})\s*(?:year|yr)s?\s*(?:remaining|unexpired|left|lease)\b/) ||
-                 bulletStr.match(/lease\s*(?:length|term|remaining)?\s*:?\s*(\d{2,4})\s*(?:year|yr)s?\b/) ||
-                 bulletStr.match(/\b(\d{2,4})\s*(?:year|yr)\s*lease\b/) ||
-                 bulletStr.match(/(?:term|length)\s*(?:of)?\s*(\d{2,4})\s*(?:year|yr)s?\b/);
-      if (lm) {
-        const years = parseInt(lm[1], 10);
-        if (years >= 1 && years <= 999) lot.leaseLength = years;
-      }
-    }
-  }
-  return lots;
-}
-
-
-// HTTP-based image backfill — fetches catalogue page(s) and matches images to lots by URL
-async function backfillImages(catalogueUrl, lots) {
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30000);
-    const resp = await fetch(catalogueUrl, { headers: HEADERS, signal: controller.signal, redirect: 'follow' });
-    clearTimeout(timeout);
-    if (!resp.ok) return null;
-    const html = await resp.text();
-    const resolvedBase = resp.url || catalogueUrl; // use final URL after redirects
-
-    // Also fix relative lot URLs while we're at it
-    for (const lot of lots) {
-      if (lot.url && !/^https?:\/\//i.test(lot.url)) {
-        try { lot.url = new URL(lot.url, resolvedBase).href; } catch {}
-      }
-    }
-
-    // Helper: resolve a src to absolute URL, skip non-property images
-    const resolveImg = (src) => {
-      if (!src || src.startsWith('data:') || src.length < 10
-        || /\.svg|icon|logo|facebook|linkedin|twitter|spacer|pixel|badge/i.test(src)) return null;
-      if (/^https?:\/\//i.test(src)) return src;
-      try { return new URL(src, resolvedBase).href; } catch { return null; }
-    };
-
-    // Strategy 1: Build href→image map from <a href>...<img src> (image inside link)
-    const hrefImgMap = {};
-    const linkImgRe = /<a[^>]+href="([^"]+)"[^>]*>[^]*?<img[^>]+(?:src|data-src|data-lazy-src)="([^"]+)"/gi;
-    let m;
-    while ((m = linkImgRe.exec(html)) !== null) {
-      const href = m[1];
-      const src = resolveImg(m[2]);
-      if (src && !hrefImgMap[href]) hrefImgMap[href] = src;
-    }
-    // Also match <a href>...background-image:url(...) patterns
-    const linkBgRe = /<a[^>]+href="([^"]+)"[^>]*>[^]*?background(?:-image)?:\s*url\(['"]?([^'")\s]+)/gi;
-    while ((m = linkBgRe.exec(html)) !== null) {
-      const href = m[1];
-      const src = resolveImg(m[2]);
-      if (src && !hrefImgMap[href]) hrefImgMap[href] = src;
-    }
-
-    // Strategy 2: Collect ALL property-like image URLs (both absolute and relative)
-    const allImages = [];
-    const imgRe = /<img[^>]+(?:src|data-src|data-lazy-src)="([^"]+)"/gi;
-    while ((m = imgRe.exec(html)) !== null) {
-      const src = resolveImg(m[1]);
-      if (src) allImages.push(src);
-    }
-    // Also collect background-image URLs
-    const bgRe = /background(?:-image)?:\s*url\(['"]?([^'")\s]+)/gi;
-    while ((m = bgRe.exec(html)) !== null) {
-      const src = resolveImg(m[1]);
-      if (src) allImages.push(src);
-    }
-    // Also collect srcset first entries
-    const srcsetRe = /srcset="([^"]+)"/gi;
-    while ((m = srcsetRe.exec(html)) !== null) {
-      const first = m[1].split(',')[0].trim().split(/\s+/)[0];
-      const src = resolveImg(first);
-      if (src) allImages.push(src);
-    }
-
-    // Strategy 3: Proximity matching — for each lot URL, find nearest image in HTML
-    // Build a position index of all image src positions in the HTML
-    const imgPositions = [];
-    const imgPosRe = /<img[^>]+(?:src|data-src|data-lazy-src)="([^"]+)"/gi;
-    while ((m = imgPosRe.exec(html)) !== null) {
-      const src = resolveImg(m[1]);
-      if (src) imgPositions.push({ pos: m.index, src });
-    }
-
-    let updated = 0;
-    for (const lot of lots) {
-      if (lot.imageUrl) continue;
-      if (!lot.url) continue; // URL-less lots handled by position matching below
-      let imgSrc = null;
-
-      // Strategy 1: direct href match (try multiple URL variants)
-      const urlVariants = [lot.url];
-      try { urlVariants.push(new URL(lot.url).pathname); } catch {}
-      if (lot.url.startsWith('http://')) urlVariants.push(lot.url.replace('http://', 'https://'));
-      else if (lot.url.startsWith('https://')) urlVariants.push(lot.url.replace('https://', 'http://'));
-      for (const v of urlVariants) {
-        if (hrefImgMap[v]) { imgSrc = hrefImgMap[v]; break; }
-      }
-
-      // Strategy 2: match by numeric ID found ANYWHERE in the lot URL path
-      if (!imgSrc) {
-        try {
-          const path = new URL(lot.url).pathname;
-          // Extract all numeric IDs (4+ digits) from the URL path
-          const ids = path.match(/\d{4,}/g) || [];
-          for (const id of ids) {
-            imgSrc = allImages.find(src => src.includes('/' + id + '/') || src.includes('/' + id + '.') || src.includes('-' + id + '.') || src.includes('/' + id + '_'));
-            if (imgSrc) break;
-          }
-        } catch {}
-      }
-
-      // Strategy 3: proximity — find lot URL in HTML and grab nearest image
-      if (!imgSrc) {
-        for (const v of urlVariants) {
-          const pos = html.indexOf(v);
-          if (pos === -1) continue;
-          // Find the nearest image within 2000 chars before or after
-          let best = null, bestDist = 2000;
-          for (const ip of imgPositions) {
-            const dist = Math.abs(ip.pos - pos);
-            if (dist < bestDist) { bestDist = dist; best = ip.src; }
-          }
-          if (best) { imgSrc = best; break; }
-        }
-      }
-
-      if (imgSrc) {
-        lot.imageUrl = imgSrc;
-        updated++;
-      }
-    }
-    // Strategy 4: Position-based matching for URL-less lots (Gemini extraction loses URLs)
-    // Use allImages ordered by appearance — nth unique property image = nth lot
-    const urlLessLots = lots.filter(l => !l.imageUrl && !l.url);
-    if (urlLessLots.length > 0 && allImages.length > 0) {
-      // Deduplicate images while preserving order
-      const seen = new Set();
-      const uniqueImages = allImages.filter(img => { if (seen.has(img)) return false; seen.add(img); return true; });
-      // If image count is roughly similar to lot count, do positional matching
-      if (uniqueImages.length >= urlLessLots.length * 0.3) {
-        let posMatched = 0;
-        for (let i = 0; i < urlLessLots.length && i < uniqueImages.length; i++) {
-          urlLessLots[i].imageUrl = uniqueImages[i];
-          posMatched++;
-        }
-        updated += posMatched;
-        if (posMatched > 0) console.log(`Image backfill position-match for URL-less lots: ${posMatched}/${urlLessLots.length}`);
-      }
-    }
-
-    console.log(`Image backfill for ${catalogueUrl.substring(0, 60)}: ${updated}/${lots.filter(l => !l.imageUrl).length + updated} matched`);
-    return updated > 0 ? lots : null;
-  } catch (err) {
-    log.warn('Image backfill error', { catalogueUrl, error: err.message });
-    return null;
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════
-// FIRECRAWL LOT-PAGE FETCHER — shared helper for all backfill functions
-// ═══════════════════════════════════════════════════════════════
-// Fetches a lot page with plain HTTP first (cheap), then Firecrawl if
-// plain fetch returns too little content (JS-rendered page). Returns HTML string.
-async function fetchLotPage(url) {
-  // Try plain HTTP first — fast and free
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
-    const resp = await fetch(url, { headers: HEADERS, signal: controller.signal, redirect: 'follow' });
-    clearTimeout(timeout);
-    if (resp.ok) {
-      const html = await resp.text();
-      // If we got substantial content, no need for Firecrawl
-      // Heuristic: <500 chars of visible text means the page is likely JS-rendered
-      const visibleText = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-        .replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-      if (visibleText.length > 500) {
-        return { html, url: resp.url || url, source: 'http' };
-      }
-      // Page looks JS-rendered — fall through to Firecrawl
-    }
-  } catch { /* timeout or network error — try Firecrawl */ }
-
-  // Firecrawl fallback — handles JS rendering, anti-bot
-  if (FIRECRAWL_API_KEY && !fcCreditExhausted) {
-    try {
-      const fcResult = await scrapeWithFirecrawl(url, { formats: ['rawHtml'] });
-      if (fcResult.html && fcResult.html.length > 100) {
-        return { html: fcResult.html, url: fcResult.sourceURL || url, source: 'firecrawl' };
-      }
-    } catch { /* Firecrawl failed — return null */ }
-  }
-
-  return null;
-}
-
-// Deep image backfill — standalone version for image-only passes (cache refresh, etc.)
-async function backfillImagesFromLotPages(lots, concurrency = 5) {
-  const missing = lots.filter(l => l.url && !l.imageUrl && /^https?:\/\//i.test(l.url));
-  if (missing.length === 0) return 0;
-  const capped = missing.slice(0, 50);
-  const junk = /logo|icon|nav|sprite|\.svg|placeholder|no-image|modal\.png|_NYC\.|_LCC\.|_BMDC\.|council|utilit|cardwell|badge|spacer|pixel|facebook|twitter|1x1|gavel|backdrop|generic[_-]?image|coming[_-]?soon|maggsandallen\.co\.uk\/images\/|hollismorgan\.co\.uk\/images\/|fssproperty\.co\.uk\/images\//i;
-  let filled = 0, fcUsed = 0;
-  for (let i = 0; i < capped.length; i += concurrency) {
-    if (i > 0) await new Promise(r => setTimeout(r, 500));
-    const batch = capped.slice(i, i + concurrency);
-    await Promise.allSettled(batch.map(async (lot) => {
-      try {
-        const result = await fetchLotPage(lot.url);
-        if (!result) return;
-        if (result.source === 'firecrawl') fcUsed++;
-        const imgRe = /<img[^>]+(?:src|data-src|data-lazy-src|data-original)="([^"]+)"/gi;
-        let m;
-        while ((m = imgRe.exec(result.html)) !== null) {
-          const src = m[1];
-          if (!src || src.length <= 20 || src.startsWith('data:')) continue;
-          let imgUrl = src;
-          if (!/^https?:\/\//i.test(imgUrl)) {
-            try { imgUrl = new URL(imgUrl, result.url || lot.url).href; } catch { continue; }
-          }
-          if (junk.test(imgUrl)) continue;
-          lot.imageUrl = imgUrl; filled++;
-          break;
-        }
-      } catch { /* skip */ }
-    }));
-  }
-  if (filled > 0) console.log(`Image backfill (lot pages): ${filled}/${missing.length}${fcUsed > 0 ? ` (${fcUsed} via Firecrawl)` : ''}`);
-  return filled;
-}
-
-// ═══════════════════════════════════════════════════════════════
-// UNIFIED LOT-PAGE ENRICHMENT — single pass extracts ALL missing data
-// Replaces separate address/tenure/image/condition backfill functions.
-// One fetch per lot page → extracts address, image, tenure, lease length,
-// condition, beds, propType in a single pass. No wasted credits.
-// ═══════════════════════════════════════════════════════════════
-async function enrichLotsFromLotPages(lots, concurrency = 5) {
-  // Target any lot with a URL that's missing ANY enrichment field
-  const addrIsDescription = a => /^A\s+(one|two|three|four|five|six|\d+)\s+(bed|studio)/i.test(a);
-  const targets = lots.filter(l => {
-    if (!l.url || !/^https?:\/\//i.test(l.url)) return false;
-    return !l.address || l.address.trim().length < 5
-      || addrIsDescription(l.address || '')
-      || !l.postcode
-      || !l.imageUrl
-      || !l.tenure
-      || !l.condition
-      || !l.beds
-      || !l.price
-      || l.vacant == null
-      || !l.propType || l.propType === 'other' || l.propType === 'unknown'
-      || (l.tenure === 'Leasehold' && !l.leaseLength);
-  });
-  if (targets.length === 0) return 0;
-
-  // Prioritise lots missing beds (high-value enrichment) ahead of other gaps
-  targets.sort((a, b) => (!a.beds ? 0 : 1) - (!b.beds ? 0 : 1));
-
-  const junk = /logo|icon|nav|sprite|\.svg|placeholder|no-image|modal\.png|_NYC\.|_LCC\.|_BMDC\.|council|utilit|cardwell|badge|spacer|pixel|facebook|twitter|1x1|gavel|backdrop|generic[_-]?image|coming[_-]?soon|maggsandallen\.co\.uk\/images\/|hollismorgan\.co\.uk\/images\/|fssproperty\.co\.uk\/images\//i;
-
-  let fcUsed = 0;
-  const stats = { address: 0, image: 0, tenure: 0, condition: 0, beds: 0, leaseLength: 0, propType: 0 };
-
-  for (let i = 0; i < targets.length; i += concurrency) {
-    if (i > 0) await new Promise(r => setTimeout(r, 500));
-    const batch = targets.slice(i, i + concurrency);
-    await Promise.allSettled(batch.map(async (lot) => {
-      try {
-        const result = await fetchLotPage(lot.url);
-        if (!result) return;
-        if (result.source === 'firecrawl') fcUsed++;
-        const html = result.html;
-        const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').toLowerCase();
-
-        // ── Address ──
-        // Also re-fetch if address looks like a description (no postcode, starts with "A one/two/three bed")
-        const addrLooksLikeDescription = lot.address && /^A\s+(one|two|three|four|five|six|\d+)\s+(bed|studio)/i.test(lot.address);
-        if (!lot.address || lot.address.trim().length < 5 || addrLooksLikeDescription) {
-          let address = '';
-          const ogMatch = html.match(/<meta[^>]+property="og:title"[^>]+content="([^"]+)"/i) ||
-                           html.match(/<meta[^>]+content="([^"]+)"[^>]+property="og:title"/i);
-          if (ogMatch) address = ogMatch[1].trim();
-          if (!address) {
-            const h1Match = html.match(/<h1[^>]*>([^<]{10,})<\/h1>/i);
-            if (h1Match) address = h1Match[1].trim();
-          }
-          if (!address) {
-            // h2 fallback — EIG lot pages often have address in h2 (e.g. "Lot 10 - 22 Street, Town, AB1 2CD")
-            const h2Match = html.match(/<h2[^>]*>([^<]{10,})<\/h2>/i);
-            if (h2Match) address = h2Match[1].trim();
-          }
-          if (!address) {
-            const titleMatch = html.match(/<title>([^<]+)<\/title>/i);
-            if (titleMatch) address = titleMatch[1].replace(/\s*[-|].*$/, '').trim();
-          }
-          if (address) {
-            address = address.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#?\w+;/g, ' ').replace(/\s+/g, ' ').trim();
-            // Strip "Lot N - " prefix from heading-derived addresses
-            address = address.replace(/^Lot\s+\d+\s*[-–—]\s*/i, '').trim();
-          }
-          if (address && address.length >= 5) { lot.address = address; stats.address++; }
-        }
-
-        // ── Image ──
-        if (!lot.imageUrl) {
-          const imgRe = /<img[^>]+(?:src|data-src|data-lazy-src|data-original)="([^"]+)"/gi;
-          let m;
-          while ((m = imgRe.exec(html)) !== null) {
-            const src = m[1];
-            if (!src || src.length <= 20 || src.startsWith('data:')) continue;
-            let imgUrl = src;
-            if (!/^https?:\/\//i.test(imgUrl)) {
-              try { imgUrl = new URL(imgUrl, result.url || lot.url).href; } catch { continue; }
-            }
-            if (junk.test(imgUrl)) continue;
-            lot.imageUrl = imgUrl; stats.image++;
-            break;
-          }
-        }
-
-        // ── Raw text capture (for Gemini fuzzy search) ──
-        if (!lot.rawText) {
-          const rawText = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '').replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-          if (rawText.length > 50) lot.rawText = rawText.slice(0, 10000); // cap at 10k chars
-        }
-
-        // ── Tenure ──
-        if (!lot.tenure) {
-          if (/share of freehold|share\s+of\s+the\s+freehold/.test(text)) { lot.tenure = 'Share of Freehold'; stats.tenure++; }
-          else if (/flying freehold/.test(text)) { lot.tenure = 'Freehold'; stats.tenure++; }
-          else if (/\bfreehold\b/.test(text) && !/leasehold/.test(text)) { lot.tenure = 'Freehold'; stats.tenure++; }
-          else if (/\bleasehold\b|long\s+lease|lease\s+remaining|\byears?\s+(?:remaining|unexpired|left)\b|\b\d+\s*(?:year|yr)\s*lease\b/.test(text)) { lot.tenure = 'Leasehold'; stats.tenure++; }
-          // Freehold scoring bonus (only if not already awarded)
-          if (lot.tenure === 'Freehold' && lot.propType === 'house' && !(lot.opps || []).includes('Freehold') && !(lot.scoreBreakdown || []).some(s => s.signal === 'Freehold house')) {
-            lot.score = (lot.score || 0) + 0.5;
-            lot.opps = lot.opps || []; lot.opps.push('Freehold');
-            lot.scoreBreakdown = lot.scoreBreakdown || [];
-            lot.scoreBreakdown.push({ signal: 'Freehold house', pts: 0.5 });
-            lot.score = Math.max(0, Math.min(10, Math.round(lot.score * 10) / 10));
-          }
-        }
-
-        // ── Lease length ──
-        if (lot.tenure === 'Leasehold' && !lot.leaseLength) {
-          const leaseMatch = text.match(/\b(\d{2,4})\s*(?:year|yr)s?\s*(?:remaining|unexpired|left|lease)\b/) ||
-                             text.match(/lease\s*(?:length|term|remaining)?\s*:?\s*(\d{2,4})\s*(?:year|yr)s?\b/) ||
-                             text.match(/\b(\d{2,4})\s*(?:year|yr)\s*lease\b/) ||
-                             text.match(/(?:approx(?:imately)?|circa|c\.?)\s*(\d{2,4})\s*(?:year|yr)s?\s*(?:remaining|unexpired|left)?\b/) ||
-                             text.match(/(?:term|length)\s*(?:of)?\s*(\d{2,4})\s*(?:year|yr)s?\b/) ||
-                             text.match(/(\d{2,4})\s*(?:year|yr)s?\s*(?:from|commencing|starting)\s*\d{4}/);
-          if (leaseMatch) {
-            const years = parseInt(leaseMatch[1], 10);
-            if (years >= 1 && years <= 999) { lot.leaseLength = years; stats.leaseLength++; }
-          }
-          // Try "999 year lease from 2005" → compute remaining
-          if (!lot.leaseLength) {
-            const fromMatch = text.match(/(\d{2,4})\s*(?:year|yr)s?\s*(?:from|commencing|starting|dated)\s*(\d{4})/);
-            if (fromMatch) {
-              const total = parseInt(fromMatch[1], 10);
-              const startYear = parseInt(fromMatch[2], 10);
-              const remaining = total - (new Date().getFullYear() - startYear);
-              if (remaining >= 1 && remaining <= 999) { lot.leaseLength = remaining; stats.leaseLength++; }
-            }
-          }
-        }
-
-        // ── Condition ──
-        if (!lot.condition) {
-          if (/\b(?:derelict|uninhabitable|severe(?:ly)?\s+dilapidated|structurally?\s+(?:unsound|unsafe)|condemned)\b/.test(text)) {
-            lot.condition = 'derelict'; stats.condition++;
-          } else if (/\b(?:poor\s+condition|very\s+poor|badly?\s+(?:damaged|deteriorated)|significant(?:ly)?\s+(?:dated|tired)|extensive\s+(?:refurb|renovation|works?\s+required))\b/.test(text)) {
-            lot.condition = 'poor'; stats.condition++;
-          } else if (/\b(?:need(?:s|ing)\s+(?:modernis|refurb|renovation|updating|improvement)|in\s+need\s+of\s+(?:modernis|refurb|renovation)|(?:requires?|requiring)\s+(?:modernis|refurb|renovation|updating)|(?:tired|dated|worn)\s+(?:condition|decor|throughout))\b/.test(text)) {
-            lot.condition = 'needs modernisation'; stats.condition++;
-          } else if (/\b(?:good\s+(?:condition|order|decorative)|well\s+(?:maintained|presented|kept)|recently\s+(?:refurb|renovated|decorated|updated))\b/.test(text)) {
-            lot.condition = 'good'; stats.condition++;
-          }
-          // Condition scoring (only if not already awarded — prevents inflation on re-enrichment)
-          if (lot.condition === 'needs modernisation' && !(lot.opps || []).includes('Needs modernisation') && !(lot.scoreBreakdown || []).some(s => s.signal === 'Needs modernisation')) {
-            lot.score = (lot.score || 0) + 2.0;
-            lot.opps = lot.opps || []; lot.opps.push('Needs modernisation');
-            lot.scoreBreakdown = lot.scoreBreakdown || [];
-            lot.scoreBreakdown.push({ signal: 'Needs modernisation', pts: 2.0 });
-            lot.score = Math.max(0, Math.min(10, Math.round(lot.score * 10) / 10));
-          } else if ((lot.condition === 'poor' || lot.condition === 'derelict') && !(lot.opps || []).includes('Poor condition') && !(lot.scoreBreakdown || []).some(s => /Poor.*condition/i.test(s.signal))) {
-            lot.score = (lot.score || 0) + 2.5;
-            lot.opps = lot.opps || []; lot.opps.push('Poor condition');
-            lot.scoreBreakdown = lot.scoreBreakdown || [];
-            lot.scoreBreakdown.push({ signal: 'Poor/derelict condition', pts: 2.5 });
-            lot.score = Math.max(0, Math.min(10, Math.round(lot.score * 10) / 10));
-          }
-        }
-
-        // ── Beds ──
-        if (!lot.beds) {
-          // Try "2/3 bed" variant format first (take higher), then standard patterns
-          const variantMatch = text.match(/\b(\d{1,2})\s*\/\s*(\d{1,2})\s*[-\s]?bed/i);
-          const standardMatch = text.match(/\b(\d{1,2})\s*(?:[-\s])?(?:bed(?:room)?s?|double\s+bed(?:room)?s?)\b/i);
-          const studioMatch = /\bstudio\s*(?:flat|apartment)?\b/i.test(text);
-          if (variantMatch) {
-            const n = Math.max(parseInt(variantMatch[1], 10), parseInt(variantMatch[2], 10));
-            if (n >= 1 && n <= 20) { lot.beds = n; stats.beds++; }
-          } else if (standardMatch) {
-            const n = parseInt(standardMatch[1], 10);
-            if (n >= 1 && n <= 20) { lot.beds = n; stats.beds++; }
-          } else if (studioMatch) {
-            lot.beds = 0; stats.beds++;
-          }
-        }
-
-        // ── Property type ──
-        if (!lot.propType || lot.propType === 'other' || lot.propType === 'unknown') {
-          if (/\b(?:flat|apartment|maisonette|studio\s+flat|penthouse)\b/.test(text)) { lot.propType = 'flat'; stats.propType++; }
-          else if (/\b(?:terraced|semi[- ]detached|detached\s+house|end[- ]terrace|mid[- ]terrace|town\s*house|cottage|villa|lodge)\b/.test(text)) { lot.propType = 'house'; stats.propType++; }
-          else if (/\bbungalow\b/.test(text)) { lot.propType = 'house'; stats.propType++; }
-          else if (/\b(?:land|plot|garage|parking\s+space|storage\s+unit)\b/.test(text)) { lot.propType = 'land'; stats.propType++; }
-          else if (/\b(?:shop|retail|office|warehouse|industrial|commercial|pub|hotel|restaurant)\b/.test(text)) { lot.propType = 'commercial'; stats.propType++; }
-        }
-
-        // ── Price ──
-        if (!lot.price) {
-          // Guide Price: £165,000 / Starting Bid: £50,000 / Reserve Price: £80,000
-          const priceMatch = text.match(/(?:guide\s*price|starting\s*bid|reserve\s*price|price|asking)[^£]*£([\d,]+)/i)
-            || text.match(/£([\d,]+)\s*(?:guide|starting|reserve|plus)/i);
-          if (priceMatch) {
-            const p = parseInt(priceMatch[1].replace(/,/g, ''), 10);
-            if (p >= 1000 && p <= 50000000) { lot.price = p; if (!stats.price) stats.price = 0; stats.price++; }
-          }
-        }
-
-        // ── Vacant ──
-        if (lot.vacant == null) {
-          if (/\b(?:vacant\s+possession|sold\s+with\s+vacant|\bvp\b|vacant\s+property|with\s+vacant|currently\s+vacant|unoccupied)\b/.test(text)) {
-            lot.vacant = true; if (!stats.vacant) stats.vacant = 0; stats.vacant++;
-          } else if (/\b(?:(?:currently\s+)?(?:let|tenanted|rented|occupied)|tenant\s+in\s+situ|subject\s+to\s+tenanc|assured\s+shorthold|sitting\s+tenant|(?:rental|current)\s+income)\b/.test(text)) {
-            lot.vacant = false; if (!stats.vacant) stats.vacant = 0; stats.vacant++;
-          }
-        }
-
-        // ── Postcode re-extraction from newly fetched address ──
-        if (!lot.postcode && lot.address) {
-          const pc = extractPostcode(lot.address);
-          if (pc) lot.postcode = pc;
-        }
-
-      } catch { /* timeout or network error — skip */ }
-    }));
-  }
-
-  const total = Object.values(stats).reduce((a, b) => a + b, 0);
-  if (total > 0) {
-    const parts = Object.entries(stats).filter(([, v]) => v > 0).map(([k, v]) => `${k}:${v}`).join(' ');
-    const bedCoverage = lots.filter(l => l.beds != null).length;
-    console.log(`Lot-page enrichment: ${targets.length} pages fetched, ${total} fields filled — ${parts}${fcUsed > 0 ? ` (${fcUsed} via Firecrawl)` : ''} | beds coverage: ${bedCoverage}/${lots.length} (${Math.round(bedCoverage/lots.length*100)}%)`);
-  }
-  return total;
-}
-
-// ═══════════════════════════════════════════════════════════════
-// PUPPETEER IMAGE BACKFILL — for JS-rendered sites where plain HTTP fails
-// ═══════════════════════════════════════════════════════════════
-async function backfillImagesWithPuppeteer(catalogueUrl, lots, house) {
-  let page;
-  try {
-    page = await acquirePage();
-    await page.setUserAgent(HEADERS['User-Agent']);
-    await page.setViewport({ width: 1280, height: 900 });
-    // Allow images through (unlike normal scraper) so img src attributes populate
-    await page.setRequestInterception(true);
-    page.on('request', req => {
-      const type = req.resourceType();
-      if (['font', 'media'].includes(type)) req.abort();
-      else req.continue();
-    });
-
-    await page.goto(catalogueUrl, { waitUntil: 'networkidle2', timeout: 45000 });
-    await new Promise(r => setTimeout(r, 3000));
-    // Scroll to trigger lazy-loaded images
-    await page.evaluate(async () => {
-      for (let i = 0; i < 15; i++) {
-        window.scrollBy(0, window.innerHeight);
-        await new Promise(r => setTimeout(r, 500));
-      }
-      window.scrollTo(0, 0);
-    });
-    await new Promise(r => setTimeout(r, 2000));
-
-    // Use existing DOM extractor to get lots with images from rendered page
-    const domLots = await extractWithDOM(page, house);
-    if (!domLots || domLots.length === 0) {
-      console.log(`Puppeteer image backfill: DOM extractor returned 0 lots for ${house}`);
-      return 0;
-    }
-
-    // Build lot number → {imageUrl, url} map
-    const lotMap = {};
-    for (const dl of domLots) {
-      if (dl.lot) lotMap[dl.lot] = { imageUrl: dl.imageUrl, url: dl.url };
-    }
-
-    let updated = 0;
-    for (const lot of lots) {
-      const match = lotMap[lot.lot];
-      if (!match) continue;
-      if (!lot.imageUrl && match.imageUrl) { lot.imageUrl = match.imageUrl; updated++; }
-      if ((!lot.url || lot.url === '') && match.url) lot.url = match.url;
-    }
-
-    console.log(`Puppeteer image backfill for ${house}: ${updated}/${lots.length} lots got images (DOM found ${domLots.length} lots)`);
-    return updated;
-  } catch (err) {
-    log.warn('Puppeteer image backfill error', { house, catalogueUrl, error: err.message });
-    return 0;
-  } finally {
-    if (page) await page.close().catch(() => {});
-  }
-}
-
-async function extractWithDOM(page, house) {
-  let lots = null;
-
-  // Try house-specific extractor first
-  const extractor = DOM_EXTRACTORS[house];
-  if (extractor) {
-    try {
-      const result = await page.evaluate(extractor);
-      if (Array.isArray(result) && result.length > 0) {
-        console.log(`DOM extractor for ${house}: found ${result.length} lots directly`);
-        lots = result;
-      }
-    } catch (err) {
-      log.warn('DOM extractor error', { house, error: err.message });
-    }
-  }
-
-  // Fall back to universal extractor
-  if (!lots) {
-    try {
-      const result = await page.evaluate(UNIVERSAL_DOM_EXTRACTOR);
-      if (Array.isArray(result) && result.length > 0) {
-        console.log(`Universal DOM extractor for ${house}: found ${result.length} lots`);
-        lots = result;
-      }
-    } catch (err) {
-      log.warn('Universal DOM extractor error', { house, error: err.message });
-    }
-  }
-
-  if (!lots) {
-    console.log(`All DOM extractors for ${house}: found 0 lots, falling back to Claude`);
-    return null;
-  }
-
-  // Save raw URLs (before resolution) for image matching against DOM hrefs
-  const rawUrls = lots.map(l => l.url || '');
-
-  // Resolve relative URLs to absolute using the page's own URL as base
-  const baseUrl = page.url();
-  for (const lot of lots) {
-    if (lot.url && !/^https?:\/\//i.test(lot.url)) {
-      try { lot.url = new URL(lot.url, baseUrl).href; } catch {}
-    }
-    if (lot.detailUrl && !/^https?:\/\//i.test(lot.detailUrl)) {
-      try { lot.detailUrl = new URL(lot.detailUrl, baseUrl).href; } catch {}
-    }
-    if (lot.imageUrl && !/^https?:\/\//i.test(lot.imageUrl)) {
-      try { lot.imageUrl = new URL(lot.imageUrl, baseUrl).href; } catch {}
-    }
-  }
-
-  // Image extraction pass — match by lot URL, not lot number text
-  try {
-    const hrefImageMap = await page.evaluate(() => {
-      const map = {};
-      const skip = /logo|icon|arrow|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|loading|cookie|emoji/i;
-      const links = document.querySelectorAll('a[href]');
-      for (const link of links) {
-        const rawHref = link.getAttribute('href') || '';
-        const absHref = link.href; // browser-resolved absolute
-        if (!rawHref || rawHref === '#') continue;
-        if (map[rawHref] || map[absHref]) continue;
-
-        // Strategy 1: <img> inside the link itself
-        let imgSrc = '';
-        let img = link.querySelector('img');
-        // Strategy 2: Walk up to parent container (up to 5 levels) and look for img
-        if (!img) {
-          let el = link;
-          for (let depth = 0; depth < 5; depth++) {
-            el = el.parentElement;
-            if (!el) break;
-            img = el.querySelector('img');
-            if (img) break;
-          }
-        }
-        if (img) {
-          imgSrc = img.getAttribute('src') || img.dataset.src
-            || img.getAttribute('data-lazy-src') || img.getAttribute('data-original')
-            || (img.srcset ? img.srcset.split(',')[0].trim().split(/\s+/)[0] : '');
-        }
-
-        // Strategy 3: background-image on elements near the link
-        if (!imgSrc || imgSrc.startsWith('data:')) {
-          let el = link;
-          for (let depth = 0; depth < 5; depth++) {
-            el = el.parentElement;
-            if (!el) break;
-            const bgEls = el.querySelectorAll('[style*="background"]');
-            for (const bgEl of bgEls) {
-              const style = bgEl.getAttribute('style') || '';
-              const bgMatch = style.match(/background(?:-image)?:\s*url\(['"]?([^'")\s]+)/i);
-              if (bgMatch && bgMatch[1] && !bgMatch[1].startsWith('data:')) {
-                imgSrc = bgMatch[1];
-                break;
-              }
-            }
-            if (imgSrc && !imgSrc.startsWith('data:')) break;
-          }
-        }
-
-        if (!imgSrc || imgSrc.startsWith('data:') || imgSrc.length < 10 || skip.test(imgSrc)) continue;
-        map[rawHref] = imgSrc;
-        map[absHref] = imgSrc;
-      }
-      return map;
-    });
-    if (hrefImageMap && Object.keys(hrefImageMap).length > 0) {
-      for (let i = 0; i < lots.length; i++) {
-        if (lots[i].imageUrl) continue;
-        // Match using raw URL (as in DOM), resolved URL, or absolute lot.url
-        const imgSrc = hrefImageMap[rawUrls[i]] || hrefImageMap[lots[i].url];
-        if (imgSrc) {
-          let imgUrl = imgSrc;
-          if (!/^https?:\/\//i.test(imgUrl)) {
-            try { imgUrl = new URL(imgUrl, baseUrl).href; } catch {}
-          }
-          lots[i].imageUrl = imgUrl;
-        }
-      }
-      console.log(`Image extraction for ${house}: ${lots.filter(l => l.imageUrl).length}/${lots.length} lots got images`);
-    }
-  } catch (err) {
-    log.warn('Image extraction error', { house, error: err.message });
-  }
-
-  // Resolve any relative imageUrls to absolute
-  for (const lot of lots) {
-    if (lot.imageUrl && !/^https?:\/\//i.test(lot.imageUrl)) {
-      try { lot.imageUrl = new URL(lot.imageUrl, baseUrl).href; } catch {}
-    }
-  }
-
-  // Post-processing: filter out non-property images (logos, icons, placeholders, known junk)
-  const imgBlocklist = /logo|icon|placeholder|no-image|default|blank|spacer|pixel|\.svg|facebook|twitter|linkedin|badge|spinner|cookie|emoji|1x1|noimage|favicon|banner|advert|sponsor|newsletter|widget|thumb_generic|modal\.png|_NYC\.|_LCC\.|_BMDC\.|Unit[ie]*d?_?Utilit|Cardwells|themes\/.*assets\/images\/|download_\(\d+\)\.|watchLIVEauction|property-top-image|auc2-logo|gavel|backdrop|generic[_-]?image|auction[_-]?house[_-]?(?:logo|image)|coming[_-]?soon|maggsandallen\.co\.uk\/images\/|hollismorgan\.co\.uk\/images\/|fssproperty\.co\.uk\/images\//i;
-  // Known non-property domains and brand names that appear as junk images
-  const imgDomainBlock = /flannels|kirklees|rdw\b|council\.gov|\.gov\.uk\/|googleads|doubleclick|analytics|hotjar|intercom|crisp\.chat|tawk\.to|zendesk|hubspot|mailchimp|sendgrid/i;
-  // House-specific: Hollis Morgan property photos always use /resize/ path
-  const hollisJunk = house === 'hollismorgan' || house === 'maggsandallen';
-  for (const lot of lots) {
-    if (!lot.imageUrl) continue;
-    if (imgBlocklist.test(lot.imageUrl) || imgDomainBlock.test(lot.imageUrl)) {
-      lot.imageUrl = undefined;
-    } else if (hollisJunk && lot.imageUrl.includes('hollismorgan.co.uk') && !lot.imageUrl.includes('/resize/')) {
-      // Hollis Morgan: only /resize/ URLs are property photos; everything else is junk
-      lot.imageUrl = undefined;
-    } else if (hollisJunk && lot.imageUrl.includes('maggsandallen.co.uk') && !lot.imageUrl.includes('/resize/')) {
-      lot.imageUrl = undefined;
-    }
-  }
-
-  return lots;
-}
+// Scraping functions (fetchPage, scrapeAllPages, scrapeAllsopApi, extractAllsopLotsFromJson,
+// enrichAllsopLots, detectTotalPages, buildPageUrl, acquirePage, getBrowser, scrapeWithPuppeteer,
+// extractLotsWithAI, isPdfUrl, extractLotsFromPdf, stripHtml, normaliseLotStatuses,
+// backfillImages, fetchLotPage, backfillImagesFromLotPages, enrichLotsFromLotPages,
+// backfillImagesWithPuppeteer, extractWithDOM) — all moved to lib/scraper.js
 
 // ═══════════════════════════════════════════════════════════════
 // ANALYSIS ENGINE
@@ -8165,21 +6405,32 @@ setInterval(() => {
     creditExhaustedAt = 0;
     console.log('Gemini credit exhaustion flag auto-cleared (1h TTL)');
   }
-  if (fcCreditExhausted && Date.now() - fcExhaustedAt > 3600000) {
-    fcCreditExhausted = false;
-    fcExhaustedAt = 0;
+  if (isFcCreditExhausted() && Date.now() - getFcExhaustedAt() > 3600000) {
+    setFcCreditExhausted(false);
+    setFcExhaustedAt(0);
     console.log('Firecrawl credit exhaustion flag auto-cleared (1h TTL)');
   }
-  if (fcTemporarilyDown && Date.now() - fcDownAt > 600000) {
-    fcTemporarilyDown = false;
-    fcDownAt = 0;
-    fcConsecutive5xx = 0;
+  if (isFcTemporarilyDown() && Date.now() - getFcDownAt() > 600000) {
+    setFcTemporarilyDown(false);
+    setFcDownAt(0);
+    setFcConsecutive5xx(0);
     console.log('Firecrawl temporarily-down flag auto-cleared (10min TTL)');
   }
 }, 300000);
 let apiCallCount = 0;
 let hashHitCount = 0;
 const serverStartTime = new Date().toISOString();
+
+// Initialize scraper with server-level dependencies
+initScraper({
+  callAI,
+  getCreditExhausted: () => creditExhausted,
+  setCreditExhausted: (v) => { creditExhausted = v; },
+  setCreditExhaustedAt: (v) => { creditExhaustedAt = v; },
+  getApiCallCount: () => apiCallCount,
+  incApiCallCount: () => { apiCallCount++; },
+  extractPostcode,
+});
 
 // ── Concurrency utilities for wave-based pipeline ──
 function createSemaphore(max) {
@@ -8594,7 +6845,7 @@ async function _doAutoAnalyseAll() {
           if (stillNoImages > 0 && PUPPETEER_IMAGE_HOUSES.has(houseSlug)) {
             console.log(`AUTO: ${auction.house} — ${stillNoImages} lots still missing images, trying rendered backfill...`);
             let gained = 0;
-            if (FIRECRAWL_API_KEY && !fcCreditExhausted) {
+            if (FIRECRAWL_API_KEY && !isFcCreditExhausted()) {
               gained += await backfillImagesWithFirecrawl(auction.url, cachedLots, houseSlug);
             }
             const afterFc = cachedLots.filter(l => !l.imageUrl).length;
@@ -8648,7 +6899,7 @@ async function _doAutoAnalyseAll() {
   console.log(`═══ AUTO-ANALYSIS COMPLETE: ${analysed} analysed, ${skipped} cached/skipped, ${failed} failed ═══\n`);
 
   // ── Step 3: Proactive healing sweep for houses with unresolved 0-lot regressions ──
-  if (FIRECRAWL_API_KEY && !fcCreditExhausted) {
+  if (FIRECRAWL_API_KEY && !isFcCreditExhausted()) {
     try {
       const { data: unresolvedAlerts } = await supabase
         .from('pipeline_alerts')
@@ -8964,7 +7215,7 @@ async function discoverAndUpdateCalendar() {
     try {
       // Fetch root page — prefer Firecrawl (handles JS rendering, anti-bot)
       let html;
-      if (FIRECRAWL_API_KEY && !fcCreditExhausted) {
+      if (FIRECRAWL_API_KEY && !isFcCreditExhausted()) {
         try {
           const fcResult = await scrapeWithFirecrawl(rootUrl, { formats: ['rawHtml'] });
           html = fcResult.html || '';
@@ -9354,7 +7605,7 @@ async function autoAnalyseOne(url) {
     try {
       let probeHtml;
       let probeSource = 'http';
-      if (FIRECRAWL_API_KEY && !fcCreditExhausted && !FIRECRAWL_SKIP.has(house)) {
+      if (FIRECRAWL_API_KEY && !isFcCreditExhausted() && !FIRECRAWL_SKIP.has(house)) {
         try {
           const fcProbe = await scrapeWithFirecrawl(scrapeUrl, { formats: ['rawHtml'] });
           probeHtml = fcProbe.html || '';
@@ -9393,7 +7644,7 @@ async function autoAnalyseOne(url) {
 
   } else if (rewritten.preferPuppeteer) {
     // JS-rendered sites: Firecrawl+JSDOM (primary), Puppeteer (fallback)
-    if (fcCreditExhausted) console.log(`AUTO: Firecrawl credits exhausted, will use Puppeteer fallback for ${house}`);
+    if (isFcCreditExhausted()) console.log(`AUTO: Firecrawl credits exhausted, will use Puppeteer fallback for ${house}`);
 
     if (rewritten.paginateAs === 'savills_pages') {
       const firstResult = await scrapeRenderedPage(scrapeUrl, house);
@@ -9413,7 +7664,7 @@ async function autoAnalyseOne(url) {
       if (firstPageLots && firstPageLots.length > 0) rawLots.push(...firstPageLots);
       const maxPages = Math.min(totalPages, 50);
       for (let p = 2; p <= maxPages; p++) {
-        if (fcCreditExhausted && !puppeteer) { console.log(`AUTO: No scraping engine available at page ${p}`); break; }
+        if (isFcCreditExhausted() && !puppeteer) { console.log(`AUTO: No scraping engine available at page ${p}`); break; }
         try {
           const pageResult = await scrapeRenderedPage(`${scrapeUrl}/page-${p}`, house);
           const pageLots = extractWithJSDOM(pageResult.html, house, `${scrapeUrl}/page-${p}`, pageResult.images);
@@ -9649,7 +7900,7 @@ async function autoAnalyseOne(url) {
   const stillNoImg = lots.filter(l => !l.imageUrl).length;
   if (stillNoImg > 0 && PUPPETEER_IMAGE_HOUSES.has(house)) {
     // Pass 1: Firecrawl (with executeJavascript to force lazy-load + images format)
-    if (FIRECRAWL_API_KEY && !fcCreditExhausted) {
+    if (FIRECRAWL_API_KEY && !isFcCreditExhausted()) {
       await backfillImagesWithFirecrawl(url, lots, house);
     }
     // Pass 2: Puppeteer for any remaining misses (renders JS natively, better at intersection observers)
@@ -9757,15 +8008,15 @@ async function autoAnalyseOne(url) {
     expires_at: expiresAt,
     content_hash: autoAnalyseOne._lastContentHash || null,
     last_scraped_at: new Date().toISOString(),
-    scraped_with: _lastScrapeEngine,
+    scraped_with: getLastScrapeEngine(),
     extracted_with: getLastExtractorUsed(),
-    ai_tier: _lastAITier,
+    ai_tier: getLastAITier(),
   }, { onConflict: 'url' });
 
   // ── Upsert individual lots to lots table (single source of truth) ──
   normaliseLotStatuses(lots); // Normalize before write — canonical statuses only
   await upsertToLotsTable(lots, house, url, {
-    scrapedWith: _lastScrapeEngine,
+    scrapedWith: getLastScrapeEngine(),
     extractedWith: getLastExtractorUsed(),
   });
 
@@ -9802,7 +8053,7 @@ async function autoAnalyseOne(url) {
       catalogueUrl: url,
       lotCount: newTotalLots,
       imageCoverage: lots.length > 0 ? Math.round(lots.filter(l => l.imageUrl).length / lots.length * 100) : 0,
-      scrapedWith: _lastScrapeEngine,
+      scrapedWith: getLastScrapeEngine(),
       requiresPuppeteer: !!rewritten.preferPuppeteer,
     });
   } catch (skillErr) {
