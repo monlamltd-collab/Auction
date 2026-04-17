@@ -196,6 +196,7 @@ ALTER TABLE house_skills ADD COLUMN IF NOT EXISTS rolling_image_coverage INTEGER
 ALTER TABLE house_skills ADD COLUMN IF NOT EXISTS enrichment_stats JSONB DEFAULT '{}';
 ALTER TABLE house_skills ADD COLUMN IF NOT EXISTS healing_cooldown_until TIMESTAMPTZ;
 ALTER TABLE house_skills ADD COLUMN IF NOT EXISTS healing_attempts INTEGER DEFAULT 0;
+ALTER TABLE house_skills ADD COLUMN IF NOT EXISTS circuit_opened_at TIMESTAMPTZ;
 
 -- 15. HARNESS: discovery_candidates table
 CREATE TABLE IF NOT EXISTS discovery_candidates (
@@ -233,3 +234,102 @@ CREATE TABLE IF NOT EXISTS manager_cycles (
 CREATE INDEX IF NOT EXISTS idx_manager_cycles_created ON manager_cycles(created_at DESC);
 ALTER TABLE manager_cycles ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Service role full access" ON manager_cycles FOR ALL USING (true) WITH CHECK (true);
+
+-- 17. LOTS TABLE
+-- Primary data store for individual auction lots (single source of truth)
+CREATE TABLE IF NOT EXISTS lots (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  house TEXT NOT NULL,
+  lot_number TEXT,
+  url TEXT NOT NULL,
+  catalogue_url TEXT NOT NULL,
+  address TEXT NOT NULL,
+  postcode TEXT,
+  price INTEGER,
+  price_text TEXT,
+  prop_type TEXT,
+  beds INTEGER,
+  tenure TEXT,
+  lease_length INTEGER,
+  sqft INTEGER,
+  condition TEXT,
+  image_url TEXT,
+  bullets JSONB DEFAULT '[]',
+  units INTEGER DEFAULT 0,
+  auction_date DATE,
+  status TEXT DEFAULT 'available',
+  sold_price INTEGER,
+  epc_rating TEXT,
+  epc_score INTEGER,
+  epc_date DATE,
+  flood_zone INTEGER,
+  flood_risk TEXT,
+  street_avg INTEGER,
+  street_sales JSONB,
+  street_sales_count INTEGER,
+  below_market NUMERIC(5,2),
+  est_monthly_rent INTEGER,
+  est_annual_rent INTEGER,
+  est_gross_yield NUMERIC(5,2),
+  score NUMERIC(4,1),
+  score_breakdown JSONB DEFAULT '[]',
+  opps JSONB DEFAULT '[]',
+  risks JSONB DEFAULT '[]',
+  deal_type TEXT,
+  vacant BOOLEAN,
+  title_split BOOLEAN,
+  raw_text TEXT,
+  search_text TEXT,
+  search_vector TSVECTOR GENERATED ALWAYS AS (to_tsvector('english', COALESCE(search_text, ''))) STORED,
+  extracted_with TEXT,
+  scraped_with TEXT,
+  last_seen_at TIMESTAMPTZ DEFAULT NOW(),
+  enriched_at TIMESTAMPTZ,
+  first_seen_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(house, url)
+);
+
+CREATE INDEX IF NOT EXISTS idx_lots_catalogue_url ON lots(catalogue_url);
+CREATE INDEX IF NOT EXISTS idx_lots_status ON lots(status);
+CREATE INDEX IF NOT EXISTS idx_lots_auction_date ON lots(auction_date);
+CREATE INDEX IF NOT EXISTS idx_lots_score ON lots(score DESC NULLS LAST);
+CREATE INDEX IF NOT EXISTS idx_lots_house ON lots(house);
+CREATE INDEX IF NOT EXISTS idx_lots_last_seen_at ON lots(last_seen_at);
+CREATE INDEX IF NOT EXISTS idx_lots_search_vector ON lots USING GIN(search_vector);
+
+ALTER TABLE lots ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Service role full access" ON lots FOR ALL USING (true) WITH CHECK (true);
+
+-- 18. LOT STATUS HISTORY
+-- Tracks status changes (available → sold, available → unsold, etc.)
+CREATE TABLE IF NOT EXISTS lot_status_history (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  lot_id UUID REFERENCES lots(id) ON DELETE CASCADE,
+  old_status TEXT,
+  new_status TEXT NOT NULL,
+  source TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_lot_status_history_lot ON lot_status_history(lot_id, created_at DESC);
+ALTER TABLE lot_status_history ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Service role full access" ON lot_status_history FOR ALL USING (true) WITH CHECK (true);
+
+-- 19. INCREMENT_RATE_LIMIT RPC
+-- Atomically upserts the rate_limits row for (ip, date) and returns the new request count.
+-- Called by routes/analyse.js to enforce per-IP daily rate limits without a read-then-write race.
+CREATE OR REPLACE FUNCTION increment_rate_limit(p_ip TEXT, p_date DATE)
+RETURNS INTEGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_requests INTEGER;
+BEGIN
+  INSERT INTO rate_limits (ip, date, requests)
+  VALUES (p_ip, p_date, 1)
+  ON CONFLICT (ip, date)
+  DO UPDATE SET requests = rate_limits.requests + 1
+  RETURNING requests INTO v_requests;
+  RETURN v_requests;
+END;
+$$;

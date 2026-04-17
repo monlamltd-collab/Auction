@@ -63,7 +63,7 @@ lib/fundability.js
 - **Fallback:** Gemini API extraction — when DOM extractors return < 3 lots, the stripped HTML is sent to Gemini with structured extraction prompts
 - **DOM→Gemini merge:** When Gemini fallback is triggered, the DOM extractor is re-run on the raw HTML to harvest URLs and images, which are then merged into Gemini's lot data by lot number (with position-based fallback). This prevents the "cascading image loss" problem where Gemini extraction strips URLs/images from the HTML.
 - **Models:** `gemini-2.5-flash-lite` for known houses (fast tier), `gemini-2.5-pro` for unknown houses and PDF extraction (capable tier). Defined in `lib/ai-provider.js`.
-- **Rate limiting:** Built-in 4.1s gap between calls to stay under Gemini free tier 15 RPM limit
+- **Rate limiting:** Configurable gap between calls via `GEMINI_MIN_GAP_MS` env var (default 100ms for paid tier; set to 4100 for free-tier-safe 15 RPM spacing)
 
 ### Image Extraction Pipeline
 Images are extracted through multiple strategies in priority order:
@@ -399,7 +399,7 @@ Must check before changes:
 - Model: use gemini-2.5-flash-lite for known houses (fast tier), gemini-2.5-pro for unknown/PDF (capable tier)
 - Rate limit guard: check creditExhausted flag before every batch (triggers on 429 / quota errors)
 - Structured output: validate response has expected lot fields before caching
-- Rate limiting: callGemini() enforces 4.1s gap between calls (15 RPM safe margin)
+- Rate limiting: callGemini() enforces a configurable gap between calls via `GEMINI_MIN_GAP_MS` (default 100ms for paid tier; set to 4100 for free-tier 15 RPM safe margin)
 
 ### Property Data Manager Agent
 Owns: enrichLots(), Land Registry calls, VOA calls, scoring logic

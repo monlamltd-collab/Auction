@@ -1565,7 +1565,7 @@ async function triggerAction(action) {
   }
 }
 
-function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
 
 // ── Pipeline display ──
 // Maps house slug → extractor type for the pipeline column
@@ -2010,10 +2010,10 @@ async function loadEnrichmentHealth() {
   const pctCell = v => '<td style="color:' + pctColor(v) + ';font-weight:600">' + v + '%</td>';
   tbody.innerHTML = (data.houses || []).map(h =>
     '<tr>' +
-      '<td>' + h.house + '</td>' +
+      '<td>' + esc(h.house) + '</td>' +
       '<td>' + h.lots + '</td>' +
       pctCell(h.epc) + pctCell(h.flood) + pctCell(h.lr) + pctCell(h.images) +
-      '<td>' + (h.gaps.length ? h.gaps.map(g => '<span class="badge badge-red" style="font-size:.65rem;margin:1px">' + g + '</span>').join(' ') : '<span style="color:var(--green)">—</span>') + '</td>' +
+      '<td>' + (h.gaps.length ? h.gaps.map(g => '<span class="badge badge-red" style="font-size:.65rem;margin:1px">' + esc(g) + '</span>').join(' ') : '<span style="color:var(--green)">—</span>') + '</td>' +
     '</tr>'
   ).join('');
 }

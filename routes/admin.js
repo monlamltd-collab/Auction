@@ -33,35 +33,10 @@ import { getAllHealth } from '../lib/harness/house-health.js';
 import { getDiscoveryQueue, approveCandidate, getDiscoveryBudget } from '../lib/harness/house-discovery.js';
 import { getEnrichmentReport } from '../lib/harness/enrichment-engine.js';
 import { runManagerCycle, getManagerReport, setManagerConfig, getManagerConfig } from '../lib/harness/manager.js';
+import { BROKEN_EXTRACTORS } from './analyse.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const router = Router();
-
-// ═══════════════════════════════════════════════════════════════
-// BROKEN EXTRACTOR TRACKING (auto-populated by audit, persisted to Supabase)
-// ═══════════════════════════════════════════════════════════════
-const BROKEN_EXTRACTORS = new Set();
-
-// Load broken extractors from Supabase on startup
-async function loadBrokenExtractors() {
-  try {
-    const { data, error } = await supabase
-      .from('house_skills')
-      .select('slug')
-      .eq('status', 'broken');
-    if (error) { console.warn('BROKEN: Failed to load broken extractors:', error.message); return; }
-    if (data) {
-      for (const row of data) {
-        BROKEN_EXTRACTORS.add(row.slug);
-      }
-      if (BROKEN_EXTRACTORS.size > 0) {
-        console.log(`BROKEN: Loaded ${BROKEN_EXTRACTORS.size} broken extractors from Supabase: ${[...BROKEN_EXTRACTORS].join(', ')}`);
-      }
-    }
-  } catch (err) {
-    console.warn('BROKEN: Failed to load broken extractors:', err.message);
-  }
-}
 
 router.get('/api/cache-status', async (req, res) => {
   // Require admin auth to prevent internal state leakage
@@ -1294,5 +1269,4 @@ router.post('/api/track/event', rateLimit(60000, 30), async (req, res) => {
   res.json({ ok: true });
 });
 
-export { BROKEN_EXTRACTORS, loadBrokenExtractors };
 export default router;

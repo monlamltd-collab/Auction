@@ -259,7 +259,7 @@ router.post('/api/cron/unsold-alerts', async (req, res) => {
     // Get all active alerts that haven't been sent in the last 23 hours (daily) or 6.5 days (weekly)
     const { data: alerts, error: alertsErr } = await supabase
       .from('unsold_alerts')
-      .select('id, user_id, filters, frequency')
+      .select('id, user_id, filters, frequency, last_sent_at')
       .eq('active', true);
 
     if (alertsErr) { log.error('Unsold alerts query error', { error: alertsErr.message }); return res.status(500).json({ error: 'Failed to fetch alerts' }); }

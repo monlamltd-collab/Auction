@@ -3579,7 +3579,7 @@ function renderLots(){
   const totalLots=lots.length;
   const perPage=parseInt($('fPerPage')?.value)||30;
   const totalPages=Math.max(1,Math.ceil(allItems.filter(i=>!i.isDivider).length/perPage));
-  if(_currentPage>totalPages) _currentPage=totalPages;
+  _currentPage=Math.min(Math.max(1,_currentPage),totalPages);
 
   // Paginate: find items for current page (counting only non-divider items)
   let itemCount=0, startIdx=0, endIdx=allItems.length;
