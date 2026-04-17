@@ -26,14 +26,14 @@ import {
   backfillImagesFromLotPages, fetchLotPage, normaliseLotStatuses, puppeteer,
   isFcCreditExhausted, getFcExhaustedAt, setFcCreditExhausted, setFcExhaustedAt,
   isFcTemporarilyDown, getFcDownAt, setFcTemporarilyDown, setFcDownAt, setFcConsecutive5xx,
-  getLastScrapeEngine, getLastAITier,
+  getLastScrapeEngine, getLastAITier, enrichLotsFromLotPages,
 } from './lib/scraper.js';
 
 // ── Resource budget — single source of truth for resource state ──
 const budget = new ResourceBudget();
 if (puppeteer) budget.setPuppeteer(puppeteer);
 initScraper({ budget });
-import { extractPostcode, enrichLots, enrichLotsFromLotPages, getCircuitBreakers } from './lib/enrichment.js';
+import { extractPostcode, enrichLots, getCircuitBreakers } from './lib/enrichment.js';
 import { log, requestLoggerMiddleware } from './lib/logging.js';
 import { validateEnv, ALLOWED_ORIGINS } from './lib/config.js';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY, AUTH_ENABLED } from './lib/supabase.js';
