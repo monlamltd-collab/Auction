@@ -124,6 +124,8 @@ a{color:var(--red);text-decoration:none}a:hover{text-decoration:underline}
 .chip-row .adv-toggle{font-size:.75rem}
 .chip-sep{width:1px;height:16px;background:var(--border);margin:0 4px;flex-shrink:0}
 /* ── More Filters Popover ── */
+.clear-all-btn{padding:7px 12px;border-radius:8px;border:1px solid var(--accent-danger,#c0392b);background:none;color:var(--accent-danger,#c0392b);font-size:.8rem;font-family:inherit;cursor:pointer;white-space:nowrap;min-height:40px;font-weight:600;transition:all .15s}
+.clear-all-btn:hover{background:var(--accent-danger,#c0392b);color:#fff}
 .more-filters-dd{position:relative;display:inline-block}
 .more-filters-btn{padding:8px 14px;border-radius:8px;border:1px solid var(--border);background:var(--white);font-size:.84rem;min-height:40px;color:var(--text);font-family:inherit;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:6px}
 .more-filters-btn:hover{border-color:var(--green);color:var(--green)}
@@ -1127,6 +1129,7 @@ footer .logo-f span{color:var(--green)}
     </div>
     <!-- ROW 2: Filters -->
     <div class="sp-filter-row sp-primary">
+      <button class="clear-all-btn" onclick="clearAllFilters()" title="Reset all filters">Clear all</button>
       <div class="price-dd" id="priceDropdown">
         <button class="price-dd-btn" id="priceDdBtn" onclick="togglePricePopover(event)">Any price</button>
         <div class="price-pop" id="pricePopover">
@@ -1153,14 +1156,14 @@ footer .logo-f span{color:var(--green)}
       </select>
       <select class="tb-select" id="fSort" onchange="debouncedRender()" aria-label="Sort lots by">
         <option value="date_asc">Auction date (soonest)</option>
-        <option value="score">Score (high → low)</option>
         <option value="price_asc">Price (low → high)</option>
         <option value="price_desc">Price (high → low)</option>
         <option value="yield">Yield (high → low)</option>
+        <option value="score">Score (high → low)</option>
         <option value="days_unsold">Days unsold (longest first)</option>
       </select>
       <div class="more-filters-dd" id="moreFiltersDD">
-        <button class="more-filters-btn" id="moreFiltersBtn" onclick="toggleMoreFilters(event)">More filters <span class="mf-dot" id="mfDot" style="display:none"></span></button>
+        <button class="more-filters-btn" id="moreFiltersBtn" onclick="toggleMoreFilters(event)">Pro filters <span class="mf-dot" id="mfDot" style="display:none"></span></button>
         <div class="more-filters-pop" id="moreFiltersPop">
           <div class="mf-grid">
             <div class="mf-field" style="grid-column:1/-1">
@@ -3441,23 +3444,18 @@ function renderLots(){
   window._filteredLots = lots;
   console.log('[BM] renderLots: LOTS='+LOTS.length+' → filtered='+lots.length+' (lookahead='+fLook+')');
 
-  const top=lots.filter(l=>l.score>=3);
-  let statsHtml=`
-    <div class="stat-card"><div class="v g">${LOTS.length}</div><div class="l">Total lots</div></div>
-    <div class="stat-card"><div class="v y">${lots.length}</div><div class="l">Showing</div></div>
-    <div class="stat-card"><div class="v g">${top.length}</div><div class="l">Score 3+</div></div>
-    <div class="stat-card"><div class="v p">${lots.filter(l=>l.vacant).length}</div><div class="l">Vacant</div></div>
-    <div class="stat-card"><div class="v y">${LOTS.filter(l=>l.price).length}</div><div class="l">Priced</div></div>`;
-  const unsoldCount=LOTS.filter(l=>l.status==='unsold').length;
-  if(unsoldCount) statsHtml+=`<div class="stat-card" style="cursor:pointer" onclick="toggleUnsoldView()"><div class="v" style="color:var(--violet,#8e44ad)">${unsoldCount}</div><div class="l">Unsold</div></div>`;
   // Update unsold toggle count
+  const unsoldCount=LOTS.filter(l=>l.status==='unsold').length;
   const ucEl=$('unsoldCount');if(ucEl) ucEl.textContent=unsoldCount;
+
+  // Stats row: only show affordability breakdown when finance profile is active
+  let statsHtml='';
   if(fp.cash&&aff){
     const cOk=lots.filter(l=>l._affTag==='in_budget').length;
     const cStr=lots.filter(l=>l._affTag==='stretch_refurb'||l._affTag==='stretch_split').length;
     const cFull=lots.filter(l=>l._affTag==='full_finance').length;
     const cOor=lots.filter(l=>l._affTag==='out_of_reach').length;
-    statsHtml+=`<div class="stat-card" style="grid-column:1/-1"><div class="aff-stats"><span class="aff-stat as-ok">${cOk} in budget</span>${cStr?`<span class="aff-stat as-str">${cStr} stretch</span>`:''}${cFull?`<span class="aff-stat" style="background:var(--violet-light);color:var(--violet)">${cFull} zero deposit</span>`:''}${cOor?`<span class="aff-stat as-oor">${cOor} out of reach</span>`:''}</div></div>`;
+    statsHtml=`<div class="stat-card" style="grid-column:1/-1"><div class="aff-stats"><span class="aff-stat as-ok">${cOk} in budget</span>${cStr?`<span class="aff-stat as-str">${cStr} stretch</span>`:''}${cFull?`<span class="aff-stat" style="background:var(--violet-light);color:var(--violet)">${cFull} zero deposit</span>`:''}${cOor?`<span class="aff-stat as-oor">${cOor} out of reach</span>`:''}</div></div>`;
   }
   $('statsRow').innerHTML=statsHtml;
 
