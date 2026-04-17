@@ -12,6 +12,8 @@ ALTER TABLE house_skills ADD COLUMN IF NOT EXISTS last_success_at TIMESTAMPTZ;
 ALTER TABLE house_skills ADD COLUMN IF NOT EXISTS rolling_lot_counts INTEGER[] DEFAULT '{}';
 ALTER TABLE house_skills ADD COLUMN IF NOT EXISTS rolling_image_coverage INTEGER[] DEFAULT '{}';
 ALTER TABLE house_skills ADD COLUMN IF NOT EXISTS enrichment_stats JSONB DEFAULT '{}';
+ALTER TABLE house_skills ADD COLUMN IF NOT EXISTS healing_cooldown_until TIMESTAMPTZ;
+ALTER TABLE house_skills ADD COLUMN IF NOT EXISTS healing_attempts INTEGER DEFAULT 0;
 
 -- 2. discovery_candidates table
 CREATE TABLE IF NOT EXISTS discovery_candidates (
