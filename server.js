@@ -12,72 +12,46 @@ if (process.env.SENTRY_DSN) {
 import express from 'express';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { randomBytes, createHash } from 'crypto';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { readFileSync } from 'fs';
-import { JSDOM } from 'jsdom';
-import { DOM_EXTRACTORS, UNIVERSAL_DOM_EXTRACTOR, extractWithJSDOM, initExtractors, getLastExtractorUsed, setLastExtractorUsed } from './lib/extractors.js';
-import { callAI, initAI, getAICostSummary } from './lib/ai-provider.js';
+import { DOM_EXTRACTORS, initExtractors, getLastExtractorUsed, extractWithJSDOM } from './lib/extractors.js';
+import { callAI, initAI } from './lib/ai-provider.js';
+import { ResourceBudget } from './lib/resource-budget.js';
 import {
-  initScraper, FIRECRAWL_API_KEY, FIRECRAWL_SKIP,
-  scrapeWithFirecrawl, scrapeRenderedPage, scrapePageWithFirecrawl,
-  fetchPage, scrapeAllPages, scrapeAllsopApi, extractAllsopLotsFromJson, enrichAllsopLots,
-  detectTotalPages, buildPageUrl, scrapeWithPuppeteer,
-  acquirePage, getBrowser, hasPuppeteer, puppeteer,
-  extractLotsWithAI, extractLotsFromPdf, isPdfUrl, stripHtml,
+  initScraper,
+  FIRECRAWL_API_KEY, FIRECRAWL_SKIP, scrapeWithFirecrawl, scrapeRenderedPage,
+  scrapeAllPages, scrapeAllsopApi, extractAllsopLotsFromJson, enrichAllsopLots,
+  detectTotalPages, buildPageUrl, fetchPage, extractLotsWithAI,
   backfillImages, backfillImagesWithFirecrawl, backfillImagesWithPuppeteer,
-  backfillImagesFromLotPages, fetchLotPage, enrichLotsFromLotPages,
-  normaliseLotStatuses, isValidImageUrl, IMG_EXTENSIONS, IMG_CDN_DOMAINS,
-  HOUSE_EXTRACTION_HINTS,
-  getFirecrawlStatus, getFcCreditsUsed, isFcCreditExhausted, getFcExhaustedAt,
-  getFcFallbackCount, getFcErrorCount, getFcRequestCount,
-  isFcTemporarilyDown, getFcDownAt, getFcConsecutive5xx, getFcLastError, getFcLastErrorAt,
-  setFcCreditExhausted, setFcExhaustedAt, setFcCreditsUsed,
-  setFcTemporarilyDown, setFcDownAt, setFcConsecutive5xx,
-  getLastScrapeEngine, setLastScrapeEngine, getLastAITier, setLastAITier,
+  backfillImagesFromLotPages, fetchLotPage, normaliseLotStatuses, puppeteer,
+  isFcCreditExhausted, getFcExhaustedAt, setFcCreditExhausted, setFcExhaustedAt,
+  isFcTemporarilyDown, getFcDownAt, setFcTemporarilyDown, setFcDownAt, setFcConsecutive5xx,
+  getLastScrapeEngine, getLastAITier,
 } from './lib/scraper.js';
-import { log, sseWrite, requestLoggerMiddleware } from './lib/logging.js';
-import { validateEnv, STRIPE_ENABLED, RATE_LIMIT_PER_DAY, CACHE_DAYS, CACHE_TIERS, getCacheTTL, HEADERS, MAX_PAGES, MAX_PUPPETEER_PAGES, MAX_LOTS_PER_SCRAPE, MAX_AUCTIONS_PER_HOUSE, TIMEOUT, ALLOWED_ORIGINS, FREE_SCAN_LIMIT, FREE_PREVIEW_LOTS, resolveEffectiveTier, getAISearchLimit, truncateAddress, stripAIFields } from './lib/config.js';
-import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY, AUTH_ENABLED, SUPABASE_JWT_SECRET } from './lib/supabase.js';
-import { securityHeaders, csrfCheck, validateUrl } from './lib/security.js';
-import { verifySupabaseToken, safeCompare, getClientIP, rateLimit, validateUserFromReq, setOnNewUser } from './lib/auth.js';
-import { HOUSE_ROOTS, PUPPETEER_IMAGE_HOUSES, detectAuctionHouse, HOUSE_DISPLAY_NAMES, getHouseDisplayName, rewriteUrl, initHouses } from './lib/houses.js';
+
+// ── Resource budget — single source of truth for resource state ──
+const budget = new ResourceBudget();
+if (puppeteer) budget.setPuppeteer(puppeteer);
+initScraper({ budget });
+import { extractPostcode, enrichLots, enrichLotsFromLotPages, getCircuitBreakers } from './lib/enrichment.js';
+import { log, requestLoggerMiddleware } from './lib/logging.js';
+import { validateEnv, ALLOWED_ORIGINS } from './lib/config.js';
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY, AUTH_ENABLED } from './lib/supabase.js';
+import { securityHeaders, csrfCheck } from './lib/security.js';
+import { getClientIP, setOnNewUser } from './lib/auth.js';
+import { initHouses, HOUSE_ROOTS, rewriteUrl } from './lib/houses.js';
+import { getCalendarAuctions } from './lib/calendar.js';
 
 // ── Harness modules (adaptive resilience framework) ──
-import { initAlerts, fireAlert as harnessFireAlert, resolveAlert as harnessResolveAlert, getUnresolved as harnessGetUnresolved } from './lib/harness/alert-router.js';
-import { validateBatch } from './lib/harness/data-contract.js';
-import { detectRegression } from './lib/harness/regression-detector.js';
-import { evaluateGate } from './lib/harness/quality-gate.js';
-import { initHouseHealth, updateHealth as harnessUpdateHealth, getHealth as harnessGetHealth, getAllHealth, isCircuitOpen, getBaseline } from './lib/harness/house-health.js';
-import { enrichBatch, getEnrichmentReport } from './lib/harness/enrichment-engine.js';
-import { initDiscovery, discoverNewHouses, getDiscoveryQueue, approveCandidate, getDiscoveryBudget } from './lib/harness/house-discovery.js';
+import { initAlerts, fireAlert as harnessFireAlert, resolveAlert as harnessResolveAlert } from './lib/harness/alert-router.js';
+import { initHouseHealth, updateHealth as harnessUpdateHealth } from './lib/harness/house-health.js';
+import { initDiscovery } from './lib/harness/house-discovery.js';
 import { initGenerator } from './lib/harness/extractor-generator.js';
-import { initManager, runManagerCycle, getManagerReport, getManagerDirectives, setManagerConfig, getManagerConfig } from './lib/harness/manager.js';
-import { enrichLotsWithFundability } from './lib/fundability.js';
-import { initEnrichment, extractPostcode, extractStreet, queryLandRegistry, estimateMonthlyRent, buildLotUrl, fetchEPCByPostcode, matchEPCToLot, fetchFloodZone, enrichLots, ensureEnrichmentCacheTable, getCircuitBreakers } from './lib/enrichment.js';
-import { escHtml, normaliseUrl } from './lib/utils.js';
-import { FALLBACK_CALENDAR, getAuctionCalendar, getCalendarAuctions } from './lib/calendar.js';
-import {
-  initAnalysis, qualityGate, analyseLot, W2N,
-  HOUSE_NAME_MIGRATIONS, syncCalendarAndHouseNames,
-  createSemaphore, runWave,
-  autoAnalyseAll, autoAnalyseOne,
-  healBrokenHouse, discoverAndUpdateCalendar,
-  JUNK_LOT_PATTERN, buildSearchText, upsertToLotsTable,
-  computeScrapeDiff, updateHouseSkill, saveDailySnapshot,
-  dbRowToLot, dbRowToFrontendLot, LOTS_SELECT, upsertLotGroups,
-  extractPriceFromText, runEnrichmentWave, logActivityEvent,
-  getCreditExhausted, setCreditExhausted, getCreditExhaustedAt, setCreditExhaustedAt,
-  getApiCallCount, incApiCallCount, getHashHitCount, getServerStartTime,
-  isEnrichmentWaveRunning, isAutoAnalysisRunning,
-  getHealingState, clearHealingCooldown,
-} from './lib/analysis.js';
+import { initManager, runManagerCycle, getManagerDirectives } from './lib/harness/manager.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 validateEnv();
-
-// escHtml and normaliseUrl moved to lib/utils.js
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -105,7 +79,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// BROKEN_EXTRACTORS tracking moved to routes/analyse.js
 import { BROKEN_EXTRACTORS, loadBrokenExtractors } from './routes/analyse.js';
 loadBrokenExtractors().then(() => initExtractors({ brokenExtractors: BROKEN_EXTRACTORS }));
 
@@ -115,10 +88,6 @@ app.use(csrfCheck);
 
 // ── Request logging (from lib/logging.js) ──
 app.use(requestLoggerMiddleware(getClientIP));
-
-// ── Config constants from lib/config.js ──
-const RATE_LIMIT = RATE_LIMIT_PER_DAY;
-// PUPPETEER_IMAGE_HOUSES now imported from lib/houses.js
 
 // ═══════════════════════════════════════════════════════════════
 // AI PROVIDER — Model selection & rate limiting in lib/ai-provider.js
@@ -131,7 +100,6 @@ initAlerts(supabase);
 initHouseHealth(supabase).catch(e => console.warn('Harness: health init failed:', e.message));
 initDiscovery(supabase, callAI);
 initGenerator(supabase, callAI);
-// Manager init deferred to after HOUSE_ROOTS and DOM_EXTRACTORS are defined (see below)
 
 // Inject server-level dependencies into lib/houses.js (rewriteUrl needs these)
 initHouses({
@@ -139,13 +107,6 @@ initHouses({
   getFcCreditExhausted: isFcCreditExhausted,
   scrapeWithFirecrawlFn: scrapeWithFirecrawl,
 });
-
-// qualityGate — moved to lib/analysis.js
-
-// scrapeRenderedPage, scrapePageWithFirecrawl, backfillImagesWithFirecrawl,
-// HOUSE_EXTRACTION_HINTS — all moved to lib/scraper.js
-// HOUSE_ROOTS, PUPPETEER_IMAGE_HOUSES, detectAuctionHouse, HOUSE_DISPLAY_NAMES, getHouseDisplayName, rewriteUrl
-// now imported from lib/houses.js
 
 // ═══════════════════════════════════════════════════════════════
 // STATIC FILES
@@ -198,4 +159,56 @@ app.get('*', (req, res) => {
   }
 });
 
-// Helper: get catalogue-ready auctions (used by auto-analyse)
+// ═══════════════════════════════════════════════════════════════
+// DEPENDENCY INJECTION — wire up lib/analysis.js and harness/manager.js
+// ═══════════════════════════════════════════════════════════════
+import { initAnalysis, autoAnalyseAll, healBrokenHouse } from './lib/analysis.js';
+
+initAnalysis({
+  // Resource budget (new: centralised resource state)
+  budget,
+  // Scraper (legacy deps — will migrate to budget incrementally)
+  FIRECRAWL_API_KEY, FIRECRAWL_SKIP, scrapeWithFirecrawl, scrapeRenderedPage,
+  scrapeAllPages, scrapeAllsopApi, extractAllsopLotsFromJson, enrichAllsopLots,
+  detectTotalPages, buildPageUrl, fetchPage, extractLotsWithAI,
+  backfillImages, backfillImagesWithFirecrawl, backfillImagesWithPuppeteer,
+  backfillImagesFromLotPages, fetchLotPage, normaliseLotStatuses, puppeteer,
+  isFcCreditExhausted, getFcExhaustedAt, setFcCreditExhausted, setFcExhaustedAt,
+  isFcTemporarilyDown, getFcDownAt, setFcTemporarilyDown, setFcDownAt, setFcConsecutive5xx,
+  getLastScrapeEngine, getLastAITier,
+  // Extractors
+  DOM_EXTRACTORS, extractWithJSDOM, getLastExtractorUsed,
+  // Enrichment
+  extractPostcode, enrichLots, enrichLotsFromLotPages,
+  // Houses
+  rewriteUrl,
+  // Calendar
+  getCalendarAuctions,
+  // AI
+  callAI,
+  // Harness
+  runManagerCycle, getManagerDirectives,
+  harnessFireAlert, harnessResolveAlert, harnessUpdateHealth,
+});
+
+initManager({
+  supabase, callAI,
+  houseRoots: HOUSE_ROOTS,
+  domExtractors: DOM_EXTRACTORS,
+  healBrokenHouse,
+  getCircuitBreakers,
+});
+
+// ═══════════════════════════════════════════════════════════════
+// START SERVER
+// ═══════════════════════════════════════════════════════════════
+app.listen(PORT, () => {
+  console.log(`Bridgematch running on port ${PORT}`);
+  if (!process.env.SUPABASE_URL) console.warn('SUPABASE_URL not set');
+  if (!process.env.SUPABASE_SERVICE_KEY) console.warn('SUPABASE_SERVICE_KEY not set');
+
+  // Auto-analyse all catalogue-ready auctions — 30s after startup, then every 6 hours
+  setTimeout(() => autoAnalyseAll(), 30000);
+  setInterval(() => autoAnalyseAll(), 6 * 60 * 60 * 1000);
+});
+

@@ -12,9 +12,9 @@ import {
   scrapeRenderedPage, scrapeAllPages, scrapeAllsopApi, extractAllsopLotsFromJson,
   detectTotalPages, buildPageUrl, extractLotsWithAI, extractLotsFromPdf, isPdfUrl, fetchPage,
   enrichLotsFromLotPages, normaliseLotStatuses,
-  getLastScrapeEngine, getLastExtractorUsed, setLastExtractorUsed, getLastAITier,
+  getLastScrapeEngine, getLastAITier,
 } from '../lib/scraper.js';
-import { extractWithJSDOM, DOM_EXTRACTORS } from '../lib/extractors.js';
+import { extractWithJSDOM, DOM_EXTRACTORS, getLastExtractorUsed, setLastExtractorUsed } from '../lib/extractors.js';
 import { enrichLots } from '../lib/enrichment.js';
 import { enrichLotsWithFundability } from '../lib/fundability.js';
 import { qualityGate, analyseLot, upsertToLotsTable, logActivityEvent, dbRowToFrontendLot, LOTS_SELECT } from '../lib/analysis.js';
