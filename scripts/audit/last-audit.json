@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-04-16T06:35:00.029Z",
+  "timestamp": "2026-04-17T06:35:13.693Z",
   "results": [
     {
       "house": "savills",
@@ -21,18 +21,13 @@
       "house": "sdl",
       "extractorLots": 1,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": 100,
       "issues": [
         {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
-        },
-        {
-          "type": "CACHE_STALE",
+          "type": "MISSING_FROM_CACHE",
           "severity": "WARNING",
-          "detail": "Cached 14 vs live 1 (93% drift)"
+          "detail": "1 live lots but missing from production cache"
         }
       ]
     },
@@ -85,7 +80,7 @@
     },
     {
       "house": "auctionhouselondon",
-      "extractorLots": 28,
+      "extractorLots": 30,
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": 100,
@@ -101,7 +96,7 @@
         {
           "type": "EXTRACTOR_BROKEN",
           "severity": "BROKEN",
-          "detail": "DOM extractor returns 0, but 762 prices on page"
+          "detail": "DOM extractor returns 0, but 786 prices on page"
         }
       ]
     },
@@ -133,11 +128,17 @@
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": null,
-      "issues": []
+      "issues": [
+        {
+          "type": "EXTRACTOR_BROKEN",
+          "severity": "BROKEN",
+          "detail": "DOM extractor returns 0, but 5 prices on page"
+        }
+      ]
     },
     {
       "house": "hollismorgan",
-      "extractorLots": 122,
+      "extractorLots": 120,
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": 0,
@@ -145,12 +146,12 @@
         {
           "type": "LOW_IMAGES",
           "severity": "WARNING",
-          "detail": "Image coverage 0% (0/122)"
+          "detail": "Image coverage 0% (0/120)"
         },
         {
           "type": "CACHE_STALE",
           "severity": "WARNING",
-          "detail": "Cached 255 vs live 122 (52% drift)"
+          "detail": "Cached 256 vs live 120 (53% drift)"
         }
       ]
     },
@@ -174,13 +175,7 @@
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": null,
-      "issues": [
-        {
-          "type": "SITE_REDESIGNED",
-          "severity": "BROKEN",
-          "detail": "Structure drift 100/100 + extractor returns 0"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "knightfrank",
@@ -261,7 +256,7 @@
         {
           "type": "CACHE_STALE",
           "severity": "WARNING",
-          "detail": "Cached 922 vs live 50 (95% drift)"
+          "detail": "Cached 923 vs live 50 (95% drift)"
         }
       ]
     },
@@ -283,17 +278,11 @@
     },
     {
       "house": "barnettross",
-      "extractorLots": 12,
+      "extractorLots": 0,
       "universalLots": 0,
       "httpStatus": 200,
-      "imgCoverage": 0,
-      "issues": [
-        {
-          "type": "LOW_IMAGES",
-          "severity": "WARNING",
-          "detail": "Image coverage 0% (0/12)"
-        }
-      ]
+      "imgCoverage": null,
+      "issues": []
     },
     {
       "house": "bradleyhall",
@@ -381,7 +370,7 @@
         {
           "type": "PAGINATION_MISSED",
           "severity": "WARNING",
-          "detail": "Page says \"24 properties found\" but no pagination config"
+          "detail": "Page says \"26 properties found\" but no pagination config"
         },
         {
           "type": "CACHE_STALE",
@@ -392,7 +381,7 @@
     },
     {
       "house": "tcpa",
-      "extractorLots": 42,
+      "extractorLots": 47,
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": 100,
@@ -408,7 +397,7 @@
         {
           "type": "EXTRACTOR_BROKEN",
           "severity": "BROKEN",
-          "detail": "DOM extractor returns 0, but 19 prices on page"
+          "detail": "DOM extractor returns 0, but 20 prices on page"
         }
       ]
     },
@@ -438,14 +427,9 @@
       "house": "harmanhealy",
       "extractorLots": 98,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": 51,
       "issues": [
-        {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
-        },
         {
           "type": "CACHE_STALE",
           "severity": "WARNING",
@@ -455,7 +439,7 @@
     },
     {
       "house": "seelauctions",
-      "extractorLots": 21,
+      "extractorLots": 27,
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": 100,
@@ -463,7 +447,7 @@
         {
           "type": "CACHE_STALE",
           "severity": "WARNING",
-          "detail": "Cached 39 vs live 21 (46% drift)"
+          "detail": "Cached 40 vs live 27 (33% drift)"
         }
       ]
     },
@@ -505,7 +489,7 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 61 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 60 prices on page"
         }
       ]
     },
@@ -527,19 +511,13 @@
       "house": "durrants",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
-      "issues": [
-        {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "dawsons",
-      "extractorLots": 8,
+      "extractorLots": 9,
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": 100,
@@ -547,7 +525,7 @@
     },
     {
       "house": "goldings",
-      "extractorLots": 10,
+      "extractorLots": 12,
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": 100,
@@ -556,6 +534,11 @@
           "type": "BLOCKED",
           "severity": "BROKEN",
           "detail": "Bot detection (Cloudflare) — 200"
+        },
+        {
+          "type": "MINOR_DRIFT",
+          "severity": "INFO",
+          "detail": "Structure drift score 26/100"
         }
       ]
     },
@@ -569,7 +552,7 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 82 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 83 prices on page"
         }
       ]
     },
@@ -589,7 +572,7 @@
     },
     {
       "house": "agentsproperty",
-      "extractorLots": 80,
+      "extractorLots": 84,
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": 100,
@@ -597,7 +580,7 @@
         {
           "type": "MISSING_FROM_CACHE",
           "severity": "WARNING",
-          "detail": "80 live lots but missing from production cache"
+          "detail": "84 live lots but missing from production cache"
         }
       ]
     },
@@ -605,14 +588,9 @@
       "house": "andrewcraig",
       "extractorLots": 24,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": 100,
       "issues": [
-        {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
-        },
         {
           "type": "PAGINATION_MISSED",
           "severity": "WARNING",
@@ -624,14 +602,9 @@
       "house": "buttersjohnbee",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": [
-        {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
-        },
         {
           "type": "EXTRACTOR_ERROR",
           "severity": "BROKEN",
@@ -650,11 +623,6 @@
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
           "detail": "No custom extractor — universal finds 0 but 83 prices on page"
-        },
-        {
-          "type": "SITE_REDESIGNED",
-          "severity": "BROKEN",
-          "detail": "Structure drift 100/100 + extractor returns 0"
         }
       ]
     },
@@ -686,18 +654,7 @@
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": 100,
-      "issues": [
-        {
-          "type": "MINOR_DRIFT",
-          "severity": "INFO",
-          "detail": "Structure drift score 25/100"
-        },
-        {
-          "type": "MISSING_FROM_CACHE",
-          "severity": "WARNING",
-          "detail": "1 live lots but missing from production cache"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "iamsold",
@@ -719,25 +676,24 @@
       "universalLots": 0,
       "httpStatus": 200,
       "imgCoverage": 100,
-      "issues": [
-        {
-          "type": "MISSING_FROM_CACHE",
-          "severity": "WARNING",
-          "detail": "16 live lots but missing from production cache"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "auctionhouseeastanglia",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": [
         {
+          "type": "TIMEOUT",
+          "severity": "BROKEN",
+          "detail": "HTTP request timed out (10s)"
+        },
+        {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 308 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 322 prices on page"
         }
       ]
     },
@@ -756,7 +712,7 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 357 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 359 prices on page"
         }
       ]
     },
@@ -775,7 +731,7 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 346 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 347 prices on page"
         }
       ]
     },
@@ -794,7 +750,7 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 253 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 255 prices on page"
         }
       ]
     },
@@ -802,13 +758,18 @@
       "house": "auctionhousebirmingham",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": [
         {
+          "type": "TIMEOUT",
+          "severity": "BROKEN",
+          "detail": "HTTP request timed out (10s)"
+        },
+        {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 105 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 83 prices on page"
         }
       ]
     },
@@ -841,7 +802,7 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 204 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 205 prices on page"
         }
       ]
     },
@@ -896,18 +857,13 @@
       "house": "auctionhousemanchester",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": [
         {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
-        },
-        {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 100 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 101 prices on page"
         }
       ]
     },
@@ -954,7 +910,7 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 1326 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 1333 prices on page"
         }
       ]
     },
@@ -968,7 +924,7 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 107 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 111 prices on page"
         }
       ]
     },
@@ -976,13 +932,18 @@
       "house": "auctionhouseteesvalley",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": [
         {
+          "type": "TIMEOUT",
+          "severity": "BROKEN",
+          "detail": "HTTP request timed out (10s)"
+        },
+        {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 52 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 53 prices on page"
         }
       ]
     },
@@ -990,13 +951,18 @@
       "house": "auctionhousehull",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": [
         {
+          "type": "TIMEOUT",
+          "severity": "BROKEN",
+          "detail": "HTTP request timed out (10s)"
+        },
+        {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 75 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 78 prices on page"
         }
       ]
     },
@@ -1015,7 +981,7 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 71 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 74 prices on page"
         }
       ]
     },
@@ -1034,7 +1000,7 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 775 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 778 prices on page"
         }
       ]
     },
@@ -1053,7 +1019,7 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 654 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 653 prices on page"
         }
       ]
     },
@@ -1061,18 +1027,13 @@
       "house": "auctionhousebedsandbucks",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": [
         {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
-        },
-        {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 45 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 42 prices on page"
         }
       ]
     },
@@ -1113,9 +1074,14 @@
       "house": "auctionhouseleicestershire",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": [
+        {
+          "type": "TIMEOUT",
+          "severity": "BROKEN",
+          "detail": "HTTP request timed out (10s)"
+        },
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
@@ -1176,7 +1142,7 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 153 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 152 prices on page"
         }
       ]
     },
@@ -1241,7 +1207,7 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 204 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 205 prices on page"
         }
       ]
     },
@@ -1249,14 +1215,9 @@
       "house": "auctionhousenorthernireland",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": [
-        {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
-        },
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
@@ -1279,7 +1240,7 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 312 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 334 prices on page"
         }
       ]
     },
@@ -1293,12 +1254,7 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 71 prices on page"
-        },
-        {
-          "type": "SITE_REDESIGNED",
-          "severity": "BROKEN",
-          "detail": "Structure drift 100/100 + extractor returns 0"
+          "detail": "No custom extractor — universal finds 0 but 70 prices on page"
         }
       ]
     },
@@ -1312,7 +1268,7 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 33 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 58 prices on page"
         }
       ]
     },
@@ -1409,14 +1365,9 @@
       "house": "propertyauctionagent",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": [
-        {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
-        },
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
@@ -1428,23 +1379,13 @@
       "house": "lot9",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": [
-        {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
-        },
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
           "detail": "No custom extractor — universal finds 0 but 45 prices on page"
-        },
-        {
-          "type": "SITE_REDESIGNED",
-          "severity": "BROKEN",
-          "detail": "Structure drift 100/100 + extractor returns 0"
         }
       ]
     },
@@ -1452,14 +1393,9 @@
       "house": "auctionnorth",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": [
-        {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
-        },
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
@@ -1471,9 +1407,14 @@
       "house": "bowensonandwatson",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": [
+        {
+          "type": "TIMEOUT",
+          "severity": "BROKEN",
+          "detail": "HTTP request timed out (10s)"
+        },
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
@@ -1585,15 +1526,9 @@
       "house": "johnpye",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
-      "issues": [
-        {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "symondsandsampson",
@@ -1634,11 +1569,6 @@
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
           "detail": "No custom extractor — universal finds 0 but 20 prices on page"
-        },
-        {
-          "type": "SITE_REDESIGNED",
-          "severity": "BROKEN",
-          "detail": "Structure drift 100/100 + extractor returns 0"
         }
       ]
     },
@@ -1736,7 +1666,7 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 44 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 43 prices on page"
         }
       ]
     },
@@ -1744,15 +1674,9 @@
       "house": "mccartneys",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
-      "issues": [
-        {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "bramleys",
@@ -1764,7 +1688,7 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 60 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 59 prices on page"
         }
       ]
     },
@@ -1786,7 +1710,7 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 137 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 138 prices on page"
         }
       ]
     },
@@ -1808,15 +1732,9 @@
       "house": "woolleyandwallis",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": 202,
+      "httpStatus": 200,
       "imgCoverage": null,
-      "issues": [
-        {
-          "type": "EXTRACTOR_ERROR",
-          "severity": "BROKEN",
-          "detail": "Protocol error (Runtime.callFunctionOn): Execution context was destroyed."
-        }
-      ]
+      "issues": []
     },
     {
       "house": "hobbsparker",
@@ -1830,15 +1748,9 @@
       "house": "hairandson",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
-      "issues": [
-        {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "phillipssmithanddunn",
@@ -1878,12 +1790,7 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 12 prices on page"
-        },
-        {
-          "type": "SITE_REDESIGNED",
-          "severity": "BROKEN",
-          "detail": "Structure drift 100/100 + extractor returns 0"
+          "detail": "No custom extractor — universal finds 0 but 11 prices on page"
         }
       ]
     },
@@ -1925,7 +1832,7 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 228 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 226 prices on page"
         }
       ]
     },
@@ -1947,14 +1854,9 @@
       "house": "markjenkinson",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": [
-        {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
-        },
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
@@ -1994,18 +1896,13 @@
       "house": "nesbits",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": [
         {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
-        },
-        {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 73 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 70 prices on page"
         }
       ]
     },
@@ -2088,13 +1985,13 @@
       "house": "luscombemaye",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 404,
       "imgCoverage": null,
       "issues": [
         {
-          "type": "TIMEOUT",
+          "type": "URL_DEAD",
           "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
+          "detail": "HTTP 404 — page not found"
         },
         {
           "type": "EXTRACTOR_ERROR",
@@ -2145,15 +2042,9 @@
       "house": "humberts",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
-      "issues": [
-        {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "allwalesauction",
@@ -2165,7 +2056,7 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 117 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 116 prices on page"
         }
       ]
     },
@@ -2192,14 +2083,9 @@
       "house": "morrismarshall",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": [
-        {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
-        },
         {
           "type": "NO_CATALOGUE",
           "severity": "INFO",
@@ -2211,15 +2097,9 @@
       "house": "gherbertbanks",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 403,
       "imgCoverage": null,
-      "issues": [
-        {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "hawkesford",
@@ -2253,13 +2133,13 @@
       "house": "scargillmann",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 404,
       "imgCoverage": null,
       "issues": [
         {
-          "type": "TIMEOUT",
+          "type": "URL_DEAD",
           "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
+          "detail": "HTTP 404 — page not found"
         }
       ]
     },
@@ -2267,28 +2147,17 @@
       "house": "mellerbraggins",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
-      "issues": [
-        {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "smithandsons",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": [
-        {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
-        },
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
@@ -2300,37 +2169,21 @@
       "house": "wrightmarshall",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
-      "issues": [
-        {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "purplebricksgoto",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": [
-        {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
-        },
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
           "detail": "No custom extractor — universal finds 0 but 70 prices on page"
-        },
-        {
-          "type": "SITE_REDESIGNED",
-          "severity": "BROKEN",
-          "detail": "Structure drift 100/100 + extractor returns 0"
         }
       ]
     },
@@ -2338,14 +2191,9 @@
       "house": "groundrentauctions",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": [
-        {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
-        },
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
@@ -2357,15 +2205,9 @@
       "house": "benjaminstevens",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
-      "issues": [
-        {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "auctionhammermidlands",
@@ -2382,7 +2224,7 @@
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 32 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 31 prices on page"
         }
       ]
     },
@@ -2390,18 +2232,13 @@
       "house": "sharpesauctions",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": [
         {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
-        },
-        {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
-          "detail": "No custom extractor — universal finds 0 but 14 prices on page"
+          "detail": "No custom extractor — universal finds 0 but 15 prices on page"
         }
       ]
     },
@@ -2409,14 +2246,9 @@
       "house": "jjmorris",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": [
-        {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
-        },
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
@@ -2428,14 +2260,9 @@
       "house": "rendells",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": [
-        {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
-        },
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
@@ -2447,14 +2274,9 @@
       "house": "pearsonferrier",
       "extractorLots": 0,
       "universalLots": 0,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": [
-        {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (10s)"
-        },
         {
           "type": "NO_EXTRACTOR",
           "severity": "WARNING",
