@@ -1123,35 +1123,35 @@ footer .logo-f span{color:var(--green)}
         <button id="listViewBtn" onclick="setView('list')" title="List view"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="3" y2="6" stroke-linecap="round"/><line x1="8" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="3" y2="12" stroke-linecap="round"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="3" y2="18" stroke-linecap="round"/><line x1="8" y1="18" x2="21" y2="18"/></svg></button>
       </div>
       <span class="sp-page-info" id="filterBarCount"></span>
-      <select class="tb-select sp-lots-dd" id="fAfford" onchange="renderLots()" style="display:none"><option value="all">All lots</option><option value="affordable">Affordable</option><option value="in_budget">In budget only</option><option value="full_finance">Zero deposit only</option></select>
+      <select class="tb-select sp-lots-dd" id="fAfford" onchange="debouncedRender()" style="display:none"><option value="all">All lots</option><option value="affordable">Affordable</option><option value="in_budget">In budget only</option><option value="full_finance">Zero deposit only</option></select>
     </div>
     <!-- ROW 2: Filters -->
     <div class="sp-filter-row sp-primary">
       <div class="price-dd" id="priceDropdown">
         <button class="price-dd-btn" id="priceDdBtn" onclick="togglePricePopover(event)">Any price</button>
         <div class="price-pop" id="pricePopover">
-          <div><label>Min</label><select id="fMinPrice" onchange="updatePriceBtn();renderLots()">
+          <div><label>Min</label><select id="fMinPrice" onchange="updatePriceBtn();debouncedRender()">
             <option value="">No min</option><option value="50000">£50k</option><option value="100000">£100k</option><option value="150000">£150k</option><option value="200000">£200k</option><option value="250000">£250k</option><option value="300000">£300k</option><option value="400000">£400k</option><option value="500000">£500k</option><option value="750000">£750k</option><option value="1000000">£1m</option><option value="1500000">£1.5m</option><option value="2000000">£2m</option>
           </select></div>
-          <div><label>Max</label><select id="fMaxPrice" onchange="updatePriceBtn();renderLots()">
+          <div><label>Max</label><select id="fMaxPrice" onchange="updatePriceBtn();debouncedRender()">
             <option value="">No max</option><option value="50000">£50k</option><option value="100000">£100k</option><option value="150000">£150k</option><option value="200000">£200k</option><option value="250000">£250k</option><option value="300000">£300k</option><option value="400000">£400k</option><option value="500000">£500k</option><option value="750000">£750k</option><option value="1000000">£1m</option><option value="1500000">£1.5m</option><option value="2000000">£2m</option><option value="3000000">£3m</option>
           </select></div>
         </div>
       </div>
-      <select class="tb-select" id="fBeds" onchange="renderLots()" aria-label="Minimum bedrooms">
+      <select class="tb-select" id="fBeds" onchange="debouncedRender()" aria-label="Minimum bedrooms">
         <option value="">Bedrooms</option><option value="1">1+</option><option value="2">2+</option><option value="3">3+</option><option value="4">4+</option><option value="5">5+</option><option value="6">6+</option><option value="7">7+</option><option value="8">8+</option><option value="9">9+</option><option value="10">10+</option><option value="11">11+</option><option value="12">12+</option><option value="13">13+</option><option value="14">14+</option><option value="15">15+</option>
       </select>
-      <select class="tb-select" id="fType" onchange="renderLots()" aria-label="Property type">
+      <select class="tb-select" id="fType" onchange="debouncedRender()" aria-label="Property type">
         <option value="">Property type</option><option value="house">House</option><option value="flat">Flat</option><option value="bungalow">Bungalow</option><option value="commercial">Commercial</option><option value="land">Land</option><option value="garage">Garage</option><option value="other">Other</option>
       </select>
-      <select class="tb-select" id="fLocation" onchange="renderLots()" aria-label="Location">
+      <select class="tb-select" id="fLocation" onchange="debouncedRender()" aria-label="Location">
         <option value="">Region</option>
         <option value="london">London</option><option value="south east">South East</option><option value="south west">South West</option><option value="east">East of England</option><option value="west midlands">West Midlands</option><option value="east midlands">East Midlands</option><option value="north west">North West</option><option value="north east">North East</option><option value="yorkshire">Yorkshire</option><option value="wales">Wales</option><option value="scotland">Scotland</option>
       </select>
-      <select class="tb-select" id="fSoldTop" onchange="renderLots()" aria-label="Lot status">
+      <select class="tb-select" id="fSoldTop" onchange="debouncedRender()" aria-label="Lot status">
         <option value="all">Lot status</option><option value="available">Available only</option><option value="unsold">Unsold (no sale)</option><option value="sold">Sold</option><option value="stc">Sale Agreed</option><option value="withdrawn">Withdrawn</option><option value="everything">All (inc. sold)</option>
       </select>
-      <select class="tb-select" id="fSort" onchange="renderLots()" aria-label="Sort lots by">
+      <select class="tb-select" id="fSort" onchange="debouncedRender()" aria-label="Sort lots by">
         <option value="date_asc">Auction date (soonest)</option>
         <option value="score">Score (high → low)</option>
         <option value="price_asc">Price (low → high)</option>
@@ -1175,11 +1175,11 @@ footer .logo-f span{color:var(--green)}
             </div>
             <div class="mf-field">
               <label>Opportunity</label>
-              <select class="tb-select" id="fDeal" onchange="renderLots();updateMoreDot()" aria-label="Deal type"><option value="">All deals</option></select>
+              <select class="tb-select" id="fDeal" onchange="debouncedRender();updateMoreDot()" aria-label="Deal type"><option value="">All deals</option></select>
             </div>
             <div class="mf-field">
               <label>Tenure</label>
-              <select class="tb-select" id="fTenure" onchange="renderLots();updateMoreDot()" aria-label="Tenure type">
+              <select class="tb-select" id="fTenure" onchange="debouncedRender();updateMoreDot()" aria-label="Tenure type">
                 <option value="">Any tenure</option><option value="Freehold">Freehold</option><option value="Leasehold">Leasehold</option><option value="Share of Freehold">Share of FH</option>
               </select>
             </div>
@@ -1189,24 +1189,24 @@ footer .logo-f span{color:var(--green)}
             </div>
             <div class="mf-field">
               <label>Radius</label>
-              <select class="tb-select" id="fRadius" onchange="renderLots();updateMoreDot()" aria-label="Search radius">
+              <select class="tb-select" id="fRadius" onchange="debouncedRender();updateMoreDot()" aria-label="Search radius">
                 <option value="">Any distance</option><option value="1">1 mile</option><option value="5">5 miles</option><option value="10">10 miles</option><option value="25">25 miles</option><option value="50">50 miles</option>
               </select>
             </div>
             <div class="mf-field">
               <label>Price info</label>
-              <select class="tb-select" id="fExcludePOA" onchange="renderLots();updateMoreDot()" aria-label="Include or exclude POA lots"><option value="">Include POA</option><option value="yes">Hide POA</option></select>
+              <select class="tb-select" id="fExcludePOA" onchange="debouncedRender();updateMoreDot()" aria-label="Include or exclude POA lots"><option value="">Include POA</option><option value="yes">Hide POA</option></select>
             </div>
             <div class="mf-field">
               <label>Auction window</label>
-              <select class="tb-select" id="fLookahead" onchange="saveLookahead();renderLots()" aria-label="Auction lookahead"><option value="1">Next auction only</option><option value="2" selected>Next 2 auctions</option><option value="all">All auctions</option></select>
+              <select class="tb-select" id="fLookahead" onchange="saveLookahead();debouncedRender()" aria-label="Auction lookahead"><option value="1">Next auction only</option><option value="2" selected>Next 2 auctions</option><option value="all">All auctions</option></select>
             </div>
             <div class="mf-field mf-check">
               <label><input type="checkbox" id="fShowPast" onchange="onShowPastChange()"> Show past auctions</label>
             </div>
             <div class="mf-field">
               <label>Condition</label>
-              <select class="tb-select" id="fCondition" onchange="renderLots();updateMoreDot()" aria-label="Property condition">
+              <select class="tb-select" id="fCondition" onchange="debouncedRender();updateMoreDot()" aria-label="Property condition">
                 <option value="">Any condition</option><option value="needs work">Needs work</option><option value="good">Good</option><option value="vacant">Vacant only</option><option value="tenanted">Tenanted only</option><option value="repossession">Repossession</option>
               </select>
             </div>
@@ -2424,7 +2424,7 @@ try{
 // Wire up input listeners
 ['fpCash','fpPropType','fpTerm','fpRefurb','fpTitleSplit','fpSplitPremium','sdltCountry'].forEach(id=>{
   const el=$(id);
-  if(el)el.addEventListener(el.type==='checkbox'?'change':'input',()=>{updateFinanceProfile();if(typeof renderLots==='function')renderLots()});
+  if(el)el.addEventListener(el.type==='checkbox'?'change':'input',()=>{updateFinanceProfile();if(typeof debouncedRender==='function')debouncedRender()});
 });
 
 function toggleAdvanced(){
@@ -3309,92 +3309,108 @@ function renderLots(){
   const floc=$('fLocation')?.value||'';
   const fpc=$('fPostcode')?.value.trim().toUpperCase()||'';
 
-  if(minP) lots=lots.filter(l=>!l.price||l.price>=minP);
-  if(maxP) lots=lots.filter(l=>!l.price||l.price<=maxP);
-  if(minBeds) lots=lots.filter(l=>!l.beds||l.beds>=minBeds);
-  if(ft) lots=lots.filter(l=>l.propType===ft);
-  if(fd) lots=lots.filter(l=>l.dealType===fd);
-  if(ften) lots=lots.filter(l=>l.tenure===ften);
-  if(fco==='needs work') lots=lots.filter(l=>l.condition==='needs work'||l.condition==='poor');
-  else if(fco==='good') lots=lots.filter(l=>l.condition==='good');
-  else if(fco==='vacant') lots=lots.filter(l=>l.vacant);
-  else if(fco==='tenanted') lots=lots.filter(l=>l.vacant===false);
-  else if(fco==='repossession') lots=lots.filter(l=>(l.bullets||[]).join(' ').toLowerCase().match(/\b(repossess(?:ion|ed)?|receivership|lpa receiver|mortgagee.?(?:sale|possess)|bank.?sale)\b/i)||(l.opps||[]).join(' ').toLowerCase().match(/repossess|receivership/i));
-  if(floc) lots=lots.filter(l=>matchesRegion(l.address, floc));
   const fradius=+($('fRadius')?.value||0);
-  if(fpc&&_searchCentre&&fradius){
-    // Radius search: filter by distance from geocoded centre
-    lots=lots.filter(l=>{
-      if(l._lat&&l._lng) return haversine(_searchCentre.lat,_searchCentre.lng,l._lat,l._lng)<=fradius;
-      // Fallback: prefix match for lots without coords
-      return (l.address||'').toUpperCase().includes(fpc);
-    });
-    // Sort by distance (closest first) when radius filtering
-    lots.sort((a,b)=>{
-      const da=(a._lat&&a._lng)?haversine(_searchCentre.lat,_searchCentre.lng,a._lat,a._lng):999;
-      const db=(b._lat&&b._lng)?haversine(_searchCentre.lat,_searchCentre.lng,b._lat,b._lng):999;
-      return da-db;
-    });
-  } else if(fpc){
-    lots=lots.filter(l=>(l.address||'').toUpperCase().includes(fpc));
-  }
-  if(fa==='affordable'&&fp.cash) lots=lots.filter(l=>l._affTag!=='out_of_reach');
-  if(fa==='in_budget'&&fp.cash) lots=lots.filter(l=>l._affTag==='in_budget'||l._affTag==='unknown');
-  if(fa==='full_finance'&&fp.cash) lots=lots.filter(l=>l._affTag==='full_finance');
   const _today=new Date().toISOString().slice(0,10);
-  const _notEnded=l=>!l._auctionDate||l._auctionDate>=_today;
-  // Skip status/date filtering for AI search results — backend already filtered these
-  if(SMART_RESULTS){
-    // Only apply explicit user-selected status overrides, not the default date gate
-    if(fsold==='available') lots=lots.filter(l=>(l.status==='available'||!l.status));
-    else if(fsold==='unsold') lots=lots.filter(l=>l.status==='unsold');
-    else if(fsold==='sold') lots=lots.filter(l=>l.status==='sold');
-    else if(fsold==='stc') lots=lots.filter(l=>l.status==='stc');
-    else if(fsold==='withdrawn') lots=lots.filter(l=>l.status==='withdrawn');
-    // 'all' or 'everything' → show all AI results as-is
-  } else {
-    if(!fsold||fsold==='all') lots=lots.filter(l=>(!l.status||l.status==='available'||l.status==='unsold')&&_notEnded(l));
-    else if(fsold==='available') lots=lots.filter(l=>(l.status==='available'||!l.status)&&_notEnded(l));
-    else if(fsold==='unsold') lots=lots.filter(l=>l.status==='unsold');
-    else if(fsold==='sold') lots=lots.filter(l=>l.status==='sold');
-    else if(fsold==='stc') lots=lots.filter(l=>l.status==='stc');
-    else if(fsold==='withdrawn') lots=lots.filter(l=>l.status==='withdrawn');
-  }
-  // fsold==='everything' → no filter, show all including sold
-  // Favourites view filter
-  if(typeof _favViewActive!=='undefined'&&_favViewActive){
-    const favKeys=getFavourites();
-    lots=lots.filter(l=>favKeys.indexOf(getFavKey(l))!==-1);
-  }
-  // Local text filter — skip for AI search results (backend already filtered by query)
-  if(fs&&!SMART_RESULTS) lots=lots.filter(l=>(l.address||'').toLowerCase().includes(fs)||(l.bullets||[]).join(' ').toLowerCase().includes(fs)||(l.opps||[]).join(' ').toLowerCase().includes(fs)||(l.risks||[]).join(' ').toLowerCase().includes(fs)||(l.dealType||'').toLowerCase().includes(fs)||(l.propType||'').toLowerCase().includes(fs)||(l._house||'').toLowerCase().includes(fs)||(l.tenure||'').toLowerCase().includes(fs));
-
-  // House filter
+  const _radiusSearch=!!(fpc&&_searchCentre&&fradius);
+  const _prefixSearch=!!(fpc&&!_radiusSearch);
+  const fExcludePOA=$('fExcludePOA')&&$('fExcludePOA').value==='yes';
   const selectedHouses=getSelectedHouses();
-  if(selectedHouses.length) lots=lots.filter(l=>selectedHouses.includes(l._house));
+  const _hasFavView=typeof _favViewActive!=='undefined'&&_favViewActive;
+  const favKeys=_hasFavView?getFavourites():null;
+  const _repoPattern=/\b(repossess(?:ion|ed)?|receivership|lpa receiver|mortgagee.?(?:sale|possess)|bank.?sale)\b/i;
+  const _repoPattern2=/repossess|receivership/i;
 
-  // Exclude POA
-  if($('fExcludePOA') && $('fExcludePOA').value==='yes') lots=lots.filter(l=>l.price>0);
-
-  // Lookahead filter — limit to N upcoming auctions per house (skip for AI search results)
+  // Pre-compute lookahead allowed dates (needs full lot list before filtering)
   const fLook=$('fLookahead')?.value||'all';
+  var houseAllowed=null;
   if(fLook!=='all'&&!SMART_RESULTS){
     const maxAuctions=parseInt(fLook)||1;
-    // Build per-house sorted list of unique auction dates
     const houseDates={};
     for(const l of lots){
       if(!l._auctionDate||!l._house) continue;
       if(!houseDates[l._house]) houseDates[l._house]=new Set();
       houseDates[l._house].add(l._auctionDate);
     }
-    const houseAllowed={};
+    houseAllowed={};
     for(const[h,dates] of Object.entries(houseDates)){
       const sorted=[...dates].sort();
       houseAllowed[h]=new Set(sorted.slice(0,maxAuctions));
     }
-    lots=lots.filter(l=>{
-      if(!l._auctionDate||!l._house) return true;
-      return houseAllowed[l._house]?.has(l._auctionDate);
+  }
+
+  // ── Single-pass filter ──
+  lots=lots.filter(l=>{
+    // Price
+    if(minP&&l.price&&l.price<minP) return false;
+    if(maxP&&l.price&&l.price>maxP) return false;
+    // Beds
+    if(minBeds&&l.beds&&l.beds<minBeds) return false;
+    // Type / Deal / Tenure
+    if(ft&&l.propType!==ft) return false;
+    if(fd&&l.dealType!==fd) return false;
+    if(ften&&l.tenure!==ften) return false;
+    // Condition
+    if(fco==='needs work'&&l.condition!=='needs work'&&l.condition!=='poor') return false;
+    else if(fco==='good'&&l.condition!=='good') return false;
+    else if(fco==='vacant'&&!l.vacant) return false;
+    else if(fco==='tenanted'&&l.vacant!==false) return false;
+    else if(fco==='repossession'){
+      if(!(_repoPattern.test((l.bullets||[]).join(' '))||_repoPattern2.test((l.opps||[]).join(' ')))) return false;
+    }
+    // Location (region)
+    if(floc&&!matchesRegion(l.address, floc)) return false;
+    // Postcode / radius
+    if(_radiusSearch){
+      if(l._lat&&l._lng){ if(haversine(_searchCentre.lat,_searchCentre.lng,l._lat,l._lng)>fradius) return false; }
+      else if(!(l.address||'').toUpperCase().includes(fpc)) return false;
+    } else if(_prefixSearch){
+      if(!(l.address||'').toUpperCase().includes(fpc)) return false;
+    }
+    // Affordability
+    if(fa==='affordable'&&fp.cash&&l._affTag==='out_of_reach') return false;
+    if(fa==='in_budget'&&fp.cash&&l._affTag!=='in_budget'&&l._affTag!=='unknown') return false;
+    if(fa==='full_finance'&&fp.cash&&l._affTag!=='full_finance') return false;
+    // Status / date filtering
+    if(SMART_RESULTS){
+      if(fsold==='available'&&!(l.status==='available'||!l.status)) return false;
+      else if(fsold==='unsold'&&l.status!=='unsold') return false;
+      else if(fsold==='sold'&&l.status!=='sold') return false;
+      else if(fsold==='stc'&&l.status!=='stc') return false;
+      else if(fsold==='withdrawn'&&l.status!=='withdrawn') return false;
+    } else {
+      const notEnded=!l._auctionDate||l._auctionDate>=_today;
+      if(!fsold||fsold==='all'){ if(!(((!l.status||l.status==='available'||l.status==='unsold')&&notEnded))) return false; }
+      else if(fsold==='available'){ if(!((l.status==='available'||!l.status)&&notEnded)) return false; }
+      else if(fsold==='unsold'&&l.status!=='unsold') return false;
+      else if(fsold==='sold'&&l.status!=='sold') return false;
+      else if(fsold==='stc'&&l.status!=='stc') return false;
+      else if(fsold==='withdrawn'&&l.status!=='withdrawn') return false;
+      // fsold==='everything' → no filter
+    }
+    // Favourites
+    if(_hasFavView&&favKeys.indexOf(getFavKey(l))===-1) return false;
+    // Text search (skip for SMART_RESULTS)
+    if(fs&&!SMART_RESULTS){
+      const addr=(l.address||'').toLowerCase(),bull=(l.bullets||[]).join(' ').toLowerCase(),opp=(l.opps||[]).join(' ').toLowerCase(),rsk=(l.risks||[]).join(' ').toLowerCase(),dt=(l.dealType||'').toLowerCase(),pt=(l.propType||'').toLowerCase(),hs=(l._house||'').toLowerCase(),tn=(l.tenure||'').toLowerCase();
+      if(!addr.includes(fs)&&!bull.includes(fs)&&!opp.includes(fs)&&!rsk.includes(fs)&&!dt.includes(fs)&&!pt.includes(fs)&&!hs.includes(fs)&&!tn.includes(fs)) return false;
+    }
+    // House filter
+    if(selectedHouses.length&&!selectedHouses.includes(l._house)) return false;
+    // Exclude POA
+    if(fExcludePOA&&!(l.price>0)) return false;
+    // Lookahead
+    if(houseAllowed&&l._auctionDate&&l._house){
+      if(!houseAllowed[l._house]?.has(l._auctionDate)) return false;
+    }
+    return true;
+  });
+
+  // Sort by distance (closest first) when radius filtering — must be after filter
+  if(_radiusSearch){
+    lots.sort((a,b)=>{
+      const da=(a._lat&&a._lng)?haversine(_searchCentre.lat,_searchCentre.lng,a._lat,a._lng):999;
+      const db=(b._lat&&b._lng)?haversine(_searchCentre.lat,_searchCentre.lng,b._lat,b._lng):999;
+      return da-db;
     });
   }
 
@@ -3466,6 +3482,7 @@ function renderLots(){
   });
 
   expandedLotId = null;
+  _expandedPanelCache.clear();
   const out=$('lotsOut');
 
   // Empty state when no lots match filters
@@ -3608,6 +3625,12 @@ function renderLots(){
 }
 
 // ── Cascading image carousel for lot cards ──
+var _renderDebounceTimer=null;
+function debouncedRender(){
+  if(_renderDebounceTimer) clearTimeout(_renderDebounceTimer);
+  _renderDebounceTimer=setTimeout(renderLots,80);
+}
+var _brokenImageUrls=new Set();
 var _carouselTimer=null;
 function startCardCarousels(){
   if(_carouselTimer) clearInterval(_carouselTimer);
@@ -4191,6 +4214,7 @@ function dl(c,n,t){const b=new Blob([c],{type:t}),a=document.createElement('a');
 // EXPANDED CARD STATE + FINANCE WIDGET
 // ═══════════════════════════════
 let expandedLotId = null;
+var _expandedPanelCache = new Map(); // lot._idx → DOM node
 
 function getPropertyTypeIcon(type) {
   const icons = {
@@ -4339,12 +4363,24 @@ function getCardImageHtml(lot) {
   _imgRenderCount++;
   var loadAttr = _imgRenderCount <= 6 ? 'eager' : 'lazy';
   const overlay = getStatusOverlay(lot);
-  if (!lot.imageUrl || !isValidImageUrl(lot.imageUrl)) {
+  if (!lot.imageUrl || !isValidImageUrl(lot.imageUrl) || _brokenImageUrls.has(optimImg(lot.imageUrl, 400))) {
     return '<div class="card-image-wrapper">' +
       getPlaceholderHtml(lot.propType) +
       overlay +
       getCardImageBadges(lot) +
     '</div>';
+  }
+  // Filter out known-broken images from carousel arrays
+  if (lot.images && lot.images.length > 1) {
+    var cleanImages = lot.images.filter(function(u){ return !_brokenImageUrls.has(optimImg(u, 400)); });
+    if (cleanImages.length === 0) {
+      return '<div class="card-image-wrapper">' +
+        getPlaceholderHtml(lot.propType) +
+        overlay +
+        getCardImageBadges(lot) +
+      '</div>';
+    }
+    if (cleanImages.length < lot.images.length) lot = Object.assign({}, lot, {images: cleanImages, imageUrl: cleanImages[0]});
   }
   // Multi-image carousel (cascading crossfade)
   if (lot.images && lot.images.length > 1) {
@@ -4352,7 +4388,7 @@ function getCardImageHtml(lot) {
     var imgsHtml = '';
     var dotsHtml = '<div class="carousel-dots">';
     for (var ci = 0; ci < imgs.length; ci++) {
-      imgsHtml += '<img src="' + esc(optimImg(imgs[ci], 400)) + '" alt="' + esc((lot.address || 'Auction property') + ' ' + (ci+1)) + '" loading="' + loadAttr + '" decoding="async"' + (ci === 0 ? ' class="carousel-active"' : '') + ' onerror="if(document.hidden){this.dataset.needsReload=1}else{this.style.display=\'none\';this.dataset.broken=\'1\'}">';
+      imgsHtml += '<img src="' + esc(optimImg(imgs[ci], 400)) + '" alt="' + esc((lot.address || 'Auction property') + ' ' + (ci+1)) + '" loading="' + loadAttr + '" decoding="async"' + (ci === 0 ? ' class="carousel-active"' : '') + ' onerror="if(document.hidden){this.dataset.needsReload=1}else{_brokenImageUrls.add(this.src);this.style.display=\'none\';this.dataset.broken=\'1\'}">';
       dotsHtml += '<span class="carousel-dot' + (ci === 0 ? ' dot-active' : '') + '"></span>';
     }
     dotsHtml += '</div>';
@@ -4369,7 +4405,7 @@ function getCardImageHtml(lot) {
     '<div class="card-image-shimmer"></div>' +
     '<img class="card-image" src="' + esc(optimImg(lot.imageUrl, 400)) + '" alt="' + esc((lot.address || 'Auction property') + ' — ' + (lot._house || 'auction lot')) + '" loading="' + loadAttr + '" decoding="async" width="400" height="300" ' +
     'onload="this.previousElementSibling.style.display=\'none\';if(this.naturalWidth<120||this.naturalHeight<90){this.outerHTML=getPlaceholderHtml(this.dataset.proptype)}" ' +
-    'onerror="if(document.hidden){this.dataset.needsReload=1}else{this.outerHTML=getPlaceholderHtml(this.dataset.proptype)}"' +
+    'onerror="if(document.hidden){this.dataset.needsReload=1}else{_brokenImageUrls.add(this.src);this.outerHTML=getPlaceholderHtml(this.dataset.proptype)}"' +
     ' data-proptype="' + esc(lot.propType || 'house') + '">' +
     overlay +
     getCardImageBadges(lot) +
@@ -4399,9 +4435,12 @@ function expandCard(lot) {
   if (window.umami) umami.track('lot_expand', {
     lot_number: lot.lot || '', house: lot._house || '', guide_price: lot.price || 0
   });
-  // Close any existing expanded panel
-  const existing = document.querySelector('.expanded-panel');
-  if (existing) existing.remove();
+  // Hide any existing expanded panel (cached — not removed)
+  const existing = document.querySelector('.expanded-panel-visible');
+  if (existing) {
+    existing.style.display = 'none';
+    existing.classList.remove('expanded-panel-visible');
+  }
 
   const cardEl = document.getElementById('lot-' + lot._idx);
   if (!cardEl) return;
@@ -4409,11 +4448,25 @@ function expandCard(lot) {
   if (expandedLotId === lot._idx) {
     expandedLotId = null;
     cardEl.classList.remove('expanded');
+    var _cached = _expandedPanelCache.get(lot._idx);
+    if (_cached) { _cached.style.display = 'none'; _cached.classList.remove('expanded-panel-visible'); }
     return;
   }
   expandedLotId = lot._idx;
   cardEl.classList.add('expanded');
   try { sessionStorage.setItem('ab_scroll_y', window.scrollY.toString()); } catch(e) {}
+
+  // Check if we have a cached panel for this lot
+  var cachedPanel = _expandedPanelCache.get(lot._idx);
+  if (cachedPanel) {
+    // Re-use cached panel — just show it
+    cachedPanel.style.display = '';
+    cachedPanel.classList.add('expanded-panel-visible');
+    // Make sure it's positioned after the correct card
+    cardEl.after(cachedPanel);
+    cachedPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    return;
+  }
 
   // Build expanded panel
   const validImg = lot.imageUrl && isValidImageUrl(lot.imageUrl);
@@ -4443,7 +4496,7 @@ function expandCard(lot) {
   const bulletsHtml = (lot.bullets || []).slice(0, 6).map(b => '<li>' + esc(b) + '</li>').join('');
 
   const panel = document.createElement('div');
-  panel.className = 'expanded-panel';
+  panel.className = 'expanded-panel expanded-panel-visible';
   panel.id = 'expanded-' + lot._idx;
 
   // ── Premium feature sections (Yield Analysis, Comparables, Deal Stacking) ──
@@ -4698,9 +4751,19 @@ function expandCard(lot) {
       '</div>' +
     '</details>';
 
-  // Insert after the card
+  // Insert after the card and cache
   cardEl.after(panel);
+  _expandedPanelCache.set(lot._idx, panel);
   panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  // Preload expanded-view images into browser cache
+  if (lot.images && lot.images.length > 0) {
+    lot.images.slice(0, 5).forEach(function(imgUrl) {
+      var p = new Image(); p.src = optimImg(imgUrl, 600);
+    });
+  } else if (lot.imageUrl) {
+    var p = new Image(); p.src = optimImg(lot.imageUrl, 600);
+  }
 
   // Auto-run finance check if lot has a price
   if (lot.price) {
@@ -4714,8 +4777,11 @@ function expandCard(lot) {
 }
 
 function closeExpandedPanel() {
-  const existing = document.querySelector('.expanded-panel');
-  if (existing) existing.remove();
+  const existing = document.querySelector('.expanded-panel-visible');
+  if (existing) {
+    existing.style.display = 'none';
+    existing.classList.remove('expanded-panel-visible');
+  }
   if (expandedLotId !== null) {
     const cardEl = document.getElementById('lot-' + expandedLotId);
     if (cardEl) cardEl.classList.remove('expanded');
