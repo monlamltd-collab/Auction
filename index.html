@@ -1937,7 +1937,7 @@ async function loadAllLots(opts){
   const force = opts?.force;
   // Skip if lots were loaded very recently (e.g. auth callback re-triggering)
   // or if an AI search is active (don't overwrite LOTS mid-search)
-  if (!force && ALL_LOTS.length > 0 && (Date.now() - _lotsLoadedAt) < 5000) {
+  if (!force && ALL_LOTS.length > 0 && (Date.now() - _lotsLoadedAt) < 10000) {
     return;
   }
   if (!force && (SMART_RESULTS || _searchAbort)) {
@@ -1949,7 +1949,7 @@ async function loadAllLots(opts){
   if (_cachedLots && (Date.now() - _cachedTs) < 600000) {
     try {
       ALL_LOTS = JSON.parse(_cachedLots);
-      _lotsLoadedAt = _cachedTs;
+      _lotsLoadedAt = Date.now(); // Use now, not stale _cachedTs — prevents auth callback re-fetch
       // Only render if not in search results view
       if (!document.body.classList.contains('view-results') && !SMART_RESULTS) {
         LOTS = ALL_LOTS;
@@ -1957,7 +1957,9 @@ async function loadAllLots(opts){
         $('cardsView').style.display = 'block';
         $('resultsPanel').style.display = 'block';
         // Skip full re-render if grid already has matching content (bfcache / tab return)
-        if (document.getElementById('lotsGrid') && window._lastRenderKey) {
+        var _savedRenderKey = sessionStorage.getItem('ab_render_key') || '';
+        if (document.getElementById('lotsGrid') && (window._lastRenderKey || _savedRenderKey)) {
+          window._lastRenderKey = window._lastRenderKey || _savedRenderKey;
           return;
         }
         window._lastRenderKey = null;
