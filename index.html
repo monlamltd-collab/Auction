@@ -1950,12 +1950,16 @@ async function loadAllLots(opts){
       // Only render if not in search results view
       if (!document.body.classList.contains('view-results') && !SMART_RESULTS) {
         LOTS = ALL_LOTS;
-        window._lastRenderKey = null;
         $('resultsTitle').textContent = ALL_LOTS.length.toLocaleString() + ' auction lots';
-        buildLotFilters();
-        renderLots();
         $('cardsView').style.display = 'block';
         $('resultsPanel').style.display = 'block';
+        // Skip full re-render if grid already has matching content (bfcache / tab return)
+        if (document.getElementById('lotsGrid') && window._lastRenderKey) {
+          return;
+        }
+        window._lastRenderKey = null;
+        buildLotFilters();
+        renderLots();
       }
       return;
     } catch(e) {
@@ -3481,13 +3485,20 @@ function renderLots(){
     sel.classList.toggle('active-filter',sel.value!==''&&sel.value!=='all'&&sel.value!=='score');
   });
 
-  expandedLotId = null;
-  _expandedPanelCache.clear();
+  // Collapse any expanded panel (but don't clear cache yet — render-key skip may preserve DOM)
+  if (expandedLotId !== null) {
+    const _expEl = document.querySelector('.expanded-panel-visible');
+    if (_expEl) { _expEl.style.display = 'none'; _expEl.classList.remove('expanded-panel-visible'); }
+    const _expCard = document.getElementById('lot-' + expandedLotId);
+    if (_expCard) _expCard.classList.remove('expanded');
+    expandedLotId = null;
+  }
   const out=$('lotsOut');
 
   // Empty state when no lots match filters
   if(lots.length===0){
     window._lastRenderKey=null;
+    _expandedPanelCache.clear();
     const searchQ=$('smartQuery')?.value.trim()||'';
     out.innerHTML='<div style="text-align:center;padding:40px 20px;color:var(--text-muted)">'+
       '<div style="font-size:1.5rem;margin-bottom:12px">No lots found</div>'+
@@ -3595,6 +3606,7 @@ function renderLots(){
     return;
   }
   window._lastRenderKey=_renderKey;
+  _expandedPanelCache.clear(); // Only clear when we're actually rebuilding DOM
   try { sessionStorage.setItem('ab_render_key', _renderKey); } catch(e) {}
   _imgRenderCount=0;
   out.innerHTML='<div class="lots-grid'+(_viewMode==='list'?' list-view':'')+'" id="lotsGrid">'+pageItems.map(i=>i.html).join('')+'</div>';
@@ -5276,20 +5288,14 @@ function submitEmailCapture(e) {
     if (document.hidden) return;
     var grid = document.getElementById('lotsOut');
     if (!grid) return;
+    // Restore any images that Edge/Chrome replaced while tab was backgrounded
     var broken = grid.querySelectorAll('img[data-needs-reload="1"]');
-    if (broken.length > 0) {
-      // Try restoring each image by re-setting src
-      broken.forEach(function(img) {
-        img.removeAttribute('data-needs-reload');
-        var src = img.getAttribute('src');
-        if (src) { img.src = ''; img.src = src; }
-      });
-      // If too many broke, just re-render the whole grid
-      if (broken.length > 5) {
-        window._lastRenderKey = null;
-        renderLots();
-      }
-    }
+    broken.forEach(function(img) {
+      img.removeAttribute('data-needs-reload');
+      var src = img.getAttribute('src');
+      if (src) { img.src = ''; img.src = src; }
+    });
+    // Never do a full re-render on tab return — image restore above handles it
   });
 
   // Boot when auth state changes
