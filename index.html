@@ -1943,35 +1943,11 @@ async function loadAllLots(opts){
   if (!force && (SMART_RESULTS || _searchAbort)) {
     return;
   }
-  // Restore from sessionStorage cache if less than 10 minutes old
-  const _cachedTs = parseInt(sessionStorage.getItem('ab_lots_ts') || '0');
-  const _cachedLots = sessionStorage.getItem('ab_lots_cache');
-  if (_cachedLots && (Date.now() - _cachedTs) < 600000) {
-    try {
-      ALL_LOTS = JSON.parse(_cachedLots);
-      _lotsLoadedAt = Date.now(); // Use now, not stale _cachedTs — prevents auth callback re-fetch
-      // Only render if not in search results view
-      if (!document.body.classList.contains('view-results') && !SMART_RESULTS) {
-        LOTS = ALL_LOTS;
-        $('resultsTitle').textContent = ALL_LOTS.length.toLocaleString() + ' auction lots';
-        $('cardsView').style.display = 'block';
-        $('resultsPanel').style.display = 'block';
-        // Skip full re-render if grid already has matching content (bfcache / tab return)
-        var _savedRenderKey = sessionStorage.getItem('ab_render_key') || '';
-        if (document.getElementById('lotsGrid') && (window._lastRenderKey || _savedRenderKey)) {
-          window._lastRenderKey = window._lastRenderKey || _savedRenderKey;
-          return;
-        }
-        window._lastRenderKey = null;
-        buildLotFilters();
-        renderLots();
-      }
-      return;
-    } catch(e) {
-      sessionStorage.removeItem('ab_lots_cache');
-    }
-  }
-  showSkeletonCards(12);
+  // sessionStorage lot cache removed — 6K+ lots exceed 5MB quota.
+  // Skeleton suppression on warm return handled via ab_render_key check below.
+  // Only show skeleton cards on a truly cold start (no prior lots rendered).
+  // On warm return (navigated away and back), skip skeletons to avoid jarring flash.
+  if (!sessionStorage.getItem('ab_render_key')) showSkeletonCards(12);
   try{
     const showPast=$('fShowPast')?.checked;
     const apiUrl='/api/all-lots'+(showPast?'?includePast=true':'');
@@ -1985,11 +1961,9 @@ async function loadAllLots(opts){
     window._houseMeta=d.houseMeta||{};
     _lotsLoadedAt = Date.now();
     if (!SMART_RESULTS) _browseSnapshot = null; // invalidate — lots changed (preserve during search)
-    // Persist lots to sessionStorage for bfcache / back-navigation
-    try {
-      sessionStorage.setItem('ab_lots_cache', JSON.stringify(ALL_LOTS));
-      sessionStorage.setItem('ab_lots_ts', _lotsLoadedAt.toString());
-    } catch(e) { /* quota exceeded — skip */ }
+    // Persist timestamp only — full lot array exceeds sessionStorage 5MB quota at 6K+ lots.
+    // ab_render_key (saved in renderLots) is used to suppress skeleton flash on warm returns.
+    try { sessionStorage.setItem('ab_lots_ts', _lotsLoadedAt.toString()); } catch(e) {}
     if(d._debug) console.log('[BM] all-lots pipeline:',d._debug);
     // Show condition filter only for signed-in users (AI field)
     if(!d.anonGated&&$('fCondition')) $('fCondition').style.display='';
