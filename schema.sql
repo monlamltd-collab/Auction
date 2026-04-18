@@ -104,10 +104,11 @@ CREATE TABLE IF NOT EXISTS processed_webhook_events (
 -- Tracks pipeline failures, regressions, and coverage drops for admin alerting
 CREATE TABLE IF NOT EXISTS pipeline_alerts (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  event_type TEXT NOT NULL,          -- 'auto_analyse_failure', 'discovery_miss', 'image_coverage_drop', 'extractor_regression'
+  event_type TEXT NOT NULL,          -- 'auto_analyse_failure', 'discovery_miss', 'image_coverage_drop', 'extractor_regression', 'status_drift', 'quality_gate_ended_lot_ratio', 'quality_gate_calendar_date_sanity'
   severity TEXT NOT NULL DEFAULT 'warning',  -- 'warning' or 'error'
   house TEXT,                        -- auction house slug (null for system-wide alerts)
   message TEXT NOT NULL,
+  meta JSONB DEFAULT '{}'::jsonb,    -- structured alert metadata (samples, coverage stats, drift details)
   resolved BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   resolved_at TIMESTAMPTZ

@@ -5,7 +5,7 @@
 
 import { validateLot, validateBatch } from '../lib/harness/data-contract.js';
 import { detectRegression } from '../lib/harness/regression-detector.js';
-import { evaluateGate } from '../lib/harness/quality-gate.js';
+import { evaluateGate, checkEndedLotRatio, checkCalendarDateSanity } from '../lib/harness/quality-gate.js';
 import { initAlerts, fireAlert, resolveAlert, getUnresolved, getDedupStats } from '../lib/harness/alert-router.js';
 import { updateHealth, getHealth, getAllHealth, isCircuitOpen, getBaseline } from '../lib/harness/house-health.js';
 import { enrichBatch, getEnrichmentReport } from '../lib/harness/enrichment-engine.js';
@@ -225,6 +225,74 @@ const firstRun = evaluateGate('test',
   null,
 );
 assert(firstRun.decision === 'cache', 'First run (no existing cache) → always cache');
+
+// ── 3b. ENDED-LOT RATIO GATE ──
+section('ended-lot-ratio');
+
+{
+  // 90% ended → flagged
+  const endedLots = Array.from({ length: 10 }, (_, i) => ({
+    lot: i + 1, address: `${i} Test St`, status: i < 9 ? 'sold' : 'available', bullets: [],
+  }));
+  const e1 = checkEndedLotRatio('test-ended', endedLots);
+  assert(e1.flagged === true, 'checkEndedLotRatio 90% ended → flagged');
+  assert(e1.ratio === 0.9, 'checkEndedLotRatio ratio = 0.9');
+  assert(e1.endedCount === 9, 'checkEndedLotRatio endedCount = 9');
+
+  // 50% ended → not flagged (below 80% threshold)
+  const halfEnded = Array.from({ length: 10 }, (_, i) => ({
+    lot: i + 1, address: `${i} Test St`, status: i < 5 ? 'unsold' : 'available', bullets: [],
+  }));
+  const e2 = checkEndedLotRatio('test-half', halfEnded);
+  assert(e2.flagged === false, 'checkEndedLotRatio 50% ended → not flagged');
+
+  // Detect "Auction Ended" in bullets even if status is available
+  const bulletEnded = Array.from({ length: 6 }, (_, i) => ({
+    lot: i + 1, address: `${i} Test St`, status: 'available',
+    bullets: i < 5 ? ['Auction Ended'] : [],
+  }));
+  const e3 = checkEndedLotRatio('test-bullets', bulletEnded);
+  assert(e3.flagged === true, 'checkEndedLotRatio detects "Auction Ended" in bullets');
+  assert(e3.endedCount === 5, 'checkEndedLotRatio counts bullet-based ended lots');
+
+  // Too few lots → not flagged
+  const tiny = [{ lot: 1, address: 'A', status: 'sold', bullets: [] }];
+  const e4 = checkEndedLotRatio('test-tiny', tiny);
+  assert(e4.flagged === false, 'checkEndedLotRatio <5 lots → not flagged');
+}
+
+// ── 3c. CALENDAR DATE SANITY ──
+section('calendar-date-sanity');
+
+{
+  // Single date on >100 lots → flagged
+  const bulkDate = Array.from({ length: 120 }, (_, i) => ({
+    lot: i + 1, address: `${i} St`, auctionDate: '2026-05-01',
+  }));
+  const d1 = checkCalendarDateSanity('test-bulk', bulkDate);
+  assert(d1.flagged === true, 'checkCalendarDateSanity >100 lots on one date → flagged');
+  assert(d1.flags.some(f => f.includes('120 lots')), 'checkCalendarDateSanity flag mentions lot count');
+
+  // Non-always_on house with multiple dates → flagged
+  const multiDate = [
+    { lot: 1, address: 'A', auctionDate: '2026-05-01' },
+    { lot: 2, address: 'B', auctionDate: '2026-05-01' },
+    { lot: 3, address: 'C', auctionDate: '2026-06-01' },
+  ];
+  const d2 = checkCalendarDateSanity('test-multi', multiDate, { isAlwaysOn: false });
+  assert(d2.flagged === true, 'checkCalendarDateSanity non-always_on with 2 dates → flagged');
+
+  // Same house as always_on → not flagged for multi-date
+  const d3 = checkCalendarDateSanity('test-ao', multiDate, { isAlwaysOn: true });
+  assert(d3.flagged === false, 'checkCalendarDateSanity always_on with 2 dates → not flagged');
+
+  // Normal single-date batch → not flagged
+  const normal = Array.from({ length: 20 }, (_, i) => ({
+    lot: i + 1, address: `${i} St`, auctionDate: '2026-05-01',
+  }));
+  const d4 = checkCalendarDateSanity('test-normal', normal, { isAlwaysOn: false });
+  assert(d4.flagged === false, 'checkCalendarDateSanity 20 lots on one date → not flagged');
+}
 
 // ═══════════════════════════════════════════════════════════════
 // 4. ALERT ROUTER
