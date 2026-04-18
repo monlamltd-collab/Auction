@@ -151,9 +151,11 @@ section('wave-0: normalisePrice k-suffix');
 section('wave-0: quality gate thresholds');
 
 {
+  const FC_OK = { address: 100, price: 100 };
+
   // evaluateGate with batchQuality=0.44 → verdict 'reject' (new threshold 0.45)
   const g1 = evaluateGate('wave0test',
-    { lots: new Array(10), batchQuality: 0.44 },
+    { lots: new Array(10), batchQuality: 0.44, fieldCoverage: FC_OK },
     { verdict: 'healthy', reasons: [], severity: 'info' },
     { total_lots: 10 },
   );
@@ -161,7 +163,7 @@ section('wave-0: quality gate thresholds');
 
   // evaluateGate with batchQuality=0.50 → verdict 'cache_warn' (in new warn band 0.45-0.60)
   const g2 = evaluateGate('wave0test',
-    { lots: new Array(10), batchQuality: 0.50 },
+    { lots: new Array(10), batchQuality: 0.50, fieldCoverage: FC_OK },
     { verdict: 'healthy', reasons: [], severity: 'info' },
     { total_lots: 10 },
   );
@@ -169,7 +171,7 @@ section('wave-0: quality gate thresholds');
 
   // evaluateGate with batchQuality=0.65 → verdict 'cache' (above new warn ceiling 0.60)
   const g3 = evaluateGate('wave0test',
-    { lots: new Array(10), batchQuality: 0.65 },
+    { lots: new Array(10), batchQuality: 0.65, fieldCoverage: FC_OK },
     { verdict: 'healthy', reasons: [], severity: 'info' },
     { total_lots: 10 },
   );
@@ -184,43 +186,45 @@ section('quality-gate');
 // Init alert router for quality-gate (which uses fireAlert)
 initAlerts(null);
 
+const FC_PASS = { address: 100, price: 100 };
+
 const cacheResult = evaluateGate('test',
-  { lots: new Array(50), batchQuality: 0.7 },
+  { lots: new Array(50), batchQuality: 0.7, fieldCoverage: FC_PASS },
   { verdict: 'healthy', reasons: [], severity: 'info' },
   { total_lots: 45 },
 );
 assert(cacheResult.decision === 'cache', 'Good batch → cache');
 
 const rejectResult = evaluateGate('test',
-  { lots: new Array(10), batchQuality: 0.7 },
+  { lots: new Array(10), batchQuality: 0.7, fieldCoverage: FC_PASS },
   { verdict: 'regression', reasons: ['Lot count drop'], severity: 'error' },
   { total_lots: 50 },
 );
 assert(rejectResult.decision === 'reject', 'Regression + 5x cached lots → reject');
 
 const lowQualityResult = evaluateGate('test',
-  { lots: new Array(10), batchQuality: 0.2 },
+  { lots: new Array(10), batchQuality: 0.2, fieldCoverage: FC_PASS },
   { verdict: 'healthy', reasons: [], severity: 'info' },
   { total_lots: 10 },
 );
 assert(lowQualityResult.decision === 'reject', 'Low quality batch → reject');
 
 const warnResult = evaluateGate('test',
-  { lots: new Array(40), batchQuality: 0.50 },
+  { lots: new Array(40), batchQuality: 0.50, fieldCoverage: FC_PASS },
   { verdict: 'healthy', reasons: [], severity: 'info' },
   { total_lots: 40 },
 );
 assert(warnResult.decision === 'cache_warn', 'Marginal quality (0.50, in warn band 0.45-0.60) → cache_warn');
 
 const degradedWarn = evaluateGate('test',
-  { lots: new Array(40), batchQuality: 0.7 },
+  { lots: new Array(40), batchQuality: 0.7, fieldCoverage: FC_PASS },
   { verdict: 'degraded', reasons: ['Image drop'], severity: 'warning' },
   { total_lots: 40 },
 );
 assert(degradedWarn.decision === 'cache_warn', 'Degraded verdict → cache_warn');
 
 const firstRun = evaluateGate('test',
-  { lots: new Array(5), batchQuality: 0.65 },
+  { lots: new Array(5), batchQuality: 0.65, fieldCoverage: FC_PASS },
   { verdict: 'healthy', reasons: [], severity: 'info' },
   null,
 );

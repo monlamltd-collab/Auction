@@ -14,7 +14,7 @@ import {
   enrichLotsFromLotPages, normaliseLotStatuses,
   getLastScrapeEngine, getLastAITier,
 } from '../lib/scraper.js';
-import { extractWithJSDOM, DOM_EXTRACTORS, getLastExtractorUsed, setLastExtractorUsed } from '../lib/extractors.js';
+import { extractWithJSDOM, DOM_EXTRACTORS, getLastExtractorUsed, setLastExtractorUsed } from '../lib/extractors/index.js';
 import { enrichLots } from '../lib/enrichment.js';
 import { enrichLotsWithFundability } from '../lib/fundability.js';
 import { qualityGate, analyseLot, upsertToLotsTable, logActivityEvent, dbRowToFrontendLot, LOTS_SELECT } from '../lib/analysis.js';

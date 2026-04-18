@@ -9,7 +9,7 @@ import { safeCompare, rateLimit, getClientIP, validateUserFromReq } from '../lib
 import { log } from '../lib/logging.js';
 import { MAX_PUPPETEER_PAGES, MAX_LOTS_PER_SCRAPE, MAX_AUCTIONS_PER_HOUSE } from '../lib/config.js';
 import { HOUSE_ROOTS, PUPPETEER_IMAGE_HOUSES, detectAuctionHouse, HOUSE_DISPLAY_NAMES } from '../lib/houses.js';
-import { DOM_EXTRACTORS, extractWithJSDOM } from '../lib/extractors.js';
+import { DOM_EXTRACTORS, extractWithJSDOM } from '../lib/extractors/index.js';
 import {
   scrapeRenderedPage, backfillImages, backfillImagesFromLotPages,
   backfillImagesWithFirecrawl, backfillImagesWithPuppeteer,

@@ -13,37 +13,14 @@
 
 import { readFileSync, existsSync } from 'fs';
 import { dirname, join } from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import { JSDOM } from 'jsdom';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// ─── Load DOM_EXTRACTORS from server.js ───
-// We extract the object by regex rather than importing (server.js has side effects)
-const serverCode = readFileSync(join(__dirname, '..', 'server.js'), 'utf-8');
-const extractorStart = serverCode.indexOf('const DOM_EXTRACTORS = {');
-if (extractorStart === -1) {
-  console.error('FAIL: Could not find DOM_EXTRACTORS in server.js');
-  process.exit(1);
-}
-
-// Find the matching closing brace
-let braceDepth = 0;
-let extractorEnd = -1;
-for (let i = extractorStart; i < serverCode.length; i++) {
-  if (serverCode[i] === '{') braceDepth++;
-  if (serverCode[i] === '}') {
-    braceDepth--;
-    if (braceDepth === 0) {
-      extractorEnd = i + 1;
-      break;
-    }
-  }
-}
-
-const extractorCode = serverCode.substring(extractorStart, extractorEnd);
-// Evaluate to get the object
-const DOM_EXTRACTORS = new Function(`${extractorCode}; return DOM_EXTRACTORS;`)();
+// ─── Load DOM_EXTRACTORS from lib/extractors/ ───
+const extractorsPath = pathToFileURL(join(__dirname, '..', 'lib', 'extractors', 'index.js')).href;
+const { DOM_EXTRACTORS } = await import(extractorsPath);
 
 // ─── Expected results per snapshot ───
 const EXPECTED = {

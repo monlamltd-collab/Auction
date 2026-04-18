@@ -14,7 +14,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { readFileSync } from 'fs';
-import { DOM_EXTRACTORS, initExtractors, getLastExtractorUsed, extractWithJSDOM } from './lib/extractors.js';
+import { DOM_EXTRACTORS, initExtractors, getLastExtractorUsed, extractWithJSDOM } from './lib/extractors/index.js';
 import { callAI, initAI } from './lib/ai-provider.js';
 import { ResourceBudget } from './lib/resource-budget.js';
 import {
