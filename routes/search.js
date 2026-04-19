@@ -9,6 +9,7 @@ import { enrichLotsWithFundability } from '../lib/fundability.js';
 import { normaliseUrl } from '../lib/utils.js';
 import { FALLBACK_CALENDAR } from '../lib/calendar.js';
 import { normaliseLotStatuses, isValidImageUrl } from '../lib/scraper.js';
+import { createHash } from 'crypto';
 
 const router = Router();
 
@@ -305,6 +306,17 @@ function parseSmartSearchQuery(query) {
 // ═══════════════════════════════════════════════════════════════
 // SMART SEARCH: Column-filtered database query + AI analysis
 // ═══════════════════════════════════════════════════════════════
+const _smartSearchCache = new Map();
+const SMART_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// Clean up expired smart search cache entries every 10 minutes
+setInterval(() => {
+  const cutoff = Date.now() - SMART_CACHE_TTL;
+  for (const [k, v] of _smartSearchCache) {
+    if (v.timestamp < cutoff) _smartSearchCache.delete(k);
+  }
+}, 10 * 60 * 1000);
+
 router.post('/api/smart-search', async (req, res) => {
   const { query, soldFilter } = req.body || {};
   if (!query) return res.status(400).json({ error: 'Missing search query' });
@@ -366,6 +378,15 @@ router.post('/api/smart-search', async (req, res) => {
 
   const presetSlug = isPresetQuery(query);
   const sf = soldFilter || 'all';
+
+  // ── Smart search cache: return cached result for identical queries ──
+  const _smCacheKey = (query.toLowerCase().trim() + '|' + sf).trim();
+  const _smCached = _smartSearchCache.get(_smCacheKey);
+  if (_smCached && (Date.now() - _smCached.timestamp) < SMART_CACHE_TTL) {
+    await incrementSearchCounter();
+    log.info('smart-search cache-hit', { query, cacheAge: Math.round((Date.now() - _smCached.timestamp) / 1000) + 's' });
+    return res.json({ ..._smCached.result, searchesUsed, searchLimit });
+  }
 
   // ── Deterministic preset fast path — no AI needed ──
   // Presets like "Best scoring deals", "Under £100k", "Vacant" etc. can be resolved
@@ -746,10 +767,12 @@ Return the indices of the best matching lots. If few lots match well, that's fin
     await incrementSearchCounter();
     logActivityEvent('smart_search', { query, results_count: matchingLots.length, mode: 'db_plus_ai', preFiltered: totalSearched }, user?.email, getClientIP(req));
 
+    // Cache the result for repeat queries
+    const _smResponseData = { results: matchingLots, report: aiParsed.report || '', sources, totalSearched };
+    _smartSearchCache.set(_smCacheKey, { result: _smResponseData, timestamp: Date.now() });
+
     return res.json({
-      results: matchingLots,
-      report: aiParsed.report || '',
-      sources, totalSearched, searchesUsed, searchLimit,
+      ..._smResponseData, searchesUsed, searchLimit,
     });
   } catch (err) {
     const msg = err.message || String(err);
@@ -785,8 +808,22 @@ router.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
 
     const activeUrls = [...new Set(activeCatalogues.map(c => normaliseUrl(c.url)))];
 
-    // ── Step 2: Query individual lots via RPC (returns JSON blob — bypasses PostgREST row limit) ──
-    const { data: lotRows, error: lotErr } = await supabase.rpc('get_active_lots');
+    // ── Step 2: Run independent queries in parallel ──
+    const unsoldCutoff = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+    const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+
+    const [lotResult, unsoldResult, calendarResult, skillsResult] = await Promise.all([
+      supabase.rpc('get_active_lots'),
+      supabase.from('lots').select(LOTS_SELECT)
+        .in('status', ['unsold', 'withdrawn'])
+        .gte('auction_date', unsoldCutoff)
+        .limit(1000),
+      supabase.from('auction_calendar').select('url, date').gte('date', weekAgo),
+      supabase.from('house_skills').select('slug, logo_url').not('logo_url', 'is', null),
+    ]);
+
+    const { data: lotRows, error: lotErr } = lotResult;
+    const { data: unsoldRows } = unsoldResult;
 
     if (lotErr) {
       log.error('all-lots: get_active_lots RPC failed', { error: lotErr.message });
@@ -796,16 +833,6 @@ router.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
     if (!lotRows || lotRows.length === 0) {
       return res.json({ lots: [], sources: [], stripeEnabled: STRIPE_ENABLED });
     }
-
-    // ── Step 2b: Include persisted unsold lots from expired catalogues (30-day window) ──
-    // This is a key Phase 4 benefit — unsold lots stay visible even after catalogue expires
-    const unsoldCutoff = new Date(Date.now() - 30 * 86400000).toISOString();
-    const { data: unsoldRows } = await supabase
-      .from('lots')
-      .select('*')
-      .in('status', ['unsold', 'withdrawn'])
-      .gte('auction_date', unsoldCutoff.slice(0, 10))
-      .limit(1000);
 
     // Merge unsold lots, avoiding duplicates with active catalogue lots
     const activeLotKeys = new Set((lotRows || []).map(r => `${r.house}|${r.url}`));
@@ -913,14 +940,12 @@ router.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
 
     // ── Attach _auctionDate from calendar (DB + fallback) ──
     const urlDateMap = {};
-    // Load from database calendar first
-    try {
-      const { data: calRows } = await supabase.from('auction_calendar').select('url, date').gte('date', new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10));
-      if (calRows) for (const a of calRows) {
-        const nu = normaliseUrl(a.url);
-        if (nu && a.date && (!urlDateMap[nu] || a.date < urlDateMap[nu])) urlDateMap[nu] = a.date;
-      }
-    } catch { /* fallback below */ }
+    // Use pre-fetched calendar data from parallel query (Step 2)
+    const calRows = calendarResult.data;
+    if (calRows) for (const a of calRows) {
+      const nu = normaliseUrl(a.url);
+      if (nu && a.date && (!urlDateMap[nu] || a.date < urlDateMap[nu])) urlDateMap[nu] = a.date;
+    }
     // Fallback calendar overlay
     for (const a of FALLBACK_CALENDAR) {
       const nu = normaliseUrl(a.url);
@@ -1135,18 +1160,23 @@ router.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
     } else {
       for (const lot of cleanLots) { delete lot.blurred; }
     }
-    // ── Load house logos from house_skills ──
+    // ── House logos from pre-fetched house_skills (Step 2 parallel query) ──
     const uniqueHouses = new Set(sources.map(s => s.house));
     let houseMeta = {};
-    try {
-      const { data: skills } = await supabase
-        .from('house_skills')
-        .select('slug, logo_url')
-        .not('logo_url', 'is', null);
-      if (skills) {
-        for (const s of skills) houseMeta[s.slug] = { logoUrl: s.logo_url };
-      }
-    } catch { /* non-fatal */ }
+    const skills = skillsResult.data;
+    if (skills) {
+      for (const s of skills) houseMeta[s.slug] = { logoUrl: s.logo_url };
+    }
+
+    // ── ETag: skip full response if client already has this data ──
+    const etag = '"' + createHash('md5')
+      .update(cleanLots.length + ':' + cleanLots.map(l => l.url + (l.status || '')).join(','))
+      .digest('hex') + '"';
+
+    if (req.headers['if-none-match'] === etag) {
+      return res.status(304).end();
+    }
+    res.set('ETag', etag);
 
     res.json({
       lots: cleanLots,

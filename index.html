@@ -27,6 +27,8 @@
 <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://auctions.bridgematch.co.uk/"},{"@type":"ListItem","position":2,"name":"Auction Lots","item":"https://auctions.bridgematch.co.uk/auctions"},{"@type":"ListItem","position":3,"name":"BridgeMatch Finance Check","item":"https://auctions.bridgematch.co.uk/check"}]}
 </script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -219,6 +221,7 @@ a{color:var(--red);text-decoration:none}a:hover{text-decoration:underline}
 .tb-select{padding:8px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--white);font-size:.82rem;color:var(--text);font-family:inherit;cursor:pointer}
 .tb-search{padding:8px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--white);font-size:.82rem;color:var(--text);font-family:inherit;outline:0;flex:1;min-width:120px}
 .tb-search:focus{border-color:var(--green)}
+.tb-search.locating{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24'%3E%3Cstyle%3E%40keyframes s%7B0%25%7Btransform:rotate(0)%7D100%25%7Btransform:rotate(360deg)%7D%7D%3C/style%3E%3Ccircle cx='12' cy='12' r='9' fill='none' stroke='%236b7c8d' stroke-width='2.5' stroke-dasharray='42 14' style='animation:s .8s linear infinite;transform-origin:center'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;background-size:16px}
 .spacer{flex:1}
 .tb-btn{padding:7px 14px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--white);font-size:.8rem;color:var(--text2);cursor:pointer;font-family:inherit;font-weight:600}
 .tb-btn:hover{background:var(--green-light);color:var(--green);border-color:var(--green)}
@@ -1316,7 +1319,7 @@ footer .logo-f span{color:var(--green)}
         <div class="step-num">1</div>
         <div class="step-content">
           <h3>Browse every auction</h3>
-          <p><span class="house-count-dynamic">166</span>+ UK auction houses in one place — Savills, Allsop, SDL, Network, Bond Wolfe and more. Filter by price, location, type, and condition.</p>
+          <p><span class="house-count-dynamic">173</span>+ UK auction houses in one place — Savills, Allsop, SDL, Network, Bond Wolfe and more. Filter by price, location, type, and condition.</p>
         </div>
       </div>
       <div class="step highlight">
@@ -1356,7 +1359,7 @@ footer .logo-f span{color:var(--green)}
       <div class="tool-card tool-ab">
         <div class="tool-emoji-wrap">🧠</div>
         <h3>Auction Brain</h3>
-        <p>AI-powered auction lot scoring across <span class="house-count-dynamic">166</span>+ UK auction houses. Every lot analysed for investment signals.</p>
+        <p>AI-powered auction lot scoring across <span class="house-count-dynamic">173</span>+ UK auction houses. Every lot analysed for investment signals.</p>
         <ul class="tool-features">
           <li>Title split detection</li>
           <li>Refurb opportunity flags</li>
@@ -1933,6 +1936,47 @@ function onShowPastChange(){
 }
 
 let _lotsLoadedAt=0; // timestamp of last successful load
+
+// ── IndexedDB lot cache (no 5MB limit like sessionStorage) ──
+const _IDB_NAME='auctionbrain', _IDB_VER=1, _IDB_STORE='lots';
+function _openLotsDB(){
+  return new Promise((resolve,reject)=>{
+    const req=indexedDB.open(_IDB_NAME,_IDB_VER);
+    req.onupgradeneeded=()=>req.result.createObjectStore(_IDB_STORE);
+    req.onsuccess=()=>resolve(req.result);
+    req.onerror=()=>reject(req.error);
+  });
+}
+async function _getCachedLots(){
+  try{const db=await _openLotsDB();return new Promise(r=>{const tx=db.transaction(_IDB_STORE,'readonly');const req=tx.objectStore(_IDB_STORE).get('latest');req.onsuccess=()=>r(req.result||null);req.onerror=()=>r(null)})}catch{return null}
+}
+async function _setCachedLots(data){
+  try{const db=await _openLotsDB();const tx=db.transaction(_IDB_STORE,'readwrite');tx.objectStore(_IDB_STORE).put(data,'latest')}catch{}
+}
+
+function _renderLotsToUI(d) {
+  if(!d.anonGated&&$('fCondition')) $('fCondition').style.display='';
+  const lsEl = document.querySelector('.ls-val[data-target="2000"]');
+  if(lsEl) lsEl.dataset.target = ALL_LOTS.length;
+  if(d.houseCount) document.querySelectorAll('.house-count-dynamic').forEach(el=>{el.textContent=d.houseCount});
+  if(!ALL_LOTS.length){
+    const out=$('lotsGrid');
+    if(out) out.textContent='No auction lots currently available. Check back soon for new listings.';
+  }
+  if(ALL_LOTS.length && !document.body.classList.contains('view-results') && !SMART_RESULTS){
+    LOTS=ALL_LOTS;
+    window._lastRenderKey=null;
+    $('resultsTitle').textContent=ALL_LOTS.length.toLocaleString()+' auction lots';
+    $('viewToggle').style.display='none';
+    $('reportView').style.display='none';
+    $('cardsView').style.display='block';
+    buildLotFilters();
+    if($('fAfford'))$('fAfford').value='all';
+    renderLots();
+    $('resultsPanel').style.display='block';
+  }
+}
+
 async function loadAllLots(opts){
   const force = opts?.force;
   // Skip if lots were loaded very recently (e.g. auth callback re-triggering)
@@ -1943,58 +1987,70 @@ async function loadAllLots(opts){
   if (!force && (SMART_RESULTS || _searchAbort)) {
     return;
   }
-  // sessionStorage lot cache removed — 6K+ lots exceed 5MB quota.
-  // Skeleton suppression on warm return handled via ab_render_key check below.
-  // Only show skeleton cards on a truly cold start (no prior lots rendered).
-  // On warm return (navigated away and back), skip skeletons to avoid jarring flash.
-  if (!sessionStorage.getItem('ab_render_key')) showSkeletonCards(12);
+
+  // ── Try IndexedDB cache for instant render while fetching fresh data ──
+  let idbRendered = false;
+  if (!force && ALL_LOTS.length === 0) {
+    try {
+      const cached = await _getCachedLots();
+      if (cached && cached.ts && (Date.now() - cached.ts) < 5 * 60 * 1000) {
+        ALL_LOTS = cached.lots || [];
+        ALL_SOURCES = cached.sources || [];
+        window._houseMeta = cached.houseMeta || {};
+        if (cached.stripeEnabled !== undefined) window._stripeEnabled = cached.stripeEnabled;
+        _lotsLoadedAt = cached.ts;
+        _renderLotsToUI({ anonGated: cached.anonGated, houseCount: cached.houseCount });
+        idbRendered = true;
+        console.log('[BM] Rendered from IndexedDB cache (' + ALL_LOTS.length + ' lots)');
+      }
+    } catch {}
+  }
+
+  // Only show skeleton cards on a truly cold start (no cached data, no prior lots)
+  if (!idbRendered && !sessionStorage.getItem('ab_render_key')) showSkeletonCards(12);
+
   try{
     const showPast=$('fShowPast')?.checked;
     const apiUrl='/api/all-lots'+(showPast?'?includePast=true':'');
-    const r=await fetch(apiUrl,{headers:getAuthHeaders()});
+    const headers = { ...getAuthHeaders() };
+    const cachedEtag = sessionStorage.getItem('ab_lots_etag');
+    if (cachedEtag) headers['If-None-Match'] = cachedEtag;
+
+    const r=await fetch(apiUrl,{headers});
+
+    // 304 Not Modified — server data unchanged, keep current lots
+    if (r.status === 304) {
+      _lotsLoadedAt = Date.now();
+      console.log('[BM] all-lots: 304 Not Modified (ETag cache hit)');
+      return;
+    }
+
     if(!r.ok) throw new Error('Server error: '+r.status);
+
+    // Store ETag for future conditional requests
+    const newEtag = r.headers.get('ETag');
+    if (newEtag) try { sessionStorage.setItem('ab_lots_etag', newEtag); } catch {}
+
     const d=await r.json();
-    // Store Stripe enabled flag from server (available to all users, including anonymous)
     if(d.stripeEnabled!==undefined) window._stripeEnabled=d.stripeEnabled;
     ALL_LOTS=d.lots||[];
     ALL_SOURCES=d.sources||[];
     window._houseMeta=d.houseMeta||{};
     _lotsLoadedAt = Date.now();
-    if (!SMART_RESULTS) _browseSnapshot = null; // invalidate — lots changed (preserve during search)
-    // Persist timestamp only — full lot array exceeds sessionStorage 5MB quota at 6K+ lots.
-    // ab_render_key (saved in renderLots) is used to suppress skeleton flash on warm returns.
+    if (!SMART_RESULTS) _browseSnapshot = null;
     try { sessionStorage.setItem('ab_lots_ts', _lotsLoadedAt.toString()); } catch(e) {}
     if(d._debug) console.log('[BM] all-lots pipeline:',d._debug);
-    // Show condition filter only for signed-in users (AI field)
-    if(!d.anonGated&&$('fCondition')) $('fCondition').style.display='';
 
-    // Update dynamic stats
-    const lsEl = document.querySelector('.ls-val[data-target="2000"]');
-    if(lsEl) lsEl.dataset.target = ALL_LOTS.length;
-    // Update house count everywhere it appears
-    if(d.houseCount) document.querySelectorAll('.house-count-dynamic').forEach(el=>{el.textContent=d.houseCount});
+    // ── Persist to IndexedDB for instant next-visit render ──
+    _setCachedLots({ lots: ALL_LOTS, sources: ALL_SOURCES, houseMeta: d.houseMeta, houseCount: d.houseCount, stripeEnabled: d.stripeEnabled, anonGated: d.anonGated, ts: _lotsLoadedAt });
 
-    // Auto-show all lots on page load
-    if(!ALL_LOTS.length){
-      const out=$('lotsGrid');
-      if(out)out.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:3rem 1rem;color:#6b7c8d"><div style="font-size:1.2rem">No auction lots currently available</div><div>Check back soon for new listings.</div></div>';
-    }
-    if(ALL_LOTS.length && !document.body.classList.contains('view-results') && !SMART_RESULTS){
-      LOTS=ALL_LOTS;
-      window._lastRenderKey=null; // Clear so renderLots() doesn't skip against skeleton DOM
-      $('resultsTitle').textContent=ALL_LOTS.length.toLocaleString()+' auction lots';
-      $('viewToggle').style.display='none';
-      $('reportView').style.display='none';
-      $('cardsView').style.display='block';
-      buildLotFilters();
-      if($('fAfford'))$('fAfford').value='all'; // Never silently filter on page load
-      renderLots();
-      $('resultsPanel').style.display='block';
-    }
+    _renderLotsToUI(d);
   }catch(e){
     console.log('Failed to load lots:',e);
+    // If we already rendered from IndexedDB cache, don't show error
+    if (idbRendered) return;
     const out=$('lotsGrid');
-    if(out)out.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:3rem 1rem;color:#6b7c8d"><div style="font-size:1.2rem;margin-bottom:0.5rem">Unable to load auction lots</div><div>Please check your connection and <a href="javascript:location.reload()" style="color:var(--red)">try again</a>.</div></div>';
+    if(out) out.textContent='Unable to load auction lots. Please check your connection and try again.';
   }
 }
 
@@ -2016,14 +2072,16 @@ function haversine(lat1,lng1,lat2,lng2){
 function onLocationInput(){
   clearTimeout(_searchLocationTimer);
   const val=$('fPostcode')?.value.trim()||'';
-  if(!val){_searchCentre=null;renderLots();updateMoreDot();return}
+  const locEl=$('fPostcode');
+  if(!val){locEl?.classList.remove('locating');_searchCentre=null;renderLots();updateMoreDot();return}
   // If looks like a UK postcode (full or partial), geocode it
   _searchLocationTimer=setTimeout(async()=>{
     const q=val.trim();
-    if(!q){_searchCentre=null;renderLots();updateMoreDot();return}
+    if(!q){locEl?.classList.remove('locating');_searchCentre=null;renderLots();updateMoreDot();return}
     // Check cache
     const cacheKey=q.toUpperCase();
     if(_searchLocationCache[cacheKey]){_searchCentre=_searchLocationCache[cacheKey];renderLots();updateMoreDot();return}
+    locEl?.classList.add('locating');
     try{
       // Try postcode first
       let resp=await fetch('https://api.postcodes.io/postcodes/'+encodeURIComponent(q));
@@ -2031,7 +2089,7 @@ function onLocationInput(){
       if(data.status===200&&data.result){
         _searchCentre={lat:data.result.latitude,lng:data.result.longitude,label:q};
         _searchLocationCache[cacheKey]=_searchCentre;
-        renderLots();updateMoreDot();return;
+        locEl?.classList.remove('locating');renderLots();updateMoreDot();return;
       }
       // Try as place name
       resp=await fetch('https://api.postcodes.io/places?q='+encodeURIComponent(q)+'&limit=1');
@@ -2039,13 +2097,13 @@ function onLocationInput(){
       if(data.status===200&&data.result&&data.result.length>0){
         _searchCentre={lat:data.result[0].latitude,lng:data.result[0].longitude,label:data.result[0].name_1||q};
         _searchLocationCache[cacheKey]=_searchCentre;
-        renderLots();updateMoreDot();return;
+        locEl?.classList.remove('locating');renderLots();updateMoreDot();return;
       }
       // Fallback: treat as postcode prefix filter (existing behaviour)
-      _searchCentre=null;renderLots();updateMoreDot();
+      _searchCentre=null;locEl?.classList.remove('locating');renderLots();updateMoreDot();
     }catch(e){
       // Network error — fall back to prefix filter
-      _searchCentre=null;renderLots();updateMoreDot();
+      _searchCentre=null;locEl?.classList.remove('locating');renderLots();updateMoreDot();
     }
   },400);
 }
