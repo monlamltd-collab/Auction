@@ -3731,7 +3731,13 @@ function card(l){
     detailPills.push({text: tenureLabel, tip: tenureTip, gap: tenureWarn, warn: tenureWarn});
   }
   if (l.daysSinceAuction != null && l.status === 'unsold') {
-    detailPills.push({text: 'Unsold ' + l.daysSinceAuction + 'd ago', tip: 'Failed to sell at auction — vendor may accept lower offers. Longer unsold = more motivated seller'});
+    if (l._relistStatus === 'sold' || l._relistStatus === 'stc') {
+      detailPills.push({text: 'Since Sold' + (l._relistPrice ? ' £' + l._relistPrice.toLocaleString() : ''), tip: 'This property was relisted and sold at a later auction (' + l._relistDate + ')', relistDanger: true});
+    } else if (l._relistStatus === 'available') {
+      detailPills.push({text: 'Relisted', tip: 'This property has been relisted at a future auction', relistWarn: true});
+    } else {
+      detailPills.push({text: 'Unsold ' + l.daysSinceAuction + 'd ago \u2713', tip: 'Verified unsold — not relisted at a later auction. Vendor may accept lower offers.'});
+    }
   }
   if (l.estGrossYield && !l.blurred && !l.anonGated && !l._yieldEstimateWarning) {
     const yv = l.estGrossYield;
@@ -3763,7 +3769,7 @@ function card(l){
     '<div class="card-body">' +
       '<div class="card-row1"><span class="card-lot-info">' + catLabel + '</span><span class="card-price">' + esc(priceText) + '</span></div>' +
       '<div class="card-address">' + esc(l.address || 'Address not available') + '</div>' +
-      '<div class="card-details">' + detailPills.map(d => '<span class="detail-pill' + (d.gap ? ' epd-gap-pill' : '') + (d.warn ? ' lease-warn' : '') + '" data-tip="' + esc(d.tip) + '"' + (d.warn ? ' style="color:var(--accent-danger);border:1px dashed var(--accent-danger)"' : d.gap ? ' style="color:var(--accent-warn);border:1px dashed var(--accent-warn)"' : d.yieldStyle ? ' style="' + d.yieldStyle + '"' : '') + '>' + esc(d.text) + '</span>').join('') + '</div>' +
+      '<div class="card-details">' + detailPills.map(d => '<span class="detail-pill' + (d.gap ? ' epd-gap-pill' : '') + (d.warn ? ' lease-warn' : '') + '" data-tip="' + esc(d.tip) + '"' + (d.relistDanger ? ' style="color:var(--accent-danger);font-weight:600;border:1px solid var(--accent-danger)"' : d.relistWarn ? ' style="color:var(--accent-warn);font-weight:600;border:1px dashed var(--accent-warn)"' : d.warn ? ' style="color:var(--accent-danger);border:1px dashed var(--accent-danger)"' : d.gap ? ' style="color:var(--accent-warn);border:1px dashed var(--accent-warn)"' : d.yieldStyle ? ' style="' + d.yieldStyle + '"' : '') + '>' + esc(d.text) + '</span>').join('') + '</div>' +
       (l.epcRating || (l.floodZone && l.floodZone !== '1') || l._yieldEstimateWarning ? '<div style="display:flex;gap:5px;margin-top:4px;flex-wrap:wrap">' +
         (l.epcRating ? '<span class="detail-pill" style="color:' + (/[AB]/.test(l.epcRating) ? 'var(--signal-pos)' : /[CD]/.test(l.epcRating) ? 'var(--accent-warn)' : 'var(--accent-danger)') + ';font-weight:600" data-tip="Energy Performance Certificate. A-B = efficient, C-D = average, E-G = poor. F/G cannot be legally let to tenants (MEES regulations).">EPC ' + esc(l.epcRating) + (/[FG]/i.test(l.epcRating) ? ' — Unlettable' : '') + '</span>' : '') +
         ((l.floodZone === '2' || l.floodZone === '3') ? '<span class="detail-pill" style="color:' + (l.floodZone === '3' ? 'var(--accent-danger)' : 'var(--accent-warn)') + ';font-weight:600" data-tip="' + (l.floodZone === '3' ? 'Flood Zone 3 = high probability of flooding. Insurance difficult/expensive. Some lenders won\'t fund.' : 'Flood Zone 2 = medium probability. Most lenders will fund but may affect valuation.') + '">FZ' + esc(l.floodZone) + '</span>' : '') +

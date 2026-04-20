@@ -1113,6 +1113,55 @@ router.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
       }
     }
 
+    // 6b. Batch relist verification for unsold lots
+    const unsoldLots = cleanLots.filter(l => l.status === 'unsold' && l._auctionDate);
+    if (unsoldLots.length > 0) {
+      const normAddr = (addr) => (addr || '').toLowerCase().replace(/[\s,]+/g, ' ')
+        .replace(/^(lot\s*\d+\s*[-:]?\s*)/i, '').trim();
+
+      const unsoldAddrs = unsoldLots.map(l => ({
+        lot: l,
+        house: l._house,
+        addr: normAddr(l.address),
+        date: l._auctionDate
+      })).filter(x => x.addr.length > 5);
+
+      if (unsoldAddrs.length > 0) {
+        const houses = [...new Set(unsoldAddrs.map(x => x.house))];
+        const minDate = unsoldAddrs.reduce((min, x) => x.date < min ? x.date : min, '9999-12-31');
+        const { data: newerLots } = await supabase
+          .from('lots')
+          .select('house, address, auction_date, status, sold_price')
+          .in('house', houses)
+          .in('status', ['sold', 'stc', 'available'])
+          .gte('auction_date', minDate);
+
+        if (newerLots?.length) {
+          const newerMap = new Map();
+          for (const nl of newerLots) {
+            const key = `${nl.house}|${normAddr(nl.address)}`;
+            const existing = newerMap.get(key);
+            if (!existing || nl.auction_date > existing.auction_date) {
+              newerMap.set(key, nl);
+            }
+          }
+
+          let relistCount = 0;
+          for (const { lot, house, addr, date } of unsoldAddrs) {
+            const key = `${house}|${addr}`;
+            const newer = newerMap.get(key);
+            if (newer && newer.auction_date > date) {
+              lot._relistStatus = newer.status;
+              lot._relistPrice = newer.sold_price || null;
+              lot._relistDate = newer.auction_date;
+              relistCount++;
+            }
+          }
+          if (relistCount > 0) log.info('relist-verification', { unsold: unsoldLots.length, relisted: relistCount });
+        }
+      }
+    }
+
     // 7. High-turnover block warning — flag addresses where same building has many sales
     const streetCounts = {};
     for (const lot of cleanLots) {
