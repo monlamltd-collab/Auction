@@ -2586,7 +2586,7 @@ function onSignIn(session) {
 
   // Re-fetch lots now that auth token is available (fixes race where
   // loadAllLots() fires before initAuth() resolves, gating all lots)
-  loadAllLots();
+  loadAllLots({ force: true });
 
   // Check Pro status
   updateProStatus();
