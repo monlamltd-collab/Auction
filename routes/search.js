@@ -883,6 +883,8 @@ router.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
       dealType: r.deal_type,
       vacant: r.vacant,
       titleSplit: r.title_split,
+      _lat: r.lat != null ? parseFloat(r.lat) : null,
+      _lng: r.lng != null ? parseFloat(r.lng) : null,
     }));
 
     // Normalise statuses + extract lease length from bullets (handles edge cases)

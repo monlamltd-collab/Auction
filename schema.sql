@@ -286,6 +286,8 @@ CREATE TABLE IF NOT EXISTS lots (
   scraped_with TEXT,
   last_seen_at TIMESTAMPTZ DEFAULT NOW(),
   enriched_at TIMESTAMPTZ,
+  lat NUMERIC(9,6),
+  lng NUMERIC(9,6),
   first_seen_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(house, url)
 );
