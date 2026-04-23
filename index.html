@@ -2681,6 +2681,94 @@ function signOut() {
   onSignOut();
 }
 
+// ── Session Timeout & Error Handling ──
+// Cross-tab login/logout sync is provided by Supabase's built-in localStorage
+// listener (onAuthStateChange fires across tabs). No extra channel needed.
+
+const ACTIVITY_KEY = 'bm_last_activity';
+const INACTIVITY_TIMEOUT_MS = 24 * 60 * 60 * 1000;
+
+// Restore from storage so the timeout survives tab close/reopen
+let lastActivityTime = parseInt(localStorage.getItem(ACTIVITY_KEY), 10) || Date.now();
+let lastActivityWriteTime = 0;
+
+function recordActivity() {
+  const now = Date.now();
+  lastActivityTime = now;
+  // Throttle writes to once per minute
+  if (now - lastActivityWriteTime > 60000) {
+    lastActivityWriteTime = now;
+    try { localStorage.setItem(ACTIVITY_KEY, String(now)); } catch {}
+  }
+}
+
+function showSessionExpiredModal(reason) {
+  $('signupModal').classList.add('show');
+  $('authStep1').style.display = '';
+  $('authStep2').style.display = 'none';
+  const errEl = $('signupError');
+  if (errEl) {
+    errEl.textContent = reason || 'Your session has expired — please sign in again.';
+    errEl.style.display = 'block';
+  }
+}
+
+// Capture the unwrapped fetch before wrapping
+const originalFetch = window.fetch.bind(window);
+
+// Wrap fetch to detect "our session expired" — but only for our own auth-bearing
+// requests. Unrelated 401s (admin secret, third-party APIs, Stripe failures, etc.)
+// must not log the user out.
+window.fetch = async function(...args) {
+  const response = await originalFetch(...args);
+
+  if (response.status === 401 && currentSession && supabaseClient) {
+    const url = typeof args[0] === 'string' ? args[0] : (args[0]?.url || '');
+    const headers = args[1]?.headers || {};
+    let authHeader = '';
+    if (headers instanceof Headers) authHeader = headers.get('Authorization') || '';
+    else authHeader = headers.Authorization || headers.authorization || '';
+    const sentOurToken = typeof authHeader === 'string' && authHeader.startsWith('Bearer ');
+    const isOurApi = url.startsWith('/api/') || url.startsWith(window.location.origin + '/api/');
+
+    if (sentOurToken && isOurApi) {
+      // Double-check the session is actually gone before signing out (avoids
+      // false positives where the backend rejects for a different reason)
+      try {
+        const { data } = await supabaseClient.auth.getSession();
+        if (!data.session) {
+          console.warn('Session expired — signing out');
+          signOut();
+          showSessionExpiredModal();
+        }
+      } catch {
+        signOut();
+        showSessionExpiredModal();
+      }
+    }
+  }
+
+  return response;
+};
+
+function checkInactivity() {
+  if (!currentSession) return;
+  if (Date.now() - lastActivityTime > INACTIVITY_TIMEOUT_MS) {
+    console.warn('Session expired due to inactivity (24h)');
+    signOut();
+    showSessionExpiredModal('You\'ve been signed out after 24 hours of inactivity.');
+  }
+}
+// Run shortly after init so reopened-tab case is caught quickly, then every 5 min
+setTimeout(checkInactivity, 2000);
+setInterval(checkInactivity, 5 * 60 * 1000);
+
+// Track real user activity (mousemove excluded — too noisy, prone to false wakeups)
+document.addEventListener('click', recordActivity);
+document.addEventListener('scroll', recordActivity, { passive: true });
+document.addEventListener('keydown', recordActivity);
+document.addEventListener('touchstart', recordActivity, { passive: true });
+
 // Init auth on load
 initAuth();
 
