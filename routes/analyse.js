@@ -13,7 +13,7 @@ import {
   detectTotalPages, buildPageUrl, extractLotsWithAI, extractLotsFromPdf, isPdfUrl, fetchPage,
   enrichLotsFromLotPages, normaliseLotStatuses,
   getLastScrapeEngine, getLastAITier,
-  fetchLotPage, cacheLotDetail,
+  fetchLotPage, cacheLotDetail, withTier,
 } from '../lib/scraper.js';
 import { extractLotDetail } from '../lib/extractors/details/runner.js';
 import { extractWithJSDOM, DOM_EXTRACTORS, getLastExtractorUsed, setLastExtractorUsed } from '../lib/extractors/index.js';
@@ -626,6 +626,7 @@ router.post('/api/analyse', async (req, res) => {
 // enrichLots (EPC/flood/Land Registry/yield) before responding. Persists
 // to lot_details cache so subsequent requests for the same URL are free.
 router.post('/api/lot', async (req, res) => {
+  return withTier('on-demand', async () => {
   try {
     const { url } = req.body || {};
     if (!url || typeof url !== 'string') return res.status(400).json({ error: 'url is required' });
@@ -691,6 +692,7 @@ router.post('/api/lot', async (req, res) => {
     log.error('/api/lot error', { error: err.message });
     return res.status(500).json({ error: 'Internal error' });
   }
+  }); // end withTier
 });
 
 export { BROKEN_EXTRACTORS, loadBrokenExtractors };

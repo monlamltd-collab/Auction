@@ -27,6 +27,7 @@ import {
   isFcCreditExhausted, getFcExhaustedAt, setFcCreditExhausted, setFcExhaustedAt,
   isFcTemporarilyDown, getFcDownAt, setFcTemporarilyDown, setFcDownAt, setFcConsecutive5xx,
   getLastScrapeEngine, getLastAITier, enrichLotsFromLotPages,
+  withTier,
 } from './lib/scraper.js';
 
 // ── Resource budget — single source of truth for resource state ──
@@ -259,15 +260,15 @@ async function bootDecision() {
     if (process.env.FORCE_BOOT_SCRAPE === 'true' || hoursSince > 25) {
       console.log(`SCHEDULE: boot — running full pass (last scrape ${hoursSince}h ago${process.env.FORCE_BOOT_SCRAPE === 'true' ? ', FORCE_BOOT_SCRAPE set' : ''})`);
       _scheduleState.lastFullPass = Date.now();
-      autoAnalyseAll().catch(e => console.error('SCHEDULE boot full pass failed:', e.message));
+      withTier('full', () => autoAnalyseAll()).catch(e => console.error('SCHEDULE boot full pass failed:', e.message));
     } else {
       console.log(`SCHEDULE: boot — skipping full pass (last scrape ${hoursSince}h ago); running free enrichment`);
       _scheduleState.lastFreeEnrich = Date.now();
-      runEnrichmentWave({ freeOnly: true }).catch(e => console.error('SCHEDULE boot enrichment failed:', e.message));
+      withTier('free-enrichment', () => runEnrichmentWave({ freeOnly: true })).catch(e => console.error('SCHEDULE boot enrichment failed:', e.message));
     }
   } catch (e) {
     console.warn('SCHEDULE: boot DB check failed, defaulting to free enrichment:', e.message);
-    runEnrichmentWave({ freeOnly: true }).catch(() => {});
+    withTier('free-enrichment', () => runEnrichmentWave({ freeOnly: true })).catch(() => {});
   }
 }
 
@@ -279,19 +280,19 @@ function scheduleTick() {
   if (hour === 3 && minute < 5 && now - _scheduleState.lastFullPass > 60 * 60 * 1000) {
     _scheduleState.lastFullPass = now;
     console.log('SCHEDULE: 03:00 UK — running full autoAnalyseAll');
-    autoAnalyseAll().catch(e => console.error('SCHEDULE full pass failed:', e.message));
+    withTier('full', () => autoAnalyseAll()).catch(e => console.error('SCHEDULE full pass failed:', e.message));
   }
 
   // Tier 2: Free enrichment every 30 min
   if (now - _scheduleState.lastFreeEnrich > 30 * 60 * 1000) {
     _scheduleState.lastFreeEnrich = now;
-    runEnrichmentWave({ freeOnly: true }).catch(e => console.error('SCHEDULE free enrichment failed:', e.message));
+    withTier('free-enrichment', () => runEnrichmentWave({ freeOnly: true })).catch(e => console.error('SCHEDULE free enrichment failed:', e.message));
   }
 
   // Tier 3: Status drift hourly 09–18 UK
   if (hour >= 9 && hour <= 18 && minute < 5 && now - _scheduleState.lastStatusDrift > 50 * 60 * 1000) {
     _scheduleState.lastStatusDrift = now;
-    statusDriftTick();
+    withTier('status-drift', () => statusDriftTick());
   }
 }
 
