@@ -11,7 +11,8 @@ permissions:
 jobs:
   audit-and-fix:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 173 houses × Puppeteer probes can take 25-30 min even with concurrency
+    timeout-minutes: 45
 
     steps:
       - uses: actions/checkout@v5
