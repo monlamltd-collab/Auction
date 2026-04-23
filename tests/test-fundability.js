@@ -275,6 +275,45 @@ assert(serverErrResult === null, 'server error returns null');
 // Restore original fetch
 globalThis.fetch = _origFetch;
 
+// ─── enrichLotsWithFundability: manifest integration ───
+console.log('\n── enrichLotsWithFundability (manifest) ──');
+{
+  const { enrichLotsWithFundability } = await import('../lib/fundability.js');
+  const { createManifest } = await import('../lib/enrichment-manifest.js');
+
+  // Mock fetch for predictable responses
+  globalThis.fetch = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ summary: { eligible: 7, possible: 1 } }),
+  });
+
+  // Three lots: one standard resi, one refurb, one zero-price (should be skipped entirely).
+  // Use fresh price/geography combos so we don't collide with the cache populated
+  // by earlier getFundabilityBadge tests in this file.
+  const lots = [
+    { price: 437000, propType: 'house', condition: 'good', address: '1 Oak Rd, Bristol', _enrichment: createManifest() },
+    { price: 123456, propType: 'flat', condition: 'needs modernisation', address: '5 Elm St, Manchester', _enrichment: createManifest() },
+    { price: 0, propType: 'house', address: '9 No Price Ln', _enrichment: createManifest() },
+  ];
+  await enrichLotsWithFundability(lots);
+
+  assert(lots[0].fundability !== null, 'standard resi gets a badge');
+  assert(lots[0]._enrichment.fundability?.status === 'api_ok', 'resi manifest status = api_ok');
+  assert(lots[0]._enrichment.fundability?.confidence === 'high', 'resi manifest confidence = high');
+  assert(Array.isArray(lots[0]._enrichment.fundability?.inputs_derived), 'inputs_derived is array');
+  assert(lots[0]._enrichment.fundability.inputs_derived.length === 0, 'non-refurb has no derived inputs');
+
+  assert(lots[1]._enrichment.fundability?.status === 'api_ok', 'refurb manifest status = api_ok');
+  assert(lots[1]._enrichment.fundability?.confidence === 'medium', 'refurb manifest confidence = medium');
+  assert(lots[1]._enrichment.fundability.inputs_derived.includes('gdv'), 'refurb flags gdv as derived');
+  assert(lots[1]._enrichment.fundability.inputs_derived.includes('works_cost'), 'refurb flags works_cost as derived');
+
+  // Zero-price lot: skipped entirely at the "no price" guard — no manifest entry expected
+  assert(lots[2]._enrichment.fundability === null, 'zero-price lot skipped at batch guard (no manifest fundability record)');
+}
+
 // ─── Summary ───
+globalThis.fetch = _origFetch;
 console.log(`\n${passed} passed, ${failed} failed\n`);
 if (failed > 0) process.exit(1);
