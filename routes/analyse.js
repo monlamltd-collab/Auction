@@ -13,7 +13,9 @@ import {
   detectTotalPages, buildPageUrl, extractLotsWithAI, extractLotsFromPdf, isPdfUrl, fetchPage,
   enrichLotsFromLotPages, normaliseLotStatuses,
   getLastScrapeEngine, getLastAITier,
+  fetchLotPage, cacheLotDetail,
 } from '../lib/scraper.js';
+import { extractLotDetail } from '../lib/extractors/details/runner.js';
 import { extractWithJSDOM, DOM_EXTRACTORS, getLastExtractorUsed, setLastExtractorUsed } from '../lib/extractors/index.js';
 import { enrichLots } from '../lib/enrichment.js';
 import { enrichLotsWithFundability } from '../lib/fundability.js';
@@ -611,6 +613,83 @@ router.post('/api/analyse', async (req, res) => {
     log.error('Analysis SSE error', { error: err.message });
     sseWrite(res, 'error', { message: 'Analysis failed' });
     return res.end();
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// POST /api/lot — single-URL on-demand detail-page analysis
+// ═══════════════════════════════════════════════════════════════
+// Body: { url: string }
+// Returns: { lot, house, displayName, source }
+//   - source: 'cache'|'http'|'firecrawl' indicating where the HTML came from
+// Uses DETAIL_EXTRACTORS for the detected house, then runs the lot through
+// enrichLots (EPC/flood/Land Registry/yield) before responding. Persists
+// to lot_details cache so subsequent requests for the same URL are free.
+router.post('/api/lot', async (req, res) => {
+  try {
+    const { url } = req.body || {};
+    if (!url || typeof url !== 'string') return res.status(400).json({ error: 'url is required' });
+
+    const urlCheck = validateUrl(url);
+    if (!urlCheck.ok) return res.status(400).json({ error: urlCheck.error || 'invalid URL' });
+
+    const house = detectAuctionHouse(url);
+    if (!house || house === 'unknown') return res.status(400).json({ error: 'Could not detect auction house from URL' });
+
+    // Fetch the lot page (cache → http → Firecrawl)
+    const result = await fetchLotPage(url, { house });
+    if (!result || !result.html) {
+      return res.status(502).json({ error: 'Failed to fetch lot page' });
+    }
+
+    // Run the detail extractor
+    const detail = extractLotDetail(result.html, house, result.url || url);
+
+    // Build a lot object — fall back to URL-only if extractor returned nothing
+    const lot = {
+      house,
+      url: result.url || url,
+      lot: null,
+      address: detail?.address || '',
+      postcode: detail?.postcode || null,
+      price: detail?.price || null,
+      priceText: detail?.priceText || null,
+      bullets: detail?.bullets || [],
+      images: detail?.images || [],
+      imageUrl: detail?.imageUrl || (detail?.images?.[0] || null),
+      tenure: detail?.tenure || null,
+      leaseLength: detail?.leaseLength || null,
+      propType: detail?.propType || null,
+      beds: detail?.beds ?? null,
+      vacant: detail?.vacant ?? null,
+      viewingDates: detail?.viewingDates || [],
+    };
+
+    // Score it
+    Object.assign(lot, analyseLot(lot));
+
+    // Optionally enrich with EPC/flood/comps/yield (free APIs)
+    try {
+      await enrichLots([lot], house, lot.url);
+    } catch (e) {
+      log.warn('on-demand /api/lot enrichLots failed (non-fatal)', { error: e.message });
+    }
+
+    // Persist extracted_data to lot_details cache so the structured payload
+    // is reusable next time (avoids re-extraction even on cache hit).
+    try {
+      await cacheLotDetail(lot.url, house, result.html, detail || {}, result.source);
+    } catch { /* non-fatal */ }
+
+    return res.json({
+      lot,
+      house,
+      displayName: getHouseDisplayName(house, url),
+      source: result.source,
+    });
+  } catch (err) {
+    log.error('/api/lot error', { error: err.message });
+    return res.status(500).json({ error: 'Internal error' });
   }
 });
 
