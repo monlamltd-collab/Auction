@@ -79,41 +79,36 @@ function extractTemplateLiteral(code, startMarker) {
   return null;
 }
 
-function extractConfig() {
-  const serverCode = readFileSync(join(PROJECT_ROOT, 'server.js'), 'utf-8');
+async function extractConfig() {
+  // After the Phase 3 module extraction, these constants live in lib/ rather
+  // than being inline in server.js. Import them directly instead of text-parsing.
+  const housesPath = 'file://' + join(PROJECT_ROOT, 'lib', 'houses.js').replace(/\\/g, '/');
+  const extractorsPath = 'file://' + join(PROJECT_ROOT, 'lib', 'extractors', 'index.js').replace(/\\/g, '/');
+  const universalPath = 'file://' + join(PROJECT_ROOT, 'lib', 'extractors', 'universal.js').replace(/\\/g, '/');
+  const configPath = 'file://' + join(PROJECT_ROOT, 'lib', 'config.js').replace(/\\/g, '/');
 
-  // HOUSE_ROOTS
-  const houseRootsCode = extractBraceBlock(serverCode, 'const HOUSE_ROOTS = {');
-  if (!houseRootsCode) throw new Error('Could not find HOUSE_ROOTS in server.js');
-  const HOUSE_ROOTS = new Function(`${houseRootsCode}; return HOUSE_ROOTS;`)();
+  const housesMod = await import(housesPath);
+  const extractorsMod = await import(extractorsPath);
+  const universalMod = await import(universalPath);
+  const configMod = await import(configPath);
 
-  // DOM_EXTRACTORS
-  const extractorCode = extractBraceBlock(serverCode, 'const DOM_EXTRACTORS = {');
-  if (!extractorCode) throw new Error('Could not find DOM_EXTRACTORS in server.js');
-  const DOM_EXTRACTORS = new Function(`${extractorCode}; return DOM_EXTRACTORS;`)();
+  const HOUSE_ROOTS = housesMod.HOUSE_ROOTS;
+  const DOM_EXTRACTORS = extractorsMod.DOM_EXTRACTORS;
+  const UNIVERSAL_DOM_EXTRACTOR = universalMod.UNIVERSAL_DOM_EXTRACTOR;
+  const CACHE_TIERS = configMod.CACHE_TIERS || null;
 
-  // UNIVERSAL_DOM_EXTRACTOR — template literal
-  const UNIVERSAL_DOM_EXTRACTOR = extractTemplateLiteral(serverCode, 'const UNIVERSAL_DOM_EXTRACTOR = `');
-  if (!UNIVERSAL_DOM_EXTRACTOR) throw new Error('Could not find UNIVERSAL_DOM_EXTRACTOR in server.js');
+  // rewriteUrl is async in lib/houses.js — bind closure dependencies (HOUSE_ROOTS, HEADERS)
+  // by passing them through; the exported function reads HOUSE_ROOTS from its own module scope.
+  const rewriteUrl = housesMod.rewriteUrl;
 
-  // rewriteUrl function (may be async)
-  const isAsyncRw = serverCode.includes('async function rewriteUrl(');
-  const rwMarker = isAsyncRw ? 'async function rewriteUrl(url, house) {' : 'function rewriteUrl(url, house) {';
-  const rwCode = extractBraceBlock(serverCode, rwMarker);
-  if (!rwCode) throw new Error('Could not find rewriteUrl in server.js');
-  const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
-  const FnCtor = isAsyncRw ? AsyncFunction : Function;
-  const rewriteUrl = new FnCtor('HOUSE_ROOTS', 'HEADERS', `${rwCode}; return rewriteUrl;`)(HOUSE_ROOTS, { 'User-Agent': USER_AGENT });
+  // SKIP_PUPPETEER lives inside lib/pipeline/scrape-stage.js as a private const.
+  // Mirror its current value here — keep in sync if the production list changes.
+  const SKIP_PUPPETEER = ['philliparnold', 'knightfrank'];
 
-  // SKIP_PUPPETEER — extract the first occurrence
-  const skipMatch = serverCode.match(/const SKIP_PUPPETEER\s*=\s*\[([^\]]+)\]/);
-  const SKIP_PUPPETEER = skipMatch
-    ? (skipMatch[1].match(/'([^']+)'/g) || []).map(s => s.replace(/'/g, ''))
-    : [];
-
-  // CACHE_TIERS
-  const cacheCode = extractBraceBlock(serverCode, 'const CACHE_TIERS = {');
-  const CACHE_TIERS = cacheCode ? new Function(`${cacheCode}; return CACHE_TIERS;`)() : null;
+  if (!HOUSE_ROOTS) throw new Error('lib/houses.js does not export HOUSE_ROOTS');
+  if (!DOM_EXTRACTORS) throw new Error('lib/extractors/index.js does not export DOM_EXTRACTORS');
+  if (!UNIVERSAL_DOM_EXTRACTOR) throw new Error('lib/extractors/universal.js does not export UNIVERSAL_DOM_EXTRACTOR');
+  if (typeof rewriteUrl !== 'function') throw new Error('lib/houses.js does not export rewriteUrl');
 
   return { HOUSE_ROOTS, DOM_EXTRACTORS, UNIVERSAL_DOM_EXTRACTOR, rewriteUrl, SKIP_PUPPETEER, CACHE_TIERS };
 }
@@ -920,8 +915,8 @@ async function main() {
   const startTime = Date.now();
 
   // ── Phase 1: Config extraction ──
-  if (!JSON_MODE) console.log('\n  Phase 1: Extracting config from server.js...');
-  const config = extractConfig();
+  if (!JSON_MODE) console.log('\n  Phase 1: Loading config from lib/...');
+  const config = await extractConfig();
   const allHouses = Object.keys(config.HOUSE_ROOTS);
   const houses = HOUSE_FILTER
     ? HOUSE_FILTER.filter(h => { if (!config.HOUSE_ROOTS[h]) { console.log(`  WARN: Unknown house "${h}" — skipping`); return false; } return true; })

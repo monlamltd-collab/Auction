@@ -208,8 +208,8 @@ manager.js
 
 ## Auction Houses
 
-### Currently Working (~21 houses, ~2,364 lots)
-The system successfully scrapes and analyses lots from 21 auction houses. Some houses that were previously failing were fixed by:
+### Currently Configured (~173 houses)
+`lib/houses.js` exports 173 entries in `HOUSE_ROOTS`, with 147 having custom DOM extractors in `lib/extractors/index.js` (the rest fall back to the universal extractor + Gemini AI). Health is tracked nightly via `scripts/audit.mjs`. Some houses that were previously failing were fixed by:
 - **BidX1** (90 lots) — DOM extraction fix
 - **Edward Mellor** (24 lots) — DOM extraction fix
 - **Bradley Hall** — URL moved to `auction.bradleyhall.co.uk`
