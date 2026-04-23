@@ -3,7 +3,16 @@ name: Nightly Audit
 on:
   schedule:
     - cron: '0 5 * * *'    # 5am UTC daily
-  workflow_dispatch:         # manual trigger from Actions tab
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Audit mode'
+        required: false
+        default: 'fast'
+        type: choice
+        options:
+          - fast         # HTTP probes only (~5 min) — catches domain/DNS/block failures
+          - full         # + Puppeteer probes of all 173 houses (~40 min)
 
 permissions:
   contents: write
@@ -11,8 +20,9 @@ permissions:
 jobs:
   audit-and-fix:
     runs-on: ubuntu-latest
-    # 173 houses × Puppeteer probes can take 25-30 min even with concurrency
-    timeout-minutes: 45
+    # Fast mode fits comfortably in 15m. Full mode is a manual trigger only —
+    # allow 90m for the Puppeteer sweep of 173 houses.
+    timeout-minutes: 90
 
     steps:
       - uses: actions/checkout@v5
@@ -24,11 +34,20 @@ jobs:
 
       - run: npm ci
 
-      - run: npx puppeteer browsers install chrome
+      # Chrome is only needed for full mode — skip install in fast mode to save ~2 min
+      - name: Install Chromium for Puppeteer
+        if: inputs.mode == 'full'
+        run: npx puppeteer browsers install chrome
 
-      - name: Run audit
-        run: node scripts/audit.mjs --json --save > audit-results.json 2>&1
-        continue-on-error: true    # audit exits 1 when houses are BROKEN
+      - name: Run audit (fast — scheduled + default manual)
+        if: inputs.mode != 'full'
+        run: node scripts/audit.mjs --fast --json --save > audit-results.json 2>&1
+        continue-on-error: true
+
+      - name: Run audit (full — manual only)
+        if: inputs.mode == 'full'
+        run: node scripts/audit.mjs --json --save --concurrency 8 > audit-results.json 2>&1
+        continue-on-error: true
 
       - name: Apply fixes + send report
         run: node scripts/audit-fix.mjs
