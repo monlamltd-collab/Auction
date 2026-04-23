@@ -397,6 +397,20 @@ let LENDERS=[{"n":"Albatross Lending Group","mn":"£100,000","mx":"£10,000,000"
 (async()=>{try{const r=await fetch('https://www.bridgematch.co.uk/api/lenders-lite');if(!r.ok)throw new Error(r.status);const d=await r.json();if(Array.isArray(d)&&d.length>0){LENDERS=d;console.log('[BridgeMatch] Live data loaded:',d.length,'lenders');document.querySelectorAll('.lender-count-dynamic').forEach(el=>el.textContent=d.length)}else{console.warn('[BridgeMatch] Empty response, using embedded data');document.querySelectorAll('.lender-count-dynamic').forEach(el=>el.textContent=LENDERS.length)}}catch(e){console.warn('[BridgeMatch] Live fetch failed, using embedded data:',e.message);document.querySelectorAll('.lender-count-dynamic').forEach(el=>el.textContent=LENDERS.length)}})();
 
 // ═══════════════════════════════════════════════════════════
+// LOCAL BRIDGING ASSUMPTIONS
+// Single source of truth for market-wide estimates used by lending
+// enquiries when lender-specific data isn't available or is mislabelled.
+// Keep values here (rather than cross-repo in the lender DB) so the
+// auction side of the enquiry stays self-contained.
+// ═══════════════════════════════════════════════════════════
+// Typical arrangement fee charged by UK bridging lenders.
+// The lender feed's `pf` column is proc fee (broker commission), NOT the
+// borrower arrangement fee that feeds LTGDV. 2% is a conservative market
+// estimate used in LTGDV exposure calculations until a dedicated arrangement
+// fee column is added to the lender feed.
+const TYPICAL_ARRANGEMENT_FEE_PCT = 2;
+
+// ═══════════════════════════════════════════════════════════
 // UTILITY FUNCTIONS
 // ═══════════════════════════════════════════════════════════
 function parseMoney(s){if(!s)return 0;return parseFloat(s.replace(/[£,\s]/g,''))||0}
@@ -661,7 +675,7 @@ function matchLenders(price,cash,propType,isRefurb,works,gdv,addlVal,addlMort,lo
       const intOnDay1=day1Loan*lenderRate*loanTermMonths;
       const intOnWorks=lenderWorks*lenderRate*(loanTermMonths/2);
       const totalBeforeFees=day1Loan+lenderWorks+intOnDay1+intOnWorks;
-      const arrFee=totalBeforeFees*(parseProcFee(l.pf)/100);
+      const arrFee=totalBeforeFees*(TYPICAL_ARRANGEMENT_FEE_PCT/100);
       const totalExposure=totalBeforeFees+arrFee;
       const lenderLTGDV=(totalExposure/gdv)*100;
       const shortfallPct=refurbLTGDV>0?((lenderLTGDV-refurbLTGDV)/refurbLTGDV)*100:0;
@@ -690,7 +704,7 @@ function matchLenders(price,cash,propType,isRefurb,works,gdv,addlVal,addlMort,lo
         const iDay1=d1Loan*lRate*loanTermMonths;
         const iWorks=lWorks*lRate*(loanTermMonths/2);
         const totBF=d1Loan+lWorks+iDay1+iWorks;
-        const aFee=totBF*(parseProcFee(l.pf)/100);
+        const aFee=totBF*(TYPICAL_ARRANGEMENT_FEE_PCT/100);
         lenderLTGDV=((totBF+aFee)/gdv)*100;
       }
       eligible.push({...l,_ltv:ltv,_maxLTV:effectiveMax,_rate:parseRate(l.r),_refurbDay1:refurbDay1,_refurbLTGDV:refurbLTGDV,_lenderLTGDV:lenderLTGDV,_fundingModel:fundingModel,_addlSecUsed:addlEquity>0&&combinedLTV<ltv});
