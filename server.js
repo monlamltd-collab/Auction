@@ -162,7 +162,8 @@ app.get('*', (req, res) => {
 // ═══════════════════════════════════════════════════════════════
 // DEPENDENCY INJECTION — wire up lib/analysis.js and harness/manager.js
 // ═══════════════════════════════════════════════════════════════
-import { initAnalysis, autoAnalyseAll, healBrokenHouse } from './lib/analysis.js';
+import { initAnalysis, autoAnalyseAll, healBrokenHouse, runEnrichmentWave } from './lib/analysis.js';
+import { auditStatusDrift } from './lib/harness/sub-agents.js';
 
 initAnalysis({
   // Resource budget (new: centralised resource state)
@@ -200,6 +201,101 @@ initManager({
 });
 
 // ═══════════════════════════════════════════════════════════════
+// THREE-TIER SCHEDULING
+// ═══════════════════════════════════════════════════════════════
+// Tier 1 — Full pass: 03:00 UK, runs autoAnalyseAll (catalogue scrape +
+//          detail-page hydration + image backfill). Firecrawl-heavy.
+// Tier 2 — Free enrichment: every 30 min, runs runEnrichmentWave({freeOnly:true}).
+//          Uses only free APIs (EPC, flood, Land Registry, postcodes.io).
+// Tier 3 — Status drift: hourly 09:00–18:00 UK, samples upcoming-auction
+//          lots to catch SOLD/Withdrawn close to auction. Small Firecrawl spend.
+// Boot   — Runs free enrichment after 60s. Triggers full pass only if last
+//          DB scrape was >25h ago, or if FORCE_BOOT_SCRAPE=true is set.
+
+const _scheduleState = { lastFullPass: 0, lastFreeEnrich: 0, lastStatusDrift: 0 };
+
+function getUkHourMinute() {
+  const ukNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/London' }));
+  return { hour: ukNow.getHours(), minute: ukNow.getMinutes() };
+}
+
+async function statusDriftTick() {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const plus7 = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+    const { data: lots } = await supabase
+      .from('lots')
+      .select('id,house,url,status,address,lot_number,auction_date')
+      .not('url', 'like', '__synthetic__%')
+      .not('auction_date', 'is', null)
+      .gte('auction_date', today)
+      .lte('auction_date', plus7)
+      .or('status.is.null,status.eq.available')
+      .limit(100);
+    if (!lots || lots.length === 0) {
+      console.log('STATUS-DRIFT: no upcoming-auction lots to check');
+      return;
+    }
+    const byHouse = {};
+    for (const l of lots) (byHouse[l.house || 'unknown'] = byHouse[l.house || 'unknown'] || []).push(l);
+    const [topHouse, topLots] = Object.entries(byHouse).sort((a, b) => b[1].length - a[1].length)[0];
+    console.log(`STATUS-DRIFT: checking ${topHouse} (${topLots.length} upcoming lots, sampling 10)`);
+    await auditStatusDrift(topHouse, topLots, { sampleSize: 10 });
+  } catch (e) {
+    console.warn('STATUS-DRIFT: tick failed:', e.message);
+  }
+}
+
+async function bootDecision() {
+  try {
+    const { data } = await supabase
+      .from('lots')
+      .select('last_seen_at')
+      .order('last_seen_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const lastSeen = data?.last_seen_at ? new Date(data.last_seen_at).getTime() : 0;
+    const hoursSince = lastSeen ? Math.round((Date.now() - lastSeen) / 3600000) : Infinity;
+    if (process.env.FORCE_BOOT_SCRAPE === 'true' || hoursSince > 25) {
+      console.log(`SCHEDULE: boot — running full pass (last scrape ${hoursSince}h ago${process.env.FORCE_BOOT_SCRAPE === 'true' ? ', FORCE_BOOT_SCRAPE set' : ''})`);
+      _scheduleState.lastFullPass = Date.now();
+      autoAnalyseAll().catch(e => console.error('SCHEDULE boot full pass failed:', e.message));
+    } else {
+      console.log(`SCHEDULE: boot — skipping full pass (last scrape ${hoursSince}h ago); running free enrichment`);
+      _scheduleState.lastFreeEnrich = Date.now();
+      runEnrichmentWave({ freeOnly: true }).catch(e => console.error('SCHEDULE boot enrichment failed:', e.message));
+    }
+  } catch (e) {
+    console.warn('SCHEDULE: boot DB check failed, defaulting to free enrichment:', e.message);
+    runEnrichmentWave({ freeOnly: true }).catch(() => {});
+  }
+}
+
+function scheduleTick() {
+  const { hour, minute } = getUkHourMinute();
+  const now = Date.now();
+
+  // Tier 1: Full pass at 03:00 UK
+  if (hour === 3 && minute < 5 && now - _scheduleState.lastFullPass > 60 * 60 * 1000) {
+    _scheduleState.lastFullPass = now;
+    console.log('SCHEDULE: 03:00 UK — running full autoAnalyseAll');
+    autoAnalyseAll().catch(e => console.error('SCHEDULE full pass failed:', e.message));
+  }
+
+  // Tier 2: Free enrichment every 30 min
+  if (now - _scheduleState.lastFreeEnrich > 30 * 60 * 1000) {
+    _scheduleState.lastFreeEnrich = now;
+    runEnrichmentWave({ freeOnly: true }).catch(e => console.error('SCHEDULE free enrichment failed:', e.message));
+  }
+
+  // Tier 3: Status drift hourly 09–18 UK
+  if (hour >= 9 && hour <= 18 && minute < 5 && now - _scheduleState.lastStatusDrift > 50 * 60 * 1000) {
+    _scheduleState.lastStatusDrift = now;
+    statusDriftTick();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
 // START SERVER
 // ═══════════════════════════════════════════════════════════════
 app.listen(PORT, () => {
@@ -207,8 +303,9 @@ app.listen(PORT, () => {
   if (!process.env.SUPABASE_URL) console.warn('SUPABASE_URL not set');
   if (!process.env.SUPABASE_SERVICE_KEY) console.warn('SUPABASE_SERVICE_KEY not set');
 
-  // Auto-analyse all catalogue-ready auctions — 30s after startup, then every 6 hours
-  setTimeout(() => autoAnalyseAll(), 30000);
-  setInterval(() => autoAnalyseAll(), 6 * 60 * 60 * 1000);
+  // Boot decision after 60s — gives DB connection time to settle
+  setTimeout(bootDecision, 60000);
+  // Cron-like ticker — every minute, decide what to run
+  setInterval(scheduleTick, 60000);
 });
 
