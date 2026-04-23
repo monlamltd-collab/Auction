@@ -289,6 +289,7 @@ CREATE TABLE IF NOT EXISTS lots (
   lat NUMERIC(9,6),
   lng NUMERIC(9,6),
   first_seen_at TIMESTAMPTZ DEFAULT NOW(),
+  enrichment_manifest JSONB DEFAULT '{}'::jsonb,
   UNIQUE(house, url)
 );
 
@@ -299,6 +300,7 @@ CREATE INDEX IF NOT EXISTS idx_lots_score ON lots(score DESC NULLS LAST);
 CREATE INDEX IF NOT EXISTS idx_lots_house ON lots(house);
 CREATE INDEX IF NOT EXISTS idx_lots_last_seen_at ON lots(last_seen_at);
 CREATE INDEX IF NOT EXISTS idx_lots_search_vector ON lots USING GIN(search_vector);
+CREATE INDEX IF NOT EXISTS idx_lots_manifest_gin ON lots USING GIN(enrichment_manifest);
 
 ALTER TABLE lots ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Service role full access" ON lots FOR ALL USING (true) WITH CHECK (true);
