@@ -181,6 +181,7 @@ app.get('*', (req, res) => {
 import { initAnalysis, autoAnalyseAll, healBrokenHouse, runEnrichmentWave } from './lib/analysis.js';
 import { auditStatusDrift } from './lib/harness/sub-agents.js';
 import { initWatcher, watchAuctionCalendar } from './lib/pipeline/auction-watcher.js';
+import { pickNextHouseForDrift } from './lib/pipeline/drift-scheduler.js';
 
 initAnalysis({
   // Resource budget (new: centralised resource state)
@@ -263,9 +264,34 @@ async function statusDriftTick() {
     }
     const byHouse = {};
     for (const l of lots) (byHouse[l.house || 'unknown'] = byHouse[l.house || 'unknown'] || []).push(l);
-    const [topHouse, topLots] = Object.entries(byHouse).sort((a, b) => b[1].length - a[1].length)[0];
-    console.log(`STATUS-DRIFT: checking ${topHouse} (${topLots.length} upcoming lots, sampling 10)`);
-    await auditStatusDrift(topHouse, topLots, { sampleSize: 10 });
+
+    // Round-robin: pick the house whose drift data is stalest, so every
+    // house gets sampled over time instead of just the highest-volume one.
+    const slugs = Object.keys(byHouse);
+    const { data: skillRows } = await supabase
+      .from('house_skills')
+      .select('slug,last_drift_checked_at')
+      .in('slug', slugs);
+    const lastCheckedMap = {};
+    for (const row of skillRows || []) lastCheckedMap[row.slug] = row.last_drift_checked_at;
+
+    const nextHouse = pickNextHouseForDrift(byHouse, lastCheckedMap);
+    if (!nextHouse) {
+      console.log('STATUS-DRIFT: no candidate house selected');
+      return;
+    }
+    const nextLots = byHouse[nextHouse];
+    console.log(`STATUS-DRIFT: checking ${nextHouse} (${nextLots.length} upcoming lots, sampling 10, last checked ${lastCheckedMap[nextHouse] || 'never'})`);
+    await auditStatusDrift(nextHouse, nextLots, { sampleSize: 10 });
+
+    try {
+      await supabase
+        .from('house_skills')
+        .update({ last_drift_checked_at: new Date().toISOString() })
+        .eq('slug', nextHouse);
+    } catch (updErr) {
+      console.warn(`STATUS-DRIFT: failed to record check for ${nextHouse}:`, updErr.message);
+    }
   } catch (e) {
     console.warn('STATUS-DRIFT: tick failed:', e.message);
   }
