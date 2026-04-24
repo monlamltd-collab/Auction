@@ -508,6 +508,13 @@ footer .logo-f span{color:var(--green)}
 .lot-status-withdrawn::after{content:'WITHDRAWN';background:rgba(127,140,141,0.85)}
 .lot-status-unsold::after{content:'UNSOLD';background:rgba(142,68,173,0.85)}
 
+/* ── Freshness / completeness / lender-match meta chips ── */
+.freshness-row{display:flex;gap:4px;margin-top:4px;flex-wrap:wrap;font-size:.7rem}
+.freshness-chip{padding:1px 6px;border-radius:10px;border:1px solid currentColor;opacity:.85;line-height:1.4;cursor:help}
+.freshness-chip.fc-green{color:var(--accent)}
+.freshness-chip.fc-amber{color:var(--accent-warn)}
+.freshness-chip.fc-red{color:var(--accent-danger)}
+
 /* ── Score breakdown popup ── */
 .score-popup{position:absolute;bottom:calc(100% + 8px);right:0;z-index:50;background:var(--white);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.15);padding:12px 14px;min-width:200px;max-width:260px;font-size:.78rem;animation:fadeInUp .15s ease}
 @keyframes fadeInUp{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
@@ -3810,6 +3817,81 @@ function startCardCarousels(){
   },200);
 }
 
+// ── Freshness / completeness / lender-match meta badges ──
+// Reads the per-lot enrichment manifest (`_enrichment`) persisted on `lots`
+// and surfaces three small chips below the EPC/flood row:
+//   1. Freshness    — age of the data (enriched_at ?? scraped_at)
+//   2. Completeness — fraction of enrichment sources with OK-ish status
+//   3. Lender match — bridging lender count from fundability
+// Returns '' for legacy lots without a manifest, and for gated cards
+// (blurred / anonGated users don't need pipeline diagnostics).
+const _OK_STATUSES = {
+  epc: new Set(['ok', 'cache_hit']),
+  flood: new Set(['ok', 'cache_hit']),
+  land_registry: new Set(['ok', 'cache_hit', 'ok_no_comps']),
+  geocode: new Set(['ok', 'cache_hit']),
+  fundability: new Set(['api_ok', 'cache_hit']),
+};
+function _relativeAge(ms){
+  const h = Math.floor(ms / 3.6e6);
+  if (h < 1) { const m = Math.max(1, Math.floor(ms / 6e4)); return m + 'm ago'; }
+  if (h < 48) return h + 'h ago';
+  return Math.floor(h / 24) + 'd ago';
+}
+function getFreshnessBadges(l){
+  if (!l || !l._enrichment) return '';
+  if (l.blurred || l.anonGated) return '';
+  const m = l._enrichment;
+  const chips = [];
+
+  // ── Freshness ──
+  const basis = m.enriched_at || m.scraped_at;
+  if (basis) {
+    const ts = new Date(basis).getTime();
+    if (!isNaN(ts)) {
+      const ageMs = Date.now() - ts;
+      const ageH = ageMs / 3.6e6;
+      const cls = ageH < 24 ? 'fc-green' : ageH < 72 ? 'fc-amber' : 'fc-red';
+      const label = _relativeAge(ageMs);
+      const tip = (m.enriched_at ? 'Enriched ' + m.enriched_at : 'Scraped ' + m.scraped_at)
+        + (m.enriched_at && m.scraped_at && m.enriched_at !== m.scraped_at ? ' · scraped ' + m.scraped_at : '');
+      chips.push('<span class="freshness-chip ' + cls + '" data-tip="' + esc(tip) + '">' + esc(label) + '</span>');
+    }
+  }
+
+  // ── Completeness ──
+  const sources = ['epc', 'flood', 'land_registry', 'geocode', 'fundability'];
+  let okCount = 0;
+  const breakdown = [];
+  for (const s of sources) {
+    const entry = m[s];
+    const status = entry && entry.status;
+    const ok = status && _OK_STATUSES[s].has(status);
+    if (ok) okCount++;
+    const niceName = s === 'land_registry' ? 'Land Reg' : (s.charAt(0).toUpperCase() + s.slice(1));
+    breakdown.push(niceName + ' ' + (ok ? '✓' : '✗' + (status ? ' (' + status + ')' : '')));
+  }
+  const compCls = okCount >= 5 ? 'fc-green' : okCount >= 3 ? 'fc-amber' : 'fc-red';
+  const compTip = breakdown.join(' · ');
+  chips.push('<span class="freshness-chip ' + compCls + '" data-tip="' + esc(compTip) + '">Data ' + okCount + '/5</span>');
+
+  // ── Lender match ──
+  const f = m.fundability;
+  if (f && f.status !== 'zero_price') {
+    const count = f.lender_count;
+    const conf = f.confidence || 'unknown';
+    let lendCls;
+    if (count >= 3 && conf === 'high') lendCls = 'fc-green';
+    else if (count >= 1) lendCls = 'fc-amber';
+    else lendCls = 'fc-red';
+    const lendLabel = (count != null ? count : 0) + ' lender' + (count === 1 ? '' : 's');
+    const lendTip = (count != null ? count : 0) + ' UK bridging lenders match this deal (confidence: ' + conf + ')';
+    chips.push('<span class="freshness-chip ' + lendCls + '" data-tip="' + esc(lendTip) + '">' + esc(lendLabel) + '</span>');
+  }
+
+  return chips.length ? '<div class="freshness-row">' + chips.join('') + '</div>' : '';
+}
+
 function card(l){
   // Price display
   let priceText = 'POA';
@@ -3876,6 +3958,7 @@ function card(l){
         ((l.floodZone === '2' || l.floodZone === '3') ? '<span class="detail-pill" style="color:' + (l.floodZone === '3' ? 'var(--accent-danger)' : 'var(--accent-warn)') + ';font-weight:600" data-tip="' + (l.floodZone === '3' ? 'Flood Zone 3 = high probability of flooding. Insurance difficult/expensive. Some lenders won\'t fund.' : 'Flood Zone 2 = medium probability. Most lenders will fund but may affect valuation.') + '">FZ' + esc(l.floodZone) + '</span>' : '') +
         (l._yieldEstimateWarning ? '<span class="detail-pill" style="color:var(--accent-warn);font-weight:600" data-tip="Yield over 30% — likely unrealistic. Very low guide prices produce inflated yield estimates. Verify actual achievable rent independently.">Yield unverified</span>' : '') +
       '</div>' : '') +
+      getFreshnessBadges(l) +
       (chipsHtml ? '<div class="card-chips">' + chipsHtml + '</div>' : '') +
       bulletsOnCard +
       getFundabilityBadgeHtml(l) +
