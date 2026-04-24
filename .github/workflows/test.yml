@@ -55,6 +55,9 @@ jobs:
       - name: test-gating
         run: node tests/test-gating.js
 
+      - name: test-cache-ttl
+        run: node tests/test-cache-ttl.js
+
       - name: test-enrichment
         run: node tests/test-enrichment.js
 
