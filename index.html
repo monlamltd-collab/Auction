@@ -1960,6 +1960,14 @@ async function _getCachedLots(){
 async function _setCachedLots(data){
   try{const db=await _openLotsDB();const tx=db.transaction(_IDB_STORE,'readwrite');tx.objectStore(_IDB_STORE).put(data,'latest')}catch{}
 }
+// Wipe IndexedDB lot cache + sessionStorage ETag. Called on auth-state change
+// so an anon payload (with `anonGated:true`) can't survive into a signed-in
+// session and vice versa. Without this, the server's ETag change alone isn't
+// enough — the stale IndexedDB copy is rendered before the network round-trip.
+async function _clearCachedLots(){
+  try{const db=await _openLotsDB();const tx=db.transaction(_IDB_STORE,'readwrite');tx.objectStore(_IDB_STORE).delete('latest')}catch{}
+  try{sessionStorage.removeItem('ab_lots_etag');sessionStorage.removeItem('ab_lots_ts');sessionStorage.removeItem('ab_render_key');}catch{}
+}
 
 function _renderLotsToUI(d) {
   if(!d.anonGated&&$('fCondition')) $('fCondition').style.display='';
@@ -2595,8 +2603,10 @@ function onSignIn(session) {
   localStorage.removeItem('bm_token');
 
   // Re-fetch lots now that auth token is available (fixes race where
-  // loadAllLots() fires before initAuth() resolves, gating all lots)
-  loadAllLots({ force: true });
+  // loadAllLots() fires before initAuth() resolves, gating all lots).
+  // Wipe the anon IDB/ETag cache first so the un-gated payload lands in-place
+  // instead of a 304 preserving the gated stubs.
+  _clearCachedLots().finally(() => loadAllLots({ force: true }));
 
   // Check Pro status
   updateProStatus();
@@ -2618,6 +2628,9 @@ function onSignOut() {
   $('acctTier').textContent = 'Free';
   $('acctTier').classList.remove('pro');
   if ($('acctManage')) $('acctManage').style.display = 'none';
+  // Wipe signed-in lot cache so anon reload isn't served a signed-in payload
+  // (with score/dealType) that the server would now strip.
+  _clearCachedLots();
 }
 
 function requireSignup() {

@@ -1220,8 +1220,13 @@ router.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
     }
 
     // ── ETag: skip full response if client already has this data ──
+    // IMPORTANT: include the signed-in flag in the hash. Anon responses strip
+    // score/dealType/opps/risks while signed-in responses include them, so two
+    // states with the same lots produce different payloads. Without this, a
+    // signed-in user whose browser cached the anon ETag gets 304 and keeps
+    // seeing "Sign up for AI scores" / "Sign up for deal type" stubs.
     const etag = '"' + createHash('md5')
-      .update(cleanLots.length + ':' + cleanLots.map(l => l.url + (l.status || '')).join(','))
+      .update((isSignedIn ? 'signed:' : 'anon:') + cleanLots.length + ':' + cleanLots.map(l => l.url + (l.status || '')).join(','))
       .digest('hex') + '"';
 
     if (req.headers['if-none-match'] === etag) {
