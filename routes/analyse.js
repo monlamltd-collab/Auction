@@ -6,6 +6,7 @@ import { validateUserFromReq, safeCompare, getClientIP } from '../lib/auth.js';
 import { validateUrl } from '../lib/security.js';
 import { log, sseWrite } from '../lib/logging.js';
 import { resolveEffectiveTier, getCacheTTL, RATE_LIMIT_PER_DAY, FREE_SCAN_LIMIT, stripAIFields, HEADERS, MAX_LOTS_PER_SCRAPE } from '../lib/config.js';
+import { getAuctionDateForUrl } from '../lib/calendar.js';
 import { detectAuctionHouse, getHouseDisplayName, HOUSE_DISPLAY_NAMES, rewriteUrl } from '../lib/houses.js';
 import { normaliseUrl } from '../lib/utils.js';
 import {
@@ -507,7 +508,8 @@ router.post('/api/analyse', async (req, res) => {
 
     // ── Cache results ──
     const displayName = getHouseDisplayName(house, url);
-    const expiresAt = new Date(Date.now() + getCacheTTL(house)).toISOString();
+    const auctionDate = await getAuctionDateForUrl(normalisedUrl);
+    const expiresAt = new Date(Date.now() + getCacheTTL(house, auctionDate)).toISOString();
 
     // Log unknown house successes for future house addition
     if (house === 'unknown' && enrichedAnalysed.length >= 3) {
