@@ -2561,6 +2561,9 @@ document.addEventListener('click', e => {
 });
 
 function onSignIn(session) {
+  // Reset the inactivity clock so a fresh sign-in doesn't get kicked out on
+  // the next 5-min check by a stale lastActivityTime.
+  recordActivity();
   currentSession = session;
   currentUser = session.user;
   const email = currentUser.email || '';
@@ -2688,6 +2691,10 @@ function signOut() {
 const ACTIVITY_KEY = 'bm_last_activity';
 const INACTIVITY_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 
+// Captured at page-load so the 2s cold-start check can tell "the user
+// hasn't touched this tab yet" apart from "they're actively interacting".
+const pageLoadTime = Date.now();
+
 // Restore from storage so the timeout survives tab close/reopen
 let lastActivityTime = parseInt(localStorage.getItem(ACTIVITY_KEY), 10) || Date.now();
 let lastActivityWriteTime = 0;
@@ -2759,8 +2766,14 @@ function checkInactivity() {
     showSessionExpiredModal('You\'ve been signed out after 24 hours of inactivity.');
   }
 }
-// Run shortly after init so reopened-tab case is caught quickly, then every 5 min
-setTimeout(checkInactivity, 2000);
+// Run shortly after init so reopened-tab case is caught quickly, then every 5 min.
+// Gate the cold-start check on actual staleness: if the user has already interacted
+// with the tab since page load, skip — they're active, don't kick them off.
+setTimeout(() => {
+  if (!currentSession) return;
+  if (lastActivityTime >= pageLoadTime) return;
+  checkInactivity();
+}, 2000);
 setInterval(checkInactivity, 5 * 60 * 1000);
 
 // Track real user activity (mousemove excluded — too noisy, prone to false wakeups)
