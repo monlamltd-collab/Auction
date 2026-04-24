@@ -885,6 +885,7 @@ router.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
       titleSplit: r.title_split,
       _lat: r.lat != null ? parseFloat(r.lat) : null,
       _lng: r.lng != null ? parseFloat(r.lng) : null,
+      _lastSeenAt: r.last_seen_at || null,
     }));
 
     // Normalise statuses + extract lease length from bullets (handles edge cases)
@@ -971,6 +972,25 @@ router.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
         lot._auctionDate = (rawDate && rawDate > '2098-01-01') ? null : rawDate;
       }
     }
+
+    // ── Staleness fallback (Issue 2 fix (c)) ──
+    // Lots with no auction_date (source doesn't publish one, no calendar row,
+    // no EIG "Auction Ends:" bullet) get stuck rendering as live forever. If
+    // we haven't re-seen a lot in 14+ days, synthesise an end-date from its
+    // last_seen_at so the "Auction ended" badge fires and the default
+    // future-only filter can exclude it. Read-time only — no DB mutation.
+    const STALE_GRACE_MS = 14 * 86400000;
+    const staleCutoff = Date.now() - STALE_GRACE_MS;
+    let staleSynth = 0;
+    for (const lot of lots) {
+      if (lot._auctionDate || !lot._lastSeenAt) continue;
+      const seenMs = Date.parse(lot._lastSeenAt);
+      if (!Number.isFinite(seenMs) || seenMs >= staleCutoff) continue;
+      lot._auctionDate = new Date(seenMs + STALE_GRACE_MS).toISOString().slice(0, 10);
+      lot._auctionDateSource = 'stale_synth';
+      staleSynth++;
+    }
+    if (staleSynth > 0) log.info('all-lots: stale-synth dates', { count: staleSynth, graceDays: 14 });
 
     // ── Server-side future-only filtering (7-day grace period) ──
     if (!includePast) {
