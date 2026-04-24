@@ -2696,7 +2696,8 @@ function signOut() {
 // listener (onAuthStateChange fires across tabs). No extra channel needed.
 
 const ACTIVITY_KEY = 'bm_last_activity';
-const INACTIVITY_TIMEOUT_MS = 24 * 60 * 60 * 1000;
+const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;         // 30 min of genuine inactivity
+const SESSION_STALENESS_THRESHOLD_MS = 10 * 60 * 1000; // skip cold-start check if >10 min remain
 
 // Captured at page-load so the 2s cold-start check can tell "the user
 // hasn't touched this tab yet" apart from "they're actively interacting".
@@ -2768,26 +2769,31 @@ window.fetch = async function(...args) {
 function checkInactivity() {
   if (!currentSession) return;
   if (Date.now() - lastActivityTime > INACTIVITY_TIMEOUT_MS) {
-    console.warn('Session expired due to inactivity (24h)');
+    console.warn('Session expired due to inactivity (30 min)');
     signOut();
-    showSessionExpiredModal('You\'ve been signed out after 24 hours of inactivity.');
+    showSessionExpiredModal('You\'ve been signed out after 30 minutes of inactivity.');
   }
 }
 // Run shortly after init so reopened-tab case is caught quickly, then every 5 min.
-// Gate the cold-start check on actual staleness: if the user has already interacted
-// with the tab since page load, skip — they're active, don't kick them off.
+// Gate the cold-start check on actual staleness:
+//   (a) if the user has already interacted since page load, skip — they're active
+//   (b) if the session token has >10 min remaining, it's not stale — skip
 setTimeout(() => {
   if (!currentSession) return;
   if (lastActivityTime >= pageLoadTime) return;
+  // Check token expiry — skip if plenty of lifetime remains
+  const expiresAt = currentSession.expires_at; // Unix seconds (Supabase)
+  if (expiresAt && (expiresAt * 1000 - Date.now()) > SESSION_STALENESS_THRESHOLD_MS) return;
   checkInactivity();
 }, 2000);
 setInterval(checkInactivity, 5 * 60 * 1000);
 
-// Track real user activity (mousemove excluded — too noisy, prone to false wakeups)
+// Track real user activity — any of these resets the 30-min inactivity clock
 document.addEventListener('click', recordActivity);
 document.addEventListener('scroll', recordActivity, { passive: true });
 document.addEventListener('keydown', recordActivity);
 document.addEventListener('touchstart', recordActivity, { passive: true });
+document.addEventListener('mousemove', recordActivity, { passive: true });
 
 // Init auth on load
 initAuth();

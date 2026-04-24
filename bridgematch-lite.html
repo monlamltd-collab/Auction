@@ -421,9 +421,14 @@ function parseRate(s){if(!s)return 0;const rates=s.match(/[\d.]+/g);if(!rates)re
 function parseProcFee(s){if(!s)return 2;const str=s.toLowerCase();if(str.includes('negotiable')||str.includes('no set'))return 1.5;const m=str.match(/(\d+\.?\d*)/);return m?parseFloat(m[0]):2}
 function parseMinMonths(s){if(!s)return 3;const str=s.toLowerCase();if(str.includes('depends'))return 3;const m=str.match(/(\d+)/);return m?parseInt(m[0]):3}
 // Port of backend estimate_net_from_gross — estimates cash-in-hand LTV after retained interest + fees
+// NOTE: feePct uses TYPICAL_ARRANGEMENT_FEE_PCT (borrower-facing arrangement fee), NOT l.pf (proc fee).
+// l.pf is the broker commission paid by the lender and is NOT deducted from the borrower's advance.
+// TODO: Replace TYPICAL_ARRANGEMENT_FEE_PCT with a per-lender arrangement fee field (e.g. l.af)
+//       once that column is added to the lender data schema.
+// procFeeStr param is retained for API compatibility but is intentionally unused here.
 function estimateNetFromGross(grossLTV,rateStr,procFeeStr,loanTermMonths,minMonthsStr){
   if(!grossLTV)return 0;
-  const feePct=parseProcFee(procFeeStr);
+  const feePct=TYPICAL_ARRANGEMENT_FEE_PCT; // conservative 2% borrower arrangement fee estimate
   const monthlyRate=parseRate(rateStr)||0.75;
   const lenderMin=parseMinMonths(minMonthsStr);
   const monthsRetained=Math.max(loanTermMonths,lenderMin);

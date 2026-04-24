@@ -3,7 +3,7 @@ import { Router } from 'express';
 import Stripe from 'stripe';
 import { STRIPE_ENABLED, ALLOWED_ORIGINS, FREE_SCAN_LIMIT, getAISearchLimit } from '../lib/config.js';
 import { supabase } from '../lib/supabase.js';
-import { validateUserFromReq, safeCompare, rateLimit } from '../lib/auth.js';
+import { validateUserFromReq, safeCompare, rateLimit, invalidateUserCache } from '../lib/auth.js';
 import { log } from '../lib/logging.js';
 import { escHtml } from '../lib/utils.js';
 
@@ -147,6 +147,12 @@ router.post('/webhook', async (req, res) => {
           }).eq('id', userId);
         }
 
+        // Bust user cache so the upgraded tier is visible on the next request
+        {
+          const { data: paidUser } = await supabase.from('users').select('supabase_auth_id').eq('id', userId).single();
+          if (paidUser?.supabase_auth_id) invalidateUserCache(paidUser.supabase_auth_id);
+        }
+
         log.info('Payment completed', { userId, product, amount: session.amount_total });
         break;
       }
@@ -156,7 +162,7 @@ router.post('/webhook', async (req, res) => {
         // Find user by subscription ID
         const { data: subUser } = await supabase
           .from('users')
-          .select('id')
+          .select('id, supabase_auth_id')
           .eq('stripe_subscription_id', sub.id)
           .single();
         if (subUser) {
@@ -180,6 +186,7 @@ router.post('/webhook', async (req, res) => {
             }).eq('id', subUser.id);
             log.info('Subscription deleted, immediate downgrade', { userId: subUser.id });
           }
+          if (subUser.supabase_auth_id) invalidateUserCache(subUser.supabase_auth_id);
         }
         break;
       }
@@ -188,7 +195,7 @@ router.post('/webhook', async (req, res) => {
         const sub = event.data.object;
         const { data: subUser } = await supabase
           .from('users')
-          .select('id')
+          .select('id, supabase_auth_id')
           .eq('stripe_subscription_id', sub.id)
           .single();
         if (!subUser) break;
@@ -203,7 +210,11 @@ router.post('/webhook', async (req, res) => {
           }).eq('id', subUser.id);
           log.info(`Subscription canceled, premium until ${periodEnd}`, { userId: subUser.id });
         } else if (sub.status === 'past_due') {
-          // Payment failed — give 3-day grace period before downgrade
+          // Payment failed — give 3-day grace period before downgrade.
+          // Do NOT touch tier or stripe_subscription_id: the user remains premium
+          // during the grace window so they aren't kicked mid-session. The
+          // subscription_warning field is computed at request time from this
+          // tier_expires_at + stripe_subscription_id combination.
           const grace = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
           await supabase.from('users').update({
             tier_expires_at: grace,
@@ -218,6 +229,8 @@ router.post('/webhook', async (req, res) => {
           }).eq('id', subUser.id);
           log.info('Subscription unpaid, immediate downgrade', { userId: subUser.id });
         }
+        // Bust the cache so the next request picks up the new tier/expiry immediately
+        if (subUser.supabase_auth_id) invalidateUserCache(subUser.supabase_auth_id);
         break;
       }
 

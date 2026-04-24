@@ -2,11 +2,11 @@
 /**
  * Scoring Engine Tests
  * ====================
- * Tests the investment scoring logic extracted to lib/scoring.js
+ * Tests the investment scoring logic in lib/pipeline/scoring.js
  * Run: node tests/test-scoring.js
  */
 
-import { scoreLot } from '../lib/scoring.js';
+import { analyseLot as scoreLot } from '../lib/pipeline/scoring.js';
 
 let passed = 0;
 let failed = 0;
@@ -66,11 +66,10 @@ test('Development potential scores +2', () => {
 });
 
 test('Extension/HMO potential scores +1.5', () => {
-  // Note: "requisite" contains "site" which triggers propType='land' + vacant bonus (+1)
-  // so total is 2.5, not 1.5 — this matches the production scoring engine behaviour
+  // pipeline scorer uses \bsite\b (word boundary) so "requisite" does not trigger propType='land'
   const lot = { address: '1 High St', bullets: ['Potential to extend subject to requisite consents'], price: 100000 };
   const result = scoreLot(lot);
-  assert(result.score === 2.5, `score should be 2.5, got ${result.score}`);
+  assert(result.score === 1.5, `score should be 1.5, got ${result.score}`);
 });
 
 test('Vacant house scores +1', () => {
