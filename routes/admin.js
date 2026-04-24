@@ -33,6 +33,7 @@ import { getAllHealth } from '../lib/harness/house-health.js';
 import { getDiscoveryQueue, approveCandidate, getDiscoveryBudget } from '../lib/harness/house-discovery.js';
 import { getEnrichmentReport } from '../lib/harness/enrichment-engine.js';
 import { runManagerCycle, getManagerReport, setManagerConfig, getManagerConfig } from '../lib/harness/manager.js';
+import { watchAuctionCalendar, watchOne } from '../lib/pipeline/auction-watcher.js';
 import { BROKEN_EXTRACTORS } from './analyse.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -856,6 +857,33 @@ router.get('/api/cost-monitor', async (req, res) => {
   } catch (e) {
     log.error('Cost monitor error', { error: e.message });
     res.status(500).json({ error: 'Cost monitor failed. Check server logs.' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// Admin: run auction-watcher on demand
+// ═══════════════════════════════════════════════════════════════
+// Body (optional):
+//   { secret, slug?: string, force?: boolean }
+// If `slug` is provided, watches only that Cat B house. Otherwise all.
+// `force=true` bypasses the "already has upcoming entry" early-exit.
+// Returns { results: [...] } from the watcher.
+router.post('/api/admin/run-watcher', async (req, res) => {
+  const token = req.headers['x-admin-secret'] || req.body?.secret || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
+    return res.status(403).json({ error: 'Invalid admin secret' });
+  }
+  try {
+    const { slug, force } = req.body || {};
+    if (slug) {
+      const r = await watchOne(slug, { force: !!force });
+      return res.json({ ok: true, result: r });
+    }
+    const r = await watchAuctionCalendar({ force: !!force });
+    return res.json({ ok: true, ...r });
+  } catch (e) {
+    log.error('run-watcher error', { error: e.message });
+    return res.status(500).json({ error: 'Watcher failed', detail: e.message });
   }
 });
 

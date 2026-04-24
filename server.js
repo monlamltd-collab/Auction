@@ -165,6 +165,7 @@ app.get('*', (req, res) => {
 // ═══════════════════════════════════════════════════════════════
 import { initAnalysis, autoAnalyseAll, healBrokenHouse, runEnrichmentWave } from './lib/analysis.js';
 import { auditStatusDrift } from './lib/harness/sub-agents.js';
+import { initWatcher, watchAuctionCalendar } from './lib/pipeline/auction-watcher.js';
 
 initAnalysis({
   // Resource budget (new: centralised resource state)
@@ -199,6 +200,14 @@ initManager({
   domExtractors: DOM_EXTRACTORS,
   healBrokenHouse,
   getCircuitBreakers,
+});
+
+// Wire auction-watcher deps (Firecrawl + AI for Tier 2 fallback)
+initWatcher({
+  scrapeWithFirecrawl,
+  callAI,
+  fireAlert: harnessFireAlert,
+  budget,
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -260,7 +269,10 @@ async function bootDecision() {
     if (process.env.FORCE_BOOT_SCRAPE === 'true' || hoursSince > 25) {
       console.log(`SCHEDULE: boot — running full pass (last scrape ${hoursSince}h ago${process.env.FORCE_BOOT_SCRAPE === 'true' ? ', FORCE_BOOT_SCRAPE set' : ''})`);
       _scheduleState.lastFullPass = Date.now();
-      withTier('full', () => autoAnalyseAll()).catch(e => console.error('SCHEDULE boot full pass failed:', e.message));
+      withTier('full', async () => {
+        try { await watchAuctionCalendar(); } catch (e) { console.error('SCHEDULE boot watcher failed (non-fatal):', e.message); }
+        await autoAnalyseAll();
+      }).catch(e => console.error('SCHEDULE boot full pass failed:', e.message));
     } else {
       console.log(`SCHEDULE: boot — skipping full pass (last scrape ${hoursSince}h ago); running free enrichment`);
       _scheduleState.lastFreeEnrich = Date.now();
@@ -276,11 +288,15 @@ function scheduleTick() {
   const { hour, minute } = getUkHourMinute();
   const now = Date.now();
 
-  // Tier 1: Full pass at 03:00 UK
+  // Tier 1: Full pass at 03:00 UK — watcher first (discovers Cat B URLs),
+  // then autoAnalyseAll scrapes whatever the calendar now points at.
   if (hour === 3 && minute < 5 && now - _scheduleState.lastFullPass > 60 * 60 * 1000) {
     _scheduleState.lastFullPass = now;
-    console.log('SCHEDULE: 03:00 UK — running full autoAnalyseAll');
-    withTier('full', () => autoAnalyseAll()).catch(e => console.error('SCHEDULE full pass failed:', e.message));
+    console.log('SCHEDULE: 03:00 UK — running auction-watcher then full autoAnalyseAll');
+    withTier('full', async () => {
+      try { await watchAuctionCalendar(); } catch (e) { console.error('SCHEDULE watcher failed (non-fatal):', e.message); }
+      await autoAnalyseAll();
+    }).catch(e => console.error('SCHEDULE full pass failed:', e.message));
   }
 
   // Tier 2: Free enrichment every 30 min
