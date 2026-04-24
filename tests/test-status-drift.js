@@ -25,6 +25,18 @@ assert(
   null,
 );
 
+// 1a. Null / undefined inputs don't throw
+assert(
+  'null houseLotMap returns null',
+  pickNextHouseForDrift(null, {}),
+  null,
+);
+assert(
+  'undefined houseLotMap returns null',
+  pickNextHouseForDrift(undefined, undefined),
+  null,
+);
+
 // 2. Single candidate → that one
 assert(
   'single candidate returns itself',
