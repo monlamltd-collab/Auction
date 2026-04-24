@@ -58,6 +58,9 @@ jobs:
       - name: test-cache-ttl
         run: node tests/test-cache-ttl.js
 
+      - name: test-status-drift
+        run: node tests/test-status-drift.js
+
       - name: test-enrichment
         run: node tests/test-enrichment.js
 
