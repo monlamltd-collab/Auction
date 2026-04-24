@@ -282,15 +282,23 @@ async function statusDriftTick() {
     }
     const nextLots = byHouse[nextHouse];
     console.log(`STATUS-DRIFT: checking ${nextHouse} (${nextLots.length} upcoming lots, sampling 10, last checked ${lastCheckedMap[nextHouse] || 'never'})`);
-    await auditStatusDrift(nextHouse, nextLots, { sampleSize: 10 });
 
+    // Record the attempt timestamp regardless of outcome — otherwise a single
+    // persistently-throwing house would monopolise every tick (re-picked as
+    // "stalest" forever). Transient failures still get re-sampled on the next
+    // full rotation; persistent failures surface via alerts, not by starving
+    // the scheduler.
     try {
-      await supabase
-        .from('house_skills')
-        .update({ last_drift_checked_at: new Date().toISOString() })
-        .eq('slug', nextHouse);
-    } catch (updErr) {
-      console.warn(`STATUS-DRIFT: failed to record check for ${nextHouse}:`, updErr.message);
+      await auditStatusDrift(nextHouse, nextLots, { sampleSize: 10 });
+    } finally {
+      try {
+        await supabase
+          .from('house_skills')
+          .update({ last_drift_checked_at: new Date().toISOString() })
+          .eq('slug', nextHouse);
+      } catch (updErr) {
+        console.warn(`STATUS-DRIFT: failed to record check for ${nextHouse}:`, updErr.message);
+      }
     }
   } catch (e) {
     console.warn('STATUS-DRIFT: tick failed:', e.message);
