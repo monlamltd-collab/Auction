@@ -125,4 +125,6 @@ _userCacheInternals.map.clear();
 
 // ─── Summary ───
 console.log(`\n${passed} passed, ${failed} failed\n`);
-if (failed > 0) process.exit(1);
+// Force exit — lib/auth.js imports jose's createRemoteJWKSet which can hold
+// background timers that prevent Node from terminating naturally.
+process.exit(failed > 0 ? 1 : 0);

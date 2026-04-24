@@ -28,8 +28,6 @@ jobs:
 
       - run: npm ci
 
-      # ── Passing tests (CI fails if these regress) ──────────────────────
-
       - name: test-extractors
         run: node tests/test-extractors.js
 
@@ -54,18 +52,11 @@ jobs:
       - name: test-auth-cache
         run: node tests/test-auth-cache.js
 
-      # ── Pre-existing failures (tracked but don't block CI) ─────────────
-      # These grep server.js for symbols that were moved to lib/ before this
-      # session. Fix tracked separately.
-
-      - name: test-gating (known failing — symbols moved to lib/)
+      - name: test-gating
         run: node tests/test-gating.js
-        continue-on-error: true
 
-      - name: test-enrichment (known failing — symbols moved to lib/)
+      - name: test-enrichment
         run: node tests/test-enrichment.js
-        continue-on-error: true
 
-      - name: test-harness (3 of 83 known failing — symbols moved to lib/)
+      - name: test-harness
         run: node tests/test-harness.js
-        continue-on-error: true

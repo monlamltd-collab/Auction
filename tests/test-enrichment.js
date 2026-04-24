@@ -33,31 +33,14 @@ function assert(condition, msg) {
   }
 }
 
-// ─── Extract matchEPCToLot from server.js ───
-const serverCode = readFileSync(join(__dirname, '..', 'server.js'), 'utf-8');
+// ─── Import matchEPCToLot + read enrichment source for cache-pattern checks ───
+import { matchEPCToLot } from '../lib/enrichment.js';
 
-// Extract the matchEPCToLot function
-const matchStart = serverCode.indexOf('function matchEPCToLot(epcRecords, lotAddress)');
-if (matchStart === -1) {
-  console.error('FAIL: Could not find matchEPCToLot in server.js');
-  process.exit(1);
-}
-
-let braceDepth = 0;
-let matchEnd = -1;
-for (let i = serverCode.indexOf('{', matchStart); i < serverCode.length; i++) {
-  if (serverCode[i] === '{') braceDepth++;
-  if (serverCode[i] === '}') {
-    braceDepth--;
-    if (braceDepth === 0) {
-      matchEnd = i + 1;
-      break;
-    }
-  }
-}
-
-const matchCode = serverCode.substring(matchStart, matchEnd);
-const matchEPCToLot = new Function('epcRecords', 'lotAddress', matchCode.replace(/^function matchEPCToLot\(epcRecords, lotAddress\)\s*\{/, '').replace(/\}$/, ''));
+// Cache-pattern assertions below want to sanity-check that enrichment_cache is
+// still queried/deleted/TTL'd. Enrichment logic now lives in lib/enrichment.js
+// rather than server.js; read that file so the grep-style assertions still mean
+// something.
+const enrichmentCode = readFileSync(join(__dirname, '..', 'lib', 'enrichment.js'), 'utf-8');
 
 // ─── EPC Tests ───
 if (runEPC) {
@@ -197,16 +180,16 @@ if (runCache) {
   assert(new Date(expiredEntry.expires_at) < now, 'Expired entry correctly identified');
   assert(new Date(validEntry.expires_at) > now, 'Valid entry correctly identified');
 
-  // Verify enrichment_cache table definition exists in server.js
-  assert(serverCode.includes('enrichment_cache'), 'enrichment_cache table referenced in server.js');
-  assert(serverCode.includes("INTERVAL '30 days'") || serverCode.includes('30 * 24 * 60 * 60 * 1000'), '30-day TTL defined');
+  // Verify enrichment_cache table definition exists in lib/enrichment.js
+  assert(enrichmentCode.includes('enrichment_cache'), 'enrichment_cache table referenced in lib/enrichment.js');
+  assert(enrichmentCode.includes("INTERVAL '30 days'") || enrichmentCode.includes('30 * 24 * 60 * 60 * 1000'), '30-day TTL defined');
 
   // Verify cache-first pattern in enrichLots
-  assert(serverCode.includes('.from(\'enrichment_cache\')'), 'enrichLots queries enrichment_cache');
-  assert(serverCode.includes('gt(\'expires_at\'') || serverCode.includes('expires_at'), 'Cache checks expiry');
+  assert(enrichmentCode.includes('.from(\'enrichment_cache\')'), 'enrichLots queries enrichment_cache');
+  assert(enrichmentCode.includes('gt(\'expires_at\'') || enrichmentCode.includes('expires_at'), 'Cache checks expiry');
 
   // Verify expired cache cleanup
-  assert(serverCode.includes('.delete()') && serverCode.includes('enrichment_cache'), 'Expired cache cleanup present');
+  assert(enrichmentCode.includes('.delete()') && enrichmentCode.includes('enrichment_cache'), 'Expired cache cleanup present');
 }
 
 // ─── Ungated Display Tests ───

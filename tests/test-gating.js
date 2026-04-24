@@ -4,8 +4,9 @@
  * Tests STRIPE_ENABLED flag, resolveEffectiveTier(), and getAISearchLimit().
  * Run: node tests/test-gating.js
  *
- * Extracts functions from server.js using regex (same pattern as test-extractors.js)
- * since server.js has side effects and can't be imported directly.
+ * Extracts functions from lib/config.js using regex so STRIPE_ENABLED can be
+ * injected with both true and false values within a single process (an `import`
+ * would bake in whatever process.env.STRIPE_ENABLED was at module-load time).
  */
 
 import { readFileSync } from 'fs';
@@ -13,61 +14,61 @@ import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const serverCode = readFileSync(join(__dirname, '..', 'server.js'), 'utf-8');
+const configCode = readFileSync(join(__dirname, '..', 'lib', 'config.js'), 'utf-8');
 
 // ── Extract STRIPE_ENABLED constant ──
-const stripeEnabledMatch = serverCode.match(/const STRIPE_ENABLED\s*=\s*([^;]+);/);
+const stripeEnabledMatch = configCode.match(/const STRIPE_ENABLED\s*=\s*([^;]+);/);
 if (!stripeEnabledMatch) {
-  console.error('FAIL: Could not find STRIPE_ENABLED in server.js');
+  console.error('FAIL: Could not find STRIPE_ENABLED in lib/config.js');
   process.exit(1);
 }
 
 // ── Extract SIGNED_IN_DAILY_LIMIT constant ──
-const dailyLimitMatch = serverCode.match(/const SIGNED_IN_DAILY_LIMIT\s*=\s*(\d+);/);
+const dailyLimitMatch = configCode.match(/const SIGNED_IN_DAILY_LIMIT\s*=\s*(\d+);/);
 if (!dailyLimitMatch) {
-  console.error('FAIL: Could not find SIGNED_IN_DAILY_LIMIT in server.js');
+  console.error('FAIL: Could not find SIGNED_IN_DAILY_LIMIT in lib/config.js');
   process.exit(1);
 }
 
 // ── Extract resolveEffectiveTier function ──
-const rETStart = serverCode.indexOf('function resolveEffectiveTier(');
+const rETStart = configCode.indexOf('function resolveEffectiveTier(');
 if (rETStart === -1) {
-  console.error('FAIL: Could not find resolveEffectiveTier in server.js');
+  console.error('FAIL: Could not find resolveEffectiveTier in lib/config.js');
   process.exit(1);
 }
 
 // Find the function body by brace matching
 let braceDepth = 0;
 let rETEnd = -1;
-for (let i = rETStart; i < serverCode.length; i++) {
-  if (serverCode[i] === '{') braceDepth++;
-  if (serverCode[i] === '}') {
+for (let i = rETStart; i < configCode.length; i++) {
+  if (configCode[i] === '{') braceDepth++;
+  if (configCode[i] === '}') {
     braceDepth--;
     if (braceDepth === 0) { rETEnd = i + 1; break; }
   }
 }
-const resolveEffectiveTierCode = serverCode.substring(rETStart, rETEnd);
+const resolveEffectiveTierCode = configCode.substring(rETStart, rETEnd);
 
 // ── Extract getAISearchLimit function ──
-const gASLStart = serverCode.indexOf('function getAISearchLimit(');
+const gASLStart = configCode.indexOf('function getAISearchLimit(');
 if (gASLStart === -1) {
-  console.error('FAIL: Could not find getAISearchLimit in server.js');
+  console.error('FAIL: Could not find getAISearchLimit in lib/config.js');
   process.exit(1);
 }
 braceDepth = 0;
 let gASLEnd = -1;
-for (let i = gASLStart; i < serverCode.length; i++) {
-  if (serverCode[i] === '{') braceDepth++;
-  if (serverCode[i] === '}') {
+for (let i = gASLStart; i < configCode.length; i++) {
+  if (configCode[i] === '{') braceDepth++;
+  if (configCode[i] === '}') {
     braceDepth--;
     if (braceDepth === 0) { gASLEnd = i + 1; break; }
   }
 }
-const getAISearchLimitCode = serverCode.substring(gASLStart, gASLEnd);
+const getAISearchLimitCode = configCode.substring(gASLStart, gASLEnd);
 
 // ── Extract constants needed by the functions ──
-const anonLimitMatch = serverCode.match(/const ANON_AI_SEARCH_LIMIT\s*=\s*(\d+);/);
-const freeLimitMatch = serverCode.match(/const FREE_AI_SEARCH_LIMIT\s*=\s*(\d+);/);
+const anonLimitMatch = configCode.match(/const ANON_AI_SEARCH_LIMIT\s*=\s*(\d+);/);
+const freeLimitMatch = configCode.match(/const FREE_AI_SEARCH_LIMIT\s*=\s*(\d+);/);
 
 // ── Test runner ──
 let passed = 0;

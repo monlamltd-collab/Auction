@@ -153,13 +153,14 @@ section('wave-0: quality gate thresholds');
 {
   const FC_OK = { address: 100, price: 100 };
 
-  // evaluateGate with batchQuality=0.44 → verdict 'reject' (new threshold 0.45)
+  // evaluateGate with batchQuality=0.44 → 'cache_warn' (policy was softened:
+  // low quality now warns rather than rejects so enrichment can still backfill)
   const g1 = evaluateGate('wave0test',
     { lots: new Array(10), batchQuality: 0.44, fieldCoverage: FC_OK },
     { verdict: 'healthy', reasons: [], severity: 'info' },
     { total_lots: 10 },
   );
-  assert(g1.decision === 'reject', 'evaluateGate batchQuality=0.44 → reject (new threshold 0.45)');
+  assert(g1.decision === 'cache_warn', 'evaluateGate batchQuality=0.44 → cache_warn (soft-fail below 0.45)');
 
   // evaluateGate with batchQuality=0.50 → verdict 'cache_warn' (in new warn band 0.45-0.60)
   const g2 = evaluateGate('wave0test',
@@ -200,14 +201,16 @@ const rejectResult = evaluateGate('test',
   { verdict: 'regression', reasons: ['Lot count drop'], severity: 'error' },
   { total_lots: 50 },
 );
-assert(rejectResult.decision === 'reject', 'Regression + 5x cached lots → reject');
+// Policy softened: regression now warns (keeps data, flags the drop) rather than rejecting
+assert(rejectResult.decision === 'cache_warn', 'Regression + 5x cached lots → cache_warn');
 
 const lowQualityResult = evaluateGate('test',
   { lots: new Array(10), batchQuality: 0.2, fieldCoverage: FC_PASS },
   { verdict: 'healthy', reasons: [], severity: 'info' },
   { total_lots: 10 },
 );
-assert(lowQualityResult.decision === 'reject', 'Low quality batch → reject');
+// Policy softened: low batch quality warns (lets enrichment backfill) rather than rejecting
+assert(lowQualityResult.decision === 'cache_warn', 'Low quality batch → cache_warn');
 
 const warnResult = evaluateGate('test',
   { lots: new Array(40), batchQuality: 0.50, fieldCoverage: FC_PASS },
