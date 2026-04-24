@@ -121,11 +121,15 @@ async function httpProbe(house, url) {
   const result = {
     house, url, status: null, finalUrl: null, redirected: false,
     responseTime: 0, bodySize: 0, cloudflare: false, botBlock: false, error: null,
+    firecrawlRescued: false, // set by firecrawlRescue() if plain HTTP fails but FC succeeds
   };
   const start = Date.now();
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000);
+    // 30s — bumped from 10s so the regional AH UK branches and other slow
+    // sites don't false-positive. Real prod scrape (Firecrawl/Puppeteer)
+    // has budgets well beyond this anyway.
+    const timeout = setTimeout(() => controller.abort(), 30000);
     const res = await fetch(url, {
       headers: { 'User-Agent': USER_AGENT, 'Accept': 'text/html,application/xhtml+xml' },
       redirect: 'follow',
@@ -159,6 +163,40 @@ async function httpProbe(house, url) {
     result.responseTime = Date.now() - start;
   }
   return result;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FIRECRAWL RESCUE — re-probe via Firecrawl when plain HTTP fails
+// ═══════════════════════════════════════════════════════════════
+// Production uses Firecrawl for Cloudflare + slow-site bypass. Without
+// this escalation, the audit systematically over-reports as BROKEN any
+// house that blocks generic User-Agents — even though it scrapes fine in
+// prod. Called only for houses flagged TIMEOUT/BLOCKED/5xx/403 — so the
+// credit spend is bounded by the false-positive count.
+async function firecrawlRescue(url) {
+  const key = process.env.FIRECRAWL_API_KEY;
+  if (!key) return { ok: false, reason: 'no FIRECRAWL_API_KEY env set' };
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 45000);
+    const res = await fetch('https://api.firecrawl.dev/v2/scrape', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${key}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ url, formats: ['rawHtml'], timeout: 30000 }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    if (!res.ok) return { ok: false, reason: `firecrawl ${res.status}` };
+    const data = await res.json();
+    const html = data?.data?.rawHtml || data?.data?.html || '';
+    if (!html || html.length < 500) return { ok: false, reason: 'firecrawl returned empty body' };
+    return { ok: true, bodySize: html.length };
+  } catch (err) {
+    return { ok: false, reason: err.name === 'AbortError' ? 'firecrawl timeout' : err.message };
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -618,20 +656,28 @@ async function detectProblems(house, httpResult, puppeteerResult, prodData, conf
   const hasCustomExtractor = !!config.DOM_EXTRACTORS[house];
 
   // ── HTTP-level issues ──
+  // If Firecrawl rescued this URL (set by the rescue pass before detectProblems
+  // runs), downgrade BROKEN → WARNING: production uses Firecrawl so these
+  // aren't real outages — just audit-tool false positives.
+  const bSev = httpResult?.firecrawlRescued ? 'WARNING' : 'BROKEN';
+  const bSuffix = httpResult?.firecrawlRescued ? ' (OK via Firecrawl)' : '';
+
   if (httpResult?.error === 'TIMEOUT') {
-    issues.push({ type: 'TIMEOUT', severity: 'BROKEN', detail: 'HTTP request timed out (10s)' });
+    issues.push({ type: 'TIMEOUT', severity: bSev, detail: `HTTP request timed out (30s)${bSuffix}` });
   } else if (httpResult?.error?.includes('ENOTFOUND') || httpResult?.error?.includes('getaddrinfo')) {
+    // DNS failure is real — Firecrawl can't rescue this
     issues.push({ type: 'URL_DEAD', severity: 'BROKEN', detail: 'DNS resolution failed' });
   } else if (httpResult?.status === 404) {
+    // 404 is real — Firecrawl would get 404 too
     issues.push({ type: 'URL_DEAD', severity: 'BROKEN', detail: 'HTTP 404 — page not found' });
   } else if (httpResult?.status >= 500) {
-    issues.push({ type: 'SERVER_ERROR', severity: 'BROKEN', detail: `HTTP ${httpResult.status}` });
+    issues.push({ type: 'SERVER_ERROR', severity: bSev, detail: `HTTP ${httpResult.status}${bSuffix}` });
   }
 
   if (httpResult?.botBlock) {
-    issues.push({ type: 'BLOCKED', severity: 'BROKEN', detail: `Bot detection${httpResult.cloudflare ? ' (Cloudflare)' : ''} — ${httpResult.status || 'challenge page'}` });
+    issues.push({ type: 'BLOCKED', severity: bSev, detail: `Bot detection${httpResult.cloudflare ? ' (Cloudflare)' : ''} — ${httpResult.status || 'challenge page'}${bSuffix}` });
   } else if (httpResult?.status === 403 && httpResult?.cloudflare) {
-    issues.push({ type: 'BLOCKED', severity: 'BROKEN', detail: 'Cloudflare blocking (403)' });
+    issues.push({ type: 'BLOCKED', severity: bSev, detail: `Cloudflare blocking (403)${bSuffix}` });
   }
 
   if (httpResult?.bodySize > 0 && httpResult?.bodySize < 500 && httpResult?.status === 200 && !httpResult?.botBlock) {
@@ -943,6 +989,38 @@ async function main() {
     const blocked = Object.values(httpResults).filter(r => r.botBlock || r.status === 403).length;
     const errs = Object.values(httpResults).filter(r => r.error).length;
     console.log(`  ${ok} OK, ${blocked} blocked, ${errs} errors  (${((Date.now() - startTime) / 1000).toFixed(1)}s)`);
+  }
+
+  // ── Phase 2.5: Firecrawl rescue for plain-HTTP failures ──
+  // Production uses Firecrawl to bypass Cloudflare / slow sites. Re-probe
+  // any house flagged BLOCKED / TIMEOUT / 5xx via Firecrawl and flag
+  // firecrawlRescued=true so detectProblems() downgrades to a warning.
+  // Bounded by the false-positive count — no spend on houses that pass HTTP.
+  const rescueCandidates = Object.entries(httpResults).filter(([, r]) =>
+    r.error === 'TIMEOUT' ||
+    r.botBlock ||
+    (r.status === 403 && r.cloudflare) ||
+    (r.status >= 500 && r.status < 600)
+  );
+  if (rescueCandidates.length > 0 && process.env.FIRECRAWL_API_KEY) {
+    if (!JSON_MODE) console.log(`\n  Phase 2.5: Firecrawl rescue for ${rescueCandidates.length} flagged houses...`);
+    let rescued = 0;
+    // Concurrency 3 to respect Firecrawl rate limits
+    for (let i = 0; i < rescueCandidates.length; i += 3) {
+      const batch = rescueCandidates.slice(i, i + 3);
+      await Promise.all(batch.map(async ([house]) => {
+        const url = config.HOUSE_ROOTS[house];
+        const fc = await firecrawlRescue(url);
+        if (fc.ok) {
+          httpResults[house].firecrawlRescued = true;
+          rescued++;
+        }
+      }));
+      if (i + 3 < rescueCandidates.length) await new Promise(r => setTimeout(r, 500));
+    }
+    if (!JSON_MODE) console.log(`  ${rescued}/${rescueCandidates.length} rescued via Firecrawl (will report as WARNING, not BROKEN)`);
+  } else if (rescueCandidates.length > 0 && !JSON_MODE) {
+    console.log(`  Phase 2.5: skipped — FIRECRAWL_API_KEY not set; ${rescueCandidates.length} will still report as BROKEN`);
   }
 
   // ── Phase 3: Puppeteer probes ──
