@@ -212,7 +212,26 @@ This is non-negotiable. The skill must compound — each incident makes the next
     Lextons 2026-04-25 was reported as one bug; the sweep surfaced four houses with the same hero-bleed pattern in <1s. Always sweep first. Fix the class, not the instance.
 16. **Always reach for Firecrawl on tricky pages and persistently thin data** (user directive 2026-04-25). curl/JSDOM is fine for static HTML, but the moment a page is a JS-rendered SPA, behind anti-bot, lazy-loads images, or returns a too-thin shell (<500 chars visible text, suspicious lot count, missing prices/images across the board), switch to Firecrawl `rawHtml` + `images` + `executeJavascript` immediately rather than fighting the static fetch. Same rule applies to data-richness regressions: if `house_skills.image_coverage < 0.7`, addresses are coming through as town-only, or bullets are empty across many lots, run a Firecrawl probe before assuming the extractor is broken — usually the extractor is fine and the input HTML was malnourished. Budget is a soft cap, not a wall: spend 2–4 credits to confirm a diagnosis instead of guessing.
 
-17. **Always check the latest visual-audit report at the start of a heal session.** Run `npm run audit:visual` (or `POST /api/admin/visual-audit`) before opening any extractor — it's a 1-second pre-flight that surfaces the class of bugs a human would notice while scrolling (hero-image bleed, slug-case dup, town-only addresses, identical-price walls, Guide-TBA walls, bullet starvation, image-coverage dips, image-domain mismatch, stale-lot walls, duplicate-address walls, cross-house URL leaks, retired-slug stragglers). Findings land in `audits/visual-audit-{ISO-date}.md` and are upserted as `pipeline_alerts` (event_type `visual_audit_issue`) so they queue alongside the screenshot-driven session. Catches bugs the screenshot didn't show — Lextons hero-bleed (2026-04-25) hit 4 houses but only one user-screenshotted.
+17. **Always check the latest visual-audit report at the start of a heal session.** Run `npm run audit:visual` (or `POST /api/admin/visual-audit`) before opening any extractor — it's a 1-second pre-flight that surfaces the class of bugs a human would notice while scrolling. Findings land in `audits/visual-audit-{ISO-date}.md` and are upserted as `pipeline_alerts` (event_type `visual_audit_issue`) so they queue alongside the screenshot-driven session. Catches bugs the screenshot didn't show — Lextons hero-bleed (2026-04-25) hit 4 houses but only one user-screenshotted.
+
+    Each heuristic maps to a typical fix path — when a finding fires, this is where to look first:
+
+    | Heuristic | Typical cause | Where to look first |
+    |---|---|---|
+    | `hero_image_bleed` | Extractor falling back to a banner / logo when the per-lot image selector misses | DOM extractor's image selector — scope it to the lot card, not the page |
+    | `slug_case_duplication` | Same house ingested under multiple casings (`Stags` vs `stags`) | Normalise slug via `lower()` at upsert; backfill existing rows |
+    | `town_only_address` | Address selector grabbed only the city/town tag, not the full line | Extractor's address joiner — check it concatenates street + town + postcode |
+    | `identical_price_wall` | Extractor scraping a hero/banner price applied to every card | Price selector inside the lot-card scope, not page-wide |
+    | `guide_tba_wall` | Genuine pre-catalogue period (lots listed without prices yet) — info, not bug | Verify on the live page first; only fix if prices ARE on the page and we're missing them |
+    | `bullet_starvation` | Extractor missed the description block | Bullets selector — check it's reading the lot description, not metadata |
+    | `image_coverage_low` | Lazy-load not triggered on Firecrawl/Puppeteer | Add scroll/exec actions or escalate to Puppeteer fallback |
+    | `image_domain_mismatch` | Cross-house URL leak — image points to a different house's CDN | Verify `image_url` is scoped to the current page's source |
+    | `stale_lot_wall` | Catalogue ended but status not updated | Run hygiene wave to mark expired auctions |
+    | `duplicate_address_wall` | Same lot ingested twice (dedup key miss) | Check upsert key — usually `(house, lot_url)` or `(house, lot_number, address)` |
+    | `cross_house_url_leak` | `detectAuctionHouse()` routing to wrong slug (the stags/bambooauctions bug, 2026-04-25) | Precedence in `lib/houses.js` — specific subdomain matches must come BEFORE generic catch-alls |
+    | `retired_slug_straggler` | Old slug rows weren't migrated when house renamed/merged | Manual SQL `UPDATE lots SET house = '<new>' WHERE LOWER(house) = '<old>'`; remove from `HOUSE_ROOTS` |
+
+    Cron is intentionally **not yet enabled** — observe a few manual runs first to confirm noise levels before automating. Promote this table into its own skill if the heuristic count grows past ~20.
 
 ## Quick reference: admin endpoints
 
