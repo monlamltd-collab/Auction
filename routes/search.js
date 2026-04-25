@@ -810,15 +810,16 @@ export function invalidateAllLotsCache() {
 // when the response is the trivial-empty shape (no need to cache).
 async function buildAllLotsResponse({ isSignedIn, includePast }) {
   const emptyBody = { lots: [], sources: [], stripeEnabled: STRIPE_ENABLED };
-  if (!supabase) return { body: emptyBody, etag: null };
+  if (!supabase) { log.warn('all-lots: !supabase — returning empty'); return { body: emptyBody, etag: null }; }
 
   // ── Step 1: Get active catalogue URLs from cached_analyses ──
-    const { data: activeCatalogues } = await supabase
+    const { data: activeCatalogues, error: catErr } = await supabase
       .from('cached_analyses')
       .select('url, house, created_at')
       .gt('expires_at', new Date().toISOString());
 
-    if (!activeCatalogues || activeCatalogues.length === 0) return { body: emptyBody, etag: null };
+    if (catErr) { log.error('all-lots: cached_analyses query failed', { error: catErr.message }); return { body: emptyBody, etag: null }; }
+    if (!activeCatalogues || activeCatalogues.length === 0) { log.warn('all-lots: no active catalogues — returning empty', { isSignedIn, includePast }); return { body: emptyBody, etag: null }; }
 
     const activeUrls = [...new Set(activeCatalogues.map(c => normaliseUrl(c.url)))];
 
