@@ -4003,9 +4003,11 @@ function renderLots(){
   startCardCarousels();
 
   // ── Restore previously-open lot if it's still in the visible page ──
-  // _idx is page-relative so we can't re-use the stored idx — match by stable
-  // (house, lot, address) key. Page-jump if needed by setting _currentPage so
-  // the lot lands in the rendered slice.
+  // _idx is the lot's position in LOTS (assigned at the top of renderLots),
+  // not page-relative — but it is render-relative: a fresh fetch builds new
+  // lot objects, so the stored idx points at the wrong object after
+  // /api/all-lots refreshes. Match by stable (house, lot#, address) key
+  // so navigation, refresh, and filter changes all preserve the open lot.
   var _wantKey = _getOpenLotKey();
   if (_wantKey && expandedLotId === null) {
     var _pageMatch = pageItems.find(function(i){ return i.lot && _lotKey(i.lot) === _wantKey; });
