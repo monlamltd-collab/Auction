@@ -514,35 +514,8 @@ router.post('/api/smart-search', async (req, res) => {
     }
     const activeUrls = [...new Set(activeCatalogues.map(c => c.url))];
 
-    // ── Build lots query with column filters ──
-    let dbQuery = supabase.from('lots').select(LOTS_SELECT);
-    dbQuery = dbQuery.in('catalogue_url', activeUrls);
-
-    // Status: query-level override ("unsold Bristol") takes priority over dropdown filter
     const effectiveSold = sqParsed.filters.statusOverride || sf;
-    if (effectiveSold === 'available') dbQuery = dbQuery.or('status.eq.available,status.is.null');
-    else if (effectiveSold === 'sold') dbQuery = dbQuery.in('status', ['sold', 'stc', 'withdrawn']);
-    else if (effectiveSold === 'unsold') dbQuery = dbQuery.eq('status', 'unsold');
-    else if (effectiveSold === 'stc') dbQuery = dbQuery.eq('status', 'stc');
-    else if (effectiveSold === 'withdrawn') dbQuery = dbQuery.eq('status', 'withdrawn');
-    else if (effectiveSold !== 'everything') dbQuery = dbQuery.or('status.eq.available,status.eq.unsold,status.is.null');
-
-    // ── Hard filters: price, location, tenure, beds — things the user definitely wants to constrain ──
-    if (sqParsed.filters.tenure) dbQuery = dbQuery.ilike('tenure', sqParsed.filters.tenure);
-    if (sqParsed.filters.maxPrice) dbQuery = dbQuery.lte('price', sqParsed.filters.maxPrice);
-    if (sqParsed.filters.minPrice) dbQuery = dbQuery.gte('price', sqParsed.filters.minPrice);
-    if (sqParsed.filters.beds) dbQuery = dbQuery.gte('beds', sqParsed.filters.beds);
-    if (sqParsed.filters.condition) dbQuery = dbQuery.in('condition', sqParsed.filters.condition);
-
-    // Location: address ILIKE for city/town names
-    for (const loc of sqParsed.locationTerms) {
-      dbQuery = dbQuery.ilike('address', `%${loc}%`);
-    }
-    // Region: postcode prefix matching (e.g. "South West" → BS, BA, EX, GL, PL, etc.)
-    if (sqParsed.filters.regionPostcodes) {
-      const pcOr = sqParsed.filters.regionPostcodes.map(p => `postcode.ilike.${p}%`).join(',');
-      dbQuery = dbQuery.or(pcOr);
-    }
+    const sortCol = sqParsed.filters.sortBy === 'yield' ? 'est_gross_yield' : 'score';
 
     // ── Concept-based broadening — build OR conditions for semantic intent ──
     const conceptOrClauses = [];
@@ -602,20 +575,66 @@ router.post('/api/smart-search', async (req, res) => {
 
     // Combine concept + soft clauses into one big OR
     const allOrClauses = [...conceptOrClauses, ...softOrClauses];
-    if (allOrClauses.length > 0) {
-      dbQuery = dbQuery.or(allOrClauses.join(','));
+
+    // ── Layer-1 query, with progressive filter relaxation ──
+    // A normal search like "freehold houses in london" should never return zero
+    // when there are matching lots in the database. We try the strict query
+    // first, then progressively drop filters until something matches:
+    //   tier 0 (strict)        — all hard filters + concept/soft ORs + free-text
+    //   tier 1 (no broadening) — drop concept/soft ORs + free-text (kept only as AI-rank signals)
+    //   tier 2 (location-only) — drop hard filters (price/beds/tenure/condition)
+    //   tier 3 (wildcard)      — drop everything except status (top-scored lots)
+    // The chosen tier is passed into the AI prompt so the report can tell the
+    // user when filters were broadened.
+    function buildLayer1Query(tier) {
+      let q = supabase.from('lots').select(LOTS_SELECT).in('catalogue_url', activeUrls);
+
+      // Status (always applied — semantic meaning, not a narrowing constraint)
+      if (effectiveSold === 'available') q = q.or('status.eq.available,status.is.null');
+      else if (effectiveSold === 'sold') q = q.in('status', ['sold', 'stc', 'withdrawn']);
+      else if (effectiveSold === 'unsold') q = q.eq('status', 'unsold');
+      else if (effectiveSold === 'stc') q = q.eq('status', 'stc');
+      else if (effectiveSold === 'withdrawn') q = q.eq('status', 'withdrawn');
+      else if (effectiveSold !== 'everything') q = q.or('status.eq.available,status.eq.unsold,status.is.null');
+
+      // Hard filters (tiers 0-1)
+      if (tier <= 1) {
+        if (sqParsed.filters.tenure) q = q.ilike('tenure', sqParsed.filters.tenure);
+        if (sqParsed.filters.maxPrice) q = q.lte('price', sqParsed.filters.maxPrice);
+        if (sqParsed.filters.minPrice) q = q.gte('price', sqParsed.filters.minPrice);
+        if (sqParsed.filters.beds) q = q.gte('beds', sqParsed.filters.beds);
+        if (sqParsed.filters.condition) q = q.in('condition', sqParsed.filters.condition);
+      }
+
+      // Location (tiers 0-2)
+      if (tier <= 2) {
+        for (const loc of sqParsed.locationTerms) q = q.ilike('address', `%${loc}%`);
+        if (sqParsed.filters.regionPostcodes) {
+          const pcOr = sqParsed.filters.regionPostcodes.map(p => `postcode.ilike.${p}%`).join(',');
+          q = q.or(pcOr);
+        }
+      }
+
+      // Concept + soft ORs (tier 0 only — these are interpretive guesses)
+      if (tier === 0 && allOrClauses.length > 0) q = q.or(allOrClauses.join(','));
+
+      // Free-text search (tier 0 only)
+      if (tier === 0 && sqParsed.freeText.length > 0) {
+        const tsTerms = sqParsed.freeText.map(t => t.replace(/[^a-z0-9]/gi, '')).filter(Boolean);
+        if (tsTerms.length) q = q.textSearch('search_vector', tsTerms.join(' | '));
+      }
+
+      return q.order(sortCol, { ascending: false, nullsFirst: false }).limit(500);
     }
 
-    // Full-text search for remaining unstructured terms (use OR not AND for broader results)
-    if (sqParsed.freeText.length > 0) {
-      const tsTerms = sqParsed.freeText.map(t => t.replace(/[^a-z0-9]/gi, '')).filter(Boolean);
-      if (tsTerms.length) dbQuery = dbQuery.textSearch('search_vector', tsTerms.join(' | '));
+    const TIER_LABELS = ['strict', 'broadened', 'location-only', 'all-active'];
+    let lotRows = null, lotErr = null, searchTier = 0;
+    for (let tier = 0; tier <= 3; tier++) {
+      const { data, error } = await buildLayer1Query(tier);
+      if (error) { lotErr = error; break; }
+      if (data && data.length > 0) { lotRows = data; searchTier = tier; break; }
     }
-
-    // Sort by yield if requested, otherwise by score
-    const sortCol = sqParsed.filters.sortBy === 'yield' ? 'est_gross_yield' : 'score';
-    dbQuery = dbQuery.order(sortCol, { ascending: false, nullsFirst: false }).limit(500);
-    const { data: lotRows, error: lotErr } = await dbQuery;
+    if (searchTier > 0) log.info('smart-search relaxed filters', { from: 'strict', to: TIER_LABELS[searchTier], query, results: lotRows?.length || 0 });
 
     // ── Also include persisted unsold lots from expired catalogues (30-day window) ──
     let unsoldExtra = [];
@@ -671,20 +690,12 @@ router.post('/api/smart-search', async (req, res) => {
     // ═══════════════════════════════════════════════════════════
     // LAYER 2: Send matching lots' search_text to Gemini
     // ═══════════════════════════════════════════════════════════
-    // If column filters narrowed to 0, return early
+    // Note: progressive relaxation above almost guarantees filteredLots > 0.
+    // If we're STILL at 0 here, the catalogue genuinely has no lots in the
+    // requested status — return a clear message but don't pretend to search.
     if (filteredLots.length === 0) {
       await incrementSearchCounter();
-      const filterDesc = [
-        ...sqParsed.locationTerms,
-        sqParsed.softFilters.title_split ? 'title split' : '',
-        sqParsed.softFilters.vacant ? 'vacant' : '',
-        sqParsed.filters.tenure || '',
-        sqParsed.softFilters.prop_type || '',
-        sqParsed.filters.maxPrice ? `under £${sqParsed.filters.maxPrice.toLocaleString()}` : '',
-        ...sqParsed.freeText,
-        ...sqParsed.concepts.map(c => c.replace(/_/g, ' ')),
-      ].filter(Boolean).join(', ');
-      return res.json({ results: [], report: `No lots found matching: ${filterDesc}. Try broadening your search.`, sources: [], totalSearched: 0, searchesUsed, searchLimit });
+      return res.json({ results: [], report: 'No auction lots are available in the current catalogue. The next scrape will run shortly.', sources: [], totalSearched: 0, searchesUsed, searchLimit });
     }
 
     // Always send to Gemini — even small sets benefit from investment commentary
@@ -741,7 +752,14 @@ router.post('/api/smart-search', async (req, res) => {
       ? '\n\nSEARCH CONCEPTS:\n' + sqParsed.concepts.map(c => `- ${conceptExplanations[c] || c}`).join('\n')
       : '';
 
-    const responseText = await callAI(`You are a UK property investment analyst. A user has searched across auction lots and the database returned ${totalSearched} candidate lots (showing top ${geminiLots.length} by score).${soldInstruction}${filterNote}${conceptNote}
+    // If progressive relaxation kicked in, tell the AI so its report can
+    // explain why the results aren't a perfect match for the user's query.
+    const relaxationNote = searchTier === 0 ? '' :
+      searchTier === 1 ? '\nNOTE: No lots matched all the user\'s soft criteria. Filters were broadened to drop the concept/keyword matching — show closest available alternatives and acknowledge in the report.' :
+      searchTier === 2 ? '\nNOTE: No lots matched the user\'s exact constraints (price/beds/tenure/type). Filters were broadened to LOCATION ONLY — explicitly tell the user "no exact matches" and explain what the closest options are.' :
+      '\nNOTE: No lots matched even the user\'s location. Showing top-scored available lots from the wider catalogue — explicitly tell the user "no matches in your area" and suggest reviewing these alternatives.';
+
+    const responseText = await callAI(`You are a UK property investment analyst. A user has searched across auction lots and the database returned ${totalSearched} candidate lots (showing top ${geminiLots.length} by score).${soldInstruction}${filterNote}${conceptNote}${relaxationNote}
 
 Their search query: "${query}"
 
@@ -757,7 +775,7 @@ Respond in this exact JSON format:
 {"indices":[0,5,12],"report":"Your report here..."}
 
 Return the indices of the best matching lots. If few lots match well, that's fine — quality over quantity. Focus your report on investment insights specific to the user's search intent.`, { tier: 'fast', maxTokens: 4000, taskType: 'search' });
-    log.info('smart_search_full', { tier: 'fast', preFiltered: totalSearched, sentToAI: geminiLots.length });
+    log.info('smart_search_full', { tier: 'fast', preFiltered: totalSearched, sentToAI: geminiLots.length, relaxationTier: TIER_LABELS[searchTier] });
 
     let aiParsed;
     try {

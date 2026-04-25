@@ -53,6 +53,19 @@ const EXPECTED = {
       { lot: 2, addressContains: 'Neath', priceMin: 100000 },
     ]
   },
+  // Bamboo Auctions SaaS migration (2026-04-25) — both stags.bambooauctions.com and
+  // carterjonas.bambooauctions.com return 20 cards via the shared bamboo platform extractor.
+  // Snapshots were captured against the SaaS root, where the first 20 cards are visible without scroll.
+  stags: {
+    minLots: 5,
+    samples: [
+      { lot: 1, addressContains: 'Beaminster', priceMin: 100000 },
+    ]
+  },
+  carterjonas: {
+    minLots: 5,
+    samples: [],
+  },
 };
 
 // ─── Run tests ───
