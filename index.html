@@ -606,6 +606,13 @@ footer .logo-f span{color:var(--green)}
 .ds-input{width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:13px;box-sizing:border-box;font-family:var(--font-main)}
 .ds-options{display:flex;flex-wrap:wrap;gap:4px 16px;margin-bottom:10px}
 .ds-check{font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:5px;cursor:pointer}
+.ds-hint{font-size:10px;color:var(--text-muted);margin-top:3px;font-style:italic;opacity:.85}
+.ds-btn{padding:6px 10px;border:1px solid var(--border,#ddd);background:var(--white,#fff);color:var(--text,#1a2a3a);border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
+.ds-btn:hover{border-color:var(--accent);color:var(--accent)}
+.ds-btn:disabled{opacity:.4;cursor:not-allowed}
+.ds-btn-danger:not(:disabled):hover{border-color:var(--accent-danger,#c0392b);color:var(--accent-danger,#c0392b)}
+.lot-card{position:relative}
+.stacks-tick{position:absolute;top:8px;left:8px;width:34px;height:34px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;line-height:1;box-shadow:0 2px 6px rgba(0,0,0,0.15);z-index:3;pointer-events:none}
 .exp-bottom{}
 .exp-close-btn{position:absolute;top:10px;right:10px;width:32px;height:32px;border-radius:50%;border:1px solid var(--border);background:var(--white);color:var(--text2);font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:5;transition:all .15s;line-height:1;padding:0;font-family:inherit;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 .exp-close-btn:hover{background:var(--red-light);color:var(--red);border-color:var(--red)}
@@ -1226,6 +1233,7 @@ footer .logo-f span{color:var(--green)}
     <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 18px;border-bottom:1px solid var(--border)">
       <button class="unsold-toggle" id="unsoldToggle" onclick="toggleUnsoldView()">Unsold lots <span class="ut-count" id="unsoldCount">0</span></button>
       <button class="unsold-toggle" id="favToggle" onclick="toggleFavView()" style="border-color:var(--accent-danger)">♥ Favourites</button>
+      <button class="unsold-toggle" id="analysedToggle" onclick="toggleAnalysedView()" style="border-color:var(--accent)">✓ Analysed</button>
       <div style="width:1px;height:20px;background:var(--border);margin:0 4px;flex-shrink:0"></div>
       <div class="saved-search-bar" id="savedSearchBar" style="display:none;padding:0;flex:1;min-width:0"></div>
       <button class="ss-save-btn" id="ssSaveBtn" onclick="saveCurrentSearch()" title="Save current filters">+ Save search</button>
@@ -1516,6 +1524,9 @@ function updateMoreDot() {
 }
 
 // ── FAVOURITES ──
+// Likes live in `user_lot_actions` (server) when the user is signed in;
+// localStorage `bm_favourites` is the fallback for anon users. The legacy key
+// is migrated into the server table on first sign-in via /api/me/likes/bulk.
 function getFavourites() {
   try { return JSON.parse(localStorage.getItem('bm_favourites') || '[]'); } catch(e) { return []; }
 }
@@ -1524,29 +1535,59 @@ function saveFavourites(favs) {
 }
 function isFavourite(lot) {
   if (!lot) return false;
+  // Signed-in: check the server-backed _userActions cache
+  if (currentSession && window._userActions) {
+    const a = window._userActions[(lot._house || '') + '|' + (lot.url || '')];
+    if (a) return !!a.liked;
+  }
+  // Anon fallback: legacy localStorage key
   var key = (lot._house || '') + ':' + (lot.lot || '') + ':' + (lot.address || '');
   return getFavourites().indexOf(key) !== -1;
 }
 function getFavKey(lot) {
   return (lot._house || '') + ':' + (lot.lot || '') + ':' + (lot.address || '');
 }
-function toggleFav(idx, event) {
+async function toggleFav(idx, event) {
   event.stopPropagation();
   if (!window._userTier) { $('signupModal').classList.add('show'); return; }
   var lot = LOTS[idx];
   if (!lot) return;
+  var card = document.getElementById('lot-' + idx);
+  var btn = card ? card.querySelector('.fav-btn') : null;
+
+  // Signed-in path → hit the server
+  if (currentSession && lot._house && lot.url) {
+    const actKey = (lot._house || '') + '|' + (lot.url || '');
+    window._userActions = window._userActions || {};
+    const wasLiked = !!(window._userActions[actKey] && window._userActions[actKey].liked);
+    const nowLiked = !wasLiked;
+    // Optimistic UI
+    if (btn) { btn.classList.toggle('fav-active', nowLiked); btn.textContent = nowLiked ? '\u2665' : '\u2661'; }
+    window._userActions[actKey] = Object.assign({}, window._userActions[actKey] || {}, { liked: nowLiked });
+    try {
+      const r = await fetch('/api/me/likes', {
+        method: 'POST', headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ house: lot._house, lot_url: lot.url, liked: nowLiked })
+      });
+      if (!r.ok) throw new Error('like failed');
+    } catch {
+      // Roll back on failure
+      window._userActions[actKey] = Object.assign({}, window._userActions[actKey] || {}, { liked: wasLiked });
+      if (btn) { btn.classList.toggle('fav-active', wasLiked); btn.textContent = wasLiked ? '\u2665' : '\u2661'; }
+      showToast && showToast('Could not update like', 'err');
+    }
+    return;
+  }
+
+  // Anon path → localStorage
   var key = getFavKey(lot);
   var favs = getFavourites();
   var i = favs.indexOf(key);
   if (i === -1) { favs.push(key); } else { favs.splice(i, 1); }
   saveFavourites(favs);
-  var card = document.getElementById('lot-' + idx);
-  if (card) {
-    var btn = card.querySelector('.fav-btn');
-    if (btn) {
-      btn.classList.toggle('fav-active', i === -1);
-      btn.innerHTML = i === -1 ? '&#9829;' : '&#9825;';
-    }
+  if (card && btn) {
+    btn.classList.toggle('fav-active', i === -1);
+    btn.textContent = i === -1 ? '\u2665' : '\u2661';
   }
 }
 
@@ -1589,7 +1630,18 @@ function toggleUnsoldView() {
 function toggleFavView() {
   _favViewActive = !_favViewActive;
   if (_unsoldViewActive) { _unsoldViewActive = false; $('unsoldToggle').classList.remove('active'); hideUnsoldAlertBar(); }
+  if (_analysedViewActive) { _analysedViewActive = false; $('analysedToggle')?.classList.remove('active'); }
   $('favToggle').classList.toggle('active', _favViewActive);
+  renderLots();
+}
+
+let _analysedViewActive = false;
+function toggleAnalysedView() {
+  if (!currentSession) { $('signupModal')?.classList.add('show'); return; }
+  _analysedViewActive = !_analysedViewActive;
+  if (_unsoldViewActive) { _unsoldViewActive = false; $('unsoldToggle').classList.remove('active'); hideUnsoldAlertBar(); }
+  if (_favViewActive) { _favViewActive = false; $('favToggle').classList.remove('active'); }
+  $('analysedToggle')?.classList.toggle('active', _analysedViewActive);
   renderLots();
 }
 
@@ -2631,8 +2683,68 @@ function onSignIn(session) {
   loadSavedSearches();
   loadUnsoldAlertStatus();
 
+  // Load per-user lot actions (likes / analysed / stacks) and merge legacy localStorage favs
+  loadUserActions().then(migrateLegacyFavourites);
+
   // Show onboarding for first-time users
   maybeShowOnboarding();
+}
+
+// Pulls likes + analysed lots and indexes them into window._userActions
+async function loadUserActions() {
+  if (!currentSession) return;
+  window._userActions = window._userActions || {};
+  try {
+    const [likesRes, anlRes] = await Promise.all([
+      fetch('/api/me/likes', { headers: getAuthHeaders() }),
+      fetch('/api/me/analysed', { headers: getAuthHeaders() })
+    ]);
+    if (likesRes.ok) {
+      const data = await likesRes.json();
+      for (const a of data.likes || []) {
+        const k = (a.house || '') + '|' + (a.lot_url || '');
+        window._userActions[k] = Object.assign({}, window._userActions[k] || {}, a);
+      }
+    }
+    if (anlRes.ok) {
+      const data = await anlRes.json();
+      for (const a of data.analysed || []) {
+        const k = (a.house || '') + '|' + (a.lot_url || '');
+        window._userActions[k] = Object.assign({}, window._userActions[k] || {}, a);
+      }
+    }
+    // Re-render so cards reflect liked/stacks state
+    if (typeof renderLots === 'function') renderLots();
+  } catch (e) {
+    console.warn('loadUserActions failed', e);
+  }
+}
+
+// One-time merge of localStorage `bm_favourites` into the server table.
+// Old keys are `<house>:<lotNum>:<address>` and don't directly carry lot_url —
+// best we can do is match against in-memory LOTS to recover (house, url).
+async function migrateLegacyFavourites() {
+  if (!currentSession) return;
+  let legacy;
+  try { legacy = JSON.parse(localStorage.getItem('bm_favourites') || '[]'); } catch { return; }
+  if (!Array.isArray(legacy) || !legacy.length) return;
+  const items = [];
+  for (const key of legacy) {
+    const lot = (window.LOTS || []).find(l => getFavKey(l) === key);
+    if (lot && lot._house && lot.url) items.push({ house: lot._house, lot_url: lot.url });
+  }
+  if (!items.length) { localStorage.removeItem('bm_favourites'); return; }
+  try {
+    const r = await fetch('/api/me/likes/bulk', {
+      method: 'POST', headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items })
+    });
+    if (r.ok) {
+      localStorage.removeItem('bm_favourites');
+      // Refresh actions so isFavourite() picks them up
+      await loadUserActions();
+    }
+  } catch {}
 }
 
 function onSignOut() {
@@ -3381,8 +3493,8 @@ async function runSmartSearch(query) {
       const remaining = Math.max(0, data.searchLimit - (data.searchesUsed || 0));
       $('statsRow').insertAdjacentHTML('afterend', '<div class="search-counter">' + remaining + ' AI search' + (remaining !== 1 ? 'es' : '') + ' left today</div>');
     }
-    // Non-determinism note
-    $('statsRow').insertAdjacentHTML('afterend', '<div style="text-align:center;font-size:.72rem;color:var(--text3);margin-top:6px">AI searches are non-deterministic — running the same search twice may return different results.</div>');
+    // Non-determinism + interpretive-results disclaimer
+    $('statsRow').insertAdjacentHTML('afterend', '<div style="text-align:center;font-size:.72rem;color:var(--text3);margin-top:6px;line-height:1.5;max-width:680px;margin-left:auto;margin-right:auto">AI searches are non-deterministic — running the same search twice may return different results. The AI interprets your intent semantically and may suggest properties outside your literal parameters when it judges them relevant (or when no exact matches exist). Always verify each lot against the auction house listing before acting.</div>');
     // Update stored counters
     if (data.searchesUsed != null) window._aiSearchesUsed = data.searchesUsed;
   } catch (e) {
@@ -3545,6 +3657,7 @@ function renderLots(){
   const selectedHouses=getSelectedHouses();
   const _hasFavView=typeof _favViewActive!=='undefined'&&_favViewActive;
   const favKeys=_hasFavView?getFavourites():null;
+  const _hasAnalysedView=typeof _analysedViewActive!=='undefined'&&_analysedViewActive;
   const _repoPattern=/\b(repossess(?:ion|ed)?|receivership|lpa receiver|mortgagee.?(?:sale|possess)|bank.?sale)\b/i;
   const _repoPattern2=/repossess|receivership/i;
 
@@ -3615,8 +3728,13 @@ function renderLots(){
       else if(fsold==='withdrawn'&&l.status!=='withdrawn') return false;
       // fsold==='everything' → no filter
     }
-    // Favourites
-    if(_hasFavView&&favKeys.indexOf(getFavKey(l))===-1) return false;
+    // Favourites — uses isFavourite() so it picks up server-backed likes for signed-in users
+    if(_hasFavView && !isFavourite(l)) return false;
+    // Analysed — only applies for signed-in users (anon users have no analysed list)
+    if(_hasAnalysedView){
+      var _act = (window._userActions || {})[(l._house || '') + '|' + (l.url || '')];
+      if(!_act || !_act.analysed) return false;
+    }
     // Text search (skip for SMART_RESULTS)
     if(fs&&!SMART_RESULTS){
       const addr=(l.address||'').toLowerCase(),bull=(l.bullets||[]).join(' ').toLowerCase(),opp=(l.opps||[]).join(' ').toLowerCase(),rsk=(l.risks||[]).join(' ').toLowerCase(),dt=(l.dealType||'').toLowerCase(),pt=(l.propType||'').toLowerCase(),hs=(l._house||'').toLowerCase(),tn=(l.tenure||'').toLowerCase();
@@ -4044,7 +4162,11 @@ function card(l){
   const endedClass = (l._auctionDate && l._auctionDate < new Date().toISOString().slice(0,10)) ? ' card-ended' : '';
   const blurredClass = l.blurred ? ' blurred' : '';
   const blurTextAttr = l.blurred ? ' data-blur-text="Sign in free for full details"' : '';
+  // Stacks tick: shown when the user has a saved scenario for this lot that stacks
+  const _act = (window._userActions && window._userActions[(l._house || '') + '|' + (l.url || '')]) || null;
+  const stacksTick = _act && _act.stacks ? '<div class="stacks-tick" title="This deal stacks">\u2705</div>' : '';
   return '<div class="lot-card' + endedClass + blurredClass + '"' + blurTextAttr + ' id="lot-' + l._idx + '" tabindex="0" role="article" aria-label="Lot ' + esc(l.lot || '') + ' — ' + esc(l.address || 'Address not available') + '" onclick="expandCard(LOTS[' + l._idx + '])" onkeydown="if(event.key===\'Enter\'){this.click()}">' +
+    stacksTick +
     getCardImageHtml(l) +
     '<div class="card-body">' +
       '<div class="card-row1"><span class="card-lot-info">' + catLabel + '</span><span class="card-price">' + esc(priceText) + '</span></div>' +
@@ -4168,6 +4290,224 @@ function detectCountry(address){
   return 'england';
 }
 
+// ── DEAL STACKING — suggestion + scenarios state ──
+// Mirrors lib/fundability.js _deriveDeal() so the widget can pre-fill
+// refurb cost & GDV even when the lot was loaded from cache (where
+// lot.suggested isn't populated by enrichLotsWithFundability).
+const _DS_WORKS_RULES = [
+  { keys: ['derelict','major_works','shell'], pct: 0.35 },
+  { keys: ['poor','needs_modernisation','cosmetic_plus'], pct: 0.20 },
+  { keys: ['cosmetic','light_refurb','needs_refresh'], pct: 0.08 }
+];
+const _DS_DEFAULT_REFURB_PCT = 0.15;
+const _DS_GDV_UPLIFT = 0.15;
+function suggestWorksAndGdv(lot) {
+  if (lot && lot.suggested && (lot.suggested.worksCost || lot.suggested.gdv)) {
+    return { worksCost: lot.suggested.worksCost || null, gdv: lot.suggested.gdv || null, source: 'server' };
+  }
+  const price = (lot && (lot.price || lot.guidePrice)) || 0;
+  if (!price) return { worksCost: null, gdv: null, source: null };
+  const cond = (lot && lot.condition || '').toLowerCase();
+  const refurbKeywords = ['poor','derelict','needs work','needs modernisation','needs refurbishment',
+    'major_works','shell','cosmetic_plus','needs_modernisation','light_refurb','needs_refresh','cosmetic'];
+  const isRefurb = refurbKeywords.some(k => cond.includes(k));
+  if (!isRefurb) return { worksCost: null, gdv: null, source: 'no_refurb_signal' };
+  let pct = _DS_DEFAULT_REFURB_PCT;
+  for (const rule of _DS_WORKS_RULES) { if (rule.keys.some(k => cond.includes(k))) { pct = rule.pct; break; } }
+  const worksCost = Math.round(price * pct);
+  const gdv = Math.round(price + worksCost + price * _DS_GDV_UPLIFT);
+  return { worksCost, gdv, source: 'derived' };
+}
+
+// In-memory cache of saved scenarios keyed by lot._idx. Each entry:
+//   { scenarios: [...], selectedId: <id|null> }
+const _dsScenarios = {};
+function _dsLotKey(lot) { return { house: lot._house || '', lot_url: lot.url || '' }; }
+function _dsLotKeyValid(lot) { const k = _dsLotKey(lot); return !!(k.house && k.lot_url); }
+
+async function loadScenariosForLot(lot, idx) {
+  if (!isPremium() || !_dsLotKeyValid(lot) || !currentSession) return;
+  const k = _dsLotKey(lot);
+  try {
+    const r = await fetch('/api/me/scenarios?house=' + encodeURIComponent(k.house) + '&lot_url=' + encodeURIComponent(k.lot_url), { headers: getAuthHeaders() });
+    if (!r.ok) return;
+    const data = await r.json();
+    _dsScenarios[idx] = { scenarios: data.scenarios || [], selectedId: null };
+    renderScenarioPicker(idx);
+  } catch {}
+}
+
+function renderScenarioPicker(idx) {
+  const sel = document.getElementById('ds-scenario-select-' + idx);
+  if (!sel) return;
+  const state = _dsScenarios[idx] || { scenarios: [] };
+  const current = state.selectedId;
+  // Use DOM API rather than innerHTML — scenario names are user-supplied
+  while (sel.firstChild) sel.removeChild(sel.firstChild);
+  const blank = document.createElement('option');
+  blank.value = '';
+  blank.textContent = '\u2014 New scenario \u2014';
+  sel.appendChild(blank);
+  for (const s of state.scenarios) {
+    const opt = document.createElement('option');
+    opt.value = s.id;
+    opt.textContent = s.name + (s.stacks ? ' \u2705' : '');
+    if (s.id === current) opt.selected = true;
+    sel.appendChild(opt);
+  }
+  const delBtn = document.getElementById('ds-scenario-delete-' + idx);
+  if (delBtn) delBtn.disabled = !current;
+}
+
+function selectScenario(idx, scenarioId) {
+  const state = _dsScenarios[idx];
+  if (!state) return;
+  if (!scenarioId) { state.selectedId = null; renderScenarioPicker(idx); return; }
+  const s = state.scenarios.find(x => x.id === scenarioId);
+  if (!s) return;
+  state.selectedId = scenarioId;
+  const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = (v == null ? '' : v); };
+  const setChk = (id, v) => { const el = document.getElementById(id); if (el) el.checked = !!v; };
+  const i = s.inputs || {};
+  setVal('ds-price-' + idx, i.price);
+  setVal('ds-works-' + idx, i.works);
+  setVal('ds-gdv-' + idx, i.gdv);
+  setVal('ds-rental-' + idx, i.rental);
+  setChk('ds-surcharge-' + idx, i.surcharge !== false);
+  setChk('ds-commercial-' + idx, !!i.commercial);
+  setChk('ds-needs-finance-' + idx, i.needsFinance !== false);
+  const ltvSlider = document.getElementById('ltv-slider-' + idx);
+  if (ltvSlider && i.ltvPct) {
+    ltvSlider.value = i.ltvPct;
+    const v = document.getElementById('ltv-val-' + idx); if (v) v.textContent = i.ltvPct + '%';
+  }
+  renderScenarioPicker(idx);
+  runDealStack(idx);
+}
+
+function _dsCollectInputs(idx) {
+  const num = id => { const v = parseFloat(document.getElementById(id)?.value); return isNaN(v) ? null : v; };
+  const chk = id => { const el = document.getElementById(id); return el ? el.checked : null; };
+  const ltvSlider = document.getElementById('ltv-slider-' + idx);
+  return {
+    price: num('ds-price-' + idx),
+    works: num('ds-works-' + idx),
+    gdv: num('ds-gdv-' + idx),
+    rental: num('ds-rental-' + idx),
+    ltvPct: ltvSlider ? parseInt(ltvSlider.value, 10) : 70,
+    surcharge: chk('ds-surcharge-' + idx) !== false,
+    commercial: !!chk('ds-commercial-' + idx),
+    needsFinance: chk('ds-needs-finance-' + idx) !== false
+  };
+}
+
+function _dsDefaultName(inputs) {
+  const finance = inputs.needsFinance ? ('@' + inputs.ltvPct + '% LTV') : 'Cash';
+  return (inputs.rental ? 'Hold ' : 'Flip ') + finance;
+}
+
+async function saveScenario(idx, opts) {
+  opts = opts || {};
+  const lot = LOTS.find(l => l._idx === idx);
+  if (!lot) return;
+  if (!isPremium() || !currentSession) { $('signupModal')?.classList.add('show'); return; }
+  if (!_dsLotKeyValid(lot)) return;
+  const result = window._dsLastResult && window._dsLastResult[idx];
+  if (!result) { showToast('Run the calculator first', 'warn'); return; }
+  const inputs = _dsCollectInputs(idx);
+  const state = _dsScenarios[idx] = _dsScenarios[idx] || { scenarios: [], selectedId: null };
+  const k = _dsLotKey(lot);
+  const isNew = opts.saveAs || !state.selectedId;
+  let name;
+  if (isNew) {
+    const proposed = (typeof opts.name === 'string' && opts.name) || _dsDefaultName(inputs);
+    name = (window.prompt && opts.saveAs) ? (window.prompt('Name this scenario:', proposed) || proposed) : proposed;
+  }
+  try {
+    const url = isNew ? '/api/me/scenarios' : '/api/me/scenarios/' + state.selectedId;
+    const method = isNew ? 'POST' : 'PUT';
+    const body = isNew
+      ? { house: k.house, lot_url: k.lot_url, name, inputs, results: result.payload, stacks: result.stacks }
+      : { inputs, results: result.payload, stacks: result.stacks };
+    const r = await fetch(url, {
+      method, headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (!r.ok) throw new Error('save failed');
+    const data = await r.json();
+    if (isNew) { state.scenarios.unshift(data.scenario); state.selectedId = data.scenario.id; }
+    else {
+      const i = state.scenarios.findIndex(x => x.id === data.scenario.id);
+      if (i >= 0) state.scenarios[i] = data.scenario;
+    }
+    renderScenarioPicker(idx);
+    _markLotAnalysed(lot, !!data.stacks);
+    showToast('Saved \u00b7 added to Analysed', 'ok');
+  } catch {
+    showToast('Could not save scenario', 'err');
+  }
+}
+
+async function deleteScenario(idx) {
+  const state = _dsScenarios[idx];
+  if (!state || !state.selectedId) return;
+  if (!confirm('Delete this scenario?')) return;
+  try {
+    const r = await fetch('/api/me/scenarios/' + state.selectedId, { method: 'DELETE', headers: getAuthHeaders() });
+    if (!r.ok) throw new Error('delete failed');
+    const data = await r.json();
+    state.scenarios = state.scenarios.filter(s => s.id !== state.selectedId);
+    state.selectedId = null;
+    renderScenarioPicker(idx);
+    const lot = LOTS.find(l => l._idx === idx);
+    if (lot) _markLotAnalysed(lot, !!data.stacks);
+  } catch {
+    showToast('Could not delete scenario', 'err');
+  }
+}
+
+// In-memory map keyed by "<house>|<lot_url>"
+window._userActions = window._userActions || {};
+function _actionKey(houseOrLot, lot_url) {
+  if (typeof houseOrLot === 'object') return (houseOrLot._house || '') + '|' + (houseOrLot.url || '');
+  return (houseOrLot || '') + '|' + (lot_url || '');
+}
+function _markLotAnalysed(lot, stacks) {
+  const key = _actionKey(lot);
+  window._userActions[key] = Object.assign({}, window._userActions[key] || {}, { liked: true, analysed: true, stacks: !!stacks });
+  const card = document.getElementById('lot-' + lot._idx);
+  if (card) {
+    const btn = card.querySelector('.fav-btn');
+    if (btn) { btn.classList.add('fav-active'); btn.textContent = '\u2665'; }
+    let tick = card.querySelector('.stacks-tick');
+    if (stacks && !tick) {
+      tick = document.createElement('div');
+      tick.className = 'stacks-tick';
+      tick.title = 'This deal stacks';
+      tick.textContent = '\u2705';
+      card.appendChild(tick);
+    } else if (!stacks && tick) {
+      tick.remove();
+    }
+  }
+}
+
+function showToast(msg, kind) {
+  let host = document.getElementById('bm-toast-host');
+  if (!host) {
+    host = document.createElement('div'); host.id = 'bm-toast-host';
+    host.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:10000;display:flex;flex-direction:column;gap:6px;align-items:center;pointer-events:none';
+    document.body.appendChild(host);
+  }
+  const el = document.createElement('div');
+  const bg = kind === 'err' ? 'var(--accent-danger,#c0392b)' : kind === 'warn' ? 'var(--accent-warn,#e67e22)' : 'var(--accent,#2e7d32)';
+  el.style.cssText = 'padding:10px 16px;border-radius:8px;background:' + bg + ';color:#fff;font-size:13px;font-weight:600;box-shadow:0 4px 14px rgba(0,0,0,0.15);opacity:0;transition:opacity .15s';
+  el.textContent = msg;
+  host.appendChild(el);
+  requestAnimationFrame(() => { el.style.opacity = '1'; });
+  setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 200); }, 2500);
+}
+
 // ── DEAL STACKING CALCULATOR (True Acquisition Cost) ──
 function calcDealStack(purchasePrice, gdv, worksCost, rentalIncome, ltvPct, address, opts) {
   if (!purchasePrice || purchasePrice <= 0 || isNaN(purchasePrice)) return null;
@@ -4178,6 +4518,7 @@ function calcDealStack(purchasePrice, gdv, worksCost, rentalIncome, ltvPct, addr
   var insuranceCost = opts.insuranceCost != null ? opts.insuranceCost : 500;
   var surcharge = opts.surcharge !== undefined ? opts.surcharge : true;
   var commercial = opts.commercial || false;
+  var needsFinance = opts.needsFinance !== false; // default true for backwards-compat
 
   // Lender matching — find best rate from LENDER_DATA
   let bestLender = null;
@@ -4185,24 +4526,28 @@ function calcDealStack(purchasePrice, gdv, worksCost, rentalIncome, ltvPct, addr
   let monthlyRate = 0.0085; // fallback 0.85%/mo
   let procFeePct = 0.02;    // fallback 2%
 
-  const lenders = window.LENDER_DATA || [];
-  if (lenders.length > 0) {
-    let bestRate = Infinity;
-    for (const l of lenders) {
-      const ltv = _parseLTV(l.l1);
-      if (ltv.pct >= ltvPct) {
-        const rate = _parseRate(l.r);
-        if (rate > 0 && rate < bestRate) {
-          bestRate = rate;
-          bestLender = l;
+  if (needsFinance) {
+    const lenders = window.LENDER_DATA || [];
+    if (lenders.length > 0) {
+      let bestRate = Infinity;
+      for (const l of lenders) {
+        const ltv = _parseLTV(l.l1);
+        if (ltv.pct >= ltvPct) {
+          const rate = _parseRate(l.r);
+          if (rate > 0 && rate < bestRate) {
+            bestRate = rate;
+            bestLender = l;
+          }
         }
       }
+      if (bestLender) {
+        usingFallback = false;
+        monthlyRate = _parseRate(bestLender.r);
+        procFeePct = _parseProcFee(bestLender.pf) / 100;
+      }
     }
-    if (bestLender) {
-      usingFallback = false;
-      monthlyRate = _parseRate(bestLender.r);
-      procFeePct = _parseProcFee(bestLender.pf) / 100;
-    }
+  } else {
+    usingFallback = false; // not using lender data, but not "fallback" either
   }
 
   // Acquisition costs
@@ -4212,13 +4557,13 @@ function calcDealStack(purchasePrice, gdv, worksCost, rentalIncome, ltvPct, addr
   const worksContingency = Math.round(worksCost * contingencyPct);
   const totalWorks = worksCost + worksContingency;
 
-  // Finance costs
-  const loanAmount = Math.round(purchasePrice * (ltvPct / 100));
-  const bridgingInterest = Math.round(loanAmount * monthlyRate * 12);
-  const arrangementFee = Math.round(loanAmount * procFeePct);
+  // Finance costs (zeroed when paying cash)
+  const loanAmount = needsFinance ? Math.round(purchasePrice * (ltvPct / 100)) : 0;
+  const bridgingInterest = needsFinance ? Math.round(loanAmount * monthlyRate * 12) : 0;
+  const arrangementFee = needsFinance ? Math.round(loanAmount * procFeePct) : 0;
   const solicitor = 1500;
   const survey = 500;
-  const brokerFee = Math.round(loanAmount * 0.01);
+  const brokerFee = needsFinance ? Math.round(loanAmount * 0.01) : 0;
 
   // True total cost in (everything to get the property done)
   const totalCostIn = purchasePrice + sdlt + buyerPremium + totalWorks + bridgingInterest + arrangementFee + solicitor + survey + brokerFee + legalPackCost + insuranceCost;
@@ -4268,6 +4613,7 @@ function calcDealStack(purchasePrice, gdv, worksCost, rentalIncome, ltvPct, addr
     buyerPremium, worksContingency, totalWorks, legalPackCost, insuranceCost,
     totalCostIn, dayOneCash, cashIn, usingFallback, bestLenderName: bestLender?.name || null,
     agentFees, exitSolicitor, totalExitCosts,
+    needsFinance,
     flip: { netProfit, roi },
     stress,
     hold
@@ -4331,16 +4677,25 @@ function runDealStack(idx) {
     return;
   }
 
+  var needsFinanceEl = document.getElementById('ds-needs-finance-' + idx);
+  var needsFinance = needsFinanceEl ? needsFinanceEl.checked : true;
+
   var result = calcDealStack(purchasePrice, gdv, works, rental, ltv, lot.address || '', {
     buyerPremPct: buyerPrem, contingencyPct: contingency,
     legalPackCost: legalPack, insuranceCost: insurance,
-    surcharge: surcharge, commercial: commercial
+    surcharge: surcharge, commercial: commercial,
+    needsFinance: needsFinance
   });
   if (!result) {
     document.getElementById('ds-results-' + idx).innerHTML =
       '<p style="color:var(--text-muted); font-size:13px; text-align:center; padding:12px 0;">Guide price not available \u2014 deal stacking requires a price</p>';
     return;
   }
+  // Compute "stacks" verdict and stash latest result for the Save button
+  var _stress = result.stress ? result.stress.netProfit : null;
+  var stacks = (result.flip.netProfit > 0) && (_stress === null || _stress > 0) && (result.flip.roi >= 20);
+  window._dsLastResult = window._dsLastResult || {};
+  window._dsLastResult[idx] = { stacks, payload: result };
   fetch('/api/track/event', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action:'deal_stacking', detail:{address: lot.address||''}})}).catch(function(){});
   renderDealStackResults(idx, result, rental > 0);
 }
@@ -4357,9 +4712,14 @@ function renderDealStackResults(idx, r, showHold) {
   var valColor = function(v) { return v >= 0 ? 'color:var(--signal-pos)' : 'color:var(--accent-danger)'; };
 
   // Lender note
-  var lenderNote = r.usingFallback
-    ? '<p style="font-size:11px; color:var(--text-muted); margin:0 0 8px; font-style:italic;">Based on market averages \u2014 lender data unavailable</p>'
-    : '<p style="font-size:11px; color:var(--text-muted); margin:0 0 8px; font-style:italic;">Based on ' + (r.bestLenderName || 'best match') + ' rates</p>';
+  var lenderNote;
+  if (r.needsFinance === false) {
+    lenderNote = '<p style="font-size:11px; color:var(--text-muted); margin:0 0 8px; font-style:italic;">Cash purchase \u2014 no bridging interest applied</p>';
+  } else if (r.usingFallback) {
+    lenderNote = '<p style="font-size:11px; color:var(--text-muted); margin:0 0 8px; font-style:italic;">Based on market averages \u2014 lender data unavailable</p>';
+  } else {
+    lenderNote = '<p style="font-size:11px; color:var(--text-muted); margin:0 0 8px; font-style:italic;">Based on ' + (r.bestLenderName || 'best match') + ' rates</p>';
+  }
 
   // Day-one cash headline
   var dayOneBanner =
@@ -4384,12 +4744,16 @@ function renderDealStackResults(idx, r, showHold) {
         (r.buyerPremium > 0 ? '<span style="color:var(--text-muted)">Buyer\'s premium (+VAT)</span><span>' + fmtCurrency(r.buyerPremium) + '</span>' : '') +
         '<span style="color:var(--text-muted)">Legal pack review</span><span>' + fmtCurrency(r.legalPackCost) + '</span>' +
         '<span style="color:var(--text-muted)">Buildings insurance</span><span>' + fmtCurrency(r.insuranceCost) + '</span>' +
-        '<span style="color:var(--text-muted); font-size:11px; font-weight:600; grid-column:span 2; margin-top:8px;">FINANCE</span>' +
-        '<span style="color:var(--text-muted)">Bridging interest (12mo)</span><span>' + fmtCurrency(r.bridgingInterest) + '</span>' +
-        '<span style="color:var(--text-muted)">Arrangement fee</span><span>' + fmtCurrency(r.arrangementFee) + '</span>' +
-        '<span style="color:var(--text-muted)">Solicitor</span><span>' + fmtCurrency(r.solicitor) + '</span>' +
-        '<span style="color:var(--text-muted)">Survey</span><span>' + fmtCurrency(r.survey) + '</span>' +
-        '<span style="color:var(--text-muted)">Broker fee</span><span>' + fmtCurrency(r.brokerFee) + '</span>' +
+        (r.needsFinance === false
+          ? '<span style="color:var(--text-muted); font-size:11px; font-weight:600; grid-column:span 2; margin-top:8px;">PROFESSIONAL FEES</span>' +
+            '<span style="color:var(--text-muted)">Solicitor</span><span>' + fmtCurrency(r.solicitor) + '</span>' +
+            '<span style="color:var(--text-muted)">Survey</span><span>' + fmtCurrency(r.survey) + '</span>'
+          : '<span style="color:var(--text-muted); font-size:11px; font-weight:600; grid-column:span 2; margin-top:8px;">FINANCE</span>' +
+            '<span style="color:var(--text-muted)">Bridging interest (12mo)</span><span>' + fmtCurrency(r.bridgingInterest) + '</span>' +
+            '<span style="color:var(--text-muted)">Arrangement fee</span><span>' + fmtCurrency(r.arrangementFee) + '</span>' +
+            '<span style="color:var(--text-muted)">Solicitor</span><span>' + fmtCurrency(r.solicitor) + '</span>' +
+            '<span style="color:var(--text-muted)">Survey</span><span>' + fmtCurrency(r.survey) + '</span>' +
+            '<span style="color:var(--text-muted)">Broker fee</span><span>' + fmtCurrency(r.brokerFee) + '</span>') +
         '<span style="color:var(--text-muted); font-size:11px; font-weight:600; grid-column:span 2; margin-top:8px;">WORKS</span>' +
         '<span style="color:var(--text-muted)">Works cost</span><span>' + fmtCurrency(r.totalWorks - r.worksContingency) + '</span>' +
         (r.worksContingency > 0 ? '<span style="color:var(--text-muted)">Contingency</span><span>' + fmtCurrency(r.worksContingency) + '</span>' : '') +
@@ -4471,9 +4835,12 @@ function renderDealStackResults(idx, r, showHold) {
   var stressPasses = stressProfit === null || stressProfit > 0;
   var flipRoi = r.flip.roi;
   if (flipProfit > 0 && stressPasses && flipRoi >= 20) {
-    verdict = '<div style="margin-top:10px; padding:10px 14px; background:#e8f5ee; border-radius:8px; border-left:4px solid var(--accent);">' +
-      '<div style="font-size:14px; font-weight:700; color:var(--accent); margin-bottom:2px;">This deal stacks.</div>' +
-      '<div style="font-size:12px; color:var(--text-muted);">Profitable even at GDV -10%. ' + Math.round(flipRoi) + '% ROI on cash deployed.</div>' +
+    verdict = '<div style="margin-top:10px; padding:10px 14px; background:#e8f5ee; border-radius:8px; border-left:4px solid var(--accent); display:flex; align-items:center; gap:10px;">' +
+      '<div style="font-size:24px; line-height:1;" aria-hidden="true">\u2705</div>' +
+      '<div>' +
+        '<div style="font-size:14px; font-weight:700; color:var(--accent); margin-bottom:2px;">This deal stacks.</div>' +
+        '<div style="font-size:12px; color:var(--text-muted);">Profitable even at GDV -10%. ' + Math.round(flipRoi) + '% ROI on cash deployed.</div>' +
+      '</div>' +
     '</div>';
   } else if (flipProfit > 0 && !stressPasses) {
     verdict = '<div style="margin-top:10px; padding:10px 14px; background:#fef3e2; border-radius:8px; border-left:4px solid var(--accent-warn);">' +
@@ -4835,28 +5202,13 @@ function expandCard(lot) {
     // Make sure it's positioned after the correct card
     cardEl.after(cachedPanel);
     cachedPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    // Refresh saved scenarios in case they changed elsewhere
+    loadScenariosForLot(lot, lot._idx);
     return;
   }
 
-  // Build expanded panel
-  const validImg = lot.imageUrl && isValidImageUrl(lot.imageUrl);
-  var imgHtml;
-  if (lot.images && lot.images.length > 1) {
-    // Multi-image gallery in expanded view
-    imgHtml = '<div class="exp-gallery">';
-    imgHtml += '<img class="exp-large-img" id="exp-main-img" src="' + esc(optimImg(lot.images[0], 600)) + '" alt="' + esc(lot.address || 'Auction property') + '" decoding="async" onerror="this.style.display=\'none\'">';
-    imgHtml += '<div class="exp-thumbs">';
-    for (var ti = 0; ti < lot.images.length; ti++) {
-      imgHtml += '<img class="exp-thumb' + (ti === 0 ? ' exp-thumb-active' : '') + '" src="' + esc(optimImg(lot.images[ti], 120)) + '" alt="Photo ' + (ti+1) + '" onclick="document.getElementById(\'exp-main-img\').src=this.src.replace(/w\\d+/,\'w600\');document.querySelectorAll(\'.exp-thumb\').forEach(function(t){t.classList.remove(\'exp-thumb-active\')});this.classList.add(\'exp-thumb-active\')" onerror="this.remove()">';
-    }
-    imgHtml += '</div></div>';
-  } else if (validImg) {
-    imgHtml = '<img class="exp-large-img" src="' + esc(optimImg(lot.imageUrl, 600)) + '" alt="' + esc(lot.address || 'Auction property') + '" decoding="async" onerror="this.outerHTML=getPlaceholderHtml(\'' + esc(lot.propType || 'house') + '\').replace(\'card-image-placeholder\',\'exp-large-img-placeholder\')">';
-  } else {
-    imgHtml = '<div class="exp-large-img-placeholder">' + getPropertyTypeIcon(lot.propType) + '</div>';
-  }
-
-  const analysisText = (lot.bullets || []).join('. ');
+  // Build expanded panel — image, AI prose, EPC/flood badges, and the property
+  // strip have been moved off the panel; the card already shows them.
   const signalsHtml = (lot.opps || []).map(o =>
     '<div class="exp-signal-row"><span class="exp-signal-chip" style="background:var(--signal-pos-bg);color:var(--signal-pos)">+</span> ' + esc(o) + '</div>'
   ).concat((lot.risks || []).map(r =>
@@ -4952,7 +5304,25 @@ function expandCard(lot) {
   })();
   // Build deal stacking calculator HTML
   var dealStackHtml = (isPremium() ? (function() {
+        var sug = suggestWorksAndGdv(lot);
+        var worksAttr = sug.worksCost ? ' value="' + sug.worksCost + '"' : '';
+        var gdvAttr = sug.gdv ? ' value="' + sug.gdv + '"' : '';
+        var worksHint = sug.worksCost
+          ? '<div class="ds-hint">Auto-suggested from condition \u2014 override any time</div>'
+          : '';
+        var gdvHint = sug.gdv
+          ? '<div class="ds-hint">Estimated as price + works + 15% \u2014 override with a real comp</div>'
+          : '';
         return '<div class="deal-stack-widget" id="deal-stack-' + lot._idx + '">' +
+          // ── Scenario picker ──
+          '<div class="ds-scenarios" style="display:flex; gap:6px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">' +
+            '<select id="ds-scenario-select-' + lot._idx + '" class="ds-input" style="flex:1; min-width:180px; padding:6px 8px;" onchange="selectScenario(' + lot._idx + ', this.value)">' +
+              '<option value="">\u2014 New scenario \u2014</option>' +
+            '</select>' +
+            '<button type="button" class="ds-btn" onclick="saveScenario(' + lot._idx + ')" title="Save this scenario">Save</button>' +
+            '<button type="button" class="ds-btn" onclick="saveScenario(' + lot._idx + ', { saveAs: true })" title="Save as new scenario">Save as\u2026</button>' +
+            '<button type="button" id="ds-scenario-delete-' + lot._idx + '" class="ds-btn ds-btn-danger" disabled onclick="deleteScenario(' + lot._idx + ')" title="Delete scenario">Delete</button>' +
+          '</div>' +
           '<div class="ds-grid">' +
             '<div>' +
               '<label class="ds-label">Purchase Price</label>' +
@@ -4960,11 +5330,13 @@ function expandCard(lot) {
             '</div>' +
             '<div>' +
               '<label class="ds-label">Works Cost</label>' +
-              '<input type="number" id="ds-works-' + lot._idx + '" placeholder="e.g. 30000" class="ds-input" oninput="debounceDealStack(' + lot._idx + ')">' +
+              '<input type="number" id="ds-works-' + lot._idx + '"' + worksAttr + ' placeholder="e.g. 30000" class="ds-input" oninput="debounceDealStack(' + lot._idx + ')">' +
+              worksHint +
             '</div>' +
             '<div>' +
               '<label class="ds-label">GDV (after works)</label>' +
-              '<input type="number" id="ds-gdv-' + lot._idx + '" placeholder="e.g. 350000" class="ds-input" oninput="debounceDealStack(' + lot._idx + ')">' +
+              '<input type="number" id="ds-gdv-' + lot._idx + '"' + gdvAttr + ' placeholder="e.g. 350000" class="ds-input" oninput="debounceDealStack(' + lot._idx + ')">' +
+              gdvHint +
             '</div>' +
             '<div>' +
               '<label class="ds-label">Monthly Rent <span class="ds-label-note">(hold scenario)</span></label>' +
@@ -4972,6 +5344,7 @@ function expandCard(lot) {
             '</div>' +
           '</div>' +
           '<div class="ds-options">' +
+            '<label class="ds-check"><input type="checkbox" id="ds-needs-finance-' + lot._idx + '" checked onchange="debounceDealStack(' + lot._idx + ')"> Needs bridging finance</label>' +
             '<label class="ds-check"><input type="checkbox" id="ds-surcharge-' + lot._idx + '" checked onchange="debounceDealStack(' + lot._idx + ')"> Additional property SDLT</label>' +
             '<label class="ds-check"><input type="checkbox" id="ds-commercial-' + lot._idx + '"' + ((lot.propType === 'commercial' || (lot.units && lot.units >= 6)) ? ' checked' : '') + ' onchange="debounceDealStack(' + lot._idx + ')"> Commercial / 6+ units</label>' +
           '</div>' +
@@ -4999,62 +5372,12 @@ function expandCard(lot) {
 
   panel.innerHTML =
     '<button class="exp-close-btn" onclick="closeExpandedPanel()" aria-label="Close panel" title="Close">&times;</button>' +
-    // ── Row 1: Overview (60/40) ──
+    // ── Row 1: Signals + Yield (lot summary content lives on the card itself) ──
     '<div class="exp-top">' +
-      '<div class="exp-left">' +
-        imgHtml +
-        '<div class="exp-analysis">' +
-          '<div class="exp-analysis-header">AI Analysis</div>' +
-          '<div class="exp-analysis-text">' + esc(analysisText || 'No detailed analysis available.') + '</div>' +
-        '</div>' +
-        // ── EPC & Flood Enrichment (ungated — visible to ALL users) ──
-        '<div class="exp-enrichment" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:8px">' +
-          // EPC Rating badge
-          (lot.epcRating
-            ? '<div data-tip="Energy Performance Certificate: A (most efficient) to G (least). F/G cannot be legally let under MEES regulations." style="padding:6px 12px;border-radius:6px;font-size:.85rem;font-weight:600;' +
-              'background:' + (/[AB]/.test(lot.epcRating) ? '#e8f5ee' : /[CD]/.test(lot.epcRating) ? '#fef3e2' : '#fdf0ee') + ';' +
-              'color:' + (/[AB]/.test(lot.epcRating) ? 'var(--signal-pos)' : /[CD]/.test(lot.epcRating) ? 'var(--accent-warn)' : 'var(--accent-danger)') + '">' +
-              'EPC: ' + esc(lot.epcRating) + (lot.epcScore ? ' (' + lot.epcScore + ')' : '') +
-              (lot.epcDate ? '<span style="font-weight:400;font-size:.75rem;margin-left:6px;opacity:.7">(assessed ' + esc(lot.epcDate) + ')</span>' : '') +
-            '</div>' +
-            (/[FG]/i.test(lot.epcRating) ? '<div data-tip="Minimum Energy Efficiency Standards — landlords cannot legally let properties rated F or G without an exemption." style="padding:4px 10px;border-radius:6px;font-size:.78rem;background:#fdf0ee;color:var(--accent-danger);font-weight:500">MEES: Cannot legally let — EPC upgrade required</div>' : '') +
-            (/^E$/i.test(lot.epcRating) ? '<div data-tip="Government plans to raise MEES minimum to EPC C. Budget for energy upgrades." style="padding:4px 10px;border-radius:6px;font-size:.78rem;background:#fef3e2;color:var(--accent-warn);font-weight:500">MEES: At risk — EPC C target coming</div>' : '')
-            : '<div data-tip="EPC rating not found — may not have been assessed or data unavailable. Check listing or request from vendor." style="padding:6px 12px;border-radius:6px;font-size:.85rem;color:var(--text-muted,#6b7c8d);background:var(--surface2,#f0f2f5)">EPC: \u2014</div>') +
-          // Flood Zone badge
-          (lot.floodZone
-            ? '<div data-tip="' + (lot.floodZone === '3' ? 'High probability of flooding. Insurance difficult/expensive. Some lenders won\'t fund.' : lot.floodZone === '2' ? 'Medium probability of flooding. Most lenders will fund but may affect valuation.' : 'Low probability of flooding. No finance or insurance concerns.') + '" style="padding:6px 12px;border-radius:6px;font-size:.85rem;font-weight:600;' +
-              'background:' + (lot.floodZone === '3' ? '#fdf0ee' : lot.floodZone === '2' ? '#fef3e2' : '#e8f5ee') + ';' +
-              'color:' + (lot.floodZone === '3' ? 'var(--accent-danger)' : lot.floodZone === '2' ? 'var(--accent-warn)' : 'var(--accent)') + '">' +
-              'Flood Zone ' + esc(lot.floodZone) + ' \u2014 ' + (lot.floodZone === '3' ? 'High Risk' : lot.floodZone === '2' ? 'Medium Risk' : 'Low Risk') +
-            '</div>'
-            : '<div data-tip="Flood zone not checked — data may be unavailable for this postcode." style="padding:6px 12px;border-radius:6px;font-size:.85rem;color:var(--text-muted,#6b7c8d);background:var(--surface2,#f0f2f5)">Flood Zone: \u2014</div>') +
-        '</div>' +
-        // ── Property Details Strip (with data gap warnings) ──
-        '<div class="exp-prop-details">' +
-          '<div class="exp-prop-detail" data-tip="Property classification — affects lender eligibility and valuation method"><div class="epd-label">Type</div><div class="epd-value">' + esc(lot.propType || 'Unknown') + '</div></div>' +
-          '<div class="exp-prop-detail' + (lot.beds == null ? ' epd-gap' : '') + '" data-tip="' + (lot.beds != null ? 'Number of bedrooms — key driver for rental yield estimates' : 'Bedroom count not listed — check the legal pack or listing') + '"><div class="epd-label">Beds</div><div class="epd-value">' + (lot.beds != null ? lot.beds : '?') + '</div></div>' +
-          '<div class="exp-prop-detail' + (!lot.tenure ? ' epd-gap' : '') + '" data-tip="' + (!lot.tenure ? 'Tenure not listed — critical for finance. Check legal pack' : lot.tenure === 'Freehold' ? 'You own the building and land outright' : 'You own for a fixed term. Under 80yrs = expensive to extend') + '"><div class="epd-label">Tenure</div><div class="epd-value">' + esc(lot.tenure ? (lot.tenure + (lot.tenure === 'Leasehold' && lot.leaseLength ? ' (' + lot.leaseLength + 'yr)' : '')) : '?') + '</div></div>' +
-          '<div class="exp-prop-detail' + (!lot.condition ? ' epd-gap' : '') + '" data-tip="' + (lot.condition ? 'Assessed condition based on listing description' : 'Condition not stated — assume needs inspection. Budget for survey costs') + '"><div class="epd-label">Condition</div><div class="epd-value">' + esc(lot.condition ? lot.condition.charAt(0).toUpperCase() + lot.condition.slice(1) : '?') + '</div></div>' +
-          '<div class="exp-prop-detail" data-tip="' + (lot.vacant === true ? 'Vacant possession confirmed — no sitting tenants. Easier to finance and renovate' : lot.vacant === false ? 'Property is tenanted — may affect finance options and refurb timeline' : 'Occupancy not stated — check legal pack for vacant possession details') + '"><div class="epd-label">Vacant</div><div class="epd-value">' + (lot.vacant === true ? 'Yes' : lot.vacant === false ? 'No (tenanted)' : '<span style="color:var(--accent-warn)">?</span>') + '</div></div>' +
-          (lot.sqft ? '<div class="exp-prop-detail" data-tip="Internal floor area — used to calculate price per sqft for comparisons"><div class="epd-label">Size</div><div class="epd-value">' + lot.sqft.toLocaleString() + ' sqft</div></div>' : '') +
-        '</div>' +
-        // ── Data gap warning bar ──
-        (function() {
-          var gaps = [];
-          if (lot.beds == null) gaps.push('beds');
-          if (!lot.tenure) gaps.push('tenure');
-          if (!lot.condition) gaps.push('condition');
-          if (lot.vacant == null) gaps.push('occupancy');
-          if (gaps.length >= 2) return '<div class="data-gap-bar"><span class="dgb-icon">\u26a0</span> Missing: ' + gaps.join(', ') + ' \u2014 check the legal pack before bidding</div>';
-          return '';
-        })() +
-        // ── Lender Summary (auto-fetched from BridgeMatch) ──
-        (lot.price ? '<div class="lender-summary" id="lender-summary-' + lot._idx + '">' + (lot.fundability && lot.fundability.lenderCount !== undefined ? '<span style="font-size:13px;color:var(--signal-pos);font-weight:600">' + lot.fundability.lenderCount + ' bridging lender' + (lot.fundability.lenderCount !== 1 ? 's' : '') + ' match at 70% LTV</span>' : '<span class="ls-loading">Checking lenders...</span>') + '</div>' : '') +
-      '</div>' +
-      '<div class="exp-right">' +
-        (signalsHtml ? '<div class="exp-signals">' + signalsHtml + '</div>' : '') +
-        yieldSection +
-      '</div>' +
+      (signalsHtml ? '<div class="exp-signals" style="margin-bottom:12px">' + signalsHtml + '</div>' : '') +
+      yieldSection +
+      // Lender summary stays — it's a unique panel-only datum
+      (lot.price ? '<div class="lender-summary" id="lender-summary-' + lot._idx + '" style="margin-top:10px">' + (lot.fundability && lot.fundability.lenderCount !== undefined ? '<span style="font-size:13px;color:var(--signal-pos);font-weight:600">' + lot.fundability.lenderCount + ' bridging lender' + (lot.fundability.lenderCount !== 1 ? 's' : '') + ' match at 70% LTV</span>' : '<span class="ls-loading">Checking lenders...</span>') + '</div>' : '') +
     '</div>' +
     // ── Row 2: Tools (Finance + Deal Stack as accordions) ──
     '<div class="exp-tools">' +
@@ -5126,14 +5449,8 @@ function expandCard(lot) {
   _expandedPanelCache.set(lot._idx, panel);
   panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
-  // Preload expanded-view images into browser cache
-  if (lot.images && lot.images.length > 0) {
-    lot.images.slice(0, 5).forEach(function(imgUrl) {
-      var p = new Image(); p.src = optimImg(imgUrl, 600);
-    });
-  } else if (lot.imageUrl) {
-    var p = new Image(); p.src = optimImg(lot.imageUrl, 600);
-  }
+  // Load saved deal-stacking scenarios for this lot (signed-in only)
+  loadScenariosForLot(lot, lot._idx);
 
   // Auto-run finance check if lot has a price
   if (lot.price) {
