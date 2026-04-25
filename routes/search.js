@@ -199,13 +199,18 @@ function parseSmartSearchQuery(query) {
     'wales': ['CF','LD','LL','NP','SA','SY'],
     'scotland': ['AB','DD','DG','EH','FK','G','HS','IV','KA','KW','KY','ML','PA','PH','TD','ZE'],
   };
-  // Check region phrases (must check multi-word first)
-  const regionOrder = ['south east','south west','west midlands','east midlands','north west','north east','east','yorkshire','wales','scotland'];
+  // Check region phrases (must check multi-word first; 'london' is included
+  // because lots in "47 Brompton Road, SW3" never contain the literal word
+  // 'london' — postcode prefix matching catches them)
+  const regionOrder = ['south east','south west','west midlands','east midlands','north west','north east','east','yorkshire','wales','scotland','london'];
   for (const region of regionOrder) {
-    if (q.includes(region)) {
+    // Use word-boundary regex so 'east' inside 'east-end' doesn't match
+    // and 'south east' doesn't trigger 'east' as well
+    const regionRe = new RegExp('\\b' + region.replace(/\s+/g, '\\s+') + '\\b', 'i');
+    if (regionRe.test(q)) {
       result.filters.regionPostcodes = regionPostcodes[region];
       result.filters.regionName = region;
-      q = q.replace(new RegExp(region, 'gi'), '').trim();
+      q = q.replace(new RegExp(regionRe.source, 'gi'), '').trim();
       break;
     }
   }
