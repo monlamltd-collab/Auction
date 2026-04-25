@@ -578,36 +578,31 @@ router.post('/api/smart-search', async (req, res) => {
       softOrClauses.push('search_text.ilike.%refurb%', 'search_text.ilike.%modernisation%');
     }
 
-    // Combine concept + soft clauses into one big OR
+    // Concept/soft/free-text OR clauses are no longer used as Layer-1 filters
+    // — Layer 2 (Gemini) is the semantic interpreter. They're still computed
+    // above so they can flow into the AI prompt as context (filterNote).
     const allOrClauses = [...conceptOrClauses, ...softOrClauses];
 
-    // Free-text terms become OR signals (broaden, not narrow). Hard textSearch
-    // would AND-eliminate any lot whose search_text doesn't contain the literal
-    // word — e.g. "blocks" excludes 35 of 36 Welsh title-split candidates that
-    // happen to say "5 units" or "freehold investment" instead. Layer 2 (Gemini)
-    // handles relevance ranking from the raw query, so free-text only needs to
-    // widen the candidate pool, not narrow it.
-    const freeTextOrs = (sqParsed.freeText || [])
-      .map(t => t.replace(/[^a-z0-9 -]/gi, '').trim())
-      .filter(t => t.length >= 3)
-      .map(t => `search_text.ilike.%${t}%`);
-
-    // ── Layer-1 query, with concept-aware progressive filter relaxation ──
-    // A normal search should never return zero when matching lots exist in the
-    // database. Try strict first, then drop filters tier-by-tier — but keep
-    // concept signals alive longer than free-text since they reflect explicit
-    // user intent (e.g. "title split", "HMO conversion").
-    //   tier 0 (strict)        — hard filters + location + concept/soft ORs + free-text ORs
-    //   tier 1 (no free-text)  — drop free-text (concept signals still ANDed)
-    //   tier 2 (no concepts)   — drop concept/soft ORs (last-resort for over-narrow concepts)
-    //   tier 3 (location-only) — drop hard filters (price/beds/tenure/condition)
-    //   tier 4 (wildcard)      — drop location too — top-scored lots in active catalogues
-    // The chosen tier is passed into the AI prompt so the report tells the user
-    // when concept criteria couldn't be matched.
+    // ── Layer-1 query — broad candidate pool ──
+    // PHILOSOPHY: Layer 1 should ONLY apply the user's EXPLICIT, MEASURABLE
+    // constraints (status, location, hard price/beds/tenure). Anything that
+    // requires interpretation — "title split", "good for HMO", "needs work",
+    // "could be split" — is left to Layer 2 (Gemini), which can reason about
+    // a lot's search_text using its general knowledge of property investment.
+    //
+    // This prevents over-narrowing: e.g. "freehold multi unit block to split"
+    // shouldn't require literal words "block" or "split" to appear in
+    // search_text. Gemini reads the lot descriptions and recognises a 4-flat
+    // freehold investment as a title-split candidate even when the data
+    // doesn't tag it explicitly.
+    //
+    // Relaxation only kicks in if hard filters narrow to zero — drop hard
+    // filters, then drop location, then wildcard. Each drop is reported to
+    // Gemini so the report can be honest about what was matched.
     function buildLayer1Query(tier) {
       let q = supabase.from('lots').select(LOTS_SELECT).in('catalogue_url', activeUrls);
 
-      // Status (always applied — semantic meaning, not a narrowing constraint)
+      // Status (always applied — semantic meaning of 'available' / 'unsold' etc)
       if (effectiveSold === 'available') q = q.or('status.eq.available,status.is.null');
       else if (effectiveSold === 'sold') q = q.in('status', ['sold', 'stc', 'withdrawn']);
       else if (effectiveSold === 'unsold') q = q.eq('status', 'unsold');
@@ -615,8 +610,8 @@ router.post('/api/smart-search', async (req, res) => {
       else if (effectiveSold === 'withdrawn') q = q.eq('status', 'withdrawn');
       else if (effectiveSold !== 'everything') q = q.or('status.eq.available,status.eq.unsold,status.is.null');
 
-      // Hard filters (tiers 0-2)
-      if (tier <= 2) {
+      // Hard filters (tier 0 only) — explicit user constraints from query parser
+      if (tier === 0) {
         if (sqParsed.filters.tenure) q = q.ilike('tenure', sqParsed.filters.tenure);
         if (sqParsed.filters.maxPrice) q = q.lte('price', sqParsed.filters.maxPrice);
         if (sqParsed.filters.minPrice) q = q.gte('price', sqParsed.filters.minPrice);
@@ -624,8 +619,8 @@ router.post('/api/smart-search', async (req, res) => {
         if (sqParsed.filters.condition) q = q.in('condition', sqParsed.filters.condition);
       }
 
-      // Location (tiers 0-3)
-      if (tier <= 3) {
+      // Location (tiers 0-1)
+      if (tier <= 1) {
         for (const loc of sqParsed.locationTerms) q = q.ilike('address', `%${loc}%`);
         if (sqParsed.filters.regionPostcodes) {
           const pcOr = sqParsed.filters.regionPostcodes.map(p => `postcode.ilike.${p}%`).join(',');
@@ -633,23 +628,15 @@ router.post('/api/smart-search', async (req, res) => {
         }
       }
 
-      // Concept + soft ORs (tiers 0-1 — explicit user intent, kept alive longer
-      // than free-text). At tier 0 we also fold in freeTextOrs so the candidate
-      // pool widens to lots that mention the user's keywords either way.
-      if (tier <= 1 && allOrClauses.length > 0) {
-        const tier0Ors = tier === 0 ? [...allOrClauses, ...freeTextOrs] : allOrClauses;
-        q = q.or(tier0Ors.join(','));
-      } else if (tier === 0 && freeTextOrs.length > 0) {
-        // No concept/soft signals but the user typed free-text — use it as the OR
-        q = q.or(freeTextOrs.join(','));
-      }
-
-      return q.order(sortCol, { ascending: false, nullsFirst: false }).limit(500);
+      // Up the limit to 800 — Layer 2 (Gemini) gets a wider candidate pool to
+      // reason over so semantic concepts (title-split, HMO, refurb, etc.)
+      // can be recognised even when the database doesn't tag them.
+      return q.order(sortCol, { ascending: false, nullsFirst: false }).limit(800);
     }
 
-    const TIER_LABELS = ['strict', 'no-free-text', 'no-concepts', 'location-only', 'all-active'];
+    const TIER_LABELS = ['strict', 'location-only', 'wildcard'];
     let lotRows = null, lotErr = null, searchTier = 0;
-    for (let tier = 0; tier <= 4; tier++) {
+    for (let tier = 0; tier <= 2; tier++) {
       const { data, error } = await buildLayer1Query(tier);
       if (error) { lotErr = error; break; }
       if (data && data.length > 0) { lotRows = data; searchTier = tier; break; }
@@ -718,9 +705,10 @@ router.post('/api/smart-search', async (req, res) => {
       return res.json({ results: [], report: 'No auction lots are available in the current catalogue. The next scrape will run shortly.', sources: [], totalSearched: 0, searchesUsed, searchLimit });
     }
 
-    // Always send to Gemini — even small sets benefit from investment commentary
-    // Cap at 200 lots for Gemini context
-    const geminiLots = filteredLots.slice(0, 200);
+    // Always send to Gemini — Layer 2 is the semantic interpreter, not a ranker.
+    // Wider candidate pool (was 200) so the LLM has more lots to reason over
+    // when interpreting concept queries like "freehold multi unit block to split".
+    const geminiLots = filteredLots.slice(0, 400);
     const lotSummaries = geminiLots.map((l, i) => {
       const meta = [
         l.status && l.status !== 'available' ? `STATUS:${l.status}` : '',
@@ -772,38 +760,36 @@ router.post('/api/smart-search', async (req, res) => {
       ? '\n\nSEARCH CONCEPTS:\n' + sqParsed.concepts.map(c => `- ${conceptExplanations[c] || c}`).join('\n')
       : '';
 
-    // If progressive relaxation kicked in, tell the AI so its report can
-    // explain why the results aren't a perfect match for the user's query.
-    // The 5-tier ladder mirrors buildLayer1Query above.
-    const hasConceptIntent = sqParsed.concepts.length > 0
-      || !!sqParsed.softFilters.title_split
-      || !!sqParsed.softFilters.vacant
-      || !!sqParsed.softFilters.condition;
-
+    // If hard filters narrowed to 0, tell the AI so the report can explain.
+    // 3-tier ladder: strict / location-only / wildcard.
     const relaxationNote = searchTier === 0 ? '' :
-      searchTier === 1 ? '\nNOTE: No lots matched all the user\'s free-text keywords (e.g. uncommon descriptive words). Filters were broadened to drop those — concept/intent matching is still active.' :
-      searchTier === 2 ? (hasConceptIntent
-        ? '\nIMPORTANT: The user explicitly asked for a SPECIFIC INVESTMENT TYPE (title-split, HMO conversion, multi-unit freehold, vacant, etc.) but NO LOTS in the dataset have those signals tagged. The lots below match the user\'s LOCATION/PRICE/STATUS only — they DO NOT match the concept criteria. Tell the user EXPLICITLY in the report\'s opening sentence: "No exact matches for [their concept] were found." Then rank these as "alternatives worth reviewing" rather than as "matching" lots.'
-        : '\nNOTE: No lots matched all the user\'s exact criteria. Filters were broadened — show closest available options and acknowledge in the report.') :
-      searchTier === 3 ? '\nNOTE: No lots matched the user\'s exact constraints (price/beds/tenure/type). Filters were broadened to LOCATION ONLY — explicitly tell the user "no exact matches in your area" and rank these as alternatives.' :
-      '\nNOTE: No lots matched even the user\'s location. Showing top-scored available lots from the wider catalogue — explicitly tell the user "no matches in your area" and suggest reviewing these alternatives.';
+      searchTier === 1 ? '\nNOTE: No lots matched the user\'s exact constraints (price/beds/tenure/type). The lots below match the user\'s LOCATION + STATUS only — be honest in the report ("no exact matches for your filters") and rank as alternatives.' :
+      '\nNOTE: No lots matched the user\'s area at all. Showing top-scored available lots from the wider catalogue — say "no matches in your area" and suggest reviewing these alternatives.';
 
-    const responseText = await callAI(`You are a UK property investment analyst. A user has searched across auction lots and the database returned ${totalSearched} candidate lots (showing top ${geminiLots.length} by score).${soldInstruction}${filterNote}${conceptNote}${relaxationNote}
+    const responseText = await callAI(`You are a UK property investment analyst with deep knowledge of property strategies (title-split, HMO conversion, BTL, refurb-and-flip, deal stacking, multi-unit freeholds, GDV uplift, planning gain, lease extension arbitrage, etc.).
 
-Their search query: "${query}"
+USER'S SEARCH QUERY: "${query}"
+${soldInstruction}${filterNote}${conceptNote}${relaxationNote}
 
-These lots were retrieved using broad matching to avoid missing relevant results. Your job is to:
-1. CAREFULLY rank and select lots that genuinely match the user's intent — read the search_text context for each lot
-2. Be generous but not indiscriminate — include lots that COULD match even if not perfectly tagged
-3. Write a brief investment report (2-3 paragraphs) with actionable insights
+YOUR JOB IS SEMANTIC INTERPRETATION, NOT KEYWORD MATCHING.
+The database has done minimal pre-filtering — only the user's EXPLICIT measurable constraints (status, location, hard price/beds/tenure) have been applied. The candidate pool below intentionally INCLUDES lots that don't literally contain the user's words. YOU are responsible for using your understanding of property investment to find lots that fit the user's INTENT.
 
-Lots (broad database matches, sorted by score):
+Examples of how to interpret intent:
+- "freehold multi unit block to title split" → look for tenure=Freehold + descriptions of multiple flats/units (e.g. "investment of 4 self-contained flats", "freehold building with 6 apartments", "5 units producing £X rent"). Do NOT require literal words "title split" or "block".
+- "HMO opportunity" → 4+ bed houses, large terraces near universities/hospitals, properties described as "currently let on AST" or "convertible".
+- "buy to let in good rental area" → properties with existing tenants, decent yields, addresses in known rental hotspots.
+- "needs work for flip" → "in need of modernisation", "scope for improvement", repossessions, vacant possession in below-market areas.
+- "development opportunity" → land with planning, properties with planning history, sites with PD potential, anything described as "development potential".
+
+Be generous when the search_text describes the concept in different words. Be skeptical when the search_text doesn't support the user's intent at all.
+
+Lots (top ${geminiLots.length} of ${totalSearched} by investment score; status+location filtered, semantic concepts NOT pre-filtered):
 ${lotSummaries}
 
-Respond in this exact JSON format:
-{"indices":[0,5,12],"report":"Your report here..."}
+Respond in this exact JSON format (and nothing else):
+{"indices":[0,5,12],"report":"Your investment commentary..."}
 
-Return the indices of the best matching lots. If few lots match well, that's fine — quality over quantity. Focus your report on investment insights specific to the user's search intent.`, { tier: 'fast', maxTokens: 4000, taskType: 'search' });
+Pick the indices of lots that genuinely match the user's INTENT — quality over quantity. Aim for 5-30 picks for a typical query; fewer if matches are weak. The report (2-3 paragraphs) should: (1) summarise what was found, (2) call out standout lots with their investment angle, (3) honestly note if the user's exact concept couldn't be matched and what was returned instead.`, { tier: 'fast', maxTokens: 4000, taskType: 'search' });
     log.info('smart_search_full', { tier: 'fast', preFiltered: totalSearched, sentToAI: geminiLots.length, relaxationTier: TIER_LABELS[searchTier] });
 
     let aiParsed;
