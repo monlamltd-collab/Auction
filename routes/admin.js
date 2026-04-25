@@ -1288,13 +1288,355 @@ router.post('/api/admin/enrich-waves', async (req, res) => {
 });
 
 // ── Lightweight event tracking for client-only actions ──
-router.post('/api/track/event', rateLimit(60000, 30), async (req, res) => {
+router.post('/api/track/event', rateLimit(60000, 60), async (req, res) => {
   const { action, detail } = req.body || {};
-  const allowed = ['deal_stacking', 'csv_export', 'bridgematch_open'];
+  const allowed = ['deal_stacking', 'csv_export', 'bridgematch_open', 'lot_view', 'paywall_hit'];
   if (!action || !allowed.includes(action)) return res.status(400).json({ error: 'Invalid action' });
   const user = await validateUserFromReq(req).catch(() => null);
   logActivityEvent(action, detail || {}, user?.email || null, getClientIP(req));
   res.json({ ok: true });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// INTEL — single fat endpoint powering the admin dashboard's
+// Intel / Lots & Houses / Billing tabs. Returns user activity,
+// search patterns, lot pipeline, house performance, and billing
+// signals in one round-trip so the admin UI doesn't N+1.
+// ═══════════════════════════════════════════════════════════════
+router.get('/api/admin/intel', async (req, res) => {
+  const token = req.headers['x-admin-secret'] || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
+    return res.status(403).json({ error: 'Invalid admin token' });
+  }
+
+  try {
+    const now = new Date();
+    const day = 24 * 60 * 60 * 1000;
+    const sinceISO = (msAgo) => new Date(now.getTime() - msAgo).toISOString();
+    const since30d = sinceISO(30 * day);
+    const since7d  = sinceISO(7 * day);
+    const since24h = sinceISO(day);
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+
+    // Run all reads in parallel — small data volumes mean this is trivially fast.
+    const [
+      usersAllRes,
+      eventsRes,
+      lotsRecentRes,
+      statusHistoryRes,
+      newLotsTodayRes,
+      lotsByHouseRes,
+      titleSplitsRes,
+      vacantResRes,
+      derelictRes,
+      topScoredRes,
+      emailSignupsRes,
+      leadsRes,
+      auctionsUpcomingRes,
+      alertsCountRes,
+      cachedAnalysesRes,
+    ] = await Promise.all([
+      // All users for tier/funnel/timeseries
+      supabase.from('users')
+        .select('id, email, tier, tier_expires_at, trial_started_at, trial_expires_at, trial_used, stripe_subscription_id, supabase_auth_id, created_at, last_login, ai_searches_today, ai_searches_date, onboarding_complete'),
+      // Last 30 days of activity events (grouping/funnel/search intel)
+      supabase.from('activity_events')
+        .select('id, action, detail, user_email, created_at')
+        .gte('created_at', since30d)
+        .order('created_at', { ascending: false })
+        .limit(2000),
+      // Lots seen in last 7d for status-pipeline counts
+      supabase.from('lots')
+        .select('id, house, lot_number, address, price, status, score, est_gross_yield, prop_type, vacant, title_split, deal_type, last_seen_at, first_seen_at, sold_price')
+        .gte('last_seen_at', since7d)
+        .limit(8000),
+      // Lot status changes in last 7d for pipeline view
+      supabase.from('lot_status_history')
+        .select('lot_id, old_status, new_status, changed_at')
+        .gte('changed_at', since7d)
+        .limit(20000),
+      // New lots today (cheap aggregate)
+      supabase.from('lots').select('id', { count: 'exact', head: true }).gte('first_seen_at', todayStart),
+      // Lots per house (active in last 7d) — count by house client-side from lotsRecentRes; this is just an extra aggregate
+      supabase.from('lots').select('house', { count: 'exact', head: true }),
+      // Title splits, vacant resi, derelict counts — high-value inventory categories
+      supabase.from('lots').select('id', { count: 'exact', head: true }).eq('title_split', true).gte('last_seen_at', since7d),
+      supabase.from('lots').select('id', { count: 'exact', head: true }).eq('vacant', true).gte('last_seen_at', since7d),
+      supabase.from('lots').select('id', { count: 'exact', head: true }).gte('score', 7).gte('last_seen_at', since7d),
+      // Top-scored lots in market right now
+      supabase.from('lots')
+        .select('id, house, lot_number, address, price, score, est_gross_yield, prop_type, deal_type, image_url')
+        .gte('last_seen_at', since7d)
+        .order('score', { ascending: false, nullsFirst: false })
+        .limit(10),
+      // Landing page email signups
+      supabase.from('email_signups').select('id, email, created_at, source').order('created_at', { ascending: false }).limit(500),
+      // Bridging leads
+      supabase.from('leads').select('id, name, email, property_price, loan_amount, created_at, source').order('created_at', { ascending: false }).limit(50),
+      // Upcoming auctions
+      supabase.from('auction_calendar').select('house, date, lots').gte('date', todayStart).lte('date', new Date(now.getTime() + 30 * day).toISOString()),
+      // Open pipeline_alerts count (separately because 6800+ rows)
+      supabase.from('pipeline_alerts').select('id', { count: 'exact', head: true }).eq('resolved', false),
+      // Cached analyses for house freshness (already used elsewhere — duplicate read but cheap)
+      supabase.from('cached_analyses').select('house, total_lots, last_scraped_at, expires_at, scraped_with, extracted_with').order('last_scraped_at', { ascending: false }).limit(200),
+    ]);
+
+    const allUsers = usersAllRes.data || [];
+    const events = eventsRes.data || [];
+    const lots = lotsRecentRes.data || [];
+    const statusHistory = statusHistoryRes.data || [];
+    const topScored = topScoredRes.data || [];
+    const emailSignups = emailSignupsRes.data || [];
+    const leads = leadsRes.data || [];
+    const upcoming = auctionsUpcomingRes.data || [];
+    const cached = cachedAnalysesRes.data || [];
+
+    // ── USERS ──
+    const totalUsers = allUsers.length;
+    const dau = new Set(events.filter(e => e.created_at >= since24h && e.user_email).map(e => e.user_email)).size;
+    const wau = new Set(events.filter(e => e.created_at >= since7d && e.user_email).map(e => e.user_email)).size;
+    const mau = new Set(events.filter(e => e.user_email).map(e => e.user_email)).size;
+
+    // Signup timeline (last 30 days, by date)
+    const signupBuckets = {};
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(now.getTime() - i * day);
+      const key = d.toISOString().slice(0, 10);
+      signupBuckets[key] = 0;
+    }
+    for (const u of allUsers) {
+      if (!u.created_at) continue;
+      const key = u.created_at.slice(0, 10);
+      if (key in signupBuckets) signupBuckets[key]++;
+    }
+    const signupsTimeseries = Object.entries(signupBuckets).map(([date, count]) => ({ date, count }));
+
+    // Tier breakdown — uses resolveEffectiveTier-style logic inline (paid/trial/free)
+    const tierBreakdown = { paid: 0, trial: 0, free: 0, anon: 0 };
+    for (const u of allUsers) {
+      const expired = u.tier_expires_at && new Date(u.tier_expires_at) < now;
+      if (u.stripe_subscription_id && !expired) tierBreakdown.paid++;
+      else if (u.trial_expires_at && new Date(u.trial_expires_at) > now) tierBreakdown.trial++;
+      else tierBreakdown.free++;
+    }
+    tierBreakdown.anon = totalUsers; // total signed-in baseline; anon traffic isn't auth-tracked
+
+    // Sign-in method — supabase_auth_id non-null and tied to OAuth provider info isn't captured here,
+    // but we can split "has OAuth-style id" vs "magic-link only" as a proxy.
+    // (Supabase doesn't expose provider in our user row, so we just count magic vs total.)
+    const signInMethod = {
+      total: allUsers.filter(u => u.supabase_auth_id).length,
+      // True provider breakdown would require a Supabase auth.users join — leave as note
+    };
+
+    // ── FUNNEL (last 30d) ──
+    const usersWith30dActivity = new Set(events.filter(e => e.user_email).map(e => e.user_email));
+    const usersWithSearch = new Set(events.filter(e => e.action === 'smart_search' && e.user_email).map(e => e.user_email));
+    const searchCounts = {};
+    for (const e of events) {
+      if (e.action === 'smart_search' && e.user_email) {
+        searchCounts[e.user_email] = (searchCounts[e.user_email] || 0) + 1;
+      }
+    }
+    const usersWithRepeat = Object.values(searchCounts).filter(c => c >= 2).length;
+    const paid = tierBreakdown.paid + tierBreakdown.trial;
+    const funnel = {
+      signedUp: totalUsers,
+      activatedAnyAction: usersWith30dActivity.size,
+      firstSearch: usersWithSearch.size,
+      repeatSearch: usersWithRepeat,
+      converted: paid,
+    };
+
+    // ── SEARCH INTEL ──
+    const searchQueryCounts = {};
+    const searchQueryNoResults = {};
+    for (const e of events) {
+      if (e.action !== 'smart_search') continue;
+      const q = e.detail?.query || e.detail?.q || null;
+      if (!q || typeof q !== 'string') continue;
+      const norm = q.trim().toLowerCase().slice(0, 80);
+      searchQueryCounts[norm] = (searchQueryCounts[norm] || 0) + 1;
+      const resultCount = e.detail?.results ?? e.detail?.result_count ?? null;
+      if (resultCount === 0) searchQueryNoResults[norm] = (searchQueryNoResults[norm] || 0) + 1;
+    }
+    const topQueries = Object.entries(searchQueryCounts)
+      .sort((a, b) => b[1] - a[1]).slice(0, 20)
+      .map(([query, count]) => ({ query, count }));
+    const noResults = Object.entries(searchQueryNoResults)
+      .sort((a, b) => b[1] - a[1]).slice(0, 10)
+      .map(([query, count]) => ({ query, count }));
+
+    // ── FEATURES ──
+    const featureBreakdown = {};
+    for (const e of events) {
+      if (!e.action) continue;
+      featureBreakdown[e.action] = featureBreakdown[e.action] || { total: 0, last7d: 0, last24h: 0, mostRecent: null };
+      featureBreakdown[e.action].total++;
+      if (e.created_at >= since7d) featureBreakdown[e.action].last7d++;
+      if (e.created_at >= since24h) featureBreakdown[e.action].last24h++;
+      if (!featureBreakdown[e.action].mostRecent || e.created_at > featureBreakdown[e.action].mostRecent) {
+        featureBreakdown[e.action].mostRecent = e.created_at;
+      }
+    }
+
+    // ── LOT PIPELINE TODAY ──
+    const newToday = newLotsTodayRes.count || 0;
+    const todaysStatus = statusHistory.filter(h => h.changed_at >= todayStart);
+    const endedToday   = todaysStatus.filter(h => ['ended', 'sold', 'withdrawn', 'unsold'].includes(h.new_status)).length;
+    const soldToday    = todaysStatus.filter(h => h.new_status === 'sold').length;
+    const withdrawnToday = todaysStatus.filter(h => h.new_status === 'withdrawn').length;
+    const unsoldToday  = todaysStatus.filter(h => h.new_status === 'unsold').length;
+
+    // Title splits / vacant / high-score counts
+    const lotInventory = {
+      total: lots.length,
+      titleSplits: titleSplitsRes.count || 0,
+      vacant: vacantResRes.count || 0,
+      highScore: derelictRes.count || 0, // score >=7 — rebadge as "top picks" in UI
+      newToday, endedToday, soldToday, withdrawnToday, unsoldToday,
+    };
+
+    // ── HOUSE LEAGUE TABLE ──
+    // Build from cached_analyses (canonical lot counts) + recent lots count
+    const houseLotsRecent = {};
+    for (const l of lots) houseLotsRecent[l.house] = (houseLotsRecent[l.house] || 0) + 1;
+    const houseAvgScore = {};
+    const houseScoreSum = {};
+    for (const l of lots) {
+      if (l.score == null) continue;
+      houseScoreSum[l.house] = (houseScoreSum[l.house] || 0) + l.score;
+      houseAvgScore[l.house] = (houseAvgScore[l.house] || 0) + 1;
+    }
+    const houseLeague = (cached || [])
+      .filter(c => c.house)
+      .map(c => ({
+        house: c.house,
+        cachedLots: c.total_lots || 0,
+        recentLots: houseLotsRecent[c.house] || 0,
+        avgScore: houseAvgScore[c.house] ? +(houseScoreSum[c.house] / houseAvgScore[c.house]).toFixed(2) : null,
+        lastScrapedAt: c.last_scraped_at,
+        scraper: c.scraped_with || '?',
+        extractor: c.extracted_with || '?',
+        upcomingDate: upcoming.find(u => u.house?.toLowerCase().includes(c.house))?.date || null,
+      }))
+      .sort((a, b) => (b.cachedLots || 0) - (a.cachedLots || 0));
+
+    // ── BILLING SIGNALS ──
+    // Free users hitting their AI cap today
+    const todayDateKey = todayStart.slice(0, 10);
+    const hittingCap = allUsers.filter(u =>
+      (u.tier === 'free' || !u.tier) &&
+      u.ai_searches_date === todayDateKey &&
+      (u.ai_searches_today || 0) >= 3 // FREE_AI_SEARCH_LIMIT default
+    ).length;
+    const paywallHits = events.filter(e => e.action === 'paywall_hit').length;
+
+    // Trial-active users + their activity in last 7d
+    const trialActive = allUsers.filter(u => u.trial_expires_at && new Date(u.trial_expires_at) > now);
+    const trialActivity = trialActive.map(u => {
+      const recentEvents = events.filter(e => e.user_email === u.email);
+      const trialEndsIn = Math.ceil((new Date(u.trial_expires_at) - now) / day);
+      return {
+        email: u.email,
+        trialEndsInDays: trialEndsIn,
+        eventsLast30d: recentEvents.length,
+        lastAction: recentEvents[0]?.action || null,
+        lastActionAt: recentEvents[0]?.created_at || null,
+      };
+    });
+
+    // Recent signups + first action
+    const recentSignups = allUsers
+      .filter(u => u.created_at)
+      .sort((a, b) => b.created_at.localeCompare(a.created_at))
+      .slice(0, 10)
+      .map(u => {
+        const userEvents = events.filter(e => e.user_email === u.email).sort((a, b) => a.created_at.localeCompare(b.created_at));
+        return {
+          email: u.email,
+          signedUpAt: u.created_at,
+          firstAction: userEvents[0]?.action || null,
+          firstActionAt: userEvents[0]?.created_at || null,
+          totalEvents: userEvents.length,
+        };
+      });
+
+    // Top users by activity
+    const userEventCounts = {};
+    for (const e of events) {
+      if (!e.user_email) continue;
+      userEventCounts[e.user_email] = (userEventCounts[e.user_email] || 0) + 1;
+    }
+    const topUsers = Object.entries(userEventCounts)
+      .sort((a, b) => b[1] - a[1]).slice(0, 10)
+      .map(([email, count]) => ({ email, count }));
+
+    res.json({
+      generatedAt: now.toISOString(),
+      users: {
+        total: totalUsers,
+        dau, wau, mau,
+        signupsTimeseries,
+        tierBreakdown,
+        signInMethod,
+        recentSignups,
+        topUsers,
+      },
+      funnel,
+      searches: { topQueries, noResults },
+      features: featureBreakdown,
+      lots: {
+        ...lotInventory,
+        topScored: topScored.slice(0, 10),
+      },
+      houses: { leagueTable: houseLeague, upcoming: upcoming.slice(0, 30) },
+      billing: {
+        paid: tierBreakdown.paid,
+        trial: tierBreakdown.trial,
+        free: tierBreakdown.free,
+        hittingCap,
+        paywallHits,
+        trialActivity,
+        emailSignupsTotal: emailSignups.length,
+        emailSignupsLast7d: emailSignups.filter(s => s.created_at >= since7d).length,
+        leadsTotal: leads.length,
+        leadsLast7d: leads.filter(l => l.created_at >= since7d).length,
+        recentLeads: leads.slice(0, 10),
+      },
+      ops: {
+        openAlerts: alertsCountRes.count || 0,
+      },
+    });
+  } catch (e) {
+    log.error('Intel endpoint error', { error: e.message, stack: e.stack });
+    res.status(500).json({ error: 'Intel query failed', detail: e.message });
+  }
+});
+
+// ── Stale alert cleanup — archive resolved/old pipeline_alerts ──
+// Currently 6,800+ unresolved alerts most of which are noise from temporary
+// scraper failures that have long since resolved themselves.
+router.post('/api/admin/alerts/cleanup', async (req, res) => {
+  const token = req.headers['x-admin-secret'] || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
+    return res.status(403).json({ error: 'Invalid admin token' });
+  }
+  const olderThanDays = Math.max(1, Math.min(365, parseInt(req.body?.olderThanDays) || 7));
+  const cutoff = new Date(Date.now() - olderThanDays * 24 * 60 * 60 * 1000).toISOString();
+  try {
+    const { data, error } = await supabase
+      .from('pipeline_alerts')
+      .update({ resolved: true, resolved_at: new Date().toISOString() })
+      .eq('resolved', false)
+      .lt('created_at', cutoff)
+      .select('id');
+    if (error) throw error;
+    res.json({ ok: true, archived: data?.length || 0, olderThanDays });
+  } catch (e) {
+    log.error('Alert cleanup error', { error: e.message });
+    res.status(500).json({ error: 'Cleanup failed', detail: e.message });
+  }
 });
 
 export default router;

@@ -2894,6 +2894,19 @@ function calcBudget() {
 // STRIPE / PAYWALL
 // ═══════════════════════════════
 function showPaywall(reason) {
+  // Server-side activity event so the admin Intel dashboard can see who's
+  // hitting limits and which feature gated them — drives billing decisions.
+  try {
+    fetch('/api/track/event', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json', ...(typeof getAuthHeaders === 'function' ? getAuthHeaders() : {})},
+      body: JSON.stringify({
+        action: 'paywall_hit',
+        detail: { reason: typeof reason === 'string' ? reason.slice(0, 120) : '', tier: window._userTier || 'anon' }
+      })
+    }).catch(function(){});
+  } catch {}
+
   // When not signed in, show sign-up modal
   if (!window._userTier) {
     $('signupModal').classList.add('show');
@@ -4719,6 +4732,30 @@ function expandCard(lot) {
   if (window.umami) umami.track('lot_expand', {
     lot_number: lot.lot || '', house: lot._house || '', guide_price: lot.price || 0
   });
+  // Server-side activity event for the admin Intel dashboard. De-dupe per
+  // session so a user toggling a lot open/closed doesn't inflate the count.
+  try {
+    window.__viewedLots = window.__viewedLots || new Set();
+    const key = (lot._house || '') + ':' + (lot.lot || '') + ':' + (lot.address || '').slice(0, 40);
+    if (!window.__viewedLots.has(key)) {
+      window.__viewedLots.add(key);
+      fetch('/api/track/event', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json', ...(typeof getAuthHeaders === 'function' ? getAuthHeaders() : {})},
+        body: JSON.stringify({
+          action: 'lot_view',
+          detail: {
+            house: lot._house || '',
+            lot: lot.lot || '',
+            price: lot.price || 0,
+            score: lot.score || null,
+            deal_type: lot.dealType || null,
+            prop_type: lot.propType || null
+          }
+        })
+      }).catch(function(){});
+    }
+  } catch {}
   // Hide any existing expanded panel (cached — not removed)
   const existing = document.querySelector('.expanded-panel-visible');
   if (existing) {

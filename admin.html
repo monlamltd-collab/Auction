@@ -215,7 +215,29 @@ tr:hover td { background: rgba(255,255,255,.02); }
 /* Collapsed missing images */
 .missing-images-details summary { padding: 14px 18px; font-size: .82rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; }
 .missing-images-details summary:hover { background: rgba(255,255,255,.02); }
+
+/* ── Intel/Lots/Billing tab specifics ── */
+.kv-list { display: flex; flex-direction: column; }
+.kv-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px dashed rgba(255,255,255,.06); }
+.kv-row:last-child { border-bottom: none; }
+.kv-row .label { color: var(--text2); font-size: .78rem; }
+.kv-row .val { font-weight: 600; font-family: var(--font-mono); font-size: .82rem; }
+.kv-row .sub { color: var(--text3); font-size: .7rem; margin-left: 6px; }
+.funnel-step { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+.funnel-bar { flex: 1; height: 18px; background: rgba(255,255,255,.04); border-radius: 4px; overflow: hidden; position: relative; }
+.funnel-fill { height: 100%; background: linear-gradient(90deg, var(--green), var(--blue)); }
+.funnel-label { font-size: .78rem; color: var(--text2); min-width: 160px; }
+.funnel-num { font-family: var(--font-mono); font-size: .82rem; font-weight: 600; min-width: 60px; text-align: right; }
+.intel-row { display: grid; grid-template-columns: 1fr auto; gap: 12px; padding: 6px 0; border-bottom: 1px dashed rgba(255,255,255,.06); align-items: center; }
+.intel-row:last-child { border-bottom: none; }
+.intel-row .pri { color: var(--text); font-size: .8rem; }
+.intel-row .pri small { color: var(--text3); font-size: .7rem; display: block; margin-top: 2px; }
+.intel-row .num { font-family: var(--font-mono); font-size: .82rem; font-weight: 600; color: var(--text); }
+.intel-row .num small { color: var(--text3); font-weight: 400; }
+.note-small { font-size: .7rem; color: var(--text3); padding: 8px 18px; background: rgba(255,255,255,.02); border-top: 1px dashed rgba(255,255,255,.06); }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" defer></script>
 </head>
 <body>
 
@@ -244,12 +266,15 @@ tr:hover td { background: rgba(255,255,255,.02); }
   </div>
 
   <div class="tab-nav">
-    <button class="tab-btn active" data-tab="operations" onclick="switchTab('operations')">Operations</button>
-    <button class="tab-btn" data-tab="growth" onclick="switchTab('growth')">Growth</button>
+    <button class="tab-btn active" data-tab="intel" onclick="switchTab('intel')">Intel</button>
+    <button class="tab-btn" data-tab="lots" onclick="switchTab('lots')">Lots &amp; Houses</button>
+    <button class="tab-btn" data-tab="billing" onclick="switchTab('billing')">Billing</button>
+    <button class="tab-btn" data-tab="operations" onclick="switchTab('operations')">Operations</button>
+    <button class="tab-btn" data-tab="growth" onclick="switchTab('growth')">Growth (legacy)</button>
   </div>
 
   <div class="main">
-    <div class="tab-pane active" id="tab-operations">
+    <div class="tab-pane" id="tab-operations">
 
     <!-- Daily Changelog -->
     <div class="daily-changelog" id="daily-changelog">Loading snapshot comparison...</div>
@@ -259,6 +284,7 @@ tr:hover td { background: rgba(255,255,255,.02); }
       <div class="section-header">
         <h2>Pipeline Alerts</h2>
         <span class="badge badge-green" id="alert-count-badge" style="display:none">0 active</span>
+        <button class="topbar-btn" style="margin-left:auto;margin-right:14px;" onclick="archiveStaleAlerts()" title="Mark all unresolved alerts older than N days as resolved (helps clean noise from temporary scraper failures that have long since recovered)">Archive stale…</button>
       </div>
       <div id="activeAlerts"><div class="no-alerts">Loading alerts...</div></div>
       <details style="border-top:1px solid var(--border)">
@@ -627,6 +653,162 @@ tr:hover td { background: rgba(255,255,255,.02); }
       </div>
     </div><!-- /tab-growth -->
 
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- INTEL — default tab. User activity, search patterns, funnel.   -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <div class="tab-pane active" id="tab-intel">
+      <div id="intel-loading" class="loading"><span class="spinner"></span> Loading intel...</div>
+      <div id="intel-content" style="display:none;">
+
+        <!-- Hero stats -->
+        <div class="stats-grid" style="margin-bottom:20px;">
+          <div class="stat-card" title="Distinct users with any tracked activity in the last 24h"><div class="stat-label">DAU</div><div class="stat-value green" id="i-dau">--</div></div>
+          <div class="stat-card" title="Distinct users active in the last 7 days"><div class="stat-label">WAU</div><div class="stat-value green" id="i-wau">--</div></div>
+          <div class="stat-card" title="Distinct users active in the last 30 days"><div class="stat-label">MAU</div><div class="stat-value green" id="i-mau">--</div></div>
+          <div class="stat-card" title="All-time signed-in users"><div class="stat-label">Total Users</div><div class="stat-value" id="i-total-users">--</div></div>
+          <div class="stat-card" title="Email signups via the landing page (last 7d / total)"><div class="stat-label">Email Signups</div><div class="stat-value blue" id="i-signups">--</div><div class="stat-sub" id="i-signups-sub"></div></div>
+          <div class="stat-card" title="Bridging finance leads captured (last 7d / total)"><div class="stat-label">Leads</div><div class="stat-value violet" id="i-leads" style="color:var(--violet);">--</div><div class="stat-sub" id="i-leads-sub"></div></div>
+        </div>
+
+        <!-- Signups timeline + Tier breakdown -->
+        <div style="display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:16px;">
+          <div class="section">
+            <div class="section-header"><h2>Signups (last 30 days)</h2></div>
+            <div style="padding:14px 18px;height:180px;"><canvas id="i-signups-chart"></canvas></div>
+          </div>
+          <div class="section">
+            <div class="section-header"><h2>Current tier mix</h2></div>
+            <div style="padding:14px 18px;height:180px;"><canvas id="i-tier-chart"></canvas></div>
+          </div>
+        </div>
+
+        <!-- Funnel + Feature usage -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+          <div class="section">
+            <div class="section-header"><h2>Activation funnel (last 30d)</h2></div>
+            <div id="i-funnel" style="padding:14px 18px;font-size:.82rem;"></div>
+          </div>
+          <div class="section">
+            <div class="section-header"><h2>Feature usage (last 30d)</h2></div>
+            <div id="i-features" style="padding:14px 18px;font-size:.82rem;"></div>
+          </div>
+        </div>
+
+        <!-- Top searches + No-result searches -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+          <div class="section">
+            <div class="section-header"><h2>Top searches (blog topic ideas)</h2></div>
+            <div id="i-top-searches" style="padding:14px 18px;max-height:340px;overflow-y:auto;font-size:.82rem;"></div>
+          </div>
+          <div class="section">
+            <div class="section-header"><h2>Zero-result searches (content gaps)</h2></div>
+            <div id="i-noresult-searches" style="padding:14px 18px;max-height:340px;overflow-y:auto;font-size:.82rem;"></div>
+          </div>
+        </div>
+
+        <!-- Recent signups + Top users -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+          <div class="section">
+            <div class="section-header"><h2>Recent signups + first action</h2></div>
+            <div id="i-recent-signups" style="padding:14px 18px;font-size:.78rem;"></div>
+          </div>
+          <div class="section">
+            <div class="section-header"><h2>Top users by activity (30d)</h2></div>
+            <div id="i-top-users" style="padding:14px 18px;font-size:.78rem;"></div>
+          </div>
+        </div>
+
+      </div>
+    </div><!-- /tab-intel -->
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- LOTS & HOUSES — pipeline, league table, top scored.            -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <div class="tab-pane" id="tab-lots">
+      <div id="lots-loading" class="loading"><span class="spinner"></span> Loading lot intel...</div>
+      <div id="lots-content" style="display:none;">
+
+        <div class="stats-grid" style="margin-bottom:20px;">
+          <div class="stat-card" title="Lots first seen today"><div class="stat-label">New today</div><div class="stat-value green" id="l-new-today">--</div></div>
+          <div class="stat-card" title="Lot status changes today: ended, sold, withdrawn or unsold"><div class="stat-label">Ended today</div><div class="stat-value" id="l-ended-today">--</div></div>
+          <div class="stat-card" title="Lots that sold today"><div class="stat-label">Sold today</div><div class="stat-value blue" id="l-sold-today">--</div></div>
+          <div class="stat-card" title="Lots withdrawn today"><div class="stat-label">Withdrawn</div><div class="stat-value" id="l-withdrawn-today">--</div></div>
+          <div class="stat-card" title="Lots that went unsold today"><div class="stat-label">Unsold</div><div class="stat-value" style="color:var(--amber);" id="l-unsold-today">--</div></div>
+          <div class="stat-card" title="Active lots seen in last 7 days"><div class="stat-label">Active 7d</div><div class="stat-value" id="l-active">--</div></div>
+        </div>
+
+        <!-- Inventory categories that drive blog topics -->
+        <div class="stats-grid" style="margin-bottom:20px;">
+          <div class="stat-card" title="Lots flagged as title-split potential — high-margin investor content"><div class="stat-label">Title splits</div><div class="stat-value violet" id="l-title-splits" style="color:var(--violet);">--</div></div>
+          <div class="stat-card" title="Vacant residential lots — common bridging-finance use case"><div class="stat-label">Vacant resi</div><div class="stat-value blue" id="l-vacant">--</div></div>
+          <div class="stat-card" title="Lots scoring 7+ — top picks for the home page and content"><div class="stat-label">Top picks (≥7)</div><div class="stat-value green" id="l-topscore">--</div></div>
+        </div>
+
+        <div class="section" style="margin-bottom:16px;">
+          <div class="section-header"><h2>Top-scored lots in market right now</h2></div>
+          <div id="l-top-scored" style="padding:14px 18px;font-size:.82rem;"></div>
+        </div>
+
+        <div class="section" style="margin-bottom:16px;">
+          <div class="section-header"><h2>House league table</h2><span style="font-size:.72rem;color:var(--text3);padding-right:14px;">sorted by cached lot count</span></div>
+          <div style="overflow-x:auto;padding:0 18px 14px;">
+            <table class="freshness-table" id="l-house-league">
+              <thead><tr>
+                <th>House</th>
+                <th style="text-align:right;">Cached lots</th>
+                <th style="text-align:right;">Active 7d</th>
+                <th style="text-align:right;">Avg score</th>
+                <th>Last scrape</th>
+                <th>Engine</th>
+                <th>Next auction</th>
+              </tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="section" style="margin-bottom:16px;">
+          <div class="section-header"><h2>Upcoming auctions (next 30 days)</h2></div>
+          <div id="l-upcoming" style="padding:14px 18px;font-size:.82rem;"></div>
+        </div>
+
+      </div>
+    </div><!-- /tab-lots -->
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- BILLING — paid mix, paywall hits, trial activity, conversion.  -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <div class="tab-pane" id="tab-billing">
+      <div id="billing-loading" class="loading"><span class="spinner"></span> Loading billing intel...</div>
+      <div id="billing-content" style="display:none;">
+
+        <div class="stats-grid" style="margin-bottom:20px;">
+          <div class="stat-card" title="Paid (active Stripe subscription)"><div class="stat-label">Paid</div><div class="stat-value green" id="b-paid">--</div></div>
+          <div class="stat-card" title="On free trial right now"><div class="stat-label">Trial</div><div class="stat-value blue" id="b-trial">--</div></div>
+          <div class="stat-card" title="Free tier"><div class="stat-label">Free</div><div class="stat-value" id="b-free">--</div></div>
+          <div class="stat-card" title="Free users who used all 3 of their AI searches today"><div class="stat-label">Free users hitting cap today</div><div class="stat-value" style="color:var(--amber);" id="b-cap">--</div></div>
+          <div class="stat-card" title="Total paywall_hit events in the last 30 days"><div class="stat-label">Paywall hits 30d</div><div class="stat-value" style="color:var(--amber);" id="b-paywall">--</div></div>
+          <div class="stat-card" title="Email signups (last 7d total)"><div class="stat-label">Email leads 7d</div><div class="stat-value blue" id="b-emails-7d">--</div></div>
+        </div>
+
+        <div class="section" style="margin-bottom:16px;">
+          <div class="section-header"><h2>MRR sensitivity (rough — at current free-cohort size)</h2></div>
+          <div id="b-mrr-sensitivity" style="padding:14px 18px;font-size:.85rem;"></div>
+        </div>
+
+        <div class="section" style="margin-bottom:16px;">
+          <div class="section-header"><h2>Trial cohort — are they actually using it?</h2></div>
+          <div id="b-trial-activity" style="padding:14px 18px;font-size:.8rem;"></div>
+        </div>
+
+        <div class="section" style="margin-bottom:16px;">
+          <div class="section-header"><h2>Recent bridging leads</h2></div>
+          <div id="b-recent-leads" style="padding:14px 18px;font-size:.78rem;"></div>
+        </div>
+
+      </div>
+    </div><!-- /tab-billing -->
+
   </div>
 </div>
 
@@ -647,7 +829,24 @@ function doLogin() {
     document.getElementById('auth-gate').style.display = 'none';
     document.getElementById('dashboard').style.display = 'block';
     refreshAll();
+    // Default tab is now Intel — kick off its data load too
+    loadIntel();
   }).catch(() => { document.getElementById('auth-err').style.display = 'block'; });
+}
+
+// Cleanup helper for the noisy pipeline_alerts table.
+async function archiveStaleAlerts() {
+  const days = prompt('Archive unresolved alerts older than how many days?', '7');
+  if (!days) return;
+  const n = parseInt(days, 10);
+  if (!Number.isFinite(n) || n < 1) return;
+  if (!confirm('Mark all unresolved alerts older than ' + n + ' days as resolved?')) return;
+  try {
+    const res = await apiFetch('/api/admin/alerts/cleanup', { method: 'POST', body: JSON.stringify({ olderThanDays: n }) });
+    if (res.error) { alert('Failed: ' + res.error); return; }
+    alert('Archived ' + (res.archived || 0) + ' stale alerts.');
+    refreshAll();
+  } catch (e) { alert('Cleanup error: ' + e.message); }
 }
 
 function logout() {
@@ -1919,6 +2118,304 @@ function switchTab(tab) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   document.querySelectorAll('.tab-pane').forEach(p => p.classList.toggle('active', p.id === 'tab-' + tab));
   if (tab === 'growth') loadGrowth();
+  if (tab === 'intel' || tab === 'lots' || tab === 'billing') loadIntel();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// INTEL — single fetch powers Intel + Lots + Billing tabs.
+// All HTML written via setSafeHTML() which routes through DOMPurify
+// before assignment, so admin-API responses cannot inject script tags
+// even if a user-controlled string (email, query) somehow slipped past
+// the per-field _esc() escaping.
+// ═══════════════════════════════════════════════════════════════
+let _intelCache = null;
+let _intelCacheAt = 0;
+let _intelCharts = {};
+
+function setSafeHTML(elOrId, body) {
+  const el = typeof elOrId === 'string' ? document.getElementById(elOrId) : elOrId;
+  if (!el) return;
+  const sanitized = (window.DOMPurify && window.DOMPurify.sanitize)
+    ? window.DOMPurify.sanitize(body, { ADD_ATTR: ['target', 'rel', 'style'] })
+    : body; // DOMPurify failed to load — fall back; everything below is also _esc()'d
+  el.innerHTML = sanitized; // eslint-disable-line no-unsanitized/property
+}
+
+async function loadIntel(force) {
+  const fresh = _intelCache && (Date.now() - _intelCacheAt) < 60000 && !force;
+  try {
+    let data = _intelCache;
+    if (!fresh) {
+      data = await apiFetch('/api/admin/intel');
+      if (data && !data.error) {
+        _intelCache = data;
+        _intelCacheAt = Date.now();
+      }
+    }
+    if (!data || data.error) {
+      ['intel', 'lots', 'billing'].forEach(t => {
+        setSafeHTML(t + '-loading', '<div class="err">Failed to load: ' + _esc(data?.error || 'unknown error') + '</div>');
+      });
+      return;
+    }
+    renderIntel(data);
+    renderLots(data);
+    renderBilling(data);
+  } catch (err) {
+    console.error('loadIntel failed', err);
+  }
+}
+
+function _esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function _fmtNum(n) { return n == null ? '—' : Number(n).toLocaleString(); }
+function _fmtPrice(n) { return n == null ? '—' : '£' + Number(n).toLocaleString(); }
+function _fmtDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-GB', { day:'2-digit', month:'short' }) + ' ' + d.toLocaleTimeString('en-GB',{hour:'2-digit', minute:'2-digit'});
+}
+function _fmtRelative(iso) {
+  if (!iso) return '—';
+  const ms = Date.now() - new Date(iso).getTime();
+  const min = Math.round(ms / 60000);
+  if (min < 1) return 'just now';
+  if (min < 60) return min + ' min ago';
+  const hr = Math.round(min / 60);
+  if (hr < 48) return hr + 'h ago';
+  return Math.round(hr / 24) + 'd ago';
+}
+function _waitChart(cb) {
+  if (window.Chart) return cb();
+  setTimeout(() => _waitChart(cb), 80);
+}
+
+// ── INTEL tab renderer ─────────────────────────────────────────
+function renderIntel(d) {
+  const u = d.users || {};
+  const f = d.funnel || {};
+  const b = d.billing || {};
+  document.getElementById('intel-loading').style.display = 'none';
+  document.getElementById('intel-content').style.display = 'block';
+
+  document.getElementById('i-dau').textContent = _fmtNum(u.dau);
+  document.getElementById('i-wau').textContent = _fmtNum(u.wau);
+  document.getElementById('i-mau').textContent = _fmtNum(u.mau);
+  document.getElementById('i-total-users').textContent = _fmtNum(u.total);
+  document.getElementById('i-signups').textContent = _fmtNum(b.emailSignupsLast7d);
+  document.getElementById('i-signups-sub').textContent = (b.emailSignupsTotal || 0) + ' all-time';
+  document.getElementById('i-leads').textContent = _fmtNum(b.leadsLast7d);
+  document.getElementById('i-leads-sub').textContent = (b.leadsTotal || 0) + ' all-time';
+
+  // Charts (Chart.js may load async)
+  _waitChart(() => {
+    if (_intelCharts.signups) _intelCharts.signups.destroy();
+    if (_intelCharts.tier) _intelCharts.tier.destroy();
+    const sCtx = document.getElementById('i-signups-chart');
+    if (sCtx && u.signupsTimeseries) {
+      _intelCharts.signups = new Chart(sCtx, {
+        type: 'bar',
+        data: {
+          labels: u.signupsTimeseries.map(p => p.date.slice(5)),
+          datasets: [{ data: u.signupsTimeseries.map(p => p.count), backgroundColor: '#22c55e', borderRadius: 3 }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false }, tooltip: { mode: 'index' } },
+          scales: {
+            x: { ticks: { color: '#9ca3b0', font: { size: 10 }, maxRotation: 0, autoSkipPadding: 12 }, grid: { display: false } },
+            y: { ticks: { color: '#9ca3b0', font: { size: 10 }, stepSize: 1 }, grid: { color: 'rgba(255,255,255,.04)' }, beginAtZero: true }
+          }
+        }
+      });
+    }
+    const tCtx = document.getElementById('i-tier-chart');
+    if (tCtx && u.tierBreakdown) {
+      const tb = u.tierBreakdown;
+      _intelCharts.tier = new Chart(tCtx, {
+        type: 'doughnut',
+        data: {
+          labels: ['Paid', 'Trial', 'Free'],
+          datasets: [{ data: [tb.paid || 0, tb.trial || 0, tb.free || 0], backgroundColor: ['#22c55e', '#3b82f6', '#9ca3b0'], borderWidth: 0 }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#e8e6e3', font: { size: 11 } } } } }
+      });
+    }
+  });
+
+  // Funnel
+  const total = Math.max(1, f.signedUp || 1);
+  const steps = [
+    { label: 'Signed up', n: f.signedUp || 0 },
+    { label: 'Did anything (30d)', n: f.activatedAnyAction || 0 },
+    { label: 'First search', n: f.firstSearch || 0 },
+    { label: 'Repeat searcher (≥2)', n: f.repeatSearch || 0 },
+    { label: 'Converted (paid/trial)', n: f.converted || 0 },
+  ];
+  setSafeHTML('i-funnel', steps.map(s => `
+    <div class="funnel-step">
+      <span class="funnel-label">${_esc(s.label)}</span>
+      <div class="funnel-bar"><div class="funnel-fill" style="width:${Math.round(s.n / total * 100)}%"></div></div>
+      <span class="funnel-num">${s.n}</span>
+    </div>
+  `).join(''));
+
+  // Feature usage
+  const features = d.features || {};
+  const flist = Object.entries(features).sort((a, b) => b[1].total - a[1].total);
+  setSafeHTML('i-features', flist.length === 0
+    ? '<em style="color:var(--text3)">No tracked feature events yet.</em>'
+    : flist.map(([action, v]) => `
+      <div class="intel-row">
+        <span class="pri">${_esc(action)}<small>last: ${_esc(_fmtRelative(v.mostRecent))}</small></span>
+        <span class="num">${v.total} <small>(${v.last7d}/7d, ${v.last24h}/24h)</small></span>
+      </div>
+    `).join(''));
+
+  // Top searches + zero-result
+  const s = d.searches || { topQueries: [], noResults: [] };
+  const renderSearchList = (arr, emptyMsg) => arr.length === 0
+    ? `<em style="color:var(--text3)">${_esc(emptyMsg)}</em>`
+    : arr.map(q => `<div class="intel-row"><span class="pri">${_esc(q.query)}</span><span class="num">${q.count}</span></div>`).join('');
+  setSafeHTML('i-top-searches', renderSearchList(s.topQueries, 'No search data yet.'));
+  setSafeHTML('i-noresult-searches', renderSearchList(s.noResults, 'No zero-result queries logged. (Will populate once smart_search events include result counts in detail.results.)'));
+
+  // Recent signups
+  setSafeHTML('i-recent-signups', (u.recentSignups || []).map(r => `
+    <div class="intel-row">
+      <span class="pri">${_esc(r.email)}<small>signed up ${_esc(_fmtRelative(r.signedUpAt))} · ${r.totalEvents} events</small></span>
+      <span class="num">${r.firstAction ? _esc(r.firstAction) : '<small style="color:var(--text3)">no action yet</small>'}</span>
+    </div>
+  `).join('') || '<em style="color:var(--text3)">No signups recorded yet.</em>');
+
+  // Top users
+  setSafeHTML('i-top-users', (u.topUsers || []).map(t => `
+    <div class="intel-row"><span class="pri">${_esc(t.email)}</span><span class="num">${t.count} events</span></div>
+  `).join('') || '<em style="color:var(--text3)">No active users in last 30d.</em>');
+}
+
+// ── LOTS & HOUSES tab renderer ─────────────────────────────────
+function renderLots(d) {
+  const l = d.lots || {};
+  document.getElementById('lots-loading').style.display = 'none';
+  document.getElementById('lots-content').style.display = 'block';
+
+  document.getElementById('l-new-today').textContent = _fmtNum(l.newToday);
+  document.getElementById('l-ended-today').textContent = _fmtNum(l.endedToday);
+  document.getElementById('l-sold-today').textContent = _fmtNum(l.soldToday);
+  document.getElementById('l-withdrawn-today').textContent = _fmtNum(l.withdrawnToday);
+  document.getElementById('l-unsold-today').textContent = _fmtNum(l.unsoldToday);
+  document.getElementById('l-active').textContent = _fmtNum(l.total);
+  document.getElementById('l-title-splits').textContent = _fmtNum(l.titleSplits);
+  document.getElementById('l-vacant').textContent = _fmtNum(l.vacant);
+  document.getElementById('l-topscore').textContent = _fmtNum(l.highScore);
+
+  const ts = l.topScored || [];
+  setSafeHTML('l-top-scored', ts.length === 0
+    ? '<em style="color:var(--text3)">No scored lots in last 7 days.</em>'
+    : ts.map(lot => `
+      <div class="intel-row">
+        <span class="pri">
+          <strong>${_esc(lot.house)}</strong> · Lot ${_esc(lot.lot_number || '—')} · ${_esc(lot.address || 'No address')}
+          <small>${_esc(lot.prop_type || '')} · ${_esc(lot.deal_type || 'Standard')}</small>
+        </span>
+        <span class="num">${_esc(_fmtPrice(lot.price))} <small>· score ${lot.score} · yield ${lot.est_gross_yield ? _esc(lot.est_gross_yield) + '%' : '—'}</small></span>
+      </div>
+    `).join(''));
+
+  const houses = (d.houses || {}).leagueTable || [];
+  const tbodyRows = houses.length === 0
+    ? '<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:14px;">No house data.</td></tr>'
+    : houses.slice(0, 50).map(h => `
+      <tr>
+        <td><strong>${_esc(h.house)}</strong></td>
+        <td style="text-align:right;font-family:var(--font-mono);">${_esc(_fmtNum(h.cachedLots))}</td>
+        <td style="text-align:right;font-family:var(--font-mono);">${_esc(_fmtNum(h.recentLots))}</td>
+        <td style="text-align:right;font-family:var(--font-mono);color:${h.avgScore >= 5 ? 'var(--green)' : 'var(--text)'}">${h.avgScore == null ? '—' : _esc(h.avgScore)}</td>
+        <td style="font-size:.74rem;color:var(--text3);">${_esc(_fmtRelative(h.lastScrapedAt))}</td>
+        <td style="font-size:.72rem;color:var(--text3);">${_esc(h.scraper)}/${_esc(h.extractor)}</td>
+        <td style="font-size:.74rem;">${h.upcomingDate ? _esc(h.upcomingDate.slice(0, 10)) : '<span style="color:var(--text3)">—</span>'}</td>
+      </tr>
+    `).join('');
+  const tbody = document.querySelector('#l-house-league tbody');
+  if (tbody) setSafeHTML(tbody, tbodyRows);
+
+  const upc = (d.houses || {}).upcoming || [];
+  setSafeHTML('l-upcoming', upc.length === 0
+    ? '<em style="color:var(--text3)">No upcoming auctions in the next 30 days.</em>'
+    : upc
+        .sort((a, b) => (a.date || '').localeCompare(b.date || ''))
+        .map(a => `<div class="intel-row"><span class="pri"><strong>${_esc(a.house)}</strong>${a.lots ? ` · ${a.lots} lots` : ''}</span><span class="num">${_esc((a.date || '').slice(0, 10))}</span></div>`).join(''));
+}
+
+// ── BILLING tab renderer ───────────────────────────────────────
+function renderBilling(d) {
+  const b = d.billing || {};
+  document.getElementById('billing-loading').style.display = 'none';
+  document.getElementById('billing-content').style.display = 'block';
+
+  document.getElementById('b-paid').textContent = _fmtNum(b.paid);
+  document.getElementById('b-trial').textContent = _fmtNum(b.trial);
+  document.getElementById('b-free').textContent = _fmtNum(b.free);
+  document.getElementById('b-cap').textContent = _fmtNum(b.hittingCap);
+  document.getElementById('b-paywall').textContent = _fmtNum(b.paywallHits);
+  document.getElementById('b-emails-7d').textContent = _fmtNum(b.emailSignupsLast7d);
+
+  // MRR sensitivity grid
+  const free = b.free || 0;
+  const emailPool = b.emailSignupsTotal || 0;
+  const addressable = free + emailPool;
+  const prices = [4.99, 9.99, 14.99, 19.99, 29.99];
+  const conversions = [0.02, 0.05, 0.10, 0.20];
+  const headerCells = '<th style="padding:6px 10px;text-align:left;color:var(--text3);">Conversion</th>' +
+    prices.map(p => `<th style="padding:6px 10px;text-align:right;color:var(--text3);">£${p}/mo</th>`).join('');
+  const rows = conversions.map(c => {
+    const cells = prices.map(p => {
+      const mrr = addressable * c * p;
+      return `<td style="padding:6px 10px;text-align:right;font-family:var(--font-mono);color:${mrr > 1000 ? 'var(--green)' : 'var(--text)'}">£${Math.round(mrr).toLocaleString()}</td>`;
+    }).join('');
+    return `<tr><td style="padding:6px 10px;color:var(--text2);">${(c * 100).toFixed(0)}%</td>${cells}</tr>`;
+  }).join('');
+  setSafeHTML('b-mrr-sensitivity', `
+    <div style="font-size:.78rem;color:var(--text3);margin-bottom:10px;">
+      Addressable pool: <strong style="color:var(--text);">${addressable.toLocaleString()}</strong> = ${free} free signed-in + ${emailPool} landing-page email signups.
+      MRR projection assumes monthly subscription at the column price.
+    </div>
+    <div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:.82rem;">
+      <thead><tr>${headerCells}</tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>
+    <div class="note-small" style="margin-top:10px;background:transparent;border:none;padding:0;">
+      ⚠️ Tiny sample today. Refine once you have 100+ signups and at least 30 days of usage data.
+    </div>
+  `);
+
+  // Trial activity
+  const ta = b.trialActivity || [];
+  setSafeHTML('b-trial-activity', ta.length === 0
+    ? '<em style="color:var(--text3)">No active trials.</em>'
+    : ta.map(t => `
+      <div class="intel-row">
+        <span class="pri">
+          ${_esc(t.email)}
+          <small>${t.eventsLast30d} events in 30d · last action: ${t.lastAction ? _esc(t.lastAction) + ' ' + _esc(_fmtRelative(t.lastActionAt)) : '<span style="color:var(--text3)">never</span>'}</small>
+        </span>
+        <span class="num" style="color:${t.trialEndsInDays <= 3 ? 'var(--amber)' : 'var(--text)'}">${t.trialEndsInDays}d left</span>
+      </div>
+    `).join(''));
+
+  // Recent leads
+  const leads = b.recentLeads || [];
+  setSafeHTML('b-recent-leads', leads.length === 0
+    ? '<em style="color:var(--text3)">No leads yet.</em>'
+    : leads.map(l => `
+      <div class="intel-row">
+        <span class="pri">
+          ${_esc(l.name || l.email || 'Anonymous')}
+          <small>${_esc(l.email || '')}${l.property_price ? ' · £' + _esc(l.property_price) : ''}${l.loan_amount ? ' / £' + _esc(l.loan_amount) : ''} · ${_esc(l.source || 'web')}</small>
+        </span>
+        <span class="num">${_esc(_fmtRelative(l.created_at))}</span>
+      </div>
+    `).join(''));
 }
 
 // ═══ Growth ═══
