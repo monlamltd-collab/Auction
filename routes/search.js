@@ -318,8 +318,34 @@ setInterval(() => {
 }, 10 * 60 * 1000);
 
 router.post('/api/smart-search', async (req, res) => {
-  const { query, soldFilter } = req.body || {};
+  const { query, soldFilter, location } = req.body || {};
   if (!query) return res.status(400).json({ error: 'Missing search query' });
+
+  // ── Normalise UI-supplied location filter (postcode/town input + radius) ──
+  // Sent by the catalogue page to keep AI search synced with the dropdowns.
+  // Precedence: precise center+radius > rawInput postcode prefix > rawInput address ILIKE.
+  let uiLoc = null;
+  if (location && typeof location === 'object') {
+    const center = location.center && Number.isFinite(location.center.lat) && Number.isFinite(location.center.lng)
+      ? { lat: +location.center.lat, lng: +location.center.lng }
+      : null;
+    const radiusMiles = Number.isFinite(+location.radiusMiles) && +location.radiusMiles > 0 ? +location.radiusMiles : null;
+    const rawInput = typeof location.rawInput === 'string' ? location.rawInput.trim() : '';
+    if (center && radiusMiles) {
+      // Bounding-box approximation: 1° lat ≈ 69mi; 1° lng ≈ 40mi at UK latitudes (conservative).
+      uiLoc = { type: 'bbox', minLat: center.lat - radiusMiles / 69, maxLat: center.lat + radiusMiles / 69, minLng: center.lng - radiusMiles / 40, maxLng: center.lng + radiusMiles / 40 };
+    } else if (rawInput) {
+      const pcMatch = rawInput.match(/^([A-Z]{1,2}\d[A-Z\d]?)/i);
+      uiLoc = pcMatch ? { type: 'postcode', prefix: pcMatch[1].toUpperCase() } : { type: 'address', text: rawInput };
+    }
+  }
+  const applyUiLoc = (q) => {
+    if (!uiLoc) return q;
+    if (uiLoc.type === 'bbox') return q.gte('lat', uiLoc.minLat).lte('lat', uiLoc.maxLat).gte('lng', uiLoc.minLng).lte('lng', uiLoc.maxLng);
+    if (uiLoc.type === 'postcode') return q.ilike('postcode', `${uiLoc.prefix}%`);
+    if (uiLoc.type === 'address') return q.ilike('address', `%${uiLoc.text}%`);
+    return q;
+  };
 
   // Authenticate user
   const user = await validateUserFromReq(req);
@@ -416,6 +442,7 @@ router.post('/api/smart-search', async (req, res) => {
       else if (sf === 'withdrawn') dbQuery = dbQuery.eq('status', 'withdrawn');
       else if (sf !== 'everything') dbQuery = dbQuery.or('status.eq.available,status.eq.unsold,status.is.null');
 
+      dbQuery = applyUiLoc(dbQuery);
       dbQuery = dbQuery.order('score', { ascending: false, nullsFirst: false }).limit(2000);
       const { data: lotRows } = await dbQuery;
 
@@ -518,6 +545,9 @@ router.post('/api/smart-search', async (req, res) => {
       dbQuery = dbQuery.or(pcOr);
     }
 
+    // UI-supplied postcode/town + radius (from catalogue dropdowns)
+    dbQuery = applyUiLoc(dbQuery);
+
     // ── Concept-based broadening — build OR conditions for semantic intent ──
     const conceptOrClauses = [];
     for (const concept of sqParsed.concepts) {
@@ -604,6 +634,7 @@ router.post('/api/smart-search', async (req, res) => {
       if (sqParsed.filters.minPrice) unsoldQuery = unsoldQuery.gte('price', sqParsed.filters.minPrice);
       for (const loc of sqParsed.locationTerms) unsoldQuery = unsoldQuery.ilike('address', `%${loc}%`);
       if (sqParsed.filters.regionPostcodes) unsoldQuery = unsoldQuery.or(sqParsed.filters.regionPostcodes.map(p => `postcode.ilike.${p}%`).join(','));
+      unsoldQuery = applyUiLoc(unsoldQuery);
       // Apply same concept/soft OR clauses
       if (allOrClauses.length > 0) unsoldQuery = unsoldQuery.or(allOrClauses.join(','));
       unsoldQuery = unsoldQuery.order(sortCol, { ascending: false, nullsFirst: false }).limit(200);

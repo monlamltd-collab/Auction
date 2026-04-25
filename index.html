@@ -3307,10 +3307,22 @@ async function runSmartSearch(query) {
   },5000));
 
   try {
+    const _smTown = ($('fTown')?.value || '').trim();
+    const _smPostcode = ($('fPostcode')?.value || '').trim();
+    const _smRaw = _smPostcode || _smTown;
+    const _smRadius = +($('fRadius')?.value || 0) || null;
     const resp = await fetch('/api/smart-search', {
       method: 'POST',
       headers: authHeaders(),
-      body: JSON.stringify({ query, soldFilter: $('fSoldTop')?.value || 'all' }),
+      body: JSON.stringify({
+        query,
+        soldFilter: $('fSoldTop')?.value || 'all',
+        location: (_smRaw || (_searchCentre && _smRadius)) ? {
+          center: _searchCentre || null,
+          rawInput: _smRaw || null,
+          radiusMiles: _smRadius,
+        } : null,
+      }),
       signal
     });
     const data = await resp.json();
