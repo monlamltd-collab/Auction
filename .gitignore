@@ -3,8 +3,11 @@ node_modules/
 .env.*
 .vercel/
 
-# Claude Code / internal
-.claude/
+# Claude Code / internal — ignore everything except shared skills.
+# The self-healing skill is the canonical playbook for the auction pipeline
+# and must propagate across worktrees / sessions, so it is tracked in git.
+.claude/*
+!.claude/skills/
 
 # Audit script persistent state (auto-generated)
 scripts/audit/*.json
