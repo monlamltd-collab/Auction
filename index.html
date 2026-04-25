@@ -1161,6 +1161,10 @@ footer .logo-f span{color:var(--green)}
         <option value="">Region</option>
         <option value="london">London</option><option value="south east">South East</option><option value="south west">South West</option><option value="east">East of England</option><option value="west midlands">West Midlands</option><option value="east midlands">East Midlands</option><option value="north west">North West</option><option value="north east">North East</option><option value="yorkshire">Yorkshire</option><option value="wales">Wales</option><option value="scotland">Scotland</option>
       </select>
+      <input class="tb-search" type="text" id="fPostcode" placeholder="Postcode or city" oninput="onLocationInput()" aria-label="Search by postcode or city" style="min-width:140px;max-width:180px">
+      <select class="tb-select" id="fRadius" onchange="debouncedRender();updateMoreDot()" aria-label="Distance from postcode or city" title="Distance from the postcode or city above">
+        <option value="">Distance from</option><option value="1">Within 1 mile</option><option value="5">Within 5 miles</option><option value="10">Within 10 miles</option><option value="25">Within 25 miles</option><option value="50">Within 50 miles</option>
+      </select>
       <select class="tb-select" id="fSoldTop" onchange="debouncedRender()" aria-label="Lot status">
         <option value="all">Lot status</option><option value="available">Available only</option><option value="unsold">Unsold (no sale)</option><option value="sold">Sold</option><option value="stc">Sale Agreed</option><option value="withdrawn">Withdrawn</option><option value="everything">All (inc. sold)</option>
       </select>
@@ -1194,16 +1198,6 @@ footer .logo-f span{color:var(--green)}
               <label>Tenure</label>
               <select class="tb-select" id="fTenure" onchange="debouncedRender();updateMoreDot()" aria-label="Tenure type">
                 <option value="">Any tenure</option><option value="Freehold">Freehold</option><option value="Leasehold">Leasehold</option><option value="Share of Freehold">Share of FH</option>
-              </select>
-            </div>
-            <div class="mf-field">
-              <label>Location</label>
-              <input class="tb-search" type="text" id="fPostcode" placeholder="e.g. BS1 or Bristol" oninput="onLocationInput()" aria-label="Search by postcode or town">
-            </div>
-            <div class="mf-field">
-              <label>Radius</label>
-              <select class="tb-select" id="fRadius" onchange="debouncedRender();updateMoreDot()" aria-label="Search radius">
-                <option value="">Any distance</option><option value="1">1 mile</option><option value="5">5 miles</option><option value="10">10 miles</option><option value="25">25 miles</option><option value="50">50 miles</option>
               </select>
             </div>
             <div class="mf-field">
@@ -1513,8 +1507,11 @@ function closeMoreFilters(e) {
   }
 }
 function updateMoreDot() {
+  // Postcode + Radius now live in the main filter row, not the Pro filters
+  // popover, so don't count them toward the "active filter" dot indicator.
   var active = $('fDeal')?.value || $('fTenure')?.value ||
-    ($('fPostcode')?.value||'').trim() || $('fRadius')?.value || $('fExcludePOA')?.value;
+    $('fExcludePOA')?.value || $('fCondition')?.value ||
+    (getSelectedHouses && getSelectedHouses().length > 0);
   $('mfDot').style.display = active ? '' : 'none';
 }
 
