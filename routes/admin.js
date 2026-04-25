@@ -35,6 +35,7 @@ import { getEnrichmentReport } from '../lib/harness/enrichment-engine.js';
 import { runManagerCycle, getManagerReport, setManagerConfig, getManagerConfig } from '../lib/harness/manager.js';
 import { watchAuctionCalendar, watchOne } from '../lib/pipeline/auction-watcher.js';
 import { BROKEN_EXTRACTORS } from './analyse.js';
+import { invalidateAllLotsCache } from './search.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const router = Router();
@@ -199,6 +200,9 @@ router.post('/api/admin/clear-cache', async (req, res) => {
 
     const cleared = data ? data.length : 0;
     const houses = data ? [...new Set(data.map(r => r.house))].filter(Boolean) : [];
+    // Invalidate the in-memory /api/all-lots cache so the API reflects the
+    // delete immediately rather than waiting for the 10-min TTL.
+    invalidateAllLotsCache();
     log.info('Cache cleared', { house: house || 'ALL', cleared });
     res.json({
       message: house
@@ -256,6 +260,10 @@ router.post('/api/admin/rescrape', async (req, res) => {
         log.error('Rescrape autoAnalyseOne error', { house, url, error: err.message });
       }
     }
+    // Invalidate the in-memory /api/all-lots cache so fresh scrape results
+    // (or a blocked=true outcome with no upsert) propagate to the API
+    // immediately rather than waiting for the 10-min TTL.
+    invalidateAllLotsCache();
     log.info('Rescrape complete', { house, urls: urls.length });
   } catch (err) {
     log.error('Rescrape error', { house, error: err.message });
