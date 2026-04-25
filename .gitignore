@@ -30,3 +30,23 @@ Desktop.ini
 # Logs
 *.log
 npm-debug.log*
+
+# graphify knowledge graph (generated locally, do not commit)
+graphify-out/
+
+# debug exports
+all_lots.json
+
+# remember plugin local buffer
+.remember/
+
+# random binary assets dropped into repo root by mistake
+email headers*
+
+# scratch scripts not part of pipeline
+scripts/backfill-lots.cjs
+
+# personal planning docs
+.planning/SHELVED-FEATURES-FRAMEWORK.md
+.planning/phases/08-field-extraction-validation/
+docs/superpowers/
