@@ -1979,6 +1979,17 @@ function _renderLotsToUI(d) {
     if(out) out.textContent='No auction lots currently available. Check back soon for new listings.';
   }
   if(ALL_LOTS.length && !document.body.classList.contains('view-results') && !SMART_RESULTS){
+    // ── Skip rebuild if incoming data is identical to last render ──
+    // _renderLotsToUI fires every time loadAllLots completes, including on
+    // INITIAL_SESSION repeats and ETag-200 races. Without this fingerprint,
+    // every re-fetch causes a full filter+sort+DOM rebuild even when nothing
+    // about the lot list has actually changed.
+    var _fp = ALL_LOTS.length + '|' + (ALL_LOTS[0]?.url || '') + '|' + (ALL_LOTS[ALL_LOTS.length-1]?.url || '') + '|' + (d.anonGated ? 'anon' : 'signed');
+    if (window.__lastLotsFingerprint === _fp && document.getElementById('lotsGrid')) {
+      LOTS = ALL_LOTS; // keep reference fresh
+      return;
+    }
+    window.__lastLotsFingerprint = _fp;
     LOTS=ALL_LOTS;
     window._lastRenderKey=null;
     $('resultsTitle').textContent=ALL_LOTS.length.toLocaleString()+' auction lots';
@@ -2606,7 +2617,15 @@ function onSignIn(session) {
   // loadAllLots() fires before initAuth() resolves, gating all lots).
   // Wipe the anon IDB/ETag cache first so the un-gated payload lands in-place
   // instead of a 304 preserving the gated stubs.
-  _clearCachedLots().finally(() => loadAllLots({ force: true }));
+  // Guard: Supabase fires INITIAL_SESSION on every page load AND on cross-tab
+  // localStorage sync. Without this guard, each fire force-refetches /api/all-lots
+  // (3-4s server work each) even when the user identity hasn't changed.
+  const _prevUserId = window.__lastSignedInUserId;
+  const _curUserId = currentUser.id || currentUser.email || '';
+  if (_prevUserId !== _curUserId) {
+    window.__lastSignedInUserId = _curUserId;
+    _clearCachedLots().finally(() => loadAllLots({ force: true }));
+  }
 
   // Check Pro status
   updateProStatus();
@@ -3837,6 +3856,24 @@ function renderLots(){
   }
   if(typeof syncFiltersToURL==='function') syncFiltersToURL();
   startCardCarousels();
+
+  // ── Restore previously-open lot if it's still in the visible page ──
+  // _idx is page-relative so we can't re-use the stored idx — match by stable
+  // (house, lot, address) key. Page-jump if needed by setting _currentPage so
+  // the lot lands in the rendered slice.
+  var _wantKey = _getOpenLotKey();
+  if (_wantKey && expandedLotId === null) {
+    var _pageMatch = pageItems.find(function(i){ return i.lot && _lotKey(i.lot) === _wantKey; });
+    if (_pageMatch && _pageMatch.lot) {
+      // Defer one frame so DOM is fully attached before expand
+      requestAnimationFrame(function(){ expandCard(_pageMatch.lot); });
+    } else {
+      // Lot isn't on the current page — drop the key so we don't keep retrying
+      // (e.g. user changed filters such that the lot is no longer in results)
+      var _stillInResults = lots.some(function(l){ return _lotKey(l) === _wantKey; });
+      if (!_stillInResults) _setOpenLotKey(null);
+    }
+  }
 }
 
 // ── Cascading image carousel for lot cards ──
@@ -4513,6 +4550,19 @@ function dl(c,n,t){const b=new Blob([c],{type:t}),a=document.createElement('a');
 let expandedLotId = null;
 var _expandedPanelCache = new Map(); // lot._idx → DOM node
 
+// Stable identity for an open lot, persisted across renders + page navigations.
+// _idx is page-relative and changes whenever the filter/sort changes, so we
+// pin to (house, lot, address-prefix) — same shape used for analytics dedup.
+function _lotKey(lot) {
+  return (lot._house || '') + ':' + (lot.lot || '') + ':' + (lot.address || '').slice(0, 40);
+}
+function _setOpenLotKey(key) {
+  try { if (key) sessionStorage.setItem('ab_open_lot', key); else sessionStorage.removeItem('ab_open_lot'); } catch {}
+}
+function _getOpenLotKey() {
+  try { return sessionStorage.getItem('ab_open_lot') || null; } catch { return null; }
+}
+
 function getPropertyTypeIcon(type) {
   const icons = {
     house: '<svg viewBox="0 0 24 24" width="48" height="48"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>',
@@ -4768,12 +4818,14 @@ function expandCard(lot) {
 
   if (expandedLotId === lot._idx) {
     expandedLotId = null;
+    _setOpenLotKey(null);
     cardEl.classList.remove('expanded');
     var _cached = _expandedPanelCache.get(lot._idx);
     if (_cached) { _cached.style.display = 'none'; _cached.classList.remove('expanded-panel-visible'); }
     return;
   }
   expandedLotId = lot._idx;
+  _setOpenLotKey(_lotKey(lot));
   cardEl.classList.add('expanded');
   try { sessionStorage.setItem('ab_scroll_y', window.scrollY.toString()); } catch(e) {}
 
@@ -5107,6 +5159,7 @@ function closeExpandedPanel() {
     const cardEl = document.getElementById('lot-' + expandedLotId);
     if (cardEl) cardEl.classList.remove('expanded');
     expandedLotId = null;
+    _setOpenLotKey(null);
   }
 }
 

@@ -791,12 +791,31 @@ Return the indices of the best matching lots. If few lots match well, that's fin
 // ═══════════════════════════════════════════════════════════════
 // API: ALL LOTS — pre-load every cached lot for frontend filtering
 // ═══════════════════════════════════════════════════════════════
+// In-memory response cache. The pipeline below takes 3-4s per call against
+// Supabase; without this cache, INITIAL_SESSION repeats and cross-tab opens
+// caused dozens of redundant runs. 60s TTL is short enough that fresh harness
+// updates appear quickly and long enough to absorb burst traffic.
+const _allLotsCache = new Map(); // key = `${signed|anon}:${past|future}` → { body, etag, ts }
+const ALL_LOTS_CACHE_TTL_MS = 60 * 1000;
+
 router.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
   try {
     if (!supabase) return res.json({ lots: [], sources: [], stripeEnabled: STRIPE_ENABLED });
 
     const includePast = req.query.includePast === 'true';
     const user = await validateUserFromReq(req);
+
+    // ── Fast path: serve from cache if fresh ──
+    const adminTokenEarly = req.headers['x-admin-secret'] || '';
+    const isAdminEarly = process.env.ADMIN_SECRET && safeCompare(adminTokenEarly, process.env.ADMIN_SECRET);
+    const isSignedInEarly = !!user || isAdminEarly;
+    const cacheKey = (isSignedInEarly ? 'signed' : 'anon') + ':' + (includePast ? 'past' : 'future');
+    const hit = _allLotsCache.get(cacheKey);
+    if (hit && (Date.now() - hit.ts) < ALL_LOTS_CACHE_TTL_MS) {
+      if (req.headers['if-none-match'] === hit.etag) return res.status(304).end();
+      res.set('ETag', hit.etag);
+      return res.json(hit.body);
+    }
 
     // ── Step 1: Get active catalogue URLs from cached_analyses ──
     const { data: activeCatalogues } = await supabase
@@ -1249,12 +1268,7 @@ router.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
       .update((isSignedIn ? 'signed:' : 'anon:') + cleanLots.length + ':' + cleanLots.map(l => l.url + (l.status || '')).join(','))
       .digest('hex') + '"';
 
-    if (req.headers['if-none-match'] === etag) {
-      return res.status(304).end();
-    }
-    res.set('ETag', etag);
-
-    res.json({
+    const responseBody = {
       lots: cleanLots,
       sources,
       houseMeta,
@@ -1270,7 +1284,16 @@ router.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
         afterJunkRemoval: cleanLots.length,
         source: 'lots_table'
       }
-    });
+    };
+
+    // Populate cache so subsequent requests hit the fast path above
+    _allLotsCache.set(cacheKey, { body: responseBody, etag, ts: Date.now() });
+
+    if (req.headers['if-none-match'] === etag) {
+      return res.status(304).end();
+    }
+    res.set('ETag', etag);
+    res.json(responseBody);
   } catch (e) {
     log.error('All lots error', { error: e.message });
     res.status(500).json({ error: 'Internal server error' });
