@@ -2709,15 +2709,22 @@ function signOut() {
 // listener (onAuthStateChange fires across tabs). No extra channel needed.
 
 const ACTIVITY_KEY = 'bm_last_activity';
-const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;         // 30 min of genuine inactivity
+const INACTIVITY_TIMEOUT_MS = 48 * 60 * 60 * 1000;    // 48 hours of genuine inactivity
 const SESSION_STALENESS_THRESHOLD_MS = 10 * 60 * 1000; // skip cold-start check if >10 min remain
 
 // Captured at page-load so the 2s cold-start check can tell "the user
 // hasn't touched this tab yet" apart from "they're actively interacting".
 const pageLoadTime = Date.now();
 
-// Restore from storage so the timeout survives tab close/reopen
-let lastActivityTime = parseInt(localStorage.getItem(ACTIVITY_KEY), 10) || Date.now();
+// Restore from storage so the timeout survives tab close/reopen.
+// If storage is empty (first ever visit OR dev-cleared storage) we leave
+// lastActivityTime as null so the cold-start check below treats it as
+// "unknown" rather than "fresh activity right now". A pagehide listener
+// further down writes the precise lastActivityTime on tab close so the
+// next session starts from the exact last interaction, not a 60s-stale
+// throttled value.
+const _storedActivity = parseInt(localStorage.getItem(ACTIVITY_KEY), 10);
+let lastActivityTime = Number.isFinite(_storedActivity) ? _storedActivity : null;
 let lastActivityWriteTime = 0;
 
 function recordActivity() {
@@ -2729,6 +2736,16 @@ function recordActivity() {
     try { localStorage.setItem(ACTIVITY_KEY, String(now)); } catch {}
   }
 }
+
+// Flush the latest activity timestamp on tab close so the throttled-write
+// gap can't make the next cold-start check think the user was idle longer
+// than they really were. pagehide fires on tab close, navigation, and
+// browser-quit (more reliable than beforeunload for mobile Safari).
+window.addEventListener('pagehide', () => {
+  if (lastActivityTime) {
+    try { localStorage.setItem(ACTIVITY_KEY, String(lastActivityTime)); } catch {}
+  }
+});
 
 function showSessionExpiredModal(reason) {
   $('signupModal').classList.add('show');
@@ -2744,13 +2761,20 @@ function showSessionExpiredModal(reason) {
 // Capture the unwrapped fetch before wrapping
 const originalFetch = window.fetch.bind(window);
 
+// Re-entrancy guard for the 401 handler. supabaseClient.auth.getSession() and
+// the SDK's internal token refresh both go through window.fetch — if a token
+// refresh itself returns 401, we must not call getSession() again from inside
+// the wrapper or we'd loop and fire signOut/showSessionExpiredModal multiple
+// times before currentSession nullifies.
+let _handlingExpiry = false;
+
 // Wrap fetch to detect "our session expired" — but only for our own auth-bearing
 // requests. Unrelated 401s (admin secret, third-party APIs, Stripe failures, etc.)
 // must not log the user out.
 window.fetch = async function(...args) {
   const response = await originalFetch(...args);
 
-  if (response.status === 401 && currentSession && supabaseClient) {
+  if (response.status === 401 && currentSession && supabaseClient && !_handlingExpiry) {
     const url = typeof args[0] === 'string' ? args[0] : (args[0]?.url || '');
     const headers = args[1]?.headers || {};
     let authHeader = '';
@@ -2760,9 +2784,10 @@ window.fetch = async function(...args) {
     const isOurApi = url.startsWith('/api/') || url.startsWith(window.location.origin + '/api/');
 
     if (sentOurToken && isOurApi) {
-      // Double-check the session is actually gone before signing out (avoids
-      // false positives where the backend rejects for a different reason)
+      _handlingExpiry = true;
       try {
+        // Double-check the session is actually gone before signing out (avoids
+        // false positives where the backend rejects for a different reason)
         const { data } = await supabaseClient.auth.getSession();
         if (!data.session) {
           console.warn('Session expired — signing out');
@@ -2772,6 +2797,8 @@ window.fetch = async function(...args) {
       } catch {
         signOut();
         showSessionExpiredModal();
+      } finally {
+        _handlingExpiry = false;
       }
     }
   }
@@ -2781,19 +2808,23 @@ window.fetch = async function(...args) {
 
 function checkInactivity() {
   if (!currentSession) return;
+  // No recorded activity at all (first visit / cleared storage) — treat as
+  // fresh; recordActivity will populate lastActivityTime once the user moves.
+  if (lastActivityTime == null) return;
   if (Date.now() - lastActivityTime > INACTIVITY_TIMEOUT_MS) {
-    console.warn('Session expired due to inactivity (30 min)');
+    console.warn('Session expired due to inactivity (48 h)');
     signOut();
-    showSessionExpiredModal('You\'ve been signed out after 30 minutes of inactivity.');
+    showSessionExpiredModal('You\'ve been signed out after 48 hours of inactivity.');
   }
 }
 // Run shortly after init so reopened-tab case is caught quickly, then every 5 min.
 // Gate the cold-start check on actual staleness:
 //   (a) if the user has already interacted since page load, skip — they're active
 //   (b) if the session token has >10 min remaining, it's not stale — skip
+//   (c) if no activity has ever been recorded, skip — checkInactivity guards too
 setTimeout(() => {
   if (!currentSession) return;
-  if (lastActivityTime >= pageLoadTime) return;
+  if (lastActivityTime != null && lastActivityTime >= pageLoadTime) return;
   // Check token expiry — skip if plenty of lifetime remains
   const expiresAt = currentSession.expires_at; // Unix seconds (Supabase)
   if (expiresAt && (expiresAt * 1000 - Date.now()) > SESSION_STALENESS_THRESHOLD_MS) return;
@@ -2801,7 +2832,7 @@ setTimeout(() => {
 }, 2000);
 setInterval(checkInactivity, 5 * 60 * 1000);
 
-// Track real user activity — any of these resets the 30-min inactivity clock
+// Track real user activity — any of these resets the 48-hour inactivity clock
 document.addEventListener('click', recordActivity);
 document.addEventListener('scroll', recordActivity, { passive: true });
 document.addEventListener('keydown', recordActivity);

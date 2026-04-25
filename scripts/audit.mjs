@@ -50,38 +50,10 @@ const ADMIN_API_BASE = param('api-base') || 'https://auctions.bridgematch.co.uk'
 // PHASE 1: CONFIG EXTRACTION
 // ═══════════════════════════════════════════════════════════════
 
-function extractBraceBlock(code, startMarker) {
-  const idx = code.indexOf(startMarker);
-  if (idx === -1) return null;
-  let depth = 0, end = -1;
-  for (let i = idx; i < code.length; i++) {
-    if (code[i] === '{') depth++;
-    if (code[i] === '}') {
-      depth--;
-      if (depth === 0) { end = i + 1; break; }
-    }
-  }
-  return end === -1 ? null : code.substring(idx, end);
-}
-
-function extractTemplateLiteral(code, startMarker) {
-  const idx = code.indexOf(startMarker);
-  if (idx === -1) return null;
-  const backtickStart = code.indexOf('`', idx);
-  if (backtickStart === -1) return null;
-  // Find matching closing backtick — skip escaped backticks
-  for (let i = backtickStart + 1; i < code.length; i++) {
-    if (code[i] === '\\') { i++; continue; } // skip escaped chars
-    if (code[i] === '`') {
-      return code.substring(backtickStart + 1, i);
-    }
-  }
-  return null;
-}
-
 async function extractConfig() {
   // After the Phase 3 module extraction, these constants live in lib/ rather
-  // than being inline in server.js. Import them directly instead of text-parsing.
+  // than being inline in server.js. Import them directly so config drift is
+  // impossible — any change in production immediately reflects in the audit.
   const housesPath = 'file://' + join(PROJECT_ROOT, 'lib', 'houses.js').replace(/\\/g, '/');
   const extractorsPath = 'file://' + join(PROJECT_ROOT, 'lib', 'extractors', 'index.js').replace(/\\/g, '/');
   const universalPath = 'file://' + join(PROJECT_ROOT, 'lib', 'extractors', 'universal.js').replace(/\\/g, '/');
@@ -96,14 +68,11 @@ async function extractConfig() {
   const DOM_EXTRACTORS = extractorsMod.DOM_EXTRACTORS;
   const UNIVERSAL_DOM_EXTRACTOR = universalMod.UNIVERSAL_DOM_EXTRACTOR;
   const CACHE_TIERS = configMod.CACHE_TIERS || null;
-
-  // rewriteUrl is async in lib/houses.js — bind closure dependencies (HOUSE_ROOTS, HEADERS)
-  // by passing them through; the exported function reads HOUSE_ROOTS from its own module scope.
   const rewriteUrl = housesMod.rewriteUrl;
-
-  // SKIP_PUPPETEER lives inside lib/pipeline/scrape-stage.js as a private const.
-  // Mirror its current value here — keep in sync if the production list changes.
-  const SKIP_PUPPETEER = ['philliparnold', 'knightfrank'];
+  // SKIP_PUPPETEER lives in lib/config.js (a supabase-free module) so the
+  // audit never spins up Puppeteer for a house production has decided to skip,
+  // without dragging in the runtime Supabase client.
+  const SKIP_PUPPETEER = configMod.SKIP_PUPPETEER || [];
 
   if (!HOUSE_ROOTS) throw new Error('lib/houses.js does not export HOUSE_ROOTS');
   if (!DOM_EXTRACTORS) throw new Error('lib/extractors/index.js does not export DOM_EXTRACTORS');
