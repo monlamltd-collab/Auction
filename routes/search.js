@@ -810,16 +810,46 @@ export function invalidateAllLotsCache() {
 // when the response is the trivial-empty shape (no need to cache).
 async function buildAllLotsResponse({ isSignedIn, includePast }) {
   const emptyBody = { lots: [], sources: [], stripeEnabled: STRIPE_ENABLED };
-  if (!supabase) { log.warn('all-lots: !supabase — returning empty'); return { body: emptyBody, etag: null }; }
+  if (!supabase) return { body: emptyBody, etag: null };
 
   // ── Step 1: Get active catalogue URLs from cached_analyses ──
-    const { data: activeCatalogues, error: catErr } = await supabase
+    let { data: activeCatalogues, error: catErr } = await supabase
       .from('cached_analyses')
       .select('url, house, created_at')
       .gt('expires_at', new Date().toISOString());
 
     if (catErr) { log.error('all-lots: cached_analyses query failed', { error: catErr.message }); return { body: emptyBody, etag: null }; }
-    if (!activeCatalogues || activeCatalogues.length === 0) { log.warn('all-lots: no active catalogues — returning empty', { isSignedIn, includePast }); return { body: emptyBody, etag: null }; }
+
+    // Resilience fallback: if cached_analyses got wiped (admin clear-cache,
+    // deploy issue, etc) we'd otherwise serve a blank site to all users
+    // until the next 03:00 UK auto-analyse repopulates it. Instead, fall
+    // back to the lots table directly — serve every lot scraped in the last
+    // 14 days, and synthesize active-catalogue rows from their catalogue_url
+    // values so the rest of the pipeline (sources array, dedup, scoring) is
+    // unchanged. Auto-analyse will repopulate cached_analyses naturally.
+    let usedFallback = false;
+    let fallbackLotRows = null;
+    if (!activeCatalogues || activeCatalogues.length === 0) {
+      log.warn('all-lots: cached_analyses empty — using lots-table fallback (last 14d)', { isSignedIn, includePast });
+      const fbCutoff = new Date(Date.now() - 14 * 86400000).toISOString();
+      const { data: fbRows, error: fbErr } = await supabase
+        .from('lots').select(LOTS_SELECT)
+        .gte('last_seen_at', fbCutoff)
+        .limit(5000);
+      if (fbErr || !fbRows || fbRows.length === 0) {
+        log.error('all-lots: fallback query failed', { error: fbErr?.message, rows: fbRows?.length || 0 });
+        return { body: emptyBody, etag: null };
+      }
+      fallbackLotRows = fbRows;
+      const catMap = new Map();
+      for (const r of fbRows) {
+        if (r.catalogue_url && !catMap.has(r.catalogue_url)) {
+          catMap.set(r.catalogue_url, { url: r.catalogue_url, house: r.house, created_at: r.last_seen_at });
+        }
+      }
+      activeCatalogues = [...catMap.values()];
+      usedFallback = true;
+    }
 
     const activeUrls = [...new Set(activeCatalogues.map(c => normaliseUrl(c.url)))];
 
@@ -828,7 +858,8 @@ async function buildAllLotsResponse({ isSignedIn, includePast }) {
     const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
 
     const [lotResult, unsoldResult, calendarResult, skillsResult] = await Promise.all([
-      supabase.rpc('get_active_lots'),
+      // Skip the RPC if we already loaded lot rows in the fallback above
+      usedFallback ? Promise.resolve({ data: fallbackLotRows, error: null }) : supabase.rpc('get_active_lots'),
       supabase.from('lots').select(LOTS_SELECT)
         .in('status', ['unsold', 'withdrawn'])
         .gte('auction_date', unsoldCutoff)
