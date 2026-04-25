@@ -9,6 +9,9 @@ node_modules/
 # Audit script persistent state (auto-generated)
 scripts/audit/*.json
 
+# Visual audit reports (auto-generated, .gitkeep preserves dir)
+audits/visual-audit-*.md
+
 # Internal docs (not production)
 AGENT_ORGANISATION_COMPLETE.md
 LAUNCH-BRAINSTORM.md

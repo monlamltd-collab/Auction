@@ -217,6 +217,32 @@ router.post('/api/admin/firecrawl-probe', async (req, res) => {
   }
 });
 
+// Admin: run the "Human-Eye" visual auditor in-process. Returns findings
+// JSON (and optionally writes alerts). See scripts/visual-audit.mjs.
+router.post('/api/admin/visual-audit', async (req, res) => {
+  const adminToken = req.headers['x-admin-secret'] || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(adminToken, process.env.ADMIN_SECRET)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  try {
+    const { runAudit, writeAlerts } = await import('../scripts/visual-audit.mjs');
+    const writeAlertsFlag = req.body?.writeAlerts !== false; // default true
+    const result = await runAudit();
+    let alertsWritten = 0;
+    if (writeAlertsFlag) alertsWritten = await writeAlerts(result.findings);
+    res.json({
+      scannedRows: result.scannedRows,
+      ms: result.ms,
+      findingCount: result.findings.length,
+      findings: result.findings,
+      alertsWritten,
+    });
+  } catch (err) {
+    log.warn('Visual audit failed', { err: err.message });
+    res.status(500).json({ error: `Visual audit failed: ${err.message}` });
+  }
+});
+
 router.post('/api/admin/clear-cache', async (req, res) => {
   const adminToken = req.headers['x-admin-secret'] || '';
   if (!process.env.ADMIN_SECRET || !safeCompare(adminToken, process.env.ADMIN_SECRET)) {
