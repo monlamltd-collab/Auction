@@ -2036,6 +2036,14 @@ function _renderLotsToUI(d) {
     var _fp = ALL_LOTS.length + '|' + (ALL_LOTS[0]?.url || '') + '|' + (ALL_LOTS[ALL_LOTS.length-1]?.url || '') + '|' + (d.anonGated ? 'anon' : 'signed');
     if (window.__lastLotsFingerprint === _fp && document.getElementById('lotsGrid')) {
       LOTS = ALL_LOTS; // keep reference fresh
+      // ALL_LOTS carries fresh lot objects on every fetch (no shared identity
+      // with the previous LOTS), so the rendered cards' inline onclick
+      // handlers — `expandCard(LOTS[_idx])` — would resolve to objects
+      // without _idx set. expandCard would then silently bail at
+      // getElementById('lot-undefined') and clicks would do nothing.
+      // Re-assign _idx by LOTS position; fingerprint match guarantees the
+      // order matches what was rendered, so cached cards stay correct.
+      LOTS.forEach((l, i) => { l._idx = i; });
       return;
     }
     window.__lastLotsFingerprint = _fp;
