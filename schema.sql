@@ -338,3 +338,40 @@ BEGIN
   RETURN v_requests;
 END;
 $$;
+
+-- =============================================================================
+-- user_lot_actions — per-user likes / analysed / stacks flags for a lot
+-- user_deal_scenarios — saved deal-stacking scenarios per (user, lot)
+-- Lots are referenced by (house, lot_url); see migrations/2026-04-25-user-lot-data.sql
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS user_lot_actions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  house text NOT NULL,
+  lot_url text NOT NULL,
+  liked boolean NOT NULL DEFAULT false,
+  analysed boolean NOT NULL DEFAULT false,
+  stacks boolean NOT NULL DEFAULT false,
+  analysed_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (user_id, house, lot_url)
+);
+CREATE INDEX IF NOT EXISTS idx_user_lot_actions_user ON user_lot_actions(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_lot_actions_user_liked ON user_lot_actions(user_id) WHERE liked = true;
+CREATE INDEX IF NOT EXISTS idx_user_lot_actions_user_analysed ON user_lot_actions(user_id) WHERE analysed = true;
+
+CREATE TABLE IF NOT EXISTS user_deal_scenarios (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  house text NOT NULL,
+  lot_url text NOT NULL,
+  name text NOT NULL,
+  inputs jsonb NOT NULL,
+  results jsonb NOT NULL,
+  stacks boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_user_deal_scenarios_user_lot ON user_deal_scenarios(user_id, house, lot_url);
+CREATE INDEX IF NOT EXISTS idx_user_deal_scenarios_user_stacks ON user_deal_scenarios(user_id) WHERE stacks = true;

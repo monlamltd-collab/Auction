@@ -128,6 +128,7 @@ import calendarRouter from './routes/calendar.js';
 import analyseRouter from './routes/analyse.js';
 import searchRouter, { invalidateAllLotsCache, warmAllLotsCache } from './routes/search.js';
 import adminRouter from './routes/admin.js';
+import userDataRouter from './routes/user_data.js';
 import { sendWelcomeEmail } from './lib/email.js';
 
 // Wire up the new-user callback so validateUserFromReq can trigger welcome emails
@@ -141,6 +142,7 @@ app.use(calendarRouter);
 app.use(analyseRouter);
 app.use(searchRouter);
 app.use(adminRouter);
+app.use(userDataRouter);
 
 // ═══════════════════════════════════════════════════════════════
 // CATCH-ALL — must be AFTER all route registrations
