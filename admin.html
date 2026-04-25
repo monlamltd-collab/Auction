@@ -727,6 +727,20 @@ tr:hover td { background: rgba(255,255,255,.02); }
           </div>
         </div>
 
+        <!-- Reel + Hook pattern usage and engagement (last 30d) -->
+        <div class="section" style="margin-bottom:16px;">
+          <div class="section-header">
+            <h2>Reel + Hook patterns</h2>
+            <span class="badge" id="i-pattern-sample" style="font-size:.7rem;">--</span>
+          </div>
+          <div id="i-patterns" style="padding:14px 18px;font-size:.78rem;">
+            <em style="color:var(--text3)">Loading…</em>
+          </div>
+          <div class="note-small">
+            Usage = how many times each pattern was generated. Engagement = avg eng-rate / CTR for posts that have Facebook insights. Drop the patterns at the bottom of the engagement column once the sample is big enough.
+          </div>
+        </div>
+
       </div>
     </div><!-- /tab-intel -->
 
@@ -2344,6 +2358,71 @@ function renderIntel(d) {
   setSafeHTML('i-top-users', (u.topUsers || []).map(t => `
     <div class="intel-row"><span class="pri">${_esc(t.email)}</span><span class="num">${t.count} events</span></div>
   `).join('') || '<em style="color:var(--text3)">No active users in last 30d.</em>');
+
+  // ── REEL + HOOK PATTERNS ──
+  const pat = d.patterns || { usage: { hook: {}, cta: {} }, performance: { hook: [], cta: [] }, sampleSize: 0, measuredSize: 0 };
+  const sampleBadge = document.getElementById('i-pattern-sample');
+  if (sampleBadge) {
+    sampleBadge.textContent = pat.sampleSize === 0
+      ? 'no patterns yet'
+      : `${pat.sampleSize} posts · ${pat.measuredSize || 0} with metrics`;
+    sampleBadge.className = 'badge ' + (pat.sampleSize === 0 ? 'badge-amber' : 'badge-green');
+  }
+  // Friendly labels for the 10 hook + 8 CTA pattern codes (must match
+  // ContentBrain/lib/generate.js HOOK_PATTERNS_MENU + CTA_PATTERNS_MENU).
+  const HOOK_LABELS = {
+    '1': 'Specific-number flex', '2': 'Mistake-cost', '3': 'Contrarian truth',
+    '4': 'Curiosity gap', '5': 'Insider knowledge', '6': 'Time / urgency',
+    '7': 'Pattern reveal', '8': 'Scary stat → hope', '9': 'Status threat',
+    '10': 'Identity reveal'
+  };
+  const CTA_LABELS = {
+    'A': 'Capability + brand', 'B': 'Filter-led', 'C': 'Free + hidden cost',
+    'D': 'Comparison', 'E': 'Calendar / event', 'F': 'Question-led',
+    'G': 'Score + scoring', 'H': 'Cross-sell'
+  };
+  const renderPatternBlock = (title, labels, usage, perf) => {
+    const usageEntries = Object.entries(usage).sort((a, b) => Number(b[1]) - Number(a[1]));
+    const perfById = {};
+    for (const p of perf) perfById[p.id] = p;
+    const rows = usageEntries.map(([id, count]) => {
+      const p = perfById[id];
+      const eng = p ? `${p.avg_eng_rate}%` : '<span style="color:var(--text3)">no data</span>';
+      const ctr = p ? `${p.avg_ctr}%` : '';
+      const measured = p ? p.posts : 0;
+      return `<tr>
+        <td><strong>${_esc(id)}</strong> ${_esc(labels[id] || '?')}</td>
+        <td style="text-align:right;font-family:var(--font-mono);">${count}</td>
+        <td style="text-align:right;font-family:var(--font-mono);">${measured}</td>
+        <td style="text-align:right;font-family:var(--font-mono);">${eng}</td>
+        <td style="text-align:right;font-family:var(--font-mono);color:var(--text3);">${ctr}</td>
+      </tr>`;
+    }).join('');
+    return `
+      <div style="margin-bottom:14px;">
+        <div style="font-weight:600;font-size:.82rem;margin-bottom:6px;color:var(--text2);">${_esc(title)}</div>
+        ${usageEntries.length === 0
+          ? '<em style="color:var(--text3)">No patterns recorded yet — start when the next reel/hook generation lands.</em>'
+          : `<table style="width:100%;border-collapse:collapse;font-size:.78rem;">
+              <thead>
+                <tr style="color:var(--text3);">
+                  <th style="text-align:left;padding:4px 6px;">Pattern</th>
+                  <th style="text-align:right;padding:4px 6px;">Used</th>
+                  <th style="text-align:right;padding:4px 6px;">Measured</th>
+                  <th style="text-align:right;padding:4px 6px;">Avg eng</th>
+                  <th style="text-align:right;padding:4px 6px;">Avg CTR</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>`
+        }
+      </div>
+    `;
+  };
+  setSafeHTML('i-patterns',
+    renderPatternBlock('Hook patterns', HOOK_LABELS, pat.usage.hook || {}, pat.performance.hook || []) +
+    renderPatternBlock('CTA patterns', CTA_LABELS, pat.usage.cta || {}, pat.performance.cta || [])
+  );
 }
 
 // ── LOTS & HOUSES tab renderer ─────────────────────────────────

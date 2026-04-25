@@ -1677,12 +1677,93 @@ router.get('/api/admin/intel', async (req, res) => {
       ops: {
         openAlerts: alertsCountRes.count || 0,
       },
+      patterns: await _patternIntel(supabase, since30d).catch(err => {
+        log.warn('pattern intel failed', { error: err.message });
+        return { usage: { hook: {}, cta: {} }, performance: { hook: [], cta: [] }, sampleSize: 0 };
+      }),
     });
   } catch (e) {
     log.error('Intel endpoint error', { error: e.message, stack: e.stack });
     res.status(500).json({ error: 'Intel query failed', detail: e.message });
   }
 });
+
+// Pattern intel — usage counts + per-pattern engagement aggregates for the
+// reel + hook templates. Joins posts.meta (hook_pattern, cta_pattern) with
+// post_metrics to surface which patterns actually land. Engagement averages
+// are noisy for the first 30 days but stabilise once enough posts are out.
+async function _patternIntel(sb, sinceISO) {
+  // 1. Posts with patterns in last 30d (usage counts)
+  const { data: pPosts } = await sb
+    .from('posts')
+    .select('id, template_type, meta, copy_headline, status, created_at, fb_post_id')
+    .in('template_type', ['reel', 'hook'])
+    .gte('created_at', sinceISO)
+    .not('meta', 'is', null)
+    .limit(500);
+  const posts = (pPosts || []).filter(p => p.meta && (p.meta.hook_pattern || p.meta.cta_pattern));
+  const sampleSize = posts.length;
+
+  // 2. Metrics for any of those posts that have published + accumulated stats
+  const ids = posts.map(p => p.id);
+  let metricsMap = new Map();
+  if (ids.length) {
+    const { data: pm } = await sb
+      .from('post_metrics')
+      .select('post_id, reach, impressions, engagements, clicks, video_views, video_avg_watch_seconds')
+      .in('post_id', ids);
+    for (const m of (pm || [])) metricsMap.set(m.post_id, m);
+  }
+
+  // 3. Aggregate
+  const usage = { hook: {}, cta: {} };
+  const perfBuckets = { hook: {}, cta: {} };
+  for (const p of posts) {
+    const hp = p.meta.hook_pattern;
+    const cp = p.meta.cta_pattern;
+    if (hp) usage.hook[hp] = (usage.hook[hp] || 0) + 1;
+    if (cp) usage.cta[cp] = (usage.cta[cp] || 0) + 1;
+
+    const m = metricsMap.get(p.id);
+    if (!m) continue;
+    const stats = {
+      reach: m.reach || 0,
+      engagements: m.engagements || 0,
+      clicks: m.clicks || 0,
+      ctr: m.reach ? (m.clicks / m.reach) : 0,
+      eng_rate: m.reach ? (m.engagements / m.reach) : 0,
+    };
+    if (hp) {
+      perfBuckets.hook[hp] = perfBuckets.hook[hp] || { posts: 0, reach: 0, engagements: 0, clicks: 0, ctr_sum: 0, eng_sum: 0 };
+      const b = perfBuckets.hook[hp];
+      b.posts++; b.reach += stats.reach; b.engagements += stats.engagements; b.clicks += stats.clicks;
+      b.ctr_sum += stats.ctr; b.eng_sum += stats.eng_rate;
+    }
+    if (cp) {
+      perfBuckets.cta[cp] = perfBuckets.cta[cp] || { posts: 0, reach: 0, engagements: 0, clicks: 0, ctr_sum: 0, eng_sum: 0 };
+      const b = perfBuckets.cta[cp];
+      b.posts++; b.reach += stats.reach; b.engagements += stats.engagements; b.clicks += stats.clicks;
+      b.ctr_sum += stats.ctr; b.eng_sum += stats.eng_rate;
+    }
+  }
+
+  const finalise = (bucket) => Object.entries(bucket).map(([id, b]) => ({
+    id,
+    posts: b.posts,
+    reach: b.reach,
+    engagements: b.engagements,
+    clicks: b.clicks,
+    avg_ctr: +(b.ctr_sum / b.posts * 100).toFixed(2), // %
+    avg_eng_rate: +(b.eng_sum / b.posts * 100).toFixed(2), // %
+  })).sort((a, b) => b.avg_eng_rate - a.avg_eng_rate);
+
+  return {
+    usage,
+    performance: { hook: finalise(perfBuckets.hook), cta: finalise(perfBuckets.cta) },
+    sampleSize,
+    measuredSize: metricsMap.size,
+  };
+}
 
 // ── Stale alert cleanup — archive resolved/old pipeline_alerts ──
 // Currently 6,800+ unresolved alerts most of which are noise from temporary
