@@ -15,6 +15,7 @@ import {
   backfillImagesWithFirecrawl, backfillImagesWithPuppeteer,
   getFirecrawlStatus, getFcCreditsUsed, isFcCreditExhausted, isFcTemporarilyDown,
   FIRECRAWL_API_KEY, FIRECRAWL_SKIP, puppeteer, normaliseLotStatuses,
+  scrapeWithFirecrawl,
 } from '../lib/scraper.js';
 import {
   autoAnalyseAll, autoAnalyseOne, analyseLot,
@@ -181,6 +182,41 @@ router.post('/api/admin/backfill-images', async (req, res) => {
 });
 
 // Admin-only: clear cached analyses to force re-scrape
+// Admin-only diagnostic: fetch any URL via Firecrawl and return rawHtml +
+// markdown + image count. For self-healing extractor diagnostics — when
+// curl returns a JS-shell, this gives the real rendered DOM. Costs 1
+// Firecrawl credit per call.
+router.post('/api/admin/firecrawl-probe', async (req, res) => {
+  const adminToken = req.headers['x-admin-secret'] || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(adminToken, process.env.ADMIN_SECRET)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  const { url, waitFor, withMarkdown = false, withImages = true } = req.body || {};
+  if (!url || typeof url !== 'string') {
+    return res.status(400).json({ error: 'url (string) is required' });
+  }
+  try {
+    const formats = ['rawHtml'];
+    if (withImages) formats.push('images');
+    if (withMarkdown) formats.push('markdown');
+    const result = await scrapeWithFirecrawl(url, {
+      formats,
+      waitFor: typeof waitFor === 'number' ? waitFor : 2000,
+    });
+    res.json({
+      url: result.sourceURL || url,
+      htmlLength: (result.html || '').length,
+      html: result.html || '',
+      markdown: withMarkdown ? (result.markdown || '') : undefined,
+      images: withImages ? (result.images || []) : undefined,
+      imageCount: (result.images || []).length,
+    });
+  } catch (err) {
+    log.warn('Firecrawl probe failed', { url, err: err.message });
+    res.status(502).json({ error: `Firecrawl probe failed: ${err.message}` });
+  }
+});
+
 router.post('/api/admin/clear-cache', async (req, res) => {
   const adminToken = req.headers['x-admin-secret'] || '';
   if (!process.env.ADMIN_SECRET || !safeCompare(adminToken, process.env.ADMIN_SECRET)) {
