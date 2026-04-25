@@ -41,14 +41,17 @@ async function recomputeStacksFlag(user_id, house, lot_url) {
 }
 
 async function upsertAction(user_id, house, lot_url, patch) {
-  const now = new Date().toISOString();
+  // Important: do NOT include default values for liked/analysed/stacks here.
+  // Supabase's upsert() writes every column in the row on UPDATE, so adding
+  // `liked: false` would clobber an existing analysed=true / stacks=true row
+  // when toggling a different flag. The Postgres column defaults handle the
+  // INSERT case; the spread of `patch` is the only thing that should drive
+  // an UPDATE, plus the always-set updated_at touch.
   const row = {
     user_id, house, lot_url,
-    liked: false, analysed: false, stacks: false,
     ...patch,
-    updated_at: now,
+    updated_at: new Date().toISOString(),
   };
-  // Upsert on the unique constraint (user_id, house, lot_url)
   const { data, error } = await supabase
     .from('user_lot_actions')
     .upsert(row, { onConflict: 'user_id,house,lot_url' })
