@@ -793,37 +793,32 @@ Return the indices of the best matching lots. If few lots match well, that's fin
 // ═══════════════════════════════════════════════════════════════
 // In-memory response cache. The pipeline below takes 3-4s per call against
 // Supabase; without this cache, INITIAL_SESSION repeats and cross-tab opens
-// caused dozens of redundant runs. 60s TTL is short enough that fresh harness
-// updates appear quickly and long enough to absorb burst traffic.
+// caused dozens of redundant runs. Auction data refreshes once nightly via
+// autoAnalyseAll at 03:00 UK, so a long TTL is safe — invalidate manually
+// after scrape completion via invalidateAllLotsCache() if needed.
 const _allLotsCache = new Map(); // key = `${signed|anon}:${past|future}` → { body, etag, ts }
-const ALL_LOTS_CACHE_TTL_MS = 60 * 1000;
+const ALL_LOTS_CACHE_TTL_MS = 10 * 60 * 1000; // 10 min
 
-router.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
-  try {
-    if (!supabase) return res.json({ lots: [], sources: [], stripeEnabled: STRIPE_ENABLED });
+export function invalidateAllLotsCache() {
+  _allLotsCache.clear();
+  log.info('all-lots cache invalidated');
+}
 
-    const includePast = req.query.includePast === 'true';
-    const user = await validateUserFromReq(req);
+// Pure compute: builds the all-lots response payload + ETag for a given
+// (isSignedIn, includePast) pair. No HTTP concerns — used by both the route
+// handler and warmAllLotsCache(). Returns { body, etag } always; etag is null
+// when the response is the trivial-empty shape (no need to cache).
+async function buildAllLotsResponse({ isSignedIn, includePast }) {
+  const emptyBody = { lots: [], sources: [], stripeEnabled: STRIPE_ENABLED };
+  if (!supabase) return { body: emptyBody, etag: null };
 
-    // ── Fast path: serve from cache if fresh ──
-    const adminTokenEarly = req.headers['x-admin-secret'] || '';
-    const isAdminEarly = process.env.ADMIN_SECRET && safeCompare(adminTokenEarly, process.env.ADMIN_SECRET);
-    const isSignedInEarly = !!user || isAdminEarly;
-    const cacheKey = (isSignedInEarly ? 'signed' : 'anon') + ':' + (includePast ? 'past' : 'future');
-    const hit = _allLotsCache.get(cacheKey);
-    if (hit && (Date.now() - hit.ts) < ALL_LOTS_CACHE_TTL_MS) {
-      if (req.headers['if-none-match'] === hit.etag) return res.status(304).end();
-      res.set('ETag', hit.etag);
-      return res.json(hit.body);
-    }
-
-    // ── Step 1: Get active catalogue URLs from cached_analyses ──
+  // ── Step 1: Get active catalogue URLs from cached_analyses ──
     const { data: activeCatalogues } = await supabase
       .from('cached_analyses')
       .select('url, house, created_at')
       .gt('expires_at', new Date().toISOString());
 
-    if (!activeCatalogues || activeCatalogues.length === 0) return res.json({ lots: [], sources: [], stripeEnabled: STRIPE_ENABLED });
+    if (!activeCatalogues || activeCatalogues.length === 0) return { body: emptyBody, etag: null };
 
     const activeUrls = [...new Set(activeCatalogues.map(c => normaliseUrl(c.url)))];
 
@@ -846,11 +841,11 @@ router.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
 
     if (lotErr) {
       log.error('all-lots: get_active_lots RPC failed', { error: lotErr.message });
-      return res.json({ lots: [], sources: [], stripeEnabled: STRIPE_ENABLED });
+      return { body: emptyBody, etag: null };
     }
 
     if (!lotRows || lotRows.length === 0) {
-      return res.json({ lots: [], sources: [], stripeEnabled: STRIPE_ENABLED });
+      return { body: emptyBody, etag: null };
     }
 
     // Merge unsold lots, avoiding duplicates with active catalogue lots
@@ -1230,9 +1225,6 @@ router.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
 
     // Directory data: free for all, but AI analysis layer requires signup
     // Anonymous users see address/price/image/house but not scores/opps/risks/dealType
-    const adminToken = req.headers['x-admin-secret'] || '';
-    const isAdmin = process.env.ADMIN_SECRET && safeCompare(adminToken, process.env.ADMIN_SECRET);
-    const isSignedIn = !!user || isAdmin;
     if (!isSignedIn) {
       for (const lot of cleanLots) {
         lot.score = null;
@@ -1268,7 +1260,7 @@ router.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
       .update((isSignedIn ? 'signed:' : 'anon:') + cleanLots.length + ':' + cleanLots.map(l => l.url + (l.status || '')).join(','))
       .digest('hex') + '"';
 
-    const responseBody = {
+    const body = {
       lots: cleanLots,
       sources,
       houseMeta,
@@ -1286,14 +1278,52 @@ router.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
       }
     };
 
-    // Populate cache so subsequent requests hit the fast path above
-    _allLotsCache.set(cacheKey, { body: responseBody, etag, ts: Date.now() });
+    return { body, etag };
+}
 
-    if (req.headers['if-none-match'] === etag) {
-      return res.status(304).end();
+// Pre-warm the cache for both visitor variants. Called from server.js on boot
+// and on a periodic interval to keep the cache continuously hot — first
+// visitor never pays the ~3-4s pipeline cost.
+export async function warmAllLotsCache() {
+  for (const includePast of [false]) {
+    for (const isSignedIn of [false, true]) {
+      try {
+        const started = Date.now();
+        const { body, etag } = await buildAllLotsResponse({ isSignedIn, includePast });
+        if (etag) {
+          const key = (isSignedIn ? 'signed' : 'anon') + ':' + (includePast ? 'past' : 'future');
+          _allLotsCache.set(key, { body, etag, ts: Date.now() });
+          log.info('all-lots cache warmed', { key, ms: Date.now() - started, lots: body.lots?.length || 0 });
+        }
+      } catch (e) {
+        log.warn('all-lots cache warm failed', { isSignedIn, err: e.message });
+      }
     }
-    res.set('ETag', etag);
-    res.json(responseBody);
+  }
+}
+
+router.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
+  try {
+    const includePast = req.query.includePast === 'true';
+    const user = await validateUserFromReq(req);
+    const adminToken = req.headers['x-admin-secret'] || '';
+    const isAdmin = process.env.ADMIN_SECRET && safeCompare(adminToken, process.env.ADMIN_SECRET);
+    const isSignedIn = !!user || isAdmin;
+
+    const cacheKey = (isSignedIn ? 'signed' : 'anon') + ':' + (includePast ? 'past' : 'future');
+    const hit = _allLotsCache.get(cacheKey);
+    if (hit && (Date.now() - hit.ts) < ALL_LOTS_CACHE_TTL_MS) {
+      if (req.headers['if-none-match'] === hit.etag) return res.status(304).end();
+      res.set('ETag', hit.etag);
+      return res.json(hit.body);
+    }
+
+    const { body, etag } = await buildAllLotsResponse({ isSignedIn, includePast });
+    if (etag) _allLotsCache.set(cacheKey, { body, etag, ts: Date.now() });
+
+    if (etag && req.headers['if-none-match'] === etag) return res.status(304).end();
+    if (etag) res.set('ETag', etag);
+    res.json(body);
   } catch (e) {
     log.error('All lots error', { error: e.message });
     res.status(500).json({ error: 'Internal server error' });

@@ -126,7 +126,7 @@ import stripeRouter from './routes/stripe.js';
 import leadsRouter from './routes/leads.js';
 import calendarRouter from './routes/calendar.js';
 import analyseRouter from './routes/analyse.js';
-import searchRouter from './routes/search.js';
+import searchRouter, { invalidateAllLotsCache, warmAllLotsCache } from './routes/search.js';
 import adminRouter from './routes/admin.js';
 import { sendWelcomeEmail } from './lib/email.js';
 
@@ -345,6 +345,7 @@ function scheduleTick() {
     withTier('full', async () => {
       try { await watchAuctionCalendar(); } catch (e) { console.error('SCHEDULE watcher failed (non-fatal):', e.message); }
       await autoAnalyseAll();
+      invalidateAllLotsCache(); // fresh scrape data should appear immediately
     }).catch(e => console.error('SCHEDULE full pass failed:', e.message));
   }
 
@@ -373,5 +374,13 @@ app.listen(PORT, () => {
   setTimeout(bootDecision, 60000);
   // Cron-like ticker — every minute, decide what to run
   setInterval(scheduleTick, 60000);
+
+  // ── Pre-warm /api/all-lots cache for both anon + signed-in variants ──
+  // Without this, the first visitor after every boot/TTL-expiry pays the
+  // full ~3-4s pipeline cost. Daily auction updates + a 10-min cache TTL
+  // mean repeat-warming every 8 min keeps the cache continuously fresh.
+  // Calls the pipeline function directly — no internal HTTP, no Umami noise.
+  setTimeout(() => warmAllLotsCache().catch(e => console.warn('initial warm failed:', e.message)), 5000);
+  setInterval(() => warmAllLotsCache().catch(e => console.warn('periodic warm failed:', e.message)), 8 * 60 * 1000);
 });
 
