@@ -581,16 +581,29 @@ router.post('/api/smart-search', async (req, res) => {
     // Combine concept + soft clauses into one big OR
     const allOrClauses = [...conceptOrClauses, ...softOrClauses];
 
-    // ── Layer-1 query, with progressive filter relaxation ──
-    // A normal search like "freehold houses in london" should never return zero
-    // when there are matching lots in the database. We try the strict query
-    // first, then progressively drop filters until something matches:
-    //   tier 0 (strict)        — all hard filters + concept/soft ORs + free-text
-    //   tier 1 (no broadening) — drop concept/soft ORs + free-text (kept only as AI-rank signals)
-    //   tier 2 (location-only) — drop hard filters (price/beds/tenure/condition)
-    //   tier 3 (wildcard)      — drop everything except status (top-scored lots)
-    // The chosen tier is passed into the AI prompt so the report can tell the
-    // user when filters were broadened.
+    // Free-text terms become OR signals (broaden, not narrow). Hard textSearch
+    // would AND-eliminate any lot whose search_text doesn't contain the literal
+    // word — e.g. "blocks" excludes 35 of 36 Welsh title-split candidates that
+    // happen to say "5 units" or "freehold investment" instead. Layer 2 (Gemini)
+    // handles relevance ranking from the raw query, so free-text only needs to
+    // widen the candidate pool, not narrow it.
+    const freeTextOrs = (sqParsed.freeText || [])
+      .map(t => t.replace(/[^a-z0-9 -]/gi, '').trim())
+      .filter(t => t.length >= 3)
+      .map(t => `search_text.ilike.%${t}%`);
+
+    // ── Layer-1 query, with concept-aware progressive filter relaxation ──
+    // A normal search should never return zero when matching lots exist in the
+    // database. Try strict first, then drop filters tier-by-tier — but keep
+    // concept signals alive longer than free-text since they reflect explicit
+    // user intent (e.g. "title split", "HMO conversion").
+    //   tier 0 (strict)        — hard filters + location + concept/soft ORs + free-text ORs
+    //   tier 1 (no free-text)  — drop free-text (concept signals still ANDed)
+    //   tier 2 (no concepts)   — drop concept/soft ORs (last-resort for over-narrow concepts)
+    //   tier 3 (location-only) — drop hard filters (price/beds/tenure/condition)
+    //   tier 4 (wildcard)      — drop location too — top-scored lots in active catalogues
+    // The chosen tier is passed into the AI prompt so the report tells the user
+    // when concept criteria couldn't be matched.
     function buildLayer1Query(tier) {
       let q = supabase.from('lots').select(LOTS_SELECT).in('catalogue_url', activeUrls);
 
@@ -602,8 +615,8 @@ router.post('/api/smart-search', async (req, res) => {
       else if (effectiveSold === 'withdrawn') q = q.eq('status', 'withdrawn');
       else if (effectiveSold !== 'everything') q = q.or('status.eq.available,status.eq.unsold,status.is.null');
 
-      // Hard filters (tiers 0-1)
-      if (tier <= 1) {
+      // Hard filters (tiers 0-2)
+      if (tier <= 2) {
         if (sqParsed.filters.tenure) q = q.ilike('tenure', sqParsed.filters.tenure);
         if (sqParsed.filters.maxPrice) q = q.lte('price', sqParsed.filters.maxPrice);
         if (sqParsed.filters.minPrice) q = q.gte('price', sqParsed.filters.minPrice);
@@ -611,8 +624,8 @@ router.post('/api/smart-search', async (req, res) => {
         if (sqParsed.filters.condition) q = q.in('condition', sqParsed.filters.condition);
       }
 
-      // Location (tiers 0-2)
-      if (tier <= 2) {
+      // Location (tiers 0-3)
+      if (tier <= 3) {
         for (const loc of sqParsed.locationTerms) q = q.ilike('address', `%${loc}%`);
         if (sqParsed.filters.regionPostcodes) {
           const pcOr = sqParsed.filters.regionPostcodes.map(p => `postcode.ilike.${p}%`).join(',');
@@ -620,21 +633,23 @@ router.post('/api/smart-search', async (req, res) => {
         }
       }
 
-      // Concept + soft ORs (tier 0 only — these are interpretive guesses)
-      if (tier === 0 && allOrClauses.length > 0) q = q.or(allOrClauses.join(','));
-
-      // Free-text search (tier 0 only)
-      if (tier === 0 && sqParsed.freeText.length > 0) {
-        const tsTerms = sqParsed.freeText.map(t => t.replace(/[^a-z0-9]/gi, '')).filter(Boolean);
-        if (tsTerms.length) q = q.textSearch('search_vector', tsTerms.join(' | '));
+      // Concept + soft ORs (tiers 0-1 — explicit user intent, kept alive longer
+      // than free-text). At tier 0 we also fold in freeTextOrs so the candidate
+      // pool widens to lots that mention the user's keywords either way.
+      if (tier <= 1 && allOrClauses.length > 0) {
+        const tier0Ors = tier === 0 ? [...allOrClauses, ...freeTextOrs] : allOrClauses;
+        q = q.or(tier0Ors.join(','));
+      } else if (tier === 0 && freeTextOrs.length > 0) {
+        // No concept/soft signals but the user typed free-text — use it as the OR
+        q = q.or(freeTextOrs.join(','));
       }
 
       return q.order(sortCol, { ascending: false, nullsFirst: false }).limit(500);
     }
 
-    const TIER_LABELS = ['strict', 'broadened', 'location-only', 'all-active'];
+    const TIER_LABELS = ['strict', 'no-free-text', 'no-concepts', 'location-only', 'all-active'];
     let lotRows = null, lotErr = null, searchTier = 0;
-    for (let tier = 0; tier <= 3; tier++) {
+    for (let tier = 0; tier <= 4; tier++) {
       const { data, error } = await buildLayer1Query(tier);
       if (error) { lotErr = error; break; }
       if (data && data.length > 0) { lotRows = data; searchTier = tier; break; }
@@ -759,9 +774,18 @@ router.post('/api/smart-search', async (req, res) => {
 
     // If progressive relaxation kicked in, tell the AI so its report can
     // explain why the results aren't a perfect match for the user's query.
+    // The 5-tier ladder mirrors buildLayer1Query above.
+    const hasConceptIntent = sqParsed.concepts.length > 0
+      || !!sqParsed.softFilters.title_split
+      || !!sqParsed.softFilters.vacant
+      || !!sqParsed.softFilters.condition;
+
     const relaxationNote = searchTier === 0 ? '' :
-      searchTier === 1 ? '\nNOTE: No lots matched all the user\'s soft criteria. Filters were broadened to drop the concept/keyword matching — show closest available alternatives and acknowledge in the report.' :
-      searchTier === 2 ? '\nNOTE: No lots matched the user\'s exact constraints (price/beds/tenure/type). Filters were broadened to LOCATION ONLY — explicitly tell the user "no exact matches" and explain what the closest options are.' :
+      searchTier === 1 ? '\nNOTE: No lots matched all the user\'s free-text keywords (e.g. uncommon descriptive words). Filters were broadened to drop those — concept/intent matching is still active.' :
+      searchTier === 2 ? (hasConceptIntent
+        ? '\nIMPORTANT: The user explicitly asked for a SPECIFIC INVESTMENT TYPE (title-split, HMO conversion, multi-unit freehold, vacant, etc.) but NO LOTS in the dataset have those signals tagged. The lots below match the user\'s LOCATION/PRICE/STATUS only — they DO NOT match the concept criteria. Tell the user EXPLICITLY in the report\'s opening sentence: "No exact matches for [their concept] were found." Then rank these as "alternatives worth reviewing" rather than as "matching" lots.'
+        : '\nNOTE: No lots matched all the user\'s exact criteria. Filters were broadened — show closest available options and acknowledge in the report.') :
+      searchTier === 3 ? '\nNOTE: No lots matched the user\'s exact constraints (price/beds/tenure/type). Filters were broadened to LOCATION ONLY — explicitly tell the user "no exact matches in your area" and rank these as alternatives.' :
       '\nNOTE: No lots matched even the user\'s location. Showing top-scored available lots from the wider catalogue — explicitly tell the user "no matches in your area" and suggest reviewing these alternatives.';
 
     const responseText = await callAI(`You are a UK property investment analyst. A user has searched across auction lots and the database returned ${totalSearched} candidate lots (showing top ${geminiLots.length} by score).${soldInstruction}${filterNote}${conceptNote}${relaxationNote}
