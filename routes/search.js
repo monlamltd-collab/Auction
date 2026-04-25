@@ -317,6 +317,37 @@ setInterval(() => {
   }
 }, 10 * 60 * 1000);
 
+// Returns active catalogue rows from cached_analyses, or synthesises them
+// from recent lots if cached_analyses is empty (admin clear-cache, deploy
+// issue, etc). Same fallback pattern as buildAllLotsResponse() — keeps the
+// site usable when the cache pointer table gets wiped.
+async function getActiveCataloguesWithFallback() {
+  const { data, error } = await supabase
+    .from('cached_analyses')
+    .select('url, house, created_at')
+    .gt('expires_at', new Date().toISOString());
+  if (error) return { rows: null, error, fromFallback: false };
+  if (data && data.length > 0) return { rows: data, error: null, fromFallback: false };
+
+  // Fallback: derive distinct catalogue_urls from lots seen in the last 14 days
+  const fbCutoff = new Date(Date.now() - 14 * 86400000).toISOString();
+  const { data: fbRows, error: fbErr } = await supabase
+    .from('lots')
+    .select('catalogue_url, house, last_seen_at')
+    .gte('last_seen_at', fbCutoff)
+    .not('catalogue_url', 'is', null)
+    .limit(10000);
+  if (fbErr || !fbRows || fbRows.length === 0) return { rows: null, error: fbErr, fromFallback: true };
+  const seen = new Map();
+  for (const r of fbRows) {
+    if (!seen.has(r.catalogue_url) || r.last_seen_at > seen.get(r.catalogue_url).created_at) {
+      seen.set(r.catalogue_url, { url: r.catalogue_url, house: r.house, created_at: r.last_seen_at });
+    }
+  }
+  log.warn('cached_analyses empty — synthesised active catalogues from lots table', { synthesised: seen.size });
+  return { rows: [...seen.values()], error: null, fromFallback: true };
+}
+
 router.post('/api/smart-search', async (req, res) => {
   const { query, soldFilter } = req.body || {};
   if (!query) return res.status(400).json({ error: 'Missing search query' });
@@ -395,10 +426,8 @@ router.post('/api/smart-search', async (req, res) => {
   if (presetFilter) {
     try {
       // Query lots table directly — get all lots from active catalogues
-      const { data: activeCatalogues } = await supabase
-        .from('cached_analyses')
-        .select('house, url')
-        .gt('expires_at', new Date().toISOString());
+      // (with fallback if cached_analyses is empty)
+      const { rows: activeCatalogues } = await getActiveCataloguesWithFallback();
 
       if (!activeCatalogues || activeCatalogues.length === 0) {
         await incrementSearchCounter();
@@ -476,11 +505,8 @@ router.post('/api/smart-search', async (req, res) => {
     const sqParsed = parseSmartSearchQuery(query);
     log.info('smart-search parsed', sqParsed);
 
-    // ── Get active catalogue URLs for freshness gate ──
-    const { data: activeCatalogues } = await supabase
-      .from('cached_analyses')
-      .select('url, house')
-      .gt('expires_at', new Date().toISOString());
+    // ── Get active catalogue URLs for freshness gate (with fallback) ──
+    const { rows: activeCatalogues } = await getActiveCataloguesWithFallback();
 
     if (!activeCatalogues || activeCatalogues.length === 0) {
       await incrementSearchCounter();
