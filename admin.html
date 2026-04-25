@@ -279,7 +279,19 @@ tr:hover td { background: rgba(255,255,255,.02); }
     <!-- Daily Changelog -->
     <div class="daily-changelog" id="daily-changelog">Loading snapshot comparison...</div>
 
-    <!-- Pipeline Alerts -->
+    <!-- ZONE A — STUFF THAT NEEDS YOU                              -->
+    <!-- Attention Required first (real blockers), then Pipeline    -->
+    <!-- Alerts (now noise-collapsed), then Broken Extractors.      -->
+    <!-- Attention Required -->
+    <div class="attn-section" id="attentionSection">
+      <div class="attn-header">
+        <h2>Attention Required</h2>
+        <span class="badge" id="attn-badge">Loading...</span>
+      </div>
+      <div id="attn-body"><div class="loading"><span class="spinner"></span> Checking...</div></div>
+    </div>
+
+    <!-- Pipeline Alerts (fresh-only by default; stale collapsed)   -->
     <div class="section" id="alertsSection">
       <div class="section-header">
         <h2>Pipeline Alerts</h2>
@@ -304,15 +316,6 @@ tr:hover td { background: rgba(255,255,255,.02); }
       </div>
     </div>
 
-    <!-- Attention Required -->
-    <div class="attn-section" id="attentionSection">
-      <div class="attn-header">
-        <h2>Attention Required</h2>
-        <span class="badge" id="attn-badge">Loading...</span>
-      </div>
-      <div id="attn-body"><div class="loading"><span class="spinner"></span> Checking...</div></div>
-    </div>
-
     <!-- House Health / Freshness (hidden on overview, used by health tab) -->
     <div class="section" id="freshnessSection" style="display:none;">
       <div class="section-header">
@@ -335,14 +338,15 @@ tr:hover td { background: rgba(255,255,255,.02); }
       </div>
     </div>
 
-    <!-- Top Stats -->
-    <div class="stats-grid" id="top-stats">
-      <div class="stat-card" title="Number of auction houses with fresh (non-expired) cached data currently being served to users"><div class="stat-label">Houses Live</div><div class="stat-value green" id="s-houses">-</div><div class="stat-sub" id="s-houses-sub"></div></div>
-      <div class="stat-card" title="Total number of individual auction lots currently held in cache across all houses"><div class="stat-label">Total Lots</div><div class="stat-value" id="s-lots">-</div><div class="stat-sub" id="s-lots-sub"></div></div>
-      <div class="stat-card" title="Number of lots with a guide price under £100,000 — the primary budget filter for investors"><div class="stat-label">Under 100k</div><div class="stat-value blue" id="s-under100k">-</div></div>
-      <div class="stat-card" title="Average estimated gross yield across all lots that have yield data. Calculated from guide price and rental estimates"><div class="stat-label">Avg Yield</div><div class="stat-value green" id="s-yield">-</div></div>
-      <div class="stat-card" title="Unique visitors to the site in the last 24 hours. Sub-count shows total events (searches, analyses, leads)"><div class="stat-label">Users (24h)</div><div class="stat-value violet" id="s-users" style="color:var(--violet)">-</div><div class="stat-sub" id="s-users-sub"></div></div>
-      <div class="stat-card" title="Total registered users via Supabase authentication"><div class="stat-label">Total Users</div><div class="stat-value" id="s-total-users">-</div><div class="stat-sub" id="s-total-users-sub"></div></div>
+    <!-- Top Stats — kept in DOM (other code writes to these IDs) but hidden.
+         Same metrics now live in the Intel + Lots & Houses tabs in richer form. -->
+    <div class="stats-grid" id="top-stats" style="display:none;">
+      <div class="stat-card"><div class="stat-label">Houses Live</div><div class="stat-value green" id="s-houses">-</div><div class="stat-sub" id="s-houses-sub"></div></div>
+      <div class="stat-card"><div class="stat-label">Total Lots</div><div class="stat-value" id="s-lots">-</div><div class="stat-sub" id="s-lots-sub"></div></div>
+      <div class="stat-card"><div class="stat-label">Under 100k</div><div class="stat-value blue" id="s-under100k">-</div></div>
+      <div class="stat-card"><div class="stat-label">Avg Yield</div><div class="stat-value green" id="s-yield">-</div></div>
+      <div class="stat-card"><div class="stat-label">Users (24h)</div><div class="stat-value violet" id="s-users" style="color:var(--violet)">-</div><div class="stat-sub" id="s-users-sub"></div></div>
+      <div class="stat-card"><div class="stat-label">Total Users</div><div class="stat-value" id="s-total-users">-</div><div class="stat-sub" id="s-total-users-sub"></div></div>
     </div>
 
     <!-- Scraping Engine Status -->
@@ -384,34 +388,39 @@ tr:hover td { background: rgba(255,255,255,.02); }
     </div>
 
     <div class="two-col">
-      <!-- Houses Table -->
+      <!-- Houses Table — collapsed by default. The Lots & Houses tab has a
+           cleaner read-only league view; this one stays here for the per-row
+           Re-scrape buttons (the manual-action use case). -->
       <div class="section" style="grid-column: 1 / -1;">
-        <div class="section-header">
-          <h2 title="All auction houses with cached lot data. Sorted by lot count. Stale houses have expired cache and will be re-scraped on the next cycle">Cached Houses</h2>
-          <span class="badge badge-green" id="houses-badge">-</span>
-        </div>
-        <div style="overflow-x:auto;">
-          <table>
-            <thead>
-              <tr>
-                <th title="Fresh = cached data is still valid. Stale = cache has expired and data will be re-scraped on the next analysis cycle">Status</th>
-                <th title="Auction house name (slug identifier used internally)">House</th>
-                <th title="Total number of individual lots extracted from this house's catalogue">Lots</th>
-                <th title="Percentage of lots that have an image URL. Low coverage may indicate broken image extraction or lazy-loading issues">Imgs %</th>
-                <th title="Number of lots flagged as high-scoring investment opportunities by the scoring engine">Top Picks</th>
-                <th title="Average estimated gross yield across lots from this house that have yield data">Yield</th>
-                <th title="Full extraction pipeline: Fetch → Extract">Pipeline</th>
-                <th title="How long ago this house's data was last scraped and cached">Last Scrape</th>
-                <th title="Next upcoming auction date for this house from the calendar">Next Auction</th>
-                <th title="Time until the cached data expires">Cache Expires</th>
-                <th title="Manually trigger a rescrape for this house">Actions</th>
-              </tr>
-            </thead>
-            <tbody id="houses-tbody">
-              <tr><td colspan="11" class="loading"><span class="spinner"></span> Loading...</td></tr>
-            </tbody>
-          </table>
-        </div>
+        <details>
+          <summary style="padding:14px 18px;font-size:.88rem;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:8px;">
+            Cached Houses (per-house re-scrape actions)
+            <span class="badge badge-green" id="houses-badge">-</span>
+            <small style="margin-left:auto;color:var(--text3);font-weight:normal;">Read-only summary in the Lots &amp; Houses tab</small>
+          </summary>
+          <div style="overflow-x:auto;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Status</th>
+                  <th>House</th>
+                  <th>Lots</th>
+                  <th>Imgs %</th>
+                  <th>Top Picks</th>
+                  <th>Yield</th>
+                  <th>Pipeline</th>
+                  <th>Last Scrape</th>
+                  <th>Next Auction</th>
+                  <th>Cache Expires</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="houses-tbody">
+                <tr><td colspan="11" class="loading"><span class="spinner"></span> Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </details>
       </div>
     </div>
 
@@ -912,10 +921,21 @@ async function loadAlerts() {
   if (data.error) return;
   const { active, recent } = data;
 
+  // Split fresh (last 24h) vs stale — the bulk of noise is repeat-offender
+  // houses that have been failing for days. Surface only fresh by default
+  // and stash the stale count + a one-click cleanup behind a collapsed view.
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+  const fresh = active.filter(a => new Date(a.created_at).getTime() >= cutoff);
+  const stale = active.filter(a => new Date(a.created_at).getTime() < cutoff);
+
   const badge = document.getElementById('alert-count-badge');
-  if (active.length > 0) {
-    badge.textContent = active.length + ' active';
+  if (fresh.length > 0) {
+    badge.textContent = fresh.length + ' fresh';
     badge.className = 'badge badge-red';
+    badge.style.display = '';
+  } else if (stale.length > 0) {
+    badge.textContent = 'Stale only';
+    badge.className = 'badge badge-amber';
     badge.style.display = '';
   } else {
     badge.textContent = 'All clear';
@@ -923,24 +943,55 @@ async function loadAlerts() {
     badge.style.display = '';
   }
 
-  document.getElementById('activeAlerts').innerHTML = active.length
-    ? active.map(a => `
+  // Fresh alerts list
+  let freshHtml = fresh.length
+    ? fresh.map(a => `
       <div class="alert-card alert-${esc(a.severity)}">
         <span class="alert-severity">${a.severity === 'error' ? '\u{1F534}' : '\u{1F7E1}'}</span>
         <strong>${esc(a.house || 'System')}</strong> ${esc(a.message)}
         <small>${timeAgo(a.created_at)}</small>
       </div>
     `).join('')
-    : '<div class="no-alerts">No active alerts</div>';
+    : '<div class="no-alerts">No fresh alerts in the last 24h</div>';
 
-  document.getElementById('recentAlerts').innerHTML = recent.length
+  // Roll-up of stale alerts: group by house + show "X houses with Y total alerts"
+  if (stale.length > 0) {
+    const byHouse = {};
+    for (const a of stale) {
+      const k = a.house || 'System';
+      byHouse[k] = (byHouse[k] || 0) + 1;
+    }
+    const sortedHouses = Object.entries(byHouse).sort((a, b) => b[1] - a[1]);
+    const houseSummary = sortedHouses.slice(0, 5).map(([h, n]) => esc(h) + ' (' + n + ')').join(', ');
+    freshHtml += `
+      <details style="margin-top:6px;border-top:1px dashed rgba(255,255,255,.08)">
+        <summary style="padding:10px 18px;font-size:.78rem;color:var(--text3);cursor:pointer;display:flex;align-items:center;gap:8px;">
+          <span>${stale.length} older alert${stale.length === 1 ? '' : 's'} from ${sortedHouses.length} house${sortedHouses.length === 1 ? '' : 's'}</span>
+          <span style="color:var(--text2);font-size:.72rem;">${houseSummary}${sortedHouses.length > 5 ? '…' : ''}</span>
+          <button class="topbar-btn" style="margin-left:auto;font-size:.72rem;padding:4px 10px;" onclick="event.preventDefault();event.stopPropagation();archiveStaleAlerts()" title="Bulk-resolve all unresolved alerts older than N days">Archive…</button>
+        </summary>
+        <div style="max-height:300px;overflow-y:auto;">
+          ${stale.map(a => `
+            <div class="alert-card alert-${esc(a.severity)}" style="opacity:0.6">
+              <span class="alert-severity">${a.severity === 'error' ? '\u{1F534}' : '\u{1F7E1}'}</span>
+              <strong>${esc(a.house || 'System')}</strong> ${esc(a.message)}
+              <small>${timeAgo(a.created_at)}</small>
+            </div>
+          `).join('')}
+        </div>
+      </details>
+    `;
+  }
+  setSafeHTML('activeAlerts', freshHtml);
+
+  setSafeHTML('recentAlerts', recent.length
     ? recent.map(a => `
       <div class="alert-card alert-resolved">
         <strong>${esc(a.house || 'System')}</strong> ${esc(a.message)}
         <small>Resolved ${timeAgo(a.resolved_at)}</small>
       </div>
     `).join('')
-    : '<div class="no-alerts">No recently resolved alerts</div>';
+    : '<div class="no-alerts">No recently resolved alerts</div>');
 }
 
 // ── House Health / Freshness ──
@@ -2469,13 +2520,79 @@ let _opsHealthLoaded = false;
 async function loadOpsHealth() {
   try {
     const resp = await fetch(API + '/api/admin/system-health', { headers: { 'x-admin-secret': SECRET } });
-    if (!resp.ok) return;
+    if (!resp.ok) {
+      setSafeHTML('broken-extractors-list', '<em style="color:var(--text3)">Failed to load (' + resp.status + ').</em>');
+      return;
+    }
     const data = await resp.json();
     _opsHealthLoaded = true;
     renderBrokenExtractors(data.brokenExtractors || []);
     renderAICosts(data.aiCosts || {});
   } catch (err) {
     console.warn('Failed to load system health:', err.message);
+    setSafeHTML('broken-extractors-list', '<em style="color:var(--text3)">Failed to load: ' + _esc(err.message) + '</em>');
+  }
+}
+
+// Both renderers were previously called but never defined — Broken Extractors
+// stayed at "Loading…" forever and AI Costs showed a dash. Defining them now.
+function renderBrokenExtractors(list) {
+  const badge = document.getElementById('broken-badge');
+  if (badge) {
+    badge.textContent = list.length;
+    badge.className = 'badge ' + (list.length === 0 ? 'badge-green' : 'badge-amber');
+  }
+  if (list.length === 0) {
+    setSafeHTML('broken-extractors-list', '<div style="color:var(--green);font-size:.82rem;">All extractors healthy.</div>');
+    return;
+  }
+  setSafeHTML('broken-extractors-list',
+    list.map(b => {
+      // Item can be a plain string (house slug) or { house, reason, lastFailedAt }
+      if (typeof b === 'string') return '<div class="intel-row"><span class="pri">' + _esc(b) + '</span><span class="num"><small style="color:var(--text3)">DOM extractor failed</small></span></div>';
+      return '<div class="intel-row"><span class="pri"><strong>' + _esc(b.house || b.slug || '?') + '</strong>'
+        + (b.reason ? '<small>' + _esc(b.reason) + '</small>' : '')
+        + '</span><span class="num"><small style="color:var(--text3)">' + _esc(_fmtRelative(b.lastFailedAt || b.last_failed_at)) + '</small></span></div>';
+    }).join('')
+  );
+}
+
+function renderAICosts(c) {
+  const badge = document.getElementById('ai-cost-badge');
+  const amountEl = document.getElementById('ai-cost-amount');
+  const budgetEl = document.getElementById('ai-cost-budget');
+  const callsEl = document.getElementById('ai-cost-calls');
+  const barEl = document.getElementById('ai-cost-bar');
+  const warningEl = document.getElementById('ai-cost-warning');
+  const tbody = document.getElementById('ai-model-tbody');
+  if (!c || !amountEl) return;
+
+  const total = Number(c.dailyTotal || 0);
+  const budget = Number(c.budget || 0);
+  const pct = budget > 0 ? Math.min(100, (total / budget) * 100) : 0;
+  if (amountEl) amountEl.textContent = '$' + total.toFixed(4);
+  if (budgetEl) budgetEl.textContent = '$' + budget.toFixed(2);
+  if (callsEl) callsEl.textContent = (c.callCount || 0) + ' calls';
+  if (barEl) {
+    barEl.style.width = pct + '%';
+    barEl.style.background = pct >= 90 ? 'var(--red)' : pct >= 70 ? 'var(--amber)' : 'var(--green)';
+  }
+  if (badge) {
+    badge.textContent = c.overBudget ? 'Over budget' : (pct >= 70 ? Math.round(pct) + '%' : 'OK');
+    badge.className = 'badge ' + (c.overBudget ? 'badge-red' : pct >= 70 ? 'badge-amber' : 'badge-green');
+  }
+  if (warningEl) warningEl.style.display = c.overBudget ? 'block' : 'none';
+  if (tbody) {
+    const models = Object.entries(c.byModel || {}).sort((a, b) => b[1].cost - a[1].cost);
+    setSafeHTML(tbody, models.length === 0
+      ? '<tr><td colspan="5" style="padding:12px 18px;color:var(--text3);">No AI calls today yet.</td></tr>'
+      : models.map(([key, m]) => '<tr>'
+          + '<td>' + _esc(key) + '</td>'
+          + '<td class="mono">' + _fmtNum(m.calls) + '</td>'
+          + '<td class="mono">' + _fmtNum(m.tokens_in) + '</td>'
+          + '<td class="mono">' + _fmtNum(m.tokens_out) + '</td>'
+          + '<td class="mono">$' + (m.cost || 0).toFixed(4) + '</td>'
+          + '</tr>').join(''));
   }
 }
 
