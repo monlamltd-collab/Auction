@@ -14,6 +14,7 @@ process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'http://localhost.invalid
 process.env.SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || 'test-key';
 
 const { computeSnapshotHash, mergeFieldSources } = await import('../lib/pipeline/persist-lots.js');
+const { findAuctionDateInBullets, parseAuctionDateFromBullet } = await import('../lib/utils.js');
 
 let pass = 0;
 let fail = 0;
@@ -66,6 +67,55 @@ console.log('\nmergeFieldSources');
   const b = { tenure: 'os-places' };
   mergeFieldSources(a, b);
   assert(!('tenure' in a) && !('beds' in b), 'does not mutate either input');
+}
+
+// findAuctionDateInBullets — locks the contract for persist-lots.js's auction-date
+// resolution. Replaced an inline regex during the LT-* fix-up cycle; if a future
+// edit silently re-inlines the parser or drops the helper, these tests catch it.
+console.log('\nfindAuctionDateInBullets');
+{
+  // EIG timed-auction format — the exact format the prior inline regex handled.
+  const eigTimed = findAuctionDateInBullets(['Auction Ends: 22/04/2026']);
+  assert(eigTimed === '2026-04-22', 'EIG "Auction Ends: DD/MM/YYYY" → ISO YYYY-MM-DD');
+
+  // EIG white-label with full date — pattern 2. Year must be honoured even when
+  // `today` is later in the year (proves pattern 3's negative lookahead works
+  // and we don't fall through to "next May" resolution).
+  const fullDate = findAuctionDateInBullets(
+    ['20 May 2026 LIVE ONLINE AUCTION'],
+    '2026-09-01',
+  );
+  assert(fullDate === '2026-05-20', 'full-date bullet honours its year (no rollover to next year)');
+
+  // EIG white-label without year — pattern 3. Resolves to next occurrence ≥ today.
+  const noYearFuture = findAuctionDateInBullets(
+    ['20 May LIVE ONLINE AUCTION'],
+    '2026-01-15',
+  );
+  assert(noYearFuture === '2026-05-20', 'no-year bullet resolves to current-year May when still upcoming');
+
+  const noYearPast = findAuctionDateInBullets(
+    ['20 May LIVE ONLINE AUCTION'],
+    '2026-09-01',
+  );
+  assert(noYearPast === '2027-05-20', 'no-year bullet rolls to next year when current-year date is past');
+
+  // First-match-wins: bullets are usually ordered with the most relevant first.
+  const multi = findAuctionDateInBullets(
+    ['Reserve £150,000', 'Auction Ends: 03/06/2026', 'Vacant possession'],
+  );
+  assert(multi === '2026-06-03', 'returns first parseable date in the array');
+
+  // Defensive guards.
+  assert(findAuctionDateInBullets(null) === null, 'null bullets → null');
+  assert(findAuctionDateInBullets(undefined) === null, 'undefined bullets → null');
+  assert(findAuctionDateInBullets('not an array') === null, 'string bullets → null (non-array)');
+  assert(findAuctionDateInBullets([]) === null, 'empty array → null');
+  assert(findAuctionDateInBullets(['no date here at all']) === null, 'unmatched bullet → null');
+
+  // parseAuctionDateFromBullet directly — non-string input must not throw.
+  assert(parseAuctionDateFromBullet(null) === null, 'parseAuctionDateFromBullet(null) safe');
+  assert(parseAuctionDateFromBullet(123) === null, 'parseAuctionDateFromBullet(number) safe');
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
