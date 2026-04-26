@@ -169,8 +169,12 @@ const _indexHtmlCache = (() => {
 })();
 
 app.get('*', (req, res) => {
+  // 'no-store' (rather than just 'no-cache') prevents Edge/Chrome's
+  // back-forward cache from restoring a stale HTML+JS snapshot after a
+  // deploy. Cost is one ~80KB doc fetch per page visit — negligible.
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  res.set('Pragma', 'no-cache');
   if (_indexHtmlCache) {
-    res.set('Cache-Control', 'no-cache');
     res.type('html').send(_indexHtmlCache);
   } else {
     res.sendFile(join(__dirname, 'index.html'));
