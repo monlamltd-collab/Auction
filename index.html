@@ -3675,7 +3675,14 @@ function renderLots(){
   const ftown=($('fTown')?.value||'').trim();
   const ftownLower=ftown.toLowerCase();
 
-  const fradius=+($('fRadius')?.value||0);
+  // If the user typed a town/postcode that geocoded successfully, default to
+  // a sensible radius (10mi for towns, 5mi for postcodes) when they haven't
+  // picked one. Otherwise the literal address-includes fallback only matches
+  // ~15% of relevant lots — e.g. typing 'Bristol' missed 318 of 375 BS-postcode
+  // lots whose addresses don't contain the literal word 'Bristol'.
+  const _explicitRadius=+($('fRadius')?.value||0);
+  const _defaultRadius=(_searchCentre && (fpc || ftown)) ? (fpc ? 5 : 10) : 0;
+  const fradius=_explicitRadius || _defaultRadius;
   const _today=new Date().toISOString().slice(0,10);
   const _radiusSearch=!!((fpc||ftown)&&_searchCentre&&fradius);
   const _prefixSearch=!!(fpc&&!_radiusSearch);
