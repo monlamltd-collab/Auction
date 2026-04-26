@@ -37,7 +37,39 @@ lib/fundability.js
 └── Fundability Badge — maps lot data to BridgeMatch DealEssentials, calls /api/filter,
     caches results (1hr TTL, max 5000 entries). Exports: mapLotToDeal(), getFundabilityBadge(),
     enrichLotsWithFundability(), buildBridgematchUrl()
+
+lib/os-places.js
+└── OS Data Hub Places API client — UPRN + canonical address + lat/lng lookup
+    on every first-contact lot. 90-day Supabase cache (os_places_cache),
+    circuit breaker (3 fails → 10 min), 100ms rate limit. Exports: lookupAddress(),
+    lookupByUprn(), getCircuitStatus()
+
+lib/quality/field-source.js
+└── Per-field provenance helper — setField(lot, field, value, source) writes
+    the value AND stamps lot._fieldSources[field] = source. Persisted to the
+    lots.field_sources JSONB column. Sparse by design — only new code paths use it.
 ```
+
+### Phase A — First-Contact Maximisation (live)
+
+When a brand-new lot URL is detected (`!existingMap.has(url)` in persist-lots.js),
+the pipeline runs the kitchen-sink pass:
+- Forced detail-page fetch (overrides `never-deep` profile, runs even when the
+  catalogue card has every field — see `lib/scraper.js:1488`)
+- OS Data Hub Places API lookup → stamps UPRN, canonical address, lat/lng,
+  classification code with `'os-places'` provenance
+- Snapshot row written to `lot_history` for time-on-market analytics
+
+New schema additions (see `migrations/2026-04-26-*.sql` and `schema.sql:380+`):
+
+| Column / Table | Purpose |
+|---|---|
+| `lots.field_sources` JSONB | Per-field provenance — which source wrote each value |
+| `lots.uprn` TEXT | Stable UK property identifier from OS Places |
+| `lots.os_classification` TEXT | OS classification code (RD = residential, CR = retail, …) |
+| `lots.property_key` TEXT (gen) | `lower(postcode)\|lower(addr-line-1)` fingerprint for cross-house dedup |
+| `lot_history` table | Append-only price/status snapshots, idempotent via snapshot_hash |
+| `os_places_cache` table | 90-day TTL cache of OS Places API responses, address-keyed |
 
 ### Key Dependencies
 - `@google/generative-ai` — Gemini API for lot data extraction (free tier: 15 RPM, 1500 RPD)
@@ -275,6 +307,10 @@ These are computed from lot data fields: `price`, `estGrossYield`, `opportunitie
 | `SUPABASE_URL` | Supabase project URL (future auth) |
 | `SUPABASE_ANON_KEY` | Supabase anon key (future auth) |
 | `BRIDGEMATCH_API_URL` | BridgeMatch API base URL for fundability badge (default: `https://www.bridgematch.co.uk`) |
+| `OS_DATA_HUB_KEY` | OS Data Hub Places API key — stamps UPRN + canonical address + lat/lng on first-contact lots (free tier 100k req/month) |
+| `EPC_API_EMAIL` | EPC register API email (paired with `EPC_API_KEY`) |
+| `EPC_API_KEY` | EPC register API key — fuels EPC enrichment + ?bedrooms backfill |
+| `SUPABASE_SERVICE_KEY` | Service-role key for server-side DB writes (lots upsert, manifest, etc.) |
 
 ---
 

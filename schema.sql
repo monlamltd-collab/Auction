@@ -375,3 +375,72 @@ CREATE TABLE IF NOT EXISTS user_deal_scenarios (
 );
 CREATE INDEX IF NOT EXISTS idx_user_deal_scenarios_user_lot ON user_deal_scenarios(user_id, house, lot_url);
 CREATE INDEX IF NOT EXISTS idx_user_deal_scenarios_user_stacks ON user_deal_scenarios(user_id) WHERE stacks = true;
+
+-- =============================================================================
+-- 20. PHASE A: First-Contact Maximisation + Data-Richness
+-- =============================================================================
+-- Applied via:
+--   migrations/2026-04-26-first-contact-maximisation.sql
+--   migrations/2026-04-26-os-classification.sql
+--
+-- Adds per-field provenance, UPRN identity, append-only price/status snapshots,
+-- and a postcode-keyed cache of OS Places API responses. See plan in
+-- C:\Users\User\.claude\plans\streamed-greeting-fountain.md.
+
+ALTER TABLE lots ADD COLUMN IF NOT EXISTS field_sources JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE lots ADD COLUMN IF NOT EXISTS uprn TEXT;
+ALTER TABLE lots ADD COLUMN IF NOT EXISTS os_classification TEXT;
+ALTER TABLE lots
+  ADD COLUMN IF NOT EXISTS property_key TEXT
+  GENERATED ALWAYS AS (
+    lower(coalesce(postcode, '')) || '|' || lower(split_part(coalesce(address, ''), ',', 1))
+  ) STORED;
+
+CREATE INDEX IF NOT EXISTS idx_lots_uprn ON lots(uprn) WHERE uprn IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_lots_os_classification ON lots(os_classification) WHERE os_classification IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_lots_property_key ON lots(property_key) WHERE property_key <> '|';
+
+-- Append-only price/status snapshots — one row per (lot, scrape) only when
+-- price / status / sold_price / bullets_count / image_count differs from the
+-- previous snapshot. Idempotent via snapshot_hash. Drives time-on-market
+-- analytics and price-drop alerts.
+CREATE TABLE IF NOT EXISTS lot_history (
+  id BIGSERIAL PRIMARY KEY,
+  lot_id UUID REFERENCES lots(id) ON DELETE CASCADE,
+  scraped_at TIMESTAMPTZ DEFAULT NOW(),
+  price INTEGER,
+  price_text TEXT,
+  status TEXT,
+  sold_price INTEGER,
+  bullets_count INTEGER,
+  image_count INTEGER,
+  snapshot_hash TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_lot_history_lot ON lot_history(lot_id, scraped_at DESC);
+CREATE INDEX IF NOT EXISTS idx_lot_history_price_changes ON lot_history(lot_id, price) WHERE price IS NOT NULL;
+
+ALTER TABLE lot_history ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Service role full access" ON lot_history;
+CREATE POLICY "Service role full access" ON lot_history FOR ALL USING (true) WITH CHECK (true);
+
+-- 90-day-TTL cache of OS Data Hub Places API responses, address-keyed.
+-- UPRNs are extremely stable (only change on demolition/new build) so a long
+-- TTL keeps API usage well under the 100k/month free-tier ceiling.
+CREATE TABLE IF NOT EXISTS os_places_cache (
+  address_key TEXT PRIMARY KEY,
+  uprn TEXT,
+  full_address TEXT,
+  postcode TEXT,
+  classification_code TEXT,
+  lat NUMERIC(9,6),
+  lng NUMERIC(9,6),
+  match_score NUMERIC(4,2),
+  raw_response JSONB,
+  fetched_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_os_places_cache_uprn ON os_places_cache(uprn) WHERE uprn IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_os_places_cache_fetched ON os_places_cache(fetched_at);
+
+ALTER TABLE os_places_cache ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Service role full access" ON os_places_cache;
+CREATE POLICY "Service role full access" ON os_places_cache FOR ALL USING (true) WITH CHECK (true);
