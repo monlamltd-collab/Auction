@@ -2006,18 +2006,23 @@ function _openLotsDB(){
     req.onerror=()=>reject(req.error);
   });
 }
+// Bump this when the lot payload SHAPE changes (new fields like _lat/_lng)
+// so existing browser caches invalidate automatically instead of serving
+// records missing the new fields. The ETag in sessionStorage is also
+// keyed off this so 304 paths can't preserve stale shapes either.
+const _IDB_KEY = 'latest-v2';
 async function _getCachedLots(){
-  try{const db=await _openLotsDB();return new Promise(r=>{const tx=db.transaction(_IDB_STORE,'readonly');const req=tx.objectStore(_IDB_STORE).get('latest');req.onsuccess=()=>r(req.result||null);req.onerror=()=>r(null)})}catch{return null}
+  try{const db=await _openLotsDB();return new Promise(r=>{const tx=db.transaction(_IDB_STORE,'readonly');const req=tx.objectStore(_IDB_STORE).get(_IDB_KEY);req.onsuccess=()=>r(req.result||null);req.onerror=()=>r(null)})}catch{return null}
 }
 async function _setCachedLots(data){
-  try{const db=await _openLotsDB();const tx=db.transaction(_IDB_STORE,'readwrite');tx.objectStore(_IDB_STORE).put(data,'latest')}catch{}
+  try{const db=await _openLotsDB();const tx=db.transaction(_IDB_STORE,'readwrite');tx.objectStore(_IDB_STORE).put(data,_IDB_KEY)}catch{}
 }
 // Wipe IndexedDB lot cache + sessionStorage ETag. Called on auth-state change
 // so an anon payload (with `anonGated:true`) can't survive into a signed-in
 // session and vice versa. Without this, the server's ETag change alone isn't
 // enough — the stale IndexedDB copy is rendered before the network round-trip.
 async function _clearCachedLots(){
-  try{const db=await _openLotsDB();const tx=db.transaction(_IDB_STORE,'readwrite');tx.objectStore(_IDB_STORE).delete('latest')}catch{}
+  try{const db=await _openLotsDB();const tx=db.transaction(_IDB_STORE,'readwrite');const store=tx.objectStore(_IDB_STORE);store.delete(_IDB_KEY);store.delete('latest');/* old key — sweep on next auth event */}catch{}
   try{sessionStorage.removeItem('ab_lots_etag');sessionStorage.removeItem('ab_lots_ts');sessionStorage.removeItem('ab_render_key');}catch{}
 }
 
