@@ -66,6 +66,24 @@ const EXPECTED = {
     minLots: 5,
     samples: [],
   },
+  // EIG white-label CMS — both run on the same backend (Hollis Morgan & Maggs &
+  // Allen). The shared `eigwhitelabel` extractor (aliased) skips lots whose
+  // status overlay is SOLD/SALE AGREED/WITHDRAWN. POSTPONED lots are kept and
+  // tagged in the bullets. Snapshots captured 2026-04-26 — Hollis showed 50
+  // upcoming-or-postponed lots, Maggs 18 (mostly the May 2026 auction).
+  hollismorgan: {
+    minLots: 20,
+    samples: [
+      { lot: 1, addressContains: 'Mumbleys Lane', priceMin: 100000 },
+      { lot: 2, addressContains: 'Birchwood', priceMin: 100000 },
+    ],
+  },
+  maggsandallen: {
+    minLots: 10,
+    samples: [
+      { lot: 3, addressContains: 'Keys Avenue', priceMin: 100000 },
+    ],
+  },
 };
 
 // ─── Run tests ───
