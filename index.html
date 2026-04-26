@@ -5672,6 +5672,13 @@ function restoreFiltersFromURL(){
   const p=new URLSearchParams(window.location.search);
   for(const id of FILTER_PARAMS){const v=p.get(id);if(v&&$(id))$(id).value=v}
   updatePriceBtn();
+  // Trigger geocoding for any restored town/postcode — setting .value directly
+  // doesn't fire the oninput handler, so onLocationInput() never runs and the
+  // radius search falls through to literal address-includes (the 'Bristol
+  // returns 2 lots' bug). Run async after DOM is ready.
+  if((p.get('fTown')||p.get('fPostcode')) && typeof onLocationInput==='function'){
+    setTimeout(onLocationInput, 0);
+  }
 }
 function syncFiltersToURL(){
   const p=new URLSearchParams();
