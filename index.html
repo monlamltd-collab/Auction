@@ -3654,6 +3654,18 @@ function getFundabilityBadgeHtml(lot) {
 function renderLots(){
   if(!_pageFromGoPage) _currentPage=1;
   _pageFromGoPage=false;
+  // Defensive: if we're on the catalog browse view but LOTS has drifted out
+  // of sync with ALL_LOTS (e.g. residue from a prior smart-search or analysis
+  // session that didn't fully reset), pull it back to the full catalog so
+  // filters apply to every lot. Symptom: "Showing 0 of N" where N is far
+  // smaller than the catalog total — region/status filters then over-prune
+  // the stale subset and the user sees 0 results despite matching lots
+  // existing in the live data. Reproduced via a user screenshot showing
+  // "South West + Available only = 0 of 118" while the live data had 88
+  // matching SW available lots.
+  if(typeof ALL_LOTS!=='undefined'&&ALL_LOTS.length>LOTS.length&&!document.body.classList.contains('view-results')&&!SMART_RESULTS){
+    LOTS=ALL_LOTS;
+  }
   const fp=updateFinanceProfile();
   const aff=fp.aff;
   let lots=LOTS.slice();
