@@ -6,7 +6,7 @@ import { resolveEffectiveTier, getAISearchLimit, STRIPE_ENABLED, stripAIFields }
 import { callAI } from '../lib/ai-provider.js';
 import { dbRowToFrontendLot, LOTS_SELECT, logActivityEvent, getCreditExhausted, setCreditExhausted, getCreditExhaustedAt, setCreditExhaustedAt } from '../lib/analysis.js';
 import { enrichLotsWithFundability } from '../lib/fundability.js';
-import { normaliseUrl } from '../lib/utils.js';
+import { normaliseUrl, findAuctionDateInBullets } from '../lib/utils.js';
 import { FALLBACK_CALENDAR } from '../lib/calendar.js';
 import { normaliseLotStatuses, isValidImageUrl } from '../lib/scraper.js';
 import { createHash } from 'crypto';
@@ -1091,14 +1091,11 @@ async function buildAllLotsResponse({ isSignedIn, includePast }) {
       if (!urlDateMap[nu] || a.date < urlDateMap[nu]) urlDateMap[nu] = a.date;
     }
     for (const lot of lots) {
-      // Per-lot end date from bullets (EIG timed auctions) takes priority
-      let lotEndDate = null;
-      if (lot.bullets && Array.isArray(lot.bullets)) {
-        for (const b of lot.bullets) {
-          const m = b.match(/Auction\s*Ends?:\s*(\d{2})\/(\d{2})\/(\d{4})/i);
-          if (m) { lotEndDate = m[3] + '-' + m[2] + '-' + m[1]; break; }
-        }
-      }
+      // Per-lot end date from bullets takes priority. Handles both EIG
+      // timed-auction "Auction Ends: DD/MM/YYYY" and EIG white-label
+      // "20 May 2026 LIVE ONLINE AUCTION" / "MAY LIVE ONLINE AUCTION"
+      // formats — see lib/utils.js#parseAuctionDateFromBullet.
+      const lotEndDate = findAuctionDateInBullets(lot.bullets);
       if (lotEndDate) {
         lot._auctionDate = lotEndDate;
       } else if (!lot._auctionDate) {
