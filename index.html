@@ -3867,6 +3867,73 @@ function renderLots(){
     bannerEl.remove();
   }
 
+  // Location-discrepancy banner — explains "Bristol search returned 2 lots
+  // but there are clearly many more". Counts lots that match the location
+  // filter alone (ignoring status/date/lookahead) and surfaces the gap.
+  // Uses safe DOM methods (createElement + textContent) — placeLabel is
+  // user-controlled (postcode/town string) so we never feed it to innerHTML.
+  let locBanner=$('locationDiscrepancyBanner');
+  if((_radiusSearch||_townSearch||_prefixSearch) && LOTS.length){
+    let inLoc=0, inLocPast=0, inLocSold=0;
+    for(const l of LOTS){
+      let m=false;
+      if(_radiusSearch){
+        if(l._lat&&l._lng){ if(haversine(_searchCentre.lat,_searchCentre.lng,l._lat,l._lng)<=fradius) m=true; }
+        else if(fpc){ if((l.address||'').toUpperCase().includes(fpc)) m=true; }
+        else if(ftown){ if((l.address||'').toLowerCase().includes(ftownLower)) m=true; }
+      } else if(_prefixSearch){
+        if((l.address||'').toUpperCase().includes(fpc)) m=true;
+      } else if(_townSearch){
+        if((l.address||'').toLowerCase().includes(ftownLower)) m=true;
+      }
+      if(!m) continue;
+      inLoc++;
+      const ended=l._auctionDate&&l._auctionDate<_today;
+      if(ended) inLocPast++;
+      if(['sold','stc','withdrawn'].includes(l.status||'')) inLocSold++;
+    }
+    const hidden=Math.max(0,inLoc-lots.length);
+    const placeLabel=String(_searchCentre?.label || ftown || fpc || '');
+    const dismissKey='bm_dismiss_locgap_'+placeLabel.toLowerCase();
+    if(hidden>=5 && !sessionStorage.getItem(dismissKey)){
+      if(locBanner) locBanner.remove();
+      locBanner=document.createElement('div');
+      locBanner.id='locationDiscrepancyBanner';
+      locBanner.style.cssText='background:#e7f3ff;color:#1a3a5c;border:1px solid #2a5a8c;border-radius:8px;padding:10px 14px;margin:8px 0;font-size:.88rem;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap';
+
+      const msg=document.createElement('span');
+      const parts=[];
+      if(inLocPast>0) parts.push(inLocPast+' had auctions in the past');
+      if(inLocSold>0) parts.push(inLocSold+' already sold/STC/withdrawn');
+      const detail=parts.length?' — '+parts.join(', ')+'.':'.';
+      msg.appendChild(document.createTextNode('📍 '));
+      const b=document.createElement('b'); b.textContent=placeLabel; msg.appendChild(b);
+      msg.appendChild(document.createTextNode(': '+inLoc+' lots in this area, but only '+lots.length+' match your current filters'+detail));
+      locBanner.appendChild(msg);
+
+      const actions=document.createElement('span');
+      actions.style.cssText='display:flex;gap:8px;flex-wrap:wrap';
+      const showAllBtn=document.createElement('button');
+      showAllBtn.textContent='Show all '+inLoc+' lots';
+      showAllBtn.style.cssText='background:var(--accent,#2a5a8c);color:white;border:none;padding:6px 12px;border-radius:6px;font-size:.82rem;font-weight:600;cursor:pointer';
+      showAllBtn.onclick=function(){ const s=$('fSoldTop'); if(s) s.value='everything'; const lk=$('fLookahead'); if(lk) lk.value='all'; debouncedRender(); };
+      actions.appendChild(showAllBtn);
+      const dismissBtn=document.createElement('button');
+      dismissBtn.textContent='✕';
+      dismissBtn.title='Dismiss';
+      dismissBtn.style.cssText='background:none;border:none;cursor:pointer;font-size:1.1rem;color:#1a3a5c;padding:2px 6px';
+      dismissBtn.onclick=function(){ try{sessionStorage.setItem(dismissKey,'1')}catch{} locBanner.remove(); };
+      actions.appendChild(dismissBtn);
+      locBanner.appendChild(actions);
+
+      const sr=$('statsRow'); if(sr) sr.parentNode.insertBefore(locBanner, sr.nextSibling);
+    } else if(locBanner) {
+      locBanner.remove();
+    }
+  } else if(locBanner) {
+    locBanner.remove();
+  }
+
   // Update filter count
   const filterCountEl=$('filterBarCount');
   if(filterCountEl) filterCountEl.textContent='Showing '+lots.length.toLocaleString()+' of '+LOTS.length.toLocaleString()+' lots';
