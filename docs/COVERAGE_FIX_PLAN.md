@@ -1,8 +1,41 @@
 # Coverage Fix Plan — Image / Price / Address / Comps
 
-**Status:** Planning. Authored 2026-04-26 from a code review focused on data enrichment and accuracy. Next session: execute fixes #1 and #2 below in a single PR.
+**Status (2026-04-27):** Rollout items **#1 + #2 SHIPPED** in commit `b2f79b7`. Baseline captured at `coverage-baseline.json`. The post-deploy data invalidates several premises of this document — see **"Post-deploy reality check"** below before working on items #3–#8.
 
-**Goal:** Move the auction pipeline towards 100% image, price, and address coverage, plus real local comps for deal stacking.
+**Original goal:** Move the auction pipeline towards 100% image, price, and address coverage, plus real local comps for deal stacking.
+
+---
+
+## Post-deploy reality check (added 2026-04-27)
+
+Coverage measured against 10,366 lots in the live `lots` table:
+
+| Field | Plan estimate | Actual | Real gap |
+|---|---|---|---|
+| `image_url` | "~80–90% real" | **96.5%** | Concentrated in 2 houses (`Charles Darrow` 17.6%, `landwood` 0%) — extractor bugs, not a generalised fix |
+| `price` | "~70–85% real" | **97.5%** | `edwardmellor` (79.2%) is the only top-volume gap |
+| `postcode` | (not estimated) | **83.9%** | `harmanhealy`, `edwardmellor`, `cliveemson`, `futureauctions` dominate the misses |
+| `uprn` | "~70–80%, drops to ~40–50% on land" | **13.3%** | **The real gap** — most houses sit at 0%. Fix #2's UPRN re-targeting + retry queue is the highest-leverage piece in this whole plan |
+| `epc_rating` | (not in plan) | **36.0%** | Underrated gap. Worth its own follow-up |
+| `flood_risk` | (not in plan) | **71.5%** | Modest gap |
+| `field_sources` non-empty | (not in plan) | **13.3%** | Exactly matches `uprn` count → provenance is currently only stamped by the OS Places path. Fix #6's catalogue-path stamping (live in `lib/pipeline/extractor.js`) should lift this on the next scrape cycle |
+
+**Bug uncovered by the baseline:** 196 retry-queue rows are `exhausted` (5/5 attempts) with `reason='circuit_open'`. The drain in `lib/pipeline/enrichment-wave.js` Pass 6 burned 5 attempts per row while the OS Places circuit breaker was tripped, instead of skipping. Filed as a follow-up — drain should call `getCircuitStatus()` from `lib/os-places.js` and bail without incrementing attempts when the breaker is open.
+
+**Headline takeaway:** The plan's "image/price coverage is the problem" framing was wrong. Image and price are already at 96–98%. The real gaps are UPRN (13%), EPC (36%), and a small handful of broken-extractor houses. Fixes #1+#2 still ship value (they unlock returning-lot UPRN recovery + dense provenance + retry infrastructure), but the next item should be sized against the real gaps, not the imagined ones.
+
+**Recommended next item (revises the rollout table below):**
+1. **Fix the retry-queue circuit_open bug** — small, blocks the UPRN gap-filler from making progress.
+2. **Rollout #4 (per-lot quality score + targeted alerts)** — empirically justified now that we know the gaps are house-concentrated, not pipeline-wide. SLA-style alerts will catch the next `Charles Darrow`-style extractor break automatically.
+3. **Investigate `Charles Darrow` + `landwood` image extractors** — a self-healing-harness task, not a fix from this plan.
+4. **Investigate `edwardmellor` postcode extractor** — same.
+5. **EPC coverage as its own plan** — 36% is too low to ignore but isn't addressed by anything in this document.
+
+Defer until the above land:
+- Rollout #3 (price normaliser): real gap is too small to prioritise.
+- Rollout #5–#8 (comps build): unrelated to coverage, ships independently when product calls for it.
+
+---
 
 ---
 

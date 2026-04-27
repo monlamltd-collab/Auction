@@ -1,0 +1,60 @@
+{
+  "captured_at": "2026-04-27T11:30:00Z",
+  "captured_by": "manual via Supabase MCP (env vars not available locally for coverage-report.mjs)",
+  "context": "Baseline taken AFTER coverage-fix code shipped (commit b2f79b7) but the code has only had partial scrape cycles since. Treat as 'shortly-after-deploy' state, not pure pre-deploy. Compare against future runs to measure ongoing drift.",
+  "totals": {
+    "total_lots": 10366,
+    "field_coverage": {
+      "image_url":     { "have": 10000, "missing":   366, "pct": 96.5 },
+      "price":         { "have": 10111, "missing":   255, "pct": 97.5 },
+      "postcode":      { "have":  8693, "missing":  1673, "pct": 83.9 },
+      "uprn":          { "have":  1374, "missing":  8992, "pct": 13.3 },
+      "epc_rating":    { "have":  3736, "missing":  6630, "pct": 36.0 },
+      "flood_risk":    { "have":  7408, "missing":  2958, "pct": 71.5 },
+      "enriched_at":   { "have":  8482, "missing":  1884, "pct": 81.8 },
+      "field_sources_non_empty": { "have": 1374, "missing": 8992, "pct": 13.3 }
+    }
+  },
+  "retry_queue": {
+    "open_under_5_attempts": 0,
+    "exhausted_at_5_attempts": 200,
+    "exhausted_breakdown": {
+      "uprn_circuit_open":  196,
+      "uprn_api_error":       4
+    },
+    "alert": "All 200 exhausted rows are uprn lookups, 196 of which exhausted via circuit_open. The OS Places circuit breaker tripped during a hygiene-wave drain and the queue burned 5 attempts × 196 rows without doing useful work. The drain should skip retries when osBreaker.isOpen() rather than counting them as failed attempts. Filed as follow-up."
+  },
+  "os_places_cache": {
+    "positive_entries": 2269,
+    "negative_entries": 0,
+    "note": "Zero negative cache entries means either no recent OS Places no_match returns, or the negative-cache write path hasn't executed yet (recently deployed). Recheck after the next full hygiene wave."
+  },
+  "top_houses_by_lot_volume": [
+    { "house": "paulfosh",            "lots": 1214, "pct_image": 100.0, "pct_price":  98.6, "pct_postcode":  99.3, "pct_uprn":  0.0, "pct_epc": 44.7 },
+    { "house": "auctionhouse",        "lots": 1167, "pct_image": 100.0, "pct_price":  98.6, "pct_postcode":  99.7, "pct_uprn":  0.0, "pct_epc": 48.8 },
+    { "house": "harmanhealy",         "lots": 1117, "pct_image": 100.0, "pct_price": 100.0, "pct_postcode":  38.7, "pct_uprn":  0.0, "pct_epc": 26.1 },
+    { "house": "firstforauctions",    "lots":  847, "pct_image": 100.0, "pct_price": 100.0, "pct_postcode":  99.9, "pct_uprn": 68.1, "pct_epc": 74.5 },
+    { "house": "tcpa",                "lots":  798, "pct_image": 100.0, "pct_price":  98.7, "pct_postcode":  99.7, "pct_uprn": 24.9, "pct_epc": 18.0 },
+    { "house": "hollismorgan",        "lots":  498, "pct_image": 100.0, "pct_price": 100.0, "pct_postcode": 100.0, "pct_uprn": 22.1, "pct_epc":  9.2 },
+    { "house": "savills",             "lots":  485, "pct_image": 100.0, "pct_price": 100.0, "pct_postcode": 100.0, "pct_uprn": 93.0, "pct_epc": 52.2 },
+    { "house": "auctionhouseuklondon","lots":  417, "pct_image": 100.0, "pct_price": 100.0, "pct_postcode": 100.0, "pct_uprn":  0.0, "pct_epc": 67.6 },
+    { "house": "auctionhousenational","lots":  269, "pct_image": 100.0, "pct_price": 100.0, "pct_postcode": 100.0, "pct_uprn":  0.0, "pct_epc": 72.1 },
+    { "house": "edwardmellor",        "lots":  265, "pct_image": 100.0, "pct_price":  79.2, "pct_postcode":   1.9, "pct_uprn":  1.1, "pct_epc":  1.5 },
+    { "house": "Charles Darrow",      "lots":  176, "pct_image":  17.6, "pct_price": 100.0, "pct_postcode":  96.6, "pct_uprn":  0.0, "pct_epc":  0.0 },
+    { "house": "landwood",            "lots":   93, "pct_image":   0.0, "pct_price": 100.0, "pct_postcode": 100.0, "pct_uprn":  0.0, "pct_epc":  0.0 }
+  ],
+  "observations": {
+    "image_coverage_already_high": "Aggregate 96.5% — the COVERAGE_FIX_PLAN's '~80-90%' estimate was off. Real outliers: Charles Darrow (17.6%), landwood (0%). Fix #1's value is concentrated on those two houses, not the whole pipeline.",
+    "price_coverage_already_high": "97.5% aggregate. Plan's '70-85%' estimate was off. Edward Mellor (79.2%) is the only top-volume house with a meaningful gap.",
+    "uprn_is_the_real_gap": "13.3% aggregate. Most houses sit at 0% — the OS Places API isn't being run on most houses (or runs are failing). Even Savills (best non-firstforauctions house at 93%) leaves room. Fix #2's UPRN re-targeting + retry queue is the highest-leverage fix in the entire plan.",
+    "epc_is_an_underrated_gap": "36% aggregate, not even mentioned as a problem in COVERAGE_FIX_PLAN.md. Savills and Auction House National are at 50-72% but most others are <30%. Worth a follow-up plan.",
+    "postcode_concentration": "harmanhealy (38.7%), edwardmellor (1.9%), futureauctions (0%), cliveemson (0%) — postcode-less houses dominate the missing rows. Fix #2's gap-filler (Pass 2 in runEnrichmentWave) should be sweeping these."
+  },
+  "follow_ups_uncovered_by_baseline": [
+    "Retry-queue drain needs to check osBreaker.isOpen() before attempting — currently burns 5 attempts per row when circuit is tripped.",
+    "Charles Darrow + landwood image extractors are broken (0-17% coverage on a pipeline that averages 100%). Investigate as part of self-healing harness, not fix-#1's general lift.",
+    "Edward Mellor is missing postcodes (1.9%) — likely an extractor bug not addressed by COVERAGE_FIX_PLAN.",
+    "Negative cache hasn't filled yet — recheck after the next 24h cycle to confirm the new write path is running.",
+    "field_sources_non_empty exactly matches uprn count (1374) — provenance stamping currently only runs through the OS Places path. Fix #6's dense provenance via stampSourceIfEmpty in lib/pipeline/extractor.js should bring this much higher on the next scrape cycle."
+  ]
+}
