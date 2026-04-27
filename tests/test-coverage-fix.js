@@ -13,7 +13,7 @@ process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'http://localhost.invalid
 process.env.SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || 'test-key';
 
 const { setField, setFieldIfEmpty, getFieldSources, stampSource, stampSourceIfEmpty } = await import('../lib/quality/field-source.js');
-const { mergeFieldSources } = await import('../lib/pipeline/persist-lots.js');
+const { mergeFieldSources, derivePriceStatus } = await import('../lib/pipeline/persist-lots.js');
 const { _internals, enqueueRetry, drainRetryQueue, markRetryDone } = await import('../lib/pipeline/retry-queue.js');
 const { computeLotQuality, computeBatchCoverage, ISSUE_CODES } = await import('../lib/quality/lot-quality.js');
 const { detectFieldRegressions, appendCoverageHistory, latestCoverage, _internals: regrInternals } = await import('../lib/pipeline/quality-regression.js');
@@ -368,6 +368,129 @@ console.log('\nappendCoverageHistory: ringbuffer of last 5');
   const inputBlob = { history: [{ scraped_at: 'x' }] };
   appendCoverageHistory(inputBlob, { scraped_at: 'y' });
   assert(inputBlob.history.length === 1, 'appendCoverageHistory does not mutate input');
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// price_status — structured pricing intent
+// ═══════════════════════════════════════════════════════════════════════
+
+console.log('\nderivePriceStatus: priority order + edge cases');
+{
+  // sold: status='sold' AND soldPrice present.
+  assert(derivePriceStatus({ status: 'sold', soldPrice: 285000 }) === 'sold',
+    'sold + soldPrice → sold');
+  // sold without soldPrice: not enough signal — falls through.
+  assert(derivePriceStatus({ status: 'sold' }) === 'unknown',
+    'sold WITHOUT soldPrice falls through to unknown (no price signal at all)');
+
+  // withdrawn: status only — sold_price irrelevant.
+  assert(derivePriceStatus({ status: 'withdrawn' }) === 'withdrawn',
+    'withdrawn status → withdrawn (regardless of price)');
+  // withdrawn beats POA when both signals present (priority).
+  assert(derivePriceStatus({ status: 'withdrawn', priceText: 'POA' }) === 'withdrawn',
+    'withdrawn beats poa (priority order)');
+
+  // POA detection — only when there is no price (a withhold, not a quote).
+  assert(derivePriceStatus({ priceText: 'POA' }) === 'poa', 'POA priceText → poa');
+  assert(derivePriceStatus({ priceText: 'Price on application' }) === 'poa',
+    '"Price on application" → poa (case insensitive)');
+  // POA with a real price: the price wins, status is guide.
+  assert(derivePriceStatus({ price: 250000, priceText: 'POA' }) === 'guide',
+    'POA priceText with real price → guide (price beats text)');
+
+  // TBA family.
+  assert(derivePriceStatus({ priceText: 'TBA' }) === 'tba', 'TBA → tba');
+  assert(derivePriceStatus({ priceText: 'TBC' }) === 'tba', 'TBC → tba');
+  assert(derivePriceStatus({ priceText: 'To be advised' }) === 'tba', 'To be advised → tba');
+
+  // starting_bid — applies even when price is set (it's the only published number).
+  assert(derivePriceStatus({ price: 50000, priceText: 'Starting bid' }) === 'starting_bid',
+    'starting bid signal wins over guide even when price present');
+  assert(derivePriceStatus({ priceText: 'Opening bid £50k' }) === 'starting_bid',
+    'opening bid → starting_bid');
+
+  // guide: the common case.
+  assert(derivePriceStatus({ price: 195000 }) === 'guide', 'price only → guide');
+
+  // unknown: genuinely missing.
+  assert(derivePriceStatus({}) === 'unknown', 'empty lot → unknown');
+  assert(derivePriceStatus(null) === 'unknown', 'null lot → unknown (defensive)');
+  assert(derivePriceStatus({ price: 0 }) === 'unknown', 'zero price → unknown (not guide)');
+}
+
+console.log('\ncomputeLotQuality: priceStatus-aware scoring');
+{
+  // POA via structured status — half-credit, distinct issue code, no false 'no_price'.
+  const poaLot = { priceStatus: 'poa', address: '12 High St', postcode: 'SW1A 1AA' };
+  const poaQ = computeLotQuality(poaLot);
+  assert(poaQ.issues.includes('poa_price'), 'priceStatus=poa → poa_price code');
+  assert(!poaQ.issues.includes('no_price'), 'priceStatus=poa NEVER also gets no_price');
+
+  // TBA gets its own code, distinct from POA.
+  const tbaQ = computeLotQuality({ priceStatus: 'tba', address: '12 High St' });
+  assert(tbaQ.issues.includes('tba_price') && !tbaQ.issues.includes('poa_price'),
+    'priceStatus=tba → tba_price (not poa_price)');
+
+  // sold + withdrawn DON'T dock the score — full credit, status flag only.
+  const soldQ = computeLotQuality({ priceStatus: 'sold', soldPrice: 250000, address: '12 High St' });
+  const guideQ = computeLotQuality({ price: 250000, priceStatus: 'guide', address: '12 High St' });
+  assert(soldQ.issues.includes('sold_price'), 'priceStatus=sold → sold_price code');
+  assert(soldQ.score === guideQ.score,
+    'priceStatus=sold scores same as guide (status, not failure)');
+
+  // Fallback: a lot without priceStatus still gets POA half-credit via the
+  // priceText regex — backwards-compatible for old lots.
+  const legacy = computeLotQuality({ priceText: 'POA', address: '12 High St' });
+  assert(legacy.issues.includes('poa_price'),
+    'fallback: priceText="POA" without priceStatus still flagged poa_price');
+
+  // ISSUE_CODES extended with the new vocabulary.
+  assert(ISSUE_CODES.includes('tba_price') &&
+         ISSUE_CODES.includes('sold_price') &&
+         ISSUE_CODES.includes('withdrawn_price'),
+    'ISSUE_CODES extended with status-class price codes');
+}
+
+console.log('\ncomputeBatchCoverage: price denominator excludes intentional withholds');
+{
+  // 4 lots: 3 priced (guide), 1 POA. Old behaviour: price_pct = 75% (POA counted as miss).
+  // New behaviour: POA dropped from BOTH numerator and denominator → price_pct = 100%.
+  const lots = [
+    { price: 100000, priceStatus: 'guide' },
+    { price: 200000, priceStatus: 'guide' },
+    { price: 300000, priceStatus: 'guide' },
+    { priceStatus: 'poa' },
+  ];
+  const cov = computeBatchCoverage(lots);
+  assert(cov.price_pct === 100, `POA-only gap → price_pct=100% (got ${cov.price_pct})`);
+  assert(cov.total_lots === 4, 'total_lots still counts everything (POA included in batch size)');
+
+  // sold/withdrawn also denominator-out.
+  const mixed = [
+    { price: 100000, priceStatus: 'guide' },
+    { priceStatus: 'sold', soldPrice: 99000 },
+    { priceStatus: 'withdrawn' },
+    { priceStatus: 'tba' },
+  ];
+  const mixedCov = computeBatchCoverage(mixed);
+  assert(mixedCov.price_pct === 100,
+    'all non-guide statuses denominator-out → price_pct=100%');
+
+  // A real gap (priceStatus='unknown' or null) DOES count.
+  const realGap = [
+    { price: 100000, priceStatus: 'guide' },
+    { price: 200000, priceStatus: 'guide' },
+    { priceStatus: 'unknown' },
+    { /* no priceStatus, no price */ },
+  ];
+  const gapCov = computeBatchCoverage(realGap);
+  assert(gapCov.price_pct === 50, `genuine 50% gap reported as 50% (got ${gapCov.price_pct})`);
+
+  // Edge: all lots are not-a-gap. Avoid divide-by-zero — return 100% (nothing to fail).
+  const allPoa = [{ priceStatus: 'poa' }, { priceStatus: 'tba' }];
+  const allPoaCov = computeBatchCoverage(allPoa);
+  assert(allPoaCov.price_pct === 100,
+    'all-POA batch → 100% price_pct (no eligible denominator)');
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
