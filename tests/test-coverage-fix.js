@@ -15,6 +15,8 @@ process.env.SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || 'test-key
 const { setField, setFieldIfEmpty, getFieldSources, stampSource, stampSourceIfEmpty } = await import('../lib/quality/field-source.js');
 const { mergeFieldSources } = await import('../lib/pipeline/persist-lots.js');
 const { _internals, enqueueRetry, drainRetryQueue, markRetryDone } = await import('../lib/pipeline/retry-queue.js');
+const { computeLotQuality, computeBatchCoverage, ISSUE_CODES } = await import('../lib/quality/lot-quality.js');
+const { detectFieldRegressions, appendCoverageHistory, latestCoverage, _internals: regrInternals } = await import('../lib/pipeline/quality-regression.js');
 
 let pass = 0;
 let fail = 0;
@@ -215,6 +217,157 @@ console.log('\nretry-queue: public API shape');
     'drainRetryQueue zero-state shape includes deferred:0');
   assert('retried' in drained && 'gaveUp' in drained,
     'all four outcome counters in the zero-state shape');
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Rollout #4 — per-lot quality + coverage regression detection
+// ═══════════════════════════════════════════════════════════════════════
+
+// ── computeLotQuality — score is bounded, issues are documented codes ──
+console.log('\ncomputeLotQuality: score + issues');
+{
+  // Fully-populated lot scores 100 with no issues.
+  const full = {
+    imageUrl: 'https://x/img.jpg',
+    price: 195000,
+    postcode: 'SW1A 1AA',
+    address: '12 High Street, London',
+    uprn: '100021533445',
+    epcRating: 'C',
+    tenure: 'Freehold',
+    beds: 3,
+  };
+  const fullQ = computeLotQuality(full);
+  assert(fullQ.score === 100, `fully populated lot scores 100 (got ${fullQ.score})`);
+  assert(fullQ.issues.length === 0, 'fully populated lot has no issues');
+
+  // Empty lot scores 0 with all field codes flagged.
+  const empty = computeLotQuality({});
+  assert(empty.score === 0, `empty lot scores 0 (got ${empty.score})`);
+  assert(empty.issues.includes('no_image') && empty.issues.includes('no_price') &&
+         empty.issues.includes('no_postcode') && empty.issues.includes('no_address'),
+    'empty lot lists every gap');
+
+  // POA price gets half-credit + a distinct code (not 'no_price').
+  const poa = computeLotQuality({ ...full, price: null, priceText: 'POA' });
+  assert(poa.issues.includes('poa_price'), 'POA price flagged with poa_price');
+  assert(!poa.issues.includes('no_price'), 'POA is NOT flagged as no_price');
+  assert(poa.score < fullQ.score && poa.score > fullQ.score - 25,
+    'POA gets half the price weight (12-13pt drop, not full 25)');
+
+  // beds=0 (studio) is valid — must NOT be flagged.
+  const studio = computeLotQuality({ ...full, beds: 0 });
+  assert(!studio.issues.includes('no_beds'), 'beds=0 (studio) is valid, not flagged');
+  assert(studio.score === fullQ.score, 'studio retains full beds weight');
+
+  // Score is clamped to [0, 100].
+  const overflow = computeLotQuality({ ...full, priceText: 'POA' }); // POA adds bonus
+  assert(overflow.score >= 0 && overflow.score <= 100, 'score clamped to 0-100');
+
+  // null/undefined/non-object lot returns a defined shape (defensive).
+  const nullQ = computeLotQuality(null);
+  assert(nullQ && typeof nullQ.score === 'number' && Array.isArray(nullQ.issues),
+    'null input returns a defined { score, issues } shape');
+
+  // ISSUE_CODES list is frozen so callers can validate against it.
+  assert(Object.isFrozen(ISSUE_CODES), 'ISSUE_CODES is frozen (immutable contract)');
+  assert(ISSUE_CODES.includes('no_image') && ISSUE_CODES.includes('poa_price'),
+    'ISSUE_CODES includes the documented codes');
+}
+
+// ── computeBatchCoverage — aggregate field coverage for the alert path ──
+console.log('\ncomputeBatchCoverage: per-field aggregate');
+{
+  const lots = [
+    { imageUrl: 'a', price: 1, postcode: 'X1', uprn: '1', epcRating: 'C' },
+    { imageUrl: 'b', price: 2, postcode: 'X2', uprn: '2', epcRating: null },
+    { imageUrl: 'c', price: null, postcode: null, uprn: null, epcRating: null },
+    { imageUrl: null, price: 4, postcode: 'X4', uprn: '4', epcRating: 'D' },
+  ];
+  const cov = computeBatchCoverage(lots);
+  assert(cov.total_lots === 4, 'total_lots reflects array length');
+  assert(cov.image_pct === 75, 'image: 3/4 = 75%');
+  assert(cov.price_pct === 75, 'price: 3/4 = 75%');
+  assert(cov.postcode_pct === 75, 'postcode: 3/4 = 75%');
+  assert(cov.uprn_pct === 75, 'uprn: 3/4 = 75%');
+  assert(cov.epc_pct === 50, 'epc: 2/4 = 50%');
+
+  assert(computeBatchCoverage([]) === null, 'empty batch returns null (avoid misleading 0% record)');
+  assert(computeBatchCoverage(null) === null, 'null batch returns null');
+}
+
+// ── detectFieldRegressions — relative-to-previous, not blanket ──
+console.log('\ndetectFieldRegressions: relative-to-previous semantics');
+{
+  const { DROP_THRESHOLD_PCT, MIN_LOTS_FOR_ALERT } = regrInternals;
+
+  const previous = {
+    total_lots: 100,
+    image_pct: 100, price_pct: 95, postcode_pct: 90, uprn_pct: 50, epc_pct: 40,
+  };
+
+  // No regression: same coverage.
+  const same = detectFieldRegressions(previous, { ...previous });
+  assert(same.length === 0, 'no regression when coverage is unchanged');
+
+  // Real regression: image drops 100 → 60 (40pp).
+  const imgDrop = detectFieldRegressions(previous, {
+    ...previous, image_pct: 60,
+  });
+  assert(imgDrop.length === 1 && imgDrop[0].label === 'image_url',
+    'image drop fires extractor_image_regression');
+  assert(imgDrop[0].drop_pct === 40, 'reports the actual drop magnitude');
+
+  // Below threshold: 5pp drop is noise, not an alert.
+  const minorDrop = detectFieldRegressions(previous, {
+    ...previous, image_pct: 95,
+  });
+  assert(minorDrop.length === 0,
+    `${DROP_THRESHOLD_PCT}pp threshold suppresses minor noise`);
+
+  // Tiny batch: regression suppressed (one missing lot warps the %).
+  const tinyBatch = detectFieldRegressions(previous, {
+    total_lots: 2, image_pct: 0, price_pct: 0, postcode_pct: 0, uprn_pct: 0, epc_pct: 0,
+  });
+  assert(tinyBatch.length === 0,
+    `batches under ${MIN_LOTS_FOR_ALERT} lots don't fire (too noisy)`);
+
+  // Multiple field drops: each fires its own alert.
+  const multi = detectFieldRegressions(previous, {
+    ...previous, image_pct: 50, postcode_pct: 60,
+  });
+  assert(multi.length === 2, 'each regressed field fires its own alert');
+  const types = multi.map(m => m.alertType).sort();
+  assert(types.includes('extractor_image_regression') &&
+         types.includes('extractor_postcode_regression'),
+    'alerts use field-specific types');
+
+  // No previous → no regressions (fresh house).
+  assert(detectFieldRegressions(null, previous).length === 0,
+    'no previous entry → no regressions (fresh house)');
+}
+
+// ── appendCoverageHistory + latestCoverage — ringbuffer semantics ──
+console.log('\nappendCoverageHistory: ringbuffer of last 5');
+{
+  const { HISTORY_LIMIT } = regrInternals;
+  let h = null;
+  for (let i = 0; i < HISTORY_LIMIT + 3; i++) {
+    h = appendCoverageHistory(h, { scraped_at: `2026-04-27T${String(i).padStart(2, '0')}:00:00Z`, total_lots: 100 });
+  }
+  assert(h.history.length === HISTORY_LIMIT,
+    `history capped at ${HISTORY_LIMIT} entries (oldest entries trimmed)`);
+  assert(h.history[h.history.length - 1].scraped_at.endsWith(':00:00Z'),
+    'newest entry is at the tail');
+  assert(latestCoverage(h) === h.history[h.history.length - 1],
+    'latestCoverage returns the tail entry');
+  assert(latestCoverage(null) === null, 'latestCoverage tolerates null history');
+  assert(latestCoverage({ history: [] }) === null, 'latestCoverage tolerates empty array');
+
+  // Pure: doesn't mutate the input blob.
+  const inputBlob = { history: [{ scraped_at: 'x' }] };
+  appendCoverageHistory(inputBlob, { scraped_at: 'y' });
+  assert(inputBlob.history.length === 1, 'appendCoverageHistory does not mutate input');
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
