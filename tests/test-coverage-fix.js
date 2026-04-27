@@ -119,6 +119,13 @@ console.log('\nretry-queue: exponential backoff math');
   assert(/T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(ts), 'nextRetryAt returns ISO8601 string');
 
   assert(MAX_ATTEMPTS === 5, 'MAX_ATTEMPTS frozen at 5 (matches partial index in migration)');
+
+  // Defer backoff is a fixed window covering OS Places' 10-min breaker reset
+  // plus a buffer. Locked here so a refactor that drops it back to attempt-1
+  // backoff (which is also 1h, just by coincidence) can't quietly regress.
+  const { DEFER_BACKOFF_MS } = _internals;
+  assert(DEFER_BACKOFF_MS === 15 * 60 * 1000, 'DEFER_BACKOFF_MS = 15 minutes (covers OS Places 10-min breaker + buffer)');
+  assert(DEFER_BACKOFF_MS < BASE_BACKOFF_MS, 'defer is shorter than retry: a deferred row should re-enter the drain before a retried one');
 }
 
 // ── stampSource — used by extractor.js for catalogue-path provenance ──
@@ -201,6 +208,13 @@ console.log('\nretry-queue: public API shape');
   const drained = await drainRetryQueue(null, { limit: 10, attemptFn: async () => 'ok' });
   assert(drained && drained.attempted === 0 && drained.ok === 0,
     'drainRetryQueue returns zero stats when supabase is null');
+  // 'deferred' must be in the zero-state shape — callers (enrichment-wave Pass 6)
+  // read drain.deferred to log breaker-driven defers separately from retries.
+  // Locks the bug-fix contract: a refactor that strips the field gets caught.
+  assert('deferred' in drained && drained.deferred === 0,
+    'drainRetryQueue zero-state shape includes deferred:0');
+  assert('retried' in drained && 'gaveUp' in drained,
+    'all four outcome counters in the zero-state shape');
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
