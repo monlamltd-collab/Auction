@@ -86,6 +86,19 @@ const EXPECTED = {
       { addressContains: 'Keys Avenue' },
     ],
   },
+  // EIG-platform extractor for Landwood. Snapshot captured 2026-04-27 from
+  // https://www.landwoodpropertyauctions.com/future-auctions?showall=true
+  // after fixing a calendar-URL drift bug that left the bare root domain in
+  // auction_calendar — see commit history. The snapshot has 31 .lot-panel
+  // cards; image coverage is 100% (locks the contract that the dedup-by-
+  // imageUrl block at the end of the landwood extractor doesn't over-strip).
+  landwood: {
+    minLots: 20,
+    samples: [
+      { lot: 1, addressContains: 'Beetham Tower', priceMin: 100000 },
+      { lot: 3, addressContains: 'Gelli Street', priceMin: 50000 },
+    ],
+  },
 };
 
 // ─── Run tests ───
