@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test": "node tests/test-extractors.js && node tests/test-detail-extractors.js && node tests/test-scoring.js && node tests/test-gating.js && node tests/test-cache-ttl.js && node tests/test-status-drift.js && node tests/test-fundability.js && node tests/test-harness.js && node tests/test-enrichment.js && node tests/test-image-coverage.js && node tests/test-missing-images-endpoint.js",
+    "test": "node tests/test-extractors.js && node tests/test-detail-extractors.js && node tests/test-scoring.js && node tests/test-gating.js && node tests/test-cache-ttl.js && node tests/test-status-drift.js && node tests/test-fundability.js && node tests/test-harness.js && node tests/test-enrichment.js && node tests/test-image-coverage.js && node tests/test-missing-images-endpoint.js && node tests/test-coverage-fix.js",
     "audit": "node scripts/audit.mjs",
     "audit:visual": "node scripts/visual-audit.mjs"
   },

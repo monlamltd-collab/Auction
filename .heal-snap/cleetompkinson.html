@@ -1,0 +1,3903 @@
+<!doctype html>
+<html class="no-js" lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+  
+  <style>
+      .cc-window{opacity:1;-webkit-transition:opacity 1s ease;transition:opacity 1s ease}.cc-window.cc-invisible{opacity:0}.cc-animate.cc-revoke{-webkit-transition:transform 1s ease;-webkit-transition:-webkit-transform 1s ease;transition:-webkit-transform 1s ease;transition:transform 1s ease;transition:transform 1s ease,-webkit-transform 1s ease}.cc-animate.cc-revoke.cc-top{-webkit-transform:translateY(-2em);transform:translateY(-2em)}.cc-animate.cc-revoke.cc-bottom{-webkit-transform:translateY(2em);transform:translateY(2em)}.cc-animate.cc-revoke.cc-active.cc-top{-webkit-transform:translateY(0);transform:translateY(0)}.cc-animate.cc-revoke.cc-active.cc-bottom{-webkit-transform:translateY(0);transform:translateY(0)}.cc-revoke:hover{-webkit-transform:translateY(0);transform:translateY(0)}.cc-grower{max-height:0;overflow:hidden;-webkit-transition:max-height 1s;transition:max-height 1s}
+      .cc-revoke,.cc-window{position:fixed;overflow:hidden;-webkit-box-sizing:border-box;box-sizing:border-box;font-family:Helvetica,Calibri,Arial,sans-serif;font-size:16px;line-height:1.5em;display:-webkit-box;display:-ms-flexbox;display:flex;-ms-flex-wrap:nowrap;flex-wrap:nowrap;z-index:9999}.cc-window.cc-static{position:static}.cc-window.cc-floating{padding:2em;max-width:24em;-webkit-box-orient:vertical;-webkit-box-direction:normal;-ms-flex-direction:column;flex-direction:column}.cc-window.cc-banner{padding:1em 1.8em;width:100%;-webkit-box-orient:horizontal;-webkit-box-direction:normal;-ms-flex-direction:row;flex-direction:row}.cc-revoke{padding:.5em}.cc-revoke:hover{text-decoration:underline}.cc-header{font-size:18px;font-weight:700}.cc-btn,.cc-close,.cc-link,.cc-revoke{cursor:pointer}.cc-link{opacity:.8;display:inline-block;padding:.2em;text-decoration:underline}.cc-link:hover{opacity:1}.cc-link:active,.cc-link:visited{color:initial}.cc-btn{display:block;padding:.4em .8em;font-size:.9em;font-weight:700;border-width:2px;border-style:solid;text-align:center;white-space:nowrap}.cc-highlight .cc-btn:first-child{background-color:transparent;border-color:transparent}.cc-highlight .cc-btn:first-child:focus,.cc-highlight .cc-btn:first-child:hover{background-color:transparent;text-decoration:underline}.cc-close{display:block;position:absolute;top:.5em;right:.5em;font-size:1.6em;opacity:.9;line-height:.75}.cc-close:focus,.cc-close:hover{opacity:1}
+      .cc-revoke.cc-top{top:0;left:3em;border-bottom-left-radius:.5em;border-bottom-right-radius:.5em}.cc-revoke.cc-bottom{bottom:0;left:3em;border-top-left-radius:.5em;border-top-right-radius:.5em}.cc-revoke.cc-left{left:3em;right:unset}.cc-revoke.cc-right{right:3em;left:unset}.cc-top{top:1em}.cc-left{left:1em}.cc-right{right:1em}.cc-bottom{bottom:1em}.cc-floating>.cc-link{margin-bottom:1em}.cc-floating .cc-message{display:block;margin-bottom:1em}.cc-window.cc-floating .cc-compliance{-webkit-box-flex:1;-ms-flex:1 0 auto;flex:1 0 auto}.cc-window.cc-banner{-webkit-box-align:center;-ms-flex-align:center;align-items:center}.cc-banner.cc-top{left:0;right:0;top:0}.cc-banner.cc-bottom{left:0;right:0;bottom:0}.cc-banner .cc-message{display:block;-webkit-box-flex:1;-ms-flex:1 1 auto;flex:1 1 auto;max-width:100%;margin-right:1em}.cc-compliance{display:-webkit-box;display:-ms-flexbox;display:flex;-webkit-box-align:center;-ms-flex-align:center;align-items:center;-ms-flex-line-pack:justify;align-content:space-between}.cc-floating .cc-compliance>.cc-btn{-webkit-box-flex:1;-ms-flex:1;flex:1}.cc-btn+.cc-btn{margin-left:.5em}
+      @media print{.cc-revoke,.cc-window{display:none}}@media screen and (max-width:900px){.cc-btn{white-space:normal}}@media screen and (max-width:414px) and (orientation:portrait),screen and (max-width:736px) and (orientation:landscape){.cc-window.cc-top{top:0}.cc-window.cc-bottom{bottom:0}.cc-window.cc-banner,.cc-window.cc-floating,.cc-window.cc-left,.cc-window.cc-right{left:0;right:0}.cc-window.cc-banner{-webkit-box-orient:vertical;-webkit-box-direction:normal;-ms-flex-direction:column;flex-direction:column}.cc-window.cc-banner .cc-compliance{-webkit-box-flex:1;-ms-flex:1 1 auto;flex:1 1 auto}.cc-window.cc-floating{max-width:none}.cc-window .cc-message{margin-bottom:1em}.cc-window.cc-banner{-webkit-box-align:unset;-ms-flex-align:unset;align-items:unset}.cc-window.cc-banner .cc-message{margin-right:0}}
+      .cc-floating.cc-theme-classic{padding:1.2em;border-radius:5px}.cc-floating.cc-type-info.cc-theme-classic .cc-compliance{text-align:center;display:inline;-webkit-box-flex:0;-ms-flex:none;flex:none}.cc-theme-classic .cc-btn{border-radius:5px}.cc-theme-classic .cc-btn:last-child{min-width:140px}.cc-floating.cc-type-info.cc-theme-classic .cc-btn{display:inline-block}
+      .cc-theme-edgeless.cc-window{padding:0}.cc-floating.cc-theme-edgeless .cc-message{margin:2em;margin-bottom:1.5em}.cc-banner.cc-theme-edgeless .cc-btn{margin:0;padding:.8em 1.8em;height:100%}.cc-banner.cc-theme-edgeless .cc-message{margin-left:1em}.cc-floating.cc-theme-edgeless .cc-btn+.cc-btn{margin-left:0}
+
+      /* custom */
+
+      .hf-cc-revoke {
+        position: fixed;
+        bottom: 0;
+        left: 20px;
+        padding: 5px 10px;
+        background-color: #edeff5;
+      }
+
+      @media (max-width: 414px) {
+        .hf-cc-revoke {
+          font-size: 12px;
+        }
+      }
+    </style>
+
+  <title>All Auction properties for sale </title>
+
+  <script>
+
+(function (w, d, u) {
+
+
+  Ctesius={};
+
+  // Define two queues for handlers
+  w.readyQ = [];
+  w.bindReadyQ = [];
+  w.eventQ = [];
+  w.confQ = [];
+
+
+  Ctesius.registerEvent=function(e,i){w.eventQ.push([e,i])}
+  Ctesius.addConfig=function(e,i){w.confQ.push([e,i])}
+
+  Ctesius.getConfig = function(e){
+    var foundConfigItem = w.confQ.find(function(i) {
+      return i[0] === e;
+    });
+    if(foundConfigItem) return foundConfigItem[1];
+  }
+
+  Ctesius.getEvent = function (key) {
+    return w.eventQ[key];
+  },
+
+  Ctesius.kickEvent = function (key, ...args) {
+    var e = Ctesius.getEvent(key);
+    if (e != null) {
+      return e.forEach(function (n) {
+        return n.ftn(...Array.from(args || []))
+      });
+    }
+  }
+
+  // Push a handler into the correct queue
+  function pushToQ(x, y) {
+      if (x == "ready") {
+          w.bindReadyQ.push(y);
+      } else {
+          w.readyQ.push(x);
+      }
+  }
+
+  // Define an alias object (for use later)
+  var alias = {
+      ready: pushToQ,
+      bind: pushToQ,
+      load: pushToQ
+  }
+
+  // Define the fake jQuery function to capture handlers
+  w.$ = w.jQuery = function (handler) {
+      if (handler === d || handler === u || handler === w) {
+          // Queue $(document).ready(handler), $().ready(handler)
+          // and $(document).bind("ready", handler) by returning
+          // an object with alias methods for pushToQ
+          return alias;
+      } else {
+          // Queue $(handler)
+          pushToQ(handler);
+      }
+  }
+
+})(window, document);
+
+</script>
+
+  <script>
+var async_foot = function(){
+
+  (function ($, doc) {
+    $.each(readyQ, function (index, handler) {
+        $(handler);
+    });
+    $.each(bindReadyQ, function (index, handler) {
+        $(doc).bind("ready", handler);
+    });
+  })(jQuery, document);
+
+
+  $.each(confQ, function(i, e){
+    Ctesius.addConfig(e[0], e[1])
+  });
+
+  $.each(eventQ, function(i, e){
+    Ctesius.registerEvent(e[0], e[1])
+  });
+
+}
+</script>
+
+
+  <script src='/vendor_assets/7804d59e1a4c98955e5b56ffe464ab13/blob.js' type='text/javascript' async onload="async_foot();"></script>
+  <!-- HTML5 shim and Respond.js for IE8 support of HTML5 elements and media queries -->
+  <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+  <!--[if lt IE 9]>
+    <script src="https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js"></script>
+    <script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
+  <![endif]-->
+
+  <script>
+  // Copyright 2014-2015 Twitter, Inc.
+  // Licensed under MIT (https://github.com/twbs/bootstrap/blob/master/LICENSE)
+  if (navigator.userAgent.match(/IEMobile\/10\.0/)) {
+    var msViewportStyle = document.createElement('style')
+    msViewportStyle.appendChild(
+      document.createTextNode(
+        '@-ms-viewport{width:auto!important}'
+      )
+    )
+    document.querySelector('head').appendChild(msViewportStyle)
+  }
+  </script>
+
+  
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta property="og:image" content="https://mr2.homeflow-assets.co.uk/files/site_asset/image/4750/8264/1200x627/new_home_carousel.jpg"/>
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="627"/>
+    <!-- Meta tags for Twitter-->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="website" />
+    <meta name="twitter:title" content="All Auction properties for sale " />
+    <meta name="twitter:description" content="Browse a list of Auction properties for sale " />
+    <meta name="twitter:image" content="https://mr2.homeflow-assets.co.uk/files/site_asset/image/4750/8264/800x533/new_home_carousel.jpg" />
+  
+
+  <meta property="og:type" content="website">
+  <meta property="og:description" content="Browse a list of Auction properties for sale ">
+
+  
+  <link rel="canonical" href="/properties/sales/tag-auction">
+  
+
+  
+  <meta name="robots" content="index, follow">
+  
+
+  
+    <link rel="icon" href="//mr2.homeflow-assets.co.uk/files/site_asset/image/5498/7085/_x_/image_2_.png">
+  
+
+  <link href="/vendor_assets/7804d59e1a4c98955e5b56ffe464ab13/blob.css" rel="stylesheet" type="text/css" />
+
+  
+
+  <!-- Bamboo auction css -->
+  
+    
+  
+
+  <meta http-equiv="Content-Security-Policy" content="" />
+
+  <script type="text/javascript">
+  Ctesius.addConfig('agency_name', 'Clee Tompkinson Francis');
+
+  
+    
+  
+
+  
+    
+  
+
+  
+    
+  
+
+  $(document).ready(function(){
+    Ctesius.addConfig('enable_user_history', true);
+    Ctesius.addConfig('enable_draw_a_map', true)
+    Ctesius.addConfig('minimum_interesting_properties', 4);
+    Ctesius.addConfig('no_advert_pages', 3);
+
+    Ctesius.addConfig('exclude_sold_let_checkbox', 'false')
+    Ctesius.addConfig('default_search_status', 'available')
+
+    // Ctesius.addConfig('properties', {"properties":[{"property_id":21602209,"photo":"//mr0.homeflow-assets.co.uk/files/photo/image/46996/4125/378x235/2626-PRC11410-1-fs.jpg","photos":["//mr0.homeflow-assets.co.uk/files/photo/image/46996/4125/378x235/2626-PRC11410-1-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4131/378x235/2626-PRC11410-2-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4139/378x235/2626-PRC11410-3-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4151/378x235/2626-PRC11410-4-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4162/378x235/2626-PRC11410-5-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4166/378x235/2626-PRC11410-6-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4168/378x235/2626-PRC11410-7-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4169/378x235/2626-PRC11410-8-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4172/378x235/2626-PRC11410-9-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4174/378x235/2626-PRC11410-10-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4177/378x235/2626-PRC11410-11-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4181/378x235/2626-PRC11410-12-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4183/378x235/2626-PRC11410-13-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4185/378x235/2626-PRC11410-14-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4189/378x235/2626-PRC11410-15-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4191/378x235/2626-PRC11410-16-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4194/378x235/2626-PRC11410-17-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4196/378x235/2626-PRC11410-18-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4198/378x235/2626-PRC11410-19-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4200/378x235/2626-PRC11410-20-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4202/378x235/2626-PRC11410-21-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4205/378x235/2626-PRC11410-22-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4208/378x235/2626-PRC11410-23-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4210/378x235/2626-PRC11410-24-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4212/378x235/2626-PRC11410-25-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4214/378x235/2626-PRC11410-26-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4216/378x235/2626-PRC11410-27-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4218/378x235/2626-PRC11410-28-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4219/378x235/2626-PRC11410-29-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4220/378x235/2626-PRC11410-30-fs.jpg"],"featured_photo":"//mr0.homeflow-assets.co.uk/files/photo/image/46996/4125/378x235/2626-PRC11410-1-fs.jpg","small_photo":"//mr0.homeflow-assets.co.uk/files/photo/image/46996/4125/187x115/2626-PRC11410-1-fs.jpg","thumb_photo":"//mr0.homeflow-assets.co.uk/files/photo/image/46996/4125/96x64/2626-PRC11410-1-fs.jpg","video_links":null,"property_url":"/properties/21602209/sales","short_description":"** on line auction mon 11th may to weds 13th may 2026 - guide price £175,000+ ** - **excellent potential on offer** - a delightfully positioned 4 b...","display_address":"Talog, Carmarthen, Carmarthenshire.","town":"Carmarthen","price":"Guide £165,000","tenure":"Freehold","bedrooms":"4","acreage":"0.0","lat":51.901528,"lng":-4.425651,"agency_name":"Clee Tompkinson Francis","vox_number":"","channel":"sales","is_premium":false,"status":"For sale","tags":["unmodernised","garden","waterside","garage","rural","auction","cottage","village house","country house","studio","diligent","refurbishments","villages","residential","warehouse","auctions","coast country","restaurant","coast and country","managed workspace","residential moore allen","detached property only","amenities","without too much land","waterfront","gym","security","privacy","river","riverside","int commercial","shouler rural","clee auction","buying commercial","shouler commercial","conservatory","ct residential","house","detached","detached house","all residential","houses","house detached","gth residential","residential northumberland","rendells residential"]},{"property_id":21567329,"photo":"//mr2.homeflow-assets.co.uk/files/photo/image/46926/8914/378x235/2626-PRE12709-2-fs.jpg","photos":["//mr2.homeflow-assets.co.uk/files/photo/image/46926/8914/378x235/2626-PRE12709-2-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/46926/8917/378x235/2626-PRE12709-3-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/46926/8920/378x235/2626-PRE12709-4.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/46926/8923/378x235/2626-PRE12709-5-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/46926/8925/378x235/2626-PRE12709-6-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/46926/8928/378x235/2626-PRE12709-7-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/46926/8930/378x235/2626-PRE12709-8-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/46926/8931/378x235/2626-PRE12709-9-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/46926/8933/378x235/2626-PRE12709-10-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/46926/8936/378x235/2626-PRE12709-11-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/46926/8938/378x235/2626-PRE12709-12-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/46926/8940/378x235/2626-PRE12709-13-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/46926/8943/378x235/2626-PRE12709-14-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/46926/8911/378x235/2626-PRE12709-1-fs.jpg"],"featured_photo":"//mr2.homeflow-assets.co.uk/files/photo/image/46926/8914/378x235/2626-PRE12709-2-fs.jpg","small_photo":"//mr2.homeflow-assets.co.uk/files/photo/image/46926/8914/187x115/2626-PRE12709-2-fs.jpg","thumb_photo":"//mr2.homeflow-assets.co.uk/files/photo/image/46926/8914/96x64/2626-PRE12709-2-fs.jpg","video_links":null,"property_url":"/properties/21567329/sales","short_description":"Going to auction alongside our partners auction house wales, bidding will commence at midday on monday the 11th to midday on wednesday the 13th of ...","display_address":"Gnoll Park Road, Neath, Neath Port Ta...","town":"Neath","price":"Guide £140,000","tenure":"Freehold","bedrooms":"3","acreage":"0.0","lat":51.664428,"lng":-3.798394,"agency_name":"Clee Tompkinson Francis","vox_number":"","channel":"sales","is_premium":false,"status":"For sale","tags":["unmodernised","garden","garage","auction","house","featured","terrace","diligent","character property","house mid terraced","parking","period","auctions","terraced","amenities","character","cellar","without too much land","heating","all residential","houses","residential","residential moore allen","gth residential","residential northumberland","rendells residential","rickman local properties","ct residential"]},{"property_id":21640750,"photo":"//mr3.homeflow-assets.co.uk/files/photo/image/47067/1990/378x235/2626-PRI11832-1-fs.jpg","photos":["//mr3.homeflow-assets.co.uk/files/photo/image/47067/1990/378x235/2626-PRI11832-1-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/1994/378x235/2626-PRI11832-2-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/1998/378x235/2626-PRI11832-3-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/2001/378x235/2626-PRI11832-4-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/2004/378x235/2626-PRI11832-5-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/2006/378x235/2626-PRI11832-6-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/2009/378x235/2626-PRI11832-7-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/2012/378x235/2626-PRI11832-8-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/2014/378x235/2626-PRI11832-9-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/2023/378x235/2626-PRI11832-10-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/2029/378x235/2626-PRI11832-11-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/2034/378x235/2626-PRI11832-12-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/2046/378x235/2626-PRI11832-13-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/2052/378x235/2626-PRI11832-14-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/2059/378x235/2626-PRI11832-15-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/2062/378x235/2626-PRI11832-16-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/2067/378x235/2626-PRI11832-17-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/2068/378x235/2626-PRI11832-18-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/2072/378x235/2626-PRI11832-19-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/2074/378x235/2626-PRI11832-20-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/2079/378x235/2626-PRI11832-21-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/2085/378x235/2626-PRI11832-22-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/2088/378x235/2626-PRI11832-23-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/2093/378x235/2626-PRI11832-24-fs.jpg"],"featured_photo":"//mr3.homeflow-assets.co.uk/files/photo/image/47067/1990/378x235/2626-PRI11832-1-fs.jpg","small_photo":"//mr3.homeflow-assets.co.uk/files/photo/image/47067/1990/187x115/2626-PRI11832-1-fs.jpg","thumb_photo":"//mr3.homeflow-assets.co.uk/files/photo/image/47067/1990/96x64/2626-PRI11832-1-fs.jpg","video_links":null,"property_url":"/properties/21640750/sales","short_description":"An excellent opportunity to acquire the llandybie church hall, a charming grade ii listed building located in the very centre of llandybie village....","display_address":"High Street, Llandybie, Ammanford, Ca...","town":"Ammanford","price":"Guide £139,000","tenure":"","bedrooms":"0","acreage":"0.0","lat":51.820556,"lng":-4.006794,"agency_name":"Clee Tompkinson Francis","vox_number":"","channel":"sales","is_premium":false,"status":"For sale","tags":["unmodernised","planning permission","auction","country house","diligent","character property","refurbishments","villages","new homes","land and new homes properties","parking","period","auctions","development-cl","amenities","character","investment opportunity","house","detached","detached house","all residential","houses","residential","house detached","residential moore allen","detached property only","gth residential","residential northumberland","rendells residential","ct residential"]},{"property_id":21456451,"photo":"//mr3.homeflow-assets.co.uk/files/photo/image/46691/9559/378x235/2626-PRM12347-1-fs.jpg","photos":["//mr3.homeflow-assets.co.uk/files/photo/image/46691/9559/378x235/2626-PRM12347-1-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/46691/9565/378x235/2626-PRM12347-2-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/46691/9571/378x235/2626-PRM12347-3-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/46691/9575/378x235/2626-PRM12347-4-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/46691/9579/378x235/2626-PRM12347-5-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/46691/9586/378x235/2626-PRM12347-6-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/46691/9589/378x235/2626-PRM12347-7-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/46691/9594/378x235/2626-PRM12347-8-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/46691/9597/378x235/2626-PRM12347-9-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/46691/9600/378x235/2626-PRM12347-10-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/46691/9603/378x235/2626-PRM12347-11-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/46691/9606/378x235/2626-PRM12347-12-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/46691/9610/378x235/2626-PRM12347-13-fs.jpg"],"featured_photo":"//mr3.homeflow-assets.co.uk/files/photo/image/46691/9559/378x235/2626-PRM12347-1-fs.jpg","small_photo":"//mr3.homeflow-assets.co.uk/files/photo/image/46691/9559/187x115/2626-PRM12347-1-fs.jpg","thumb_photo":"//mr3.homeflow-assets.co.uk/files/photo/image/46691/9559/96x64/2626-PRM12347-1-fs.jpg","video_links":null,"property_url":"/properties/21456451/sales","short_description":"We are delighted to offer this unique and characterful former chapel, thoughtfully converted into a two-bedroom residential home. ideally located i...","display_address":"Carlton Terrace, Swansea, City And Co...","town":"Swansea","price":"Guide £80,000","tenure":"Freehold","bedrooms":"2","acreage":"0.0","lat":51.621225,"lng":-3.952029,"agency_name":"Clee Tompkinson Francis","vox_number":"","channel":"sales","is_premium":false,"status":"For sale","tags":["garden","auction","house","terrace","residential","parking","auctions","terraced","residential moore allen","amenities","without too much land","investment opportunity","public transport","ct residential","all residential","houses","gth residential","residential northumberland","rendells residential","rickman local properties"]},{"property_id":21627941,"photo":"//mr2.homeflow-assets.co.uk/files/photo/image/47042/4660/378x235/2626-PRC11409-1-fs.jpg","photos":["//mr2.homeflow-assets.co.uk/files/photo/image/47042/4660/378x235/2626-PRC11409-1-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/47042/4663/378x235/2626-PRC11409-2.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/47042/4666/378x235/2626-PRC11409-3-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/47042/4669/378x235/2626-PRC11409-4-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/47042/4672/378x235/2626-PRC11409-5-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/47042/4675/378x235/2626-PRC11409-6-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/47042/4678/378x235/2626-PRC11409-7-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/47042/4681/378x235/2626-PRC11409-8-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/47042/4685/378x235/2626-PRC11409-9-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/47042/4688/378x235/2626-PRC11409-10.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/47042/4690/378x235/2626-PRC11409-11-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/47042/4694/378x235/2626-PRC11409-12-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/47042/4697/378x235/2626-PRC11409-13-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/47042/4700/378x235/2626-PRC11409-14-fs.jpg"],"featured_photo":"//mr2.homeflow-assets.co.uk/files/photo/image/47042/4660/378x235/2626-PRC11409-1-fs.jpg","small_photo":"//mr2.homeflow-assets.co.uk/files/photo/image/47042/4660/187x115/2626-PRC11409-1-fs.jpg","thumb_photo":"//mr2.homeflow-assets.co.uk/files/photo/image/47042/4660/96x64/2626-PRC11409-1-fs.jpg","video_links":null,"property_url":"/properties/21627941/sales","short_description":"** on line auction mon 11th may to weds 13th may 2026 - guide price £55,000+ ** - an ideal investment 3 bedroom mid terraced property located withi...","display_address":"Gwendraeth Town, Kidwelly, Carmarthen...","town":"Kidwelly","price":"Guide £55,000","tenure":"Freehold","bedrooms":"3","acreage":"0.0","lat":51.738873,"lng":-4.29815,"agency_name":"Clee Tompkinson Francis","vox_number":"","channel":"sales","is_premium":false,"status":"For sale","tags":["garden","waterside","auction","country house","castle","terrace","refurbishments","investments","commercial property","parking","investment","period","buy to let investments","auctions","terraced","restaurant","amenities","beach","character","school","hiking-cycling","without too much land","heating","investment opportunity","restoration project","age 55+","clee auction","beachfront","house","all residential","houses","residential","residential moore allen","gth residential","residential northumberland","rendells residential","rickman local properties","ct residential"]}],"pagination":{"current_page":1,"current_page_modulo_3":1,"has_prev_page":false,"total_count":5,"has_next_page":false,"from_record":1,"to_record":5,"page_count":1}}.properties);
+    Ctesius.addConfig('permit_blank_searches', true);
+    var custom_map_icon = "MrRichardImage";
+    if(custom_map_icon != ""){
+      custom_map_icon = "//mr0.homeflow-assets.co.uk/files/site_asset/image/4412/1320/_x_/icons8-marker-48.png";
+      var dimensions = "".split(',');
+      Ctesius.addConfig('custom_map_icon', custom_map_icon);
+      Ctesius.addConfig('custom_map_icon_size', dimensions);
+
+      var custom_map_icon_shadow = "";
+      if(custom_map_icon_shadow != ""){
+        Ctesius.addConfig('custom_map_icon_shadow', "");
+        Ctesius.addConfig('custom_map_shadow_icon_size', "");
+      }
+    };
+
+    $('#search_form_button').click(function(form){
+      Ctesius.Actions.submitSearchForm();
+      return false;
+
+    
+      Ctesius.addConfig('leaflet_layer', new L.Google('ROADMAP'));
+    
+    
+    
+    
+    
+    
+    
+    
+    });
+    // var decorate_for_property = function (saved_property){
+    //   $('#saved_properties_view').removeClass('hidden');
+    //   $('#add_to_shortlist_'+saved_property.id).html('Remove from shortlist &gt;');
+    //   $('#add_to_shortlist_'+saved_property.id).attr('onclick', 'Ctesius.Actions.removeSavedProperty('+saved_property.id+'); return false;')
+    //   $('#add_to_shortlist_'+saved_property.id+'_side').html('<i class="add-to-shortlist-icon"></i>Remove from shortlist');
+    //   $('#add_to_shortlist_'+saved_property.id+'_side').attr('onclick', 'Ctesius.Actions.removeSavedProperty('+saved_property.id+'); return false;')
+    // }
+    // Ctesius.registerEvent('after_saved_property_added_by_action', function(saved_property){
+    //   var from_element = $('#property_row_' + saved_property.id + ' .thumb');
+    //   if (from_element.length) {
+    //     flyToElement(from_element, $(".mini_property_" + saved_property.id));
+    //   };
+    //   $('#saved_properties_link').effect('highlight',{color: '#e07719'},3000);
+    // });
+
+    // Ctesius.registerEvent('before_saved_property_removed_by_action', function(saved_property_id){
+    //   var to_element = $('#property_row_' + saved_property_id + ' .thumb');
+    //   if (to_element.length) {
+    //     flyFromElement(to_element, $(".mini_property_" + saved_property_id));
+    //   };
+    //   $('#saved_properties_link').effect('highlight',{color: '#e07719'},3000);
+    // });
+
+    // Ctesius.registerEvent('saved_property_view_rendered', decorate_for_property);
+
+    Ctesius.registerEvent('saved_property_removed', function(saved_property, collection) {
+      $('.js-addToFavourites[data-id=' + saved_property.id + ']').each(function(){
+        var element = $(this);
+        element.html('Shortlist <i class="fa fa-heart-o" aria-hidden="true"></i>');
+        element.attr('data-action', 'add');
+        element.attr('onclick', 'Ctesius.Actions.addSavedProperty(' + saved_property.id + '); return false;');
+      });
+      if(collection.size() === 0){
+        $('#saved_properties_view').addClass("hidden");
+      }
+    });
+
+    var setSavedPropertyLink = function ($link) {
+      var propertyId = $link.data('id');
+      $link.html('Remove <i class="fa fa-heart" aria-hidden="true"></i>');
+      $link.attr('data-action', 'remove');
+      $link.attr('onclick', 'Ctesius.Actions.removeSavedProperty(' + propertyId + '); return false;');
+    }
+
+    Ctesius.registerEvent('saved_property_added', function(saved_property, collection) {
+      $('.js-addToFavourites[data-id=' + saved_property.id + ']').each(function(){
+        setSavedPropertyLink($(this));
+      });
+    });
+
+
+    Ctesius.registerEvent('saved_search_removed', function(search, collection){
+      if (search.equalTo(Ctesius.getSearch())){
+        $("#save_search_link").html("Save search");
+        $("#save_search_link").attr("onclick", 'Ctesius.Actions.saveCurrentSearch();');
+      }
+    });
+    Ctesius.registerEvent('saved_search_added', function(search, collection){
+      if (search.equalTo(Ctesius.getSearch())){
+        $("#save_search_link").html("Remove search");
+        $("#save_search_link").attr("onclick", 'Ctesius.Actions.removeSavedSearch("'+search.search_id()+'");');
+
+        if (Ctesius.user.userType() == 'local') {
+          document.location.hash = "#user";
+        };
+      }
+    });
+    Ctesius.registerEvent('map_marker_opened', function(event) {
+      var propertyLink = document.getElementById('map-popup-property-shortlist');
+      var propertyId = parseInt(propertyLink.getAttribute('data-id'));
+      var savedProperties = Ctesius.savedPropertiesCollection.models;
+
+      for (var i = 0; i < savedProperties.length; i += 1) {
+        if (savedProperties[i].get('property_id') === propertyId) {
+          setSavedPropertyLink($(propertyLink));
+          break;
+        }
+      }
+    });
+
+
+
+    Ctesius.registerEvent('redirection_flash_ready', function(message, type){
+      var mess = '<div class="alert alert-'+type+'"><a class="close" data-dismiss="alert">×</a>'+message+'</div>';
+      $('#alert_location').html(mess);
+    });
+
+    Ctesius.registerEvent('before_properties_map_toggle_view_displayed', function(){
+      $('#save_search_link').hide();
+    });
+
+    Ctesius.registerEvent('before_togglable_list_displayed', function(){
+      $('#save_search_link').show();
+    });
+
+    Ctesius.registerEvent('before_draggable_map_updated',function(){
+       $('#map_info').html('Updating map&hellip;');
+    });
+
+    Ctesius.registerEvent('draggable_map_updated',function(res){
+       $('#map_info').html('Showing ' + res.properties.length + ' of ' + res.pagination.total_count + ' properties. Zoom in or drag the map to see more.');
+    });
+
+    Ctesius.registerEvent('user_logged_in', function(user){
+      $('.register-or-login-pod').addClass('hidden');
+    });
+
+    Ctesius.registerEvent('user_logged_out', function(user){
+      $('.register-or-login-pod').removeClass('hidden');
+    });
+
+    Ctesius.registerEvent('banner', function(){
+      $('#draggable_map_view').append("<div id='bannercontainer'></div>")
+    });
+
+    Ctesius.registerEvent('drawbanner', function(){
+      $('#bannercontainer').append("<div class='mappy' style='position:relative' padding-left='100px'> Click and drag to sketch the area you are interested in.  </div>");
+    });
+
+    Ctesius.registerEvent('editbanner', function(){
+      $('#bannercontainer').append("<div class='mappyedit' style='position:relative' padding-left='100px'>Click and drag a point on the shape to adjust the area.  Press save when you are finished editing. </div>");
+    });
+
+    Ctesius.registerEvent('deletebanner', function(){
+      $('#bannercontainer').append("<div class='mappydelete' style='position:relative' padding-left='100px'>Click on an area to delete it.</div>");
+    });
+
+    Ctesius.registerEvent('editbannertoggled', function(){
+      $('.mappyedit').siblings().hide();
+      $('.mappyedit').slideToggle()
+    });
+
+    Ctesius.registerEvent('deletebannertoggled', function(){
+      $('.mappydelete').siblings().hide();
+      $('.mappydelete').slideToggle();
+    });
+
+    Ctesius.registerEvent('drawbannertoggled', function(){
+      $('.mappy').siblings().hide();
+      $('.mappy').slideToggle();
+    });
+
+    Ctesius.init();
+  });
+</script>
+
+
+  
+
+  
+
+  <script>
+  
+    Ctesius.addConfig('recaptcha_version', 2);
+  
+
+  Ctesius.addConfig('stamp_duty_england', {"base":[{"id":16,"country_name":"England","minimum_property_price":0,"maximum_property_price":125000,"base_sdlt_rate":"0.0","base_lbtt_rate":null,"base_ltt_rate":null,"additional_property_surcharge":"5.0","first_time_buyer_rate":null,"non_uk_resident_surcharge":"2.0","tax_type":"base","first_time_buyer_cap":null,"associations":[],"filtered_associations":[]},{"id":29,"country_name":"England","minimum_property_price":125000,"maximum_property_price":250000,"base_sdlt_rate":"2.0","base_lbtt_rate":null,"base_ltt_rate":null,"additional_property_surcharge":"5.0","first_time_buyer_rate":null,"non_uk_resident_surcharge":"2.0","tax_type":"base","first_time_buyer_cap":null,"associations":[],"filtered_associations":[]},{"id":17,"country_name":"England","minimum_property_price":250000,"maximum_property_price":925000,"base_sdlt_rate":"5.0","base_lbtt_rate":null,"base_ltt_rate":null,"additional_property_surcharge":"5.0","first_time_buyer_rate":null,"non_uk_resident_surcharge":"2.0","tax_type":"base","first_time_buyer_cap":null,"associations":[],"filtered_associations":[]},{"id":18,"country_name":"England","minimum_property_price":925000,"maximum_property_price":1500000,"base_sdlt_rate":"10.0","base_lbtt_rate":null,"base_ltt_rate":null,"additional_property_surcharge":"5.0","first_time_buyer_rate":null,"non_uk_resident_surcharge":"2.0","tax_type":"base","first_time_buyer_cap":null,"associations":[],"filtered_associations":[]},{"id":19,"country_name":"England","minimum_property_price":1500000,"maximum_property_price":null,"base_sdlt_rate":"12.0","base_lbtt_rate":null,"base_ltt_rate":null,"additional_property_surcharge":"5.0","first_time_buyer_rate":null,"non_uk_resident_surcharge":"2.0","tax_type":"base","first_time_buyer_cap":null,"associations":[],"filtered_associations":[]}],"first_time_buyer":[{"id":30,"country_name":"England","minimum_property_price":0,"maximum_property_price":300000,"base_sdlt_rate":null,"base_lbtt_rate":null,"base_ltt_rate":null,"additional_property_surcharge":null,"first_time_buyer_rate":"0.0","non_uk_resident_surcharge":"2.0","tax_type":"first_time_buyer","first_time_buyer_cap":null,"associations":[],"filtered_associations":[]},{"id":31,"country_name":"England","minimum_property_price":300000,"maximum_property_price":500000,"base_sdlt_rate":"5.0","base_lbtt_rate":null,"base_ltt_rate":null,"additional_property_surcharge":null,"first_time_buyer_rate":null,"non_uk_resident_surcharge":"2.0","tax_type":"first_time_buyer","first_time_buyer_cap":null,"associations":[],"filtered_associations":[]}]});
+  Ctesius.addConfig('stamp_duty_scotland', {"base":[{"id":38,"country_name":"Scotland","minimum_property_price":0,"maximum_property_price":145000,"base_sdlt_rate":null,"base_lbtt_rate":"0.0","base_ltt_rate":null,"additional_property_surcharge":"8.0","first_time_buyer_rate":null,"non_uk_resident_surcharge":null,"tax_type":"base","first_time_buyer_cap":null,"associations":[],"filtered_associations":[]},{"id":20,"country_name":"Scotland","minimum_property_price":145000,"maximum_property_price":250000,"base_sdlt_rate":null,"base_lbtt_rate":"2.0","base_ltt_rate":null,"additional_property_surcharge":"8.0","first_time_buyer_rate":null,"non_uk_resident_surcharge":null,"tax_type":"base","first_time_buyer_cap":null,"associations":[],"filtered_associations":[]},{"id":26,"country_name":"Scotland","minimum_property_price":250000,"maximum_property_price":325000,"base_sdlt_rate":null,"base_lbtt_rate":"5.0","base_ltt_rate":null,"additional_property_surcharge":"8.0","first_time_buyer_rate":null,"non_uk_resident_surcharge":null,"tax_type":"base","first_time_buyer_cap":null,"associations":[],"filtered_associations":[]},{"id":27,"country_name":"Scotland","minimum_property_price":325000,"maximum_property_price":750000,"base_sdlt_rate":null,"base_lbtt_rate":"10.0","base_ltt_rate":null,"additional_property_surcharge":"8.0","first_time_buyer_rate":null,"non_uk_resident_surcharge":null,"tax_type":"base","first_time_buyer_cap":null,"associations":[],"filtered_associations":[]},{"id":28,"country_name":"Scotland","minimum_property_price":750000,"maximum_property_price":null,"base_sdlt_rate":null,"base_lbtt_rate":"12.0","base_ltt_rate":null,"additional_property_surcharge":"8.0","first_time_buyer_rate":null,"non_uk_resident_surcharge":null,"tax_type":"base","first_time_buyer_cap":null,"associations":[],"filtered_associations":[]}],"first_time_buyer":[{"id":39,"country_name":"Scotland","minimum_property_price":0,"maximum_property_price":175000,"base_sdlt_rate":null,"base_lbtt_rate":"0.0","base_ltt_rate":null,"additional_property_surcharge":null,"first_time_buyer_rate":null,"non_uk_resident_surcharge":null,"tax_type":"first_time_buyer","first_time_buyer_cap":null,"associations":[],"filtered_associations":[]},{"id":40,"country_name":"Scotland","minimum_property_price":175000,"maximum_property_price":250000,"base_sdlt_rate":null,"base_lbtt_rate":"2.0","base_ltt_rate":null,"additional_property_surcharge":null,"first_time_buyer_rate":null,"non_uk_resident_surcharge":null,"tax_type":"first_time_buyer","first_time_buyer_cap":null,"associations":[],"filtered_associations":[]},{"id":41,"country_name":"Scotland","minimum_property_price":250000,"maximum_property_price":325000,"base_sdlt_rate":null,"base_lbtt_rate":"5.0","base_ltt_rate":null,"additional_property_surcharge":null,"first_time_buyer_rate":null,"non_uk_resident_surcharge":null,"tax_type":"first_time_buyer","first_time_buyer_cap":null,"associations":[],"filtered_associations":[]},{"id":42,"country_name":"Scotland","minimum_property_price":325000,"maximum_property_price":750000,"base_sdlt_rate":null,"base_lbtt_rate":"10.0","base_ltt_rate":null,"additional_property_surcharge":null,"first_time_buyer_rate":null,"non_uk_resident_surcharge":null,"tax_type":"first_time_buyer","first_time_buyer_cap":null,"associations":[],"filtered_associations":[]},{"id":43,"country_name":"Scotland","minimum_property_price":750000,"maximum_property_price":null,"base_sdlt_rate":null,"base_lbtt_rate":"12.0","base_ltt_rate":null,"additional_property_surcharge":null,"first_time_buyer_rate":null,"non_uk_resident_surcharge":null,"tax_type":"first_time_buyer","first_time_buyer_cap":null,"associations":[],"filtered_associations":[]}]});
+  Ctesius.addConfig('stamp_duty_wales', {"base":[{"id":21,"country_name":"Wales","minimum_property_price":0,"maximum_property_price":225000,"base_sdlt_rate":null,"base_lbtt_rate":null,"base_ltt_rate":"0.0","additional_property_surcharge":null,"first_time_buyer_rate":"0.0","non_uk_resident_surcharge":null,"tax_type":"base","first_time_buyer_cap":null,"associations":[],"filtered_associations":[]},{"id":22,"country_name":"Wales","minimum_property_price":225000,"maximum_property_price":400000,"base_sdlt_rate":null,"base_lbtt_rate":null,"base_ltt_rate":"6.0","additional_property_surcharge":null,"first_time_buyer_rate":"6.0","non_uk_resident_surcharge":null,"tax_type":"base","first_time_buyer_cap":null,"associations":[],"filtered_associations":[]},{"id":23,"country_name":"Wales","minimum_property_price":400000,"maximum_property_price":750000,"base_sdlt_rate":null,"base_lbtt_rate":null,"base_ltt_rate":"7.5","additional_property_surcharge":null,"first_time_buyer_rate":"7.5","non_uk_resident_surcharge":null,"tax_type":"base","first_time_buyer_cap":null,"associations":[],"filtered_associations":[]},{"id":25,"country_name":"Wales","minimum_property_price":750000,"maximum_property_price":1500000,"base_sdlt_rate":null,"base_lbtt_rate":null,"base_ltt_rate":"10.0","additional_property_surcharge":null,"first_time_buyer_rate":"10.0","non_uk_resident_surcharge":null,"tax_type":"base","first_time_buyer_cap":null,"associations":[],"filtered_associations":[]},{"id":24,"country_name":"Wales","minimum_property_price":1500000,"maximum_property_price":null,"base_sdlt_rate":null,"base_lbtt_rate":null,"base_ltt_rate":"12.0","additional_property_surcharge":null,"first_time_buyer_rate":"12.0","non_uk_resident_surcharge":null,"tax_type":"base","first_time_buyer_cap":null,"associations":[],"filtered_associations":[]}],"corporate_buyer":[{"id":32,"country_name":"Wales","minimum_property_price":0,"maximum_property_price":180000,"base_sdlt_rate":null,"base_lbtt_rate":null,"base_ltt_rate":"5.0","additional_property_surcharge":null,"first_time_buyer_rate":null,"non_uk_resident_surcharge":null,"tax_type":"corporate_buyer","first_time_buyer_cap":null,"associations":[],"filtered_associations":[]},{"id":33,"country_name":"Wales","minimum_property_price":180000,"maximum_property_price":250000,"base_sdlt_rate":null,"base_lbtt_rate":null,"base_ltt_rate":"8.5","additional_property_surcharge":null,"first_time_buyer_rate":null,"non_uk_resident_surcharge":null,"tax_type":"corporate_buyer","first_time_buyer_cap":null,"associations":[],"filtered_associations":[]},{"id":34,"country_name":"Wales","minimum_property_price":250000,"maximum_property_price":400000,"base_sdlt_rate":null,"base_lbtt_rate":null,"base_ltt_rate":"10.0","additional_property_surcharge":null,"first_time_buyer_rate":null,"non_uk_resident_surcharge":null,"tax_type":"corporate_buyer","first_time_buyer_cap":null,"associations":[],"filtered_associations":[]},{"id":35,"country_name":"Wales","minimum_property_price":400000,"maximum_property_price":750000,"base_sdlt_rate":null,"base_lbtt_rate":null,"base_ltt_rate":"12.5","additional_property_surcharge":null,"first_time_buyer_rate":null,"non_uk_resident_surcharge":null,"tax_type":"corporate_buyer","first_time_buyer_cap":null,"associations":[],"filtered_associations":[]},{"id":36,"country_name":"Wales","minimum_property_price":750000,"maximum_property_price":1500000,"base_sdlt_rate":null,"base_lbtt_rate":null,"base_ltt_rate":"15.0","additional_property_surcharge":null,"first_time_buyer_rate":null,"non_uk_resident_surcharge":null,"tax_type":"corporate_buyer","first_time_buyer_cap":null,"associations":[],"filtered_associations":[]},{"id":37,"country_name":"Wales","minimum_property_price":1500000,"maximum_property_price":null,"base_sdlt_rate":null,"base_lbtt_rate":null,"base_ltt_rate":"17.0","additional_property_surcharge":null,"first_time_buyer_rate":null,"non_uk_resident_surcharge":null,"tax_type":"corporate_buyer","first_time_buyer_cap":null,"associations":[],"filtered_associations":[]}]});
+
+  
+    
+      Ctesius.addConfig('cookie_consent_config', {
+        "palette": {
+          "popup": {
+            "background": "rgb(237, 239, 245)",
+            "text": "rgb(101, 101, 101)",
+            "link": "rgb(101, 101, 101)",
+          },
+          "button": {
+            "background": "transparent",
+            "text": "rgb(66, 66, 66)",
+            "border": "rgb(66, 66, 66)",
+          },
+        },
+        "position": "bottom-left",
+        "type": "opt-in",
+        "content": {
+          "href": "/pages/cookies",
+          "message": "This website uses cookies to give you the best experience.",
+        },
+      });
+    
+  
+
+  console.log('%c[v2] '+'%c[production] '+'%c[vogels]', 'font-weight: bold; color: #008000', 'font-weight: bold; color: #9c50b6', 'font-weight: bold; color: #3e5a81');
+
+  var USER_SESSION_TOKEN = '';
+
+  var formAuthenticityToken = "gLW+kZwwpRn+o48xwGyhTeTPqFUlV4ft90HY4DLfeCIPwmxmovvM4uEq70ITihu+H/Akb0HlXAFC9XgwsmTUWQ==";
+
+  // add authenticity token to lead forms
+  function checkAuthenticityTokens(form){
+    var $authenticityToken = $('<input>', {
+      type: 'hidden',
+      name: 'authenticity_token',
+      value: formAuthenticityToken,
+    });
+
+    $form = $(form);
+    if ($form.find('input[name="authenticity_token"]').length == 0) {
+      $form.prepend($authenticityToken);
+    }
+  }
+  $(function() {
+
+    var searchAction = '[action="/search"], [action="/branches"]';
+    var noToken = '.noAuthToken';
+
+    $(document).on('submit', 'form:not(' + searchAction + ',' + noToken + ')', function(){
+      checkAuthenticityTokens(this);
+    })
+
+    populateAuthenticityTokensToAllForms();
+
+    Ctesius.registerEvent('user_profile_lightview_rendered', function() {
+      populateAuthenticityTokensToAllForms()
+    });
+
+    function populateAuthenticityTokensToAllForms(){
+      $('form').not(searchAction + ', ' + noToken).each(function(){
+        checkAuthenticityTokens(this)
+      });
+    }
+  });
+
+  
+
+  Ctesius.addConfig('exposures_public_url', 'https://exposures.homeflow.co.uk');
+
+  function bulkPropertyExposureCreationFromElements(event_type, elements){
+    if (elements.length > 0) {
+      var propertyIds = $.map(elements, function(el) {
+        return $(el).data('search-result-exposure-property-id')
+      });
+      if(propertyIds.length > 0) {
+        Ctesius.Actions.postBulkPropertyExposureCreation('SearchResult', listWithoutDuplicates(propertyIds));
+      }
+    }
+  }
+
+  /**
+  Function to create a new array of values from an existing array with all duplicates removed
+  @param arrayOfValues // Array - the array of values which you wish to remove
+  @return // Array - a new array based on given array with all duplicate values removed
+  */
+  function listWithoutDuplicates(arrayOfValues) {
+    var newArray = [];
+    var addValueToArray = false;
+    for(var i = 0; i < arrayOfValues.length; i++) {
+      addValueToArray = true;
+      for(var j = 0; j < newArray.length; j++) {
+        if(arrayOfValues[i] == newArray[j]) {
+          addValueToArray = false;
+          break;
+        }
+      }
+      if(addValueToArray) {
+        newArray.push(arrayOfValues[i]);
+      }
+    }
+    return newArray;
+  }
+
+  function bulkPropertyExposureCreation(event_type){
+    Ctesius.Actions.postBulkPropertyExposureCreation(
+      event_type,
+      '[21602209,21567329,21640750,21456451,21627941]'
+    );
+  }
+
+  $(function() {
+    bulkPropertyExposureCreationFromElements('SearchResult', $('[data-search-result-exposure-property-id]'));
+  });
+
+  
+    $(function() { bulkPropertyExposureCreation('SearchResult') });
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+    Ctesius.addConfig('properties', {"properties":[{"property_id":21602209,"photo":"//mr0.homeflow-assets.co.uk/files/photo/image/46996/4125/378x235/2626-PRC11410-1-fs.jpg","photos":["//mr0.homeflow-assets.co.uk/files/photo/image/46996/4125/378x235/2626-PRC11410-1-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4131/378x235/2626-PRC11410-2-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4139/378x235/2626-PRC11410-3-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4151/378x235/2626-PRC11410-4-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4162/378x235/2626-PRC11410-5-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4166/378x235/2626-PRC11410-6-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4168/378x235/2626-PRC11410-7-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4169/378x235/2626-PRC11410-8-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4172/378x235/2626-PRC11410-9-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4174/378x235/2626-PRC11410-10-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4177/378x235/2626-PRC11410-11-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4181/378x235/2626-PRC11410-12-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4183/378x235/2626-PRC11410-13-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4185/378x235/2626-PRC11410-14-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4189/378x235/2626-PRC11410-15-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4191/378x235/2626-PRC11410-16-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4194/378x235/2626-PRC11410-17-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4196/378x235/2626-PRC11410-18-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4198/378x235/2626-PRC11410-19-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4200/378x235/2626-PRC11410-20-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4202/378x235/2626-PRC11410-21-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4205/378x235/2626-PRC11410-22-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4208/378x235/2626-PRC11410-23-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4210/378x235/2626-PRC11410-24-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4212/378x235/2626-PRC11410-25-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4214/378x235/2626-PRC11410-26-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4216/378x235/2626-PRC11410-27-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4218/378x235/2626-PRC11410-28-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4219/378x235/2626-PRC11410-29-fs.jpg","//mr0.homeflow-assets.co.uk/files/photo/image/46996/4220/378x235/2626-PRC11410-30-fs.jpg"],"featured_photo":"//mr0.homeflow-assets.co.uk/files/photo/image/46996/4125/378x235/2626-PRC11410-1-fs.jpg","small_photo":"//mr0.homeflow-assets.co.uk/files/photo/image/46996/4125/187x115/2626-PRC11410-1-fs.jpg","thumb_photo":"//mr0.homeflow-assets.co.uk/files/photo/image/46996/4125/96x64/2626-PRC11410-1-fs.jpg","video_links":null,"property_url":"/properties/21602209/sales","short_description":"** on line auction mon 11th may to weds 13th may 2026 - guide price £175,000+ ** - **excellent potential on offer** - a delightfully positioned 4 b...","display_address":"Talog, Carmarthen, Carmarthenshire.","town":"Carmarthen","price":"Guide £165,000","tenure":"Freehold","bedrooms":"4","acreage":"0.0","lat":51.901528,"lng":-4.425651,"agency_name":"Clee Tompkinson Francis","vox_number":"","channel":"sales","is_premium":false,"status":"For sale","tags":["unmodernised","garden","waterside","garage","rural","auction","cottage","village house","country house","studio","diligent","refurbishments","villages","residential","warehouse","auctions","coast country","restaurant","coast and country","managed workspace","residential moore allen","detached property only","amenities","without too much land","waterfront","gym","security","privacy","river","riverside","int commercial","shouler rural","clee auction","buying commercial","shouler commercial","conservatory","ct residential","house","detached","detached house","all residential","houses","house detached","gth residential","residential northumberland","rendells residential"]},{"property_id":21567329,"photo":"//mr2.homeflow-assets.co.uk/files/photo/image/46926/8914/378x235/2626-PRE12709-2-fs.jpg","photos":["//mr2.homeflow-assets.co.uk/files/photo/image/46926/8914/378x235/2626-PRE12709-2-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/46926/8917/378x235/2626-PRE12709-3-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/46926/8920/378x235/2626-PRE12709-4.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/46926/8923/378x235/2626-PRE12709-5-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/46926/8925/378x235/2626-PRE12709-6-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/46926/8928/378x235/2626-PRE12709-7-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/46926/8930/378x235/2626-PRE12709-8-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/46926/8931/378x235/2626-PRE12709-9-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/46926/8933/378x235/2626-PRE12709-10-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/46926/8936/378x235/2626-PRE12709-11-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/46926/8938/378x235/2626-PRE12709-12-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/46926/8940/378x235/2626-PRE12709-13-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/46926/8943/378x235/2626-PRE12709-14-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/46926/8911/378x235/2626-PRE12709-1-fs.jpg"],"featured_photo":"//mr2.homeflow-assets.co.uk/files/photo/image/46926/8914/378x235/2626-PRE12709-2-fs.jpg","small_photo":"//mr2.homeflow-assets.co.uk/files/photo/image/46926/8914/187x115/2626-PRE12709-2-fs.jpg","thumb_photo":"//mr2.homeflow-assets.co.uk/files/photo/image/46926/8914/96x64/2626-PRE12709-2-fs.jpg","video_links":null,"property_url":"/properties/21567329/sales","short_description":"Going to auction alongside our partners auction house wales, bidding will commence at midday on monday the 11th to midday on wednesday the 13th of ...","display_address":"Gnoll Park Road, Neath, Neath Port Ta...","town":"Neath","price":"Guide £140,000","tenure":"Freehold","bedrooms":"3","acreage":"0.0","lat":51.664428,"lng":-3.798394,"agency_name":"Clee Tompkinson Francis","vox_number":"","channel":"sales","is_premium":false,"status":"For sale","tags":["unmodernised","garden","garage","auction","house","featured","terrace","diligent","character property","house mid terraced","parking","period","auctions","terraced","amenities","character","cellar","without too much land","heating","all residential","houses","residential","residential moore allen","gth residential","residential northumberland","rendells residential","rickman local properties","ct residential"]},{"property_id":21640750,"photo":"//mr3.homeflow-assets.co.uk/files/photo/image/47067/1990/378x235/2626-PRI11832-1-fs.jpg","photos":["//mr3.homeflow-assets.co.uk/files/photo/image/47067/1990/378x235/2626-PRI11832-1-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/1994/378x235/2626-PRI11832-2-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/1998/378x235/2626-PRI11832-3-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/2001/378x235/2626-PRI11832-4-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/2004/378x235/2626-PRI11832-5-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/2006/378x235/2626-PRI11832-6-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/2009/378x235/2626-PRI11832-7-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/2012/378x235/2626-PRI11832-8-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/2014/378x235/2626-PRI11832-9-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/2023/378x235/2626-PRI11832-10-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/2029/378x235/2626-PRI11832-11-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/2034/378x235/2626-PRI11832-12-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/2046/378x235/2626-PRI11832-13-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/2052/378x235/2626-PRI11832-14-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/2059/378x235/2626-PRI11832-15-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/2062/378x235/2626-PRI11832-16-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/2067/378x235/2626-PRI11832-17-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/2068/378x235/2626-PRI11832-18-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/2072/378x235/2626-PRI11832-19-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/2074/378x235/2626-PRI11832-20-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/2079/378x235/2626-PRI11832-21-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/2085/378x235/2626-PRI11832-22-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/2088/378x235/2626-PRI11832-23-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/47067/2093/378x235/2626-PRI11832-24-fs.jpg"],"featured_photo":"//mr3.homeflow-assets.co.uk/files/photo/image/47067/1990/378x235/2626-PRI11832-1-fs.jpg","small_photo":"//mr3.homeflow-assets.co.uk/files/photo/image/47067/1990/187x115/2626-PRI11832-1-fs.jpg","thumb_photo":"//mr3.homeflow-assets.co.uk/files/photo/image/47067/1990/96x64/2626-PRI11832-1-fs.jpg","video_links":null,"property_url":"/properties/21640750/sales","short_description":"An excellent opportunity to acquire the llandybie church hall, a charming grade ii listed building located in the very centre of llandybie village....","display_address":"High Street, Llandybie, Ammanford, Ca...","town":"Ammanford","price":"Guide £139,000","tenure":"","bedrooms":"0","acreage":"0.0","lat":51.820556,"lng":-4.006794,"agency_name":"Clee Tompkinson Francis","vox_number":"","channel":"sales","is_premium":false,"status":"For sale","tags":["unmodernised","planning permission","auction","country house","diligent","character property","refurbishments","villages","new homes","land and new homes properties","parking","period","auctions","development-cl","amenities","character","investment opportunity","house","detached","detached house","all residential","houses","residential","house detached","residential moore allen","detached property only","gth residential","residential northumberland","rendells residential","ct residential"]},{"property_id":21456451,"photo":"//mr3.homeflow-assets.co.uk/files/photo/image/46691/9559/378x235/2626-PRM12347-1-fs.jpg","photos":["//mr3.homeflow-assets.co.uk/files/photo/image/46691/9559/378x235/2626-PRM12347-1-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/46691/9565/378x235/2626-PRM12347-2-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/46691/9571/378x235/2626-PRM12347-3-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/46691/9575/378x235/2626-PRM12347-4-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/46691/9579/378x235/2626-PRM12347-5-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/46691/9586/378x235/2626-PRM12347-6-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/46691/9589/378x235/2626-PRM12347-7-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/46691/9594/378x235/2626-PRM12347-8-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/46691/9597/378x235/2626-PRM12347-9-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/46691/9600/378x235/2626-PRM12347-10-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/46691/9603/378x235/2626-PRM12347-11-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/46691/9606/378x235/2626-PRM12347-12-fs.jpg","//mr3.homeflow-assets.co.uk/files/photo/image/46691/9610/378x235/2626-PRM12347-13-fs.jpg"],"featured_photo":"//mr3.homeflow-assets.co.uk/files/photo/image/46691/9559/378x235/2626-PRM12347-1-fs.jpg","small_photo":"//mr3.homeflow-assets.co.uk/files/photo/image/46691/9559/187x115/2626-PRM12347-1-fs.jpg","thumb_photo":"//mr3.homeflow-assets.co.uk/files/photo/image/46691/9559/96x64/2626-PRM12347-1-fs.jpg","video_links":null,"property_url":"/properties/21456451/sales","short_description":"We are delighted to offer this unique and characterful former chapel, thoughtfully converted into a two-bedroom residential home. ideally located i...","display_address":"Carlton Terrace, Swansea, City And Co...","town":"Swansea","price":"Guide £80,000","tenure":"Freehold","bedrooms":"2","acreage":"0.0","lat":51.621225,"lng":-3.952029,"agency_name":"Clee Tompkinson Francis","vox_number":"","channel":"sales","is_premium":false,"status":"For sale","tags":["garden","auction","house","terrace","residential","parking","auctions","terraced","residential moore allen","amenities","without too much land","investment opportunity","public transport","ct residential","all residential","houses","gth residential","residential northumberland","rendells residential","rickman local properties"]},{"property_id":21627941,"photo":"//mr2.homeflow-assets.co.uk/files/photo/image/47042/4660/378x235/2626-PRC11409-1-fs.jpg","photos":["//mr2.homeflow-assets.co.uk/files/photo/image/47042/4660/378x235/2626-PRC11409-1-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/47042/4663/378x235/2626-PRC11409-2.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/47042/4666/378x235/2626-PRC11409-3-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/47042/4669/378x235/2626-PRC11409-4-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/47042/4672/378x235/2626-PRC11409-5-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/47042/4675/378x235/2626-PRC11409-6-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/47042/4678/378x235/2626-PRC11409-7-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/47042/4681/378x235/2626-PRC11409-8-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/47042/4685/378x235/2626-PRC11409-9-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/47042/4688/378x235/2626-PRC11409-10.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/47042/4690/378x235/2626-PRC11409-11-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/47042/4694/378x235/2626-PRC11409-12-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/47042/4697/378x235/2626-PRC11409-13-fs.jpg","//mr2.homeflow-assets.co.uk/files/photo/image/47042/4700/378x235/2626-PRC11409-14-fs.jpg"],"featured_photo":"//mr2.homeflow-assets.co.uk/files/photo/image/47042/4660/378x235/2626-PRC11409-1-fs.jpg","small_photo":"//mr2.homeflow-assets.co.uk/files/photo/image/47042/4660/187x115/2626-PRC11409-1-fs.jpg","thumb_photo":"//mr2.homeflow-assets.co.uk/files/photo/image/47042/4660/96x64/2626-PRC11409-1-fs.jpg","video_links":null,"property_url":"/properties/21627941/sales","short_description":"** on line auction mon 11th may to weds 13th may 2026 - guide price £55,000+ ** - an ideal investment 3 bedroom mid terraced property located withi...","display_address":"Gwendraeth Town, Kidwelly, Carmarthen...","town":"Kidwelly","price":"Guide £55,000","tenure":"Freehold","bedrooms":"3","acreage":"0.0","lat":51.738873,"lng":-4.29815,"agency_name":"Clee Tompkinson Francis","vox_number":"","channel":"sales","is_premium":false,"status":"For sale","tags":["garden","waterside","auction","country house","castle","terrace","refurbishments","investments","commercial property","parking","investment","period","buy to let investments","auctions","terraced","restaurant","amenities","beach","character","school","hiking-cycling","without too much land","heating","investment opportunity","restoration project","age 55+","clee auction","beachfront","house","all residential","houses","residential","residential moore allen","gth residential","residential northumberland","rendells residential","rickman local properties","ct residential"]}],"pagination":{"current_page":1,"current_page_modulo_3":1,"has_prev_page":false,"total_count":5,"has_next_page":false,"from_record":1,"to_record":5,"page_count":1}}.properties);
+  
+
+  
+
+  //We want to hide or disable the email and the name fields if we've got a logged in user.
+  Ctesius.registerEvent('user_logged_in', function(user){
+      if (user.userType() != 'local'){
+        $('input[name="lead_client[email]"]').val(user.get('email')).prop("disabled", true);
+        $('input[name="lead_client[first_name]"]').val(user.get('first_name')).prop("disabled", true);
+        $('input[name="lead_client[last_name]"]').val(user.get('last_name')).prop("disabled", true);
+      }
+  });
+
+  Ctesius.registerEvent('user_loaded', function(user){
+    
+      if (user.attributes.is_opted_in_to_marketing) {
+        $('.optin-label__opt_in_marketing').remove();
+        //Custom forms don't have above class
+        $('.marketingoptin_label[for=opt_in_marketing]').remove();
+      }
+    
+
+      // remove account_confirmation checkbox and label from forms.
+      if (user.get('user_id')) {
+        $('.optin-label__account_confirmation_status').remove();
+        $('[name="marketing_preferences[account_confirmation_status]"]').remove();
+
+        $('[name="form_submission[account_confirmation_status]"]').remove();
+        $('[for="account_confirmation_status"]').remove();
+      }
+  });
+
+  Ctesius.addConfig('sales_price_dropdown_list', "\u003coption value=\"100000\"\u003e£100,000\u003c/option\u003e\n\u003coption value=\"200000\"\u003e£200,000\u003c/option\u003e\n\u003coption value=\"300000\"\u003e£300,000\u003c/option\u003e\n\u003coption value=\"400000\"\u003e£400,000\u003c/option\u003e\n\u003coption value=\"500000\"\u003e£500,000\u003c/option\u003e\n\u003coption value=\"600000\"\u003e£600,000\u003c/option\u003e\n\u003coption value=\"700000\"\u003e£700,000\u003c/option\u003e\n\u003coption value=\"800000\"\u003e£800,000\u003c/option\u003e\n\u003coption value=\"900000\"\u003e£900,000\u003c/option\u003e\n\u003coption value=\"1000000\"\u003e£1,000,000\u003c/option\u003e\n\u003coption value=\"2000000\"\u003e£2,000,000\u003c/option\u003e\n\u003coption value=\"3000000\"\u003e£3,000,000\u003c/option\u003e\n\u003coption value=\"4000000\"\u003e£4,000,000\u003c/option\u003e\n\u003coption value=\"5000000\"\u003e£5,000,000\u003c/option\u003e\n\u003coption value=\"6000000\"\u003e£6,000,000\u003c/option\u003e\n\u003coption value=\"7000000\"\u003e£7,000,000\u003c/option\u003e\n\u003coption value=\"8000000\"\u003e£8,000,000\u003c/option\u003e\n\u003coption value=\"9000000\"\u003e£9,000,000\u003c/option\u003e\n\u003coption value=\"10000000\"\u003e£10,000,000\u003c/option\u003e" );
+  Ctesius.addConfig('lettings_price_dropdown_list', "\u003coption value=\"200\"\u003e£200pcm (£47pcw)\u003c/option\u003e\n\u003coption value=\"300\"\u003e£300pcm (£70pcw)\u003c/option\u003e\n\u003coption value=\"400\"\u003e£400pcm (£93pcw)\u003c/option\u003e\n\u003coption value=\"500\"\u003e£500pcm (£116pcw)\u003c/option\u003e\n\u003coption value=\"600\"\u003e£600pcm (£139pcw)\u003c/option\u003e\n\u003coption value=\"700\"\u003e£700pcm (£162pcw)\u003c/option\u003e\n\u003coption value=\"800\"\u003e£800pcm (£185pcw)\u003c/option\u003e\n\u003coption value=\"900\"\u003e£900pcm (£208pcw)\u003c/option\u003e\n\u003coption value=\"1000\"\u003e£1,000pcm (£231pcw)\u003c/option\u003e\n\u003coption value=\"1100\"\u003e£1,100pcm (£254pcw)\u003c/option\u003e\n\u003coption value=\"1200\"\u003e£1,200pcm (£277pcw)\u003c/option\u003e\n\u003coption value=\"1300\"\u003e£1,300pcm (£300pcw)\u003c/option\u003e\n\u003coption value=\"1500\"\u003e£1,500pcm (£347pcw)\u003c/option\u003e\n\u003coption value=\"2000\"\u003e£2,000pcm (£462pcw)\u003c/option\u003e\n\u003coption value=\"2500\"\u003e£2,500pcm (£577pcw)\u003c/option\u003e\n\u003coption value=\"3000\"\u003e£3,000pcm (£693pcw)\u003c/option\u003e\n\u003coption value=\"3500\"\u003e£3,500pcm (£808pcw)\u003c/option\u003e\n\u003coption value=\"4000\"\u003e£4,000pcm (£924pcw)\u003c/option\u003e\n\u003coption value=\"4500\"\u003e£4,500pcm (£1,039pcw)\u003c/option\u003e\n\u003coption value=\"5000\"\u003e£5,000pcm (£1,154pcw)\u003c/option\u003e" );
+
+  
+    Ctesius.addConfig('default_sales_search_order', 'most-expensive-first');
+    Ctesius.addConfig('default_lettings_search_order', 'most-expensive-first');
+  
+
+  
+
+  
+
+  
+    
+  
+
+  
+    
+  
+
+  
+    Ctesius.addConfig ('sales_preposition', 'for sale' );
+  
+
+  
+    Ctesius.addConfig ('lettings_preposition', 'to let' );
+  
+
+  // Clear visible lead form fields when user logs out
+  Ctesius.registerEvent('user_logged_out', function(user){
+    $("form[action='/leads'] input").not('[type="hidden"]').val('');
+  });
+
+  Ctesius.addConfig('google_maps_api_key', 'AIzaSyC1fBGiO75NYKYrCh_Wd_qQqe0YPdu1dqA');
+
+  // Needed for twenty7tec
+  // Adding to core rather than invidual themes
+  
+   window.agencyId = 7310
+  
+</script>
+
+
+
+
+  
+
+
+<style>
+  
+
+  .grecaptcha-badge {
+    visibility: hidden;
+    opacity: 0;
+    transition: linear opacity 1s;
+  }
+
+  .grecaptcha-badge.show {
+    visibility: visible;
+    opacity: 1;
+    transition: linear opacity 1s;
+    right: 0px !important;
+  }
+
+  .grecaptcha-badge {
+    z-index: 999999;
+  }
+  /* Custom styles */
+
+  .xmas-hours__popup {
+    width: 333px;
+}
+
+.alert-success {
+    background-color: green;
+}
+
+/*valuation*/
+#valuation-section .top h3 {
+    margin-top: 10px;
+}
+
+#valuation-section {
+    background-image: url(https://mr1.homeflow-assets.co.uk/files/site_asset/image/4749/8757/kai-bossom-SX1JvCymZdk-unsplash.jpg);
+    background-size: 100% !important;
+}
+#valuation-section .top h3,
+#valuation-section .similar-properties-top h4 {
+    font-size: 20px;
+    color: #e11e2c;
+}
+.similar-properties-top h3,
+.similar-properties-top h4,
+#valuation-section .top h2,
+#valuation-section .sell-switch,
+#valuation-section .let-switch {
+    color: #e11e2c !important;
+}
+#valuation-section .sell-let-switch .active {
+    color: white !important;
+}
+.propertyTeaser .propertyTeaser-description span {
+    min-height: 50px;
+}
+.result-container,
+.valuation_start_again,
+#details-form,
+#similar-properties {
+    background-color: rgba(255, 255, 255, 0.7);
+    padding: 5px;
+}
+
+/*valuation*/
+
+html,
+body {
+    font-family: 'Oxygen', sans-serif !important;
+}
+html,
+body {
+    width: 100%;
+    margin: 0px;
+    padding: 0px;
+    overflow-x: hidden;
+}
+.xmas-hours__see {
+    background-color: #e11e2c !important;
+}
+#valuation-section .agency-logo,
+.result-container .agency-logo {
+    padding: 5px;
+}
+.mainNavbar.mainNavbar--withMarginBottom {
+    background: rgba(255, 255, 255, 0.7);
+}
+.mainNavbar-header,
+.mainNavbar.mainNavbar--withPaddingBottom {
+    background-color: transparent;
+}
+.mainNavbar .mainNavbar-brand img {
+    margin-top: -20px;
+}
+.mainNavbar .mainNavbar-brand {
+  width: 120px !important;
+  margin-top: 20px;
+}
+@media (min-width: 501px) {
+    .mainNavbar .mainNavbar-brand {
+        width: 218px !important;
+        height: auto !important;
+    }
+}
+@media (min-width: 1200px) {
+    .mainNavbar .mainNavbar-brand {
+        width: 100% !important;
+    }
+}
+body
+    > div.heroGalleryContainer
+    > div.heroTextWrapper.clearfix
+    > div
+    > div
+    > div
+    > p
+    > span
+    > a:nth-child(4) {
+    background-color: #e11e2c !important;
+    border: #e11e2c;
+}
+.btn-primary,
+.btn {
+    color: #ffffff !important;
+    background-color: #2f4fa0 !important;
+    border-color: #2f4fa0 !important;
+}
+.btn-primary:hover,
+.btn:hover {
+    color: #ffffff;
+    background-color: #2f4fa0 !important;
+    border-color: #2f4fa0 !important;
+}
+.btn-group .btn:active,
+.btn-group .btn.active {
+    background-color: #e11e2c !important;
+    border-color: #e11e2c !important;
+}
+/*HOMEPAGE */
+.inlineFormHolder.inlineFormHolder--alternativeBackground {
+    background-color: #2f4fa0 !important;
+}
+#search_form_button {
+    background: #e11e2c !important;
+    border: #e11e2c;
+}
+.teaserPlain .teaserPlain-header {
+    border-bottom: 2px solid #2f4ea0;
+    border-left: 3px solid #e11e2c;
+    text-align: left !important;
+}
+.teaserPlain .teaserPlain-header:hover a {
+    text-decoration: none !important;
+    font-weight: bold;
+}
+.teaserPlain .teaserPlain-header:hover {
+    transition: 0.2s ease-in-out;
+    background-color: #e7e7e7 !important;
+}
+
+.heroTextWrapper {
+    padding-bottom: 30px !important;
+    margin-bottom: 0px !important;
+}
+.inlineFormHolder.inlineFormHolder--withPadding {
+    margin-top: 35px;
+}
+.agencyCoverage {
+    background-color: #9cc0fa !important;
+}
+@media (min-width: 600px) {
+    .agencyCoverage img {
+        height: auto !important;
+    }
+}
+.teaserNewsHolder,
+body > div.container.mobile_display > div:nth-child(4) > div > section > h2 {
+    display: none;
+}
+
+/*BOXES*/
+.teaserPage h2 a {
+    color: #c4122f;
+}
+.teaserPage {
+    max-height: 300px !important;
+}
+.teaserPage {
+    padding: unset !important;
+    border: none !important;
+}
+.teaserPage-header {
+    padding: 5px;
+    background-color: #dedede;
+    text-align: center;
+    min-height: 100px;
+}
+.teaserPage img {
+    max-height: 240px !important;
+    min-height: 240px;
+    min-width: 100%;
+}
+.teaserPage::after {
+    content: '';
+    display: block;
+    width: 0;
+    height: 2px;
+    background: #2f4fa0;
+    transition: width 0.3s;
+}
+.teaserPage:hover::after {
+    width: 100%;
+    transition: width 0.3s;
+}
+.teaserPage:hover img {
+    filter: grayscale(100%);
+    transition: 0.3s;
+}
+/* PAGES */
+.masthead-body h2 {
+    color: white;
+}
+@media (min-width: 1108px) {
+    .mainCol.mainCol-marginTopNegativeLarge {
+        margin-top: -600px !important;
+    }
+    .mastheadWrapper.mastheadWrapper--marginBottomLarge {
+        margin-bottom: 0px !important;
+        min-height: 100px !important;
+    }
+    .heroGallery-item.smaller-item {
+        height: 335px !important;
+    }
+}
+
+.masthead {
+    padding-bottom: 50px !important;
+    border-bottom: 2px solid #e11e2c;
+    background-color: rgba(43, 82, 151, 0.5) !important;
+  	padding: 0 20px;
+}
+.masthead .masthead-header h1, .masthead .masthead-header .article-show__title {
+    color: #fff;
+}
+.teaserPlain--extraMarginTop {
+    margin-top: 20px;
+}
+/*FOOTER */
+.footer .footer-smallPrint {
+    background-color: #2f4fa0 !important;
+}
+.footer a {
+    color: white !important;
+}
+.portal-logos img {
+    max-height: 60px;
+    margin-right: 15px;
+}
+
+@media (min-width: 991px) {
+    #request_valuation_form {
+        bottom: 0px !important;
+    }
+}
+#request_valuation_form .col-sm-6 {
+    margin-top: 50px !important;
+}
+
+/* NON-HOMEPAGE HEADERS */
+.mainCol.mainCol-marginTopNegativeLarge {
+    margin-top: 10px;
+}
+
+@media screen and (min-width: 768px) {
+    body
+        > div.container
+        > div
+        > div.mainCol.mainCol-marginTopNegativeLarge.mainCol--cmsPage.col-md-8.col-md-push-4
+        > div.mastheadWrapper.mastheadWrapper--marginBottomLarge {
+        margin-bottom: -20px !important;
+    }
+
+    .mainCol.mainCol-marginTopNegativeLarge {
+        margin-top: -290px !important;
+    }
+}
+@media screen and (min-width: 991px) {
+    .mainCol.mainCol-marginTopNegativeLarge {
+        margin-top: -450px !important;
+    }
+}
+@media screen and (min-width: 1108px) {
+    body
+        > div.container
+        > div
+        > div.mainCol.mainCol-marginTopNegativeLarge.mainCol--cmsPage.col-md-8.col-md-push-4
+        > div.mastheadWrapper.mastheadWrapper--marginBottomLarge {
+        margin-bottom: 20px !important;
+    }
+
+    .mainCol.mainCol-marginTopNegativeLarge {
+        margin-top: -380px !important;
+    }
+}
+@media screen and (min-width: 1108px) {
+    .mainCol.mainCol-marginTopNegativeLarge {
+        margin-top: -370px !important;
+    }
+}
+
+body > div.heroGalleryContainer > div.heroGalleryWrapper > div > div {
+    background-position: center;
+}
+@media (max-width: 730px) {
+    .footer-main .col-sm-2,
+    .footer-main .col-sm-3 {
+        padding-left: 35px;
+    }
+    body > div.footer > div > div:nth-child(1) > div:nth-child(1) > img {
+        padding-left: unset !important;
+    }
+    .portal-logos img {
+        height: 35px;
+        margin-top: 10px;
+        margin-bottom: 10px;
+    }
+}
+@media (max-width: 765px) {
+    .valuation-text_button-mobile {
+        display: none;
+    }
+}
+    .masthead .masthead-header {
+        background-color: transparent !important;
+    }
+@media (max-width: 766px) {
+    .masthead .masthead-header {
+        background-color: transparent !important;
+    }
+    .masthead {
+        padding: 0px 10px 0px 10px !important;
+    }
+    body
+        > div.container
+        > div
+        > div.mainCol.mainCol-marginTopNegativeMedium.col-md-8.col-md-push-4
+        > div.mastheadWrapper
+        > div {
+        padding-bottom: 0px !important;
+    }
+}
+@media (max-width: 450px) {
+    .valuation-subtext {
+        display: none;
+    }
+}
+.departmentFormHolder {
+    background-color: #e7e7e7b0 !important;
+}
+@media (min-width: 1000px) {
+    .heroGalleryContainer .heroTextWrapper {
+        bottom: 115px;
+        padding-bottom: unset !important;
+    }
+    .mainCol.mainCol-marginTopNegativeSmall,
+    .inlineFormHolder.inlineFormHolder--withPadding {
+        margin-top: -50px !important;
+    }
+}
+
+@media (max-width: 450px) {
+    .valuation-subtext {
+        display: block !important;
+        font-size: 12px;
+        line-height: 1em;
+        margin-top: 0px;
+    }
+    body
+        > div.heroGalleryContainer
+        > div.heroTextWrapper.clearfix
+        > div
+        > div
+        > div
+        > p
+        > span
+        > a:nth-child(4),
+    .valuation-subtext a.btn-primary {
+        margin: 2px;
+        font-size: 10px;
+    }
+    body > div.heroGalleryContainer > div.heroTextWrapper.clearfix {
+        padding-bottom: 0px !important;
+        padding-top: 0;
+    }
+}
+@media (max-width: 600px) {
+    .js-buttonGrid {
+        display: none !important;
+    }
+}
+@media (max-width: 500px) {
+    body > div.heroGalleryContainer > div.heroTextWrapper.clearfix p {
+        margin: 0;
+    }
+}
+
+body > div.container > div:nth-child(1) > div.mainCol.mainCol-marginTopNegativeLarge.col-md-8.col-md-push-4 > section #branch_map {
+    visibility: hidden;
+}
+
+body
+    > div.container
+    > div:nth-child(1)
+    > div.mainCol.mainCol-marginTopNegativeLarge.col-md-8.col-md-push-4
+    > section {
+    background: url(https://mr1.homeflow.co.uk/files/site_asset/image/4510/7790/clee_map_2_.png);
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+}
+
+@media (min-width: 1000px) {
+    #branch_map {
+        margin-top: 60px;
+    }
+}
+.eventEntry .eventEntry-media img {
+    max-width: 100px !important;
+}
+.eventEntry .eventEntry-calendarDate{
+  font-size:15px !important;
+margin-top:4px;
+}
+.teaserPage-header p{font-size:14.5px; max-height:20px;}
+body > div.container > div > div.mainCol.mainCol-marginTopNegativeLarge.col-md-8.col-md-push-4 > div.row.u-whiteBackground .articleSharing li:nth-child(4){
+    display:none;
+}
+body > div:nth-child(18) > div > div.col-sm-9.mainCol.mainCol--paddingLeft50px > div > button{
+    padding:5px !important;
+  margin-bottom:5px;
+}
+@media(max-width:500px){
+    img[usemap]{width: 95% !important;margin-left: 15px;}
+
+    .teaserContent .teaserContent-image {
+margin:0px auto;
+    }
+    .teaserContent h2{text-align:center;}
+
+body > div.footer > div > div:nth-child(1) > div:nth-child(4) > h3,
+    body > div.footer > div > div:nth-child(1) > div:nth-child(5) > h3{
+    margin-top:15px !important;
+}
+      #branch_map{display:none;}
+}
+  .col-sm-9.mainCol.mainCol--paddingLeft50px > div > button{margin-bottom:10px;}
+
+.officeMapWrapper .officeMapWrapper-streetView i, .officeMapWrapper .officeMapWrapper-mapToggle i {
+  color: #fff !important;
+}
+/*
+  .heroGalleryContainer.heroGalleryContainer--greyBg{
+    background-image:url("https://mr1.homeflow-assets.co.uk/files/site_asset/image/5202/9977/banner_property_search.jpg");
+    background-position:10%;
+    background-size:cover;
+  }*/
+/*mobile alternative heading
+  @media(max-width:760px)
+    body > div.container > div > div.mainCol.mainCol-marginTopNegativeMedium.col-md-8.col-md-push-4 > div.mastheadWrapper > div{
+      background-color:transparent !important;
+    }
+  body > div.container > div > div.mainCol.mainCol-marginTopNegativeMedium.col-md-8.col-md-push-4 > div.mastheadWrapper > div > div.masthead-header > h1,
+  body > div.container > div > div.mainCol.mainCol-marginTopNegativeMedium.col-md-8.col-md-push-4 > div.mastheadWrapper > div > div.masthead-body > h2{
+      color:#2f4fa0 !important;
+    }
+    .mainCol.mainCol-marginTopNegativeMedium{
+      margin-top:0px !important;
+    }
+  }
+  mobile alternative heading*/
+#search-fields > div:nth-child(9) {
+    display: none;
+}
+.advancedSearch .advancedSearch-heading {
+ position:relative;
+  visibility: hidden;
+}
+a.advancedSearch-heading.visible-xs-block::after {
+    content: 'Filter properties \2228';
+    position: absolute;
+    inset: 0;
+    visibility: visible;
+}
+
+@media screen and (max-width: 767px) {
+  a.advancedSearch-heading::after {
+    background-color: #2f4fa0;
+    color: white;
+    margin-bottom: 10px;
+    height: 35px;
+    text-align: center;
+  }
+  .advancedSearch {
+    align-items: unset;
+  }
+  
+  .advancedSearch-form {
+    padding: 0 10px;
+  }
+}
+
+.footer {
+    background-color: #2f4ea0 !important;
+}
+
+  /* /Custom styles */
+
+  
+  @media only screen
+  and (device-width: 414px)
+  and (device-height: 896px)
+  and (-webkit-device-pixel-ratio: 2),
+  screen and (device-width: 375px)
+  and (device-height: 812px)
+  and (-webkit-device-pixel-ratio: 3),
+  screen and (device-width: 414px)
+  and (device-height: 896px)
+  and (-webkit-device-pixel-ratio: 3) {
+    .cc-window.cc-floating {
+      padding: 2em;
+      max-width: none;
+      -webkit-box-orient: vertical;
+      -webkit-box-direction: normal;
+      -ms-flex-direction: column;
+      flex-direction: column;
+      bottom: 50px;
+      left: 0;
+      margin-left: 0;
+      margin-right: 0;
+    }
+  }
+</style>
+
+
+<script>
+  $(document).ready(function(){
+
+  
+
+  });
+</script>
+
+
+
+
+<script id="property_map_pin_template" type="text/liquid">
+  <div class="propertyTeaserMap">
+
+    <p style="position:relative;">
+      {% unless property.status == "For sale" or property.status == "To let" %}
+      <span class="propertyTeaserMap-sash">{{ property.status }}</span>
+      {% endunless %}
+      <a href="{{ property.property_url }}">
+        <img style="width:200px;" src="{{ property.photo }}">
+      </a>
+    </p>
+
+    <p>
+      <span class="u-line propertyTeaserMap-propertyAddress">
+        <a href="{{ property.property_url }}">{{ property.display_address }}</a>
+      </span>
+
+      <b>{{ property.price }}</b>
+
+      {% unless property.bedrooms == 0 %}
+        | {{ property.bedrooms }} {% if property.bedrooms == 1 %}bedroom{% else %}bedrooms{% endif %}
+      {% endunless %}
+
+      {% unless property.acreage == 0 %}
+        | {{ property.acreage }} acres
+      {% endunless %}
+
+    </p>
+
+    <div class="propertyTeaser-actions">
+      <a
+        id="map-popup-property-shortlist"
+        class="propertyTeaser-shortlist js-addToFavourites"
+        data-id="{{ property.property_id }}"
+        href="#"
+        onclick="Ctesius.Actions.addSavedProperty({{property.property_id}}); return false;"
+      >
+        Shortlist
+        <i class="fa fa-heart-o" aria-hidden="true"></i>
+      </a>
+    </div>
+  </div>
+</script>
+
+
+
+
+
+<script id="branch_map_pin_template" type="text/liquid">
+  <div class="branchMapPin">
+    <a href="{{ branch.branch_url }}">
+      <h4>{{ branch.name }}</h4>
+    </a>
+    <div class="branchMapPin-details">
+      <p>
+      {{ branch.address }}
+      </p>
+      <p><a target='_blank' href='https://maps.google.com/maps?saddr=&daddr={{branch.lat}},{{branch.lng}}'>Directions ><a></p>
+      <p>
+      {% if branch.sales_enabled %}<a href="{{branch.branch_url }}/sales/status-all">View all properties for sale &gt;</a><br>{% endif %}
+        {% if branch.lettings_enabled %}<a href="{{branch.branch_url }}/lettings/status-all">View all properties to let &gt;</a>{% endif %}
+      </p>
+      <p>
+        <a href="{{ branch.branch_url }}">View branch details</a>
+      </p>
+    </div>
+  </div>
+</script>
+
+
+
+<!-- user info template -->
+
+  <script id="user_micro_template" type="text/liquid">
+    <li>
+      <a href="#user/saved_properties">
+        My shortlist {% if saved_properties.length != 0 %}({{ saved_properties.length }}){% endif %}
+        <i class="fa fa-heart-o" aria-hidden="true"></i>
+      </a>
+    </li>
+    <li>
+      {% if user_type == 'persisted' %}
+        
+          
+            
+              <a href="#user">My Profile</a>
+            
+          
+        
+      {% else %}
+        <a href="#user">Sign in / register</a>
+      {% endif %}
+    </li>
+  </script>
+
+
+
+<!-- user profile template -->
+
+<script id="user_profile_template" type="text/liquid">
+  <div class="profile_lightbox core">
+    <div class="profileBody">
+      <div class="row">
+        {% if user_type != 'local'%}
+          <div class="col-sm-12">
+            <div class="userWelcome">
+              
+                
+                  
+                    <h2 class="profile-content__title">My Profile</h2>
+                  
+                
+              
+              <h3>Hello {{ user.first_name }}</h3>
+            </div>
+          </div>
+        {% endif %}
+
+        <div class="col-sm-12">
+          <div class="alert flash_message_container {% unless flash.message %} hidden {% endunless %}" role="alert">
+            {% if flash.message %}
+              <strong>Warning!</strong> {{ flash.message }}</span>
+            {% endif %}
+          </div>
+        </div>
+
+
+      </div>
+
+      
+
+      
+<div class='profile_tab_content hidden' id="profile_tab_content">
+ {% if user_type == 'local'%}
+  <div class="row">
+    <div class="col-md-6">
+      <div class="why-register">
+        <h2 class="profile-content__title">Why Register?</h2>
+        <div class="email-alerts"></div>
+        <h2>Find out about new properties first</h2>
+        <p>Set up automatic email alerts based on your search criteria and be notified as soon as relevant properties come onto the market.</p>
+        <div class="save-properties"></div>
+        <h2>Save favourite properties</h2>
+        <p>Save properties of interest so they are easy to find once you log back in.</p>
+        <div class="save-search"></div>
+        <h2>Save searches</h2>
+        <p>Search for your ideal house and then save that search so you can run it again in future with just one click.</p>
+
+      </div>
+    </div>
+
+
+    <div class="col-md-6">
+      <div class="row registerArea">
+        <div class="col-sm-12">
+          <h2 class="text-center profile-content__title">My Clee Tompkinson Francis</h2>
+        </div>
+
+        
+
+        <div class="col-sm-6">
+          <p>Are you new?</p>
+          <p>Create your account:</p>
+
+          <form onsubmit="Ctesius.Actions.createNewUser(this); return false;">
+            <fieldset>
+              <div class="form-group">
+                <input
+                  type="text"
+                  id="profile_first_name"
+                  name="first_name"
+                  required
+                  placeholder="First name"
+                  class="form-control"
+                />
+              </div>
+
+              <div class="form-group">
+                <input
+                  type="text"
+                  id="profile_last_name"
+                  name="last_name"
+                  required
+                  placeholder="Last name"
+                  class="form-control"
+                />
+              </div>
+
+              <div class="form-group">
+                <input
+                  type="email"
+                  id="profile_email"
+                  name="email"
+                  required
+                  placeholder="Email"
+                  class="form-control"
+                  pattern="[a-zA-Z0-9._%+-]*@[a-zA-Z0-9\.\-]*\.[a-zA-Z]{1,}$"
+                />
+              </div>
+
+              <div class="form-group">
+                <input
+                  type="tel"
+                  id="profile_telephone"
+                  name="tel_home"
+                  required
+                  pattern="^[0-9-.()\/ +]{6,20}$"
+                  placeholder="Contact number"
+                  class="form-control"
+                />
+              </div>
+
+              <div class="form-group">
+                <input
+                  type="password"
+                  id="profile_password"
+                  name="password"
+                  required placeholder="Password"
+                  class="form-control"
+                />
+              </div>
+
+              <div class="form-group">
+                <input
+                  type="password"
+                  id="profile_confirm_password"
+                  required placeholder="Confirm password"
+                  name="password_confirmation"
+                  class="form-control"
+                />
+              </div>
+              
+                
+                  <div class='optin_container__opt_in_marketing opt_in_box'><label class='statement_text  optin-label__opt_in_marketing'><input class='checkbox_class_opt_in_marketing' type='checkbox' name='marketing_preferences[opt_in_marketing]' /><span> Get emails with the latest news and information on the local property market, our products and services. You can unsubscribe at any time. </span></label></div><div class='optin_container__opt_in_terms opt_in_box'><label class='statement_text  optin-label__opt_in_terms'><input class='checkbox_class_opt_in_terms' type='checkbox' name='marketing_preferences[opt_in_terms]' required/><span> I have read and agree to the <a href="/pages/terms-of-use">Terms and Conditions</a>, <a href="/pages/privacy-policy">Privacy Policy</a> and <a href="/pages/cookies">Cookies Policy</a>. </span></label></div><input type='hidden' name='[marketing_preferences][opt_in_marketing_statement]' value='Get emails with the latest news and information on the local property market, our products and services. You can unsubscribe at any time.'/>
+                
+              
+
+              {% comment %} HONEYPOT {% endcomment %}
+              <input type="text" id="body" name="body" style="height: 0; width: 0; opacity: 0;" tabindex="-1" autocomplete="off" />
+
+              <div class="form-group">
+                <input type="submit" value="Register" class="btn btn-primary">
+              </div>
+            </fieldset>
+          </form>
+        </div>
+
+        <div class="col-sm-6">
+          <p>Already got an account?</p>
+          <p>Sign in:</p>
+
+          <form onsubmit="Ctesius.Actions.logUserIn(this); return false;" class="form-horizontal">
+            <fieldset>
+              <div class="form-group">
+                <input
+                  type="text"
+                  id="sign_in_email"
+                  name="username"
+                  class="form-control"
+                  placeholder="Email"
+                  pattern="[a-zA-Z0-9._%+-]*@[a-zA-Z0-9\.\-]*\.[a-zA-Z]{1,}$"
+                  required
+                >
+              </div>
+              <div class="form-group">
+                <input
+                  type="password"
+                  id="sign_in_password"
+                  name="password"
+                  class="form-control"
+                  placeholder="Password"
+                  required
+                >
+              </div>
+              <div class="form-group">
+                <input type="submit" value="Sign in" class="btn btn-primary">
+              </div>
+              <p><a href='#user/forgotten_password'><em>Forgotten your password?</em></a></p>
+            </fieldset>
+          </form>
+        </div>
+      </div> <!-- end row -->
+    </div>
+  </div>
+
+  
+
+  
+    
+  
+
+  
+
+{% else %}
+  <div class="row">
+    {% if user_type != 'local'%}
+    <div class="col-md-4 col-sm-12">
+      <a href="#user">
+        <div class="profileNav profileNav--current">
+          <div class="profileNav-profile"></div>
+          <p>My Profile</p>
+        </div>
+      </a>
+    </div>
+
+    <div class="col-md-4 col-sm-6">
+      <a href="#/user/saved_properties">
+        <div class="profileNav">
+          <div class="profileNav-properties"></div>
+          <p>My Saved Properties({{ saved_properties.length }})</p>
+        </div>
+      </a>
+    </div>
+
+    <div class="col-md-4 col-sm-6">
+      <a href="#/user/alerts">
+        <div class="profileNav">
+          <div class="profileNav-search"></div>
+          <p>My Alerts & Searches({{ saved_searches.length }})</p>
+        </div>
+      </a>
+    </div>
+    {% endif %}
+
+    <div class="col-sm-12">
+      <div class="myProfileWrapper">
+        <p>Something changed? <a onclick='javascript: $("#user_update_form").removeClass("hidden"); $("#user_details").addClass("hidden");'>Edit your profile.</a></p>
+        <div id="user_update_form" class="hidden">
+          <form onsubmit="Ctesius.Actions.updateUser(this); return false;">
+            <button
+              type="button"
+              onclick='javascript: $("#user_update_form").addClass("hidden"); $("#user_details").removeClass("hidden");'
+              class="editProfile-close">x</a>
+            </button>
+
+            <div class="row">
+              <div class="col-md-4 col-sm-6">
+                <div class="form-group">
+                  <input type="text" id="edit_first_name" name="first_name" class="form-control" placeholder="First name" value="{{ user.first_name }}">
+                </div>
+              </div>
+
+              <div class="col-md-4 col-sm-6">
+                <div class="form-group">
+                  <input type="text" id="edit_last_name" name="last_name" class="form-control" placeholder="Last name" value="{{ user.last_name }}">
+                </div>
+              </div>
+
+              <div class="col-md-4 col-sm-6">
+                <div class="form-group">
+                  <input type="text" id="edit_email" name="email" class="form-control" placeholder="Email" value="{{ user.email }}" pattern="[a-zA-Z0-9._%+-]*@[a-zA-Z0-9\.\-]*\.[a-zA-Z]{1,}$">
+                </div>
+              </div>
+
+              <div class="col-md-4 col-sm-6">
+                <div class="form-group">
+                  <input type="text" id="edit_telephone" name="tel_home" class="form-control" placeholder="Telephone" value="{{ user.tel_home }}" pattern="^[0-9-.()\/ +]{6,20}$">
+                </div>
+              </div>
+
+              <div class="col-md-4 col-sm-6">
+                <div class="form-group">
+                  <input type="text" id="edit_street_address" name="street_address" class="form-control" placeholder="Street address" value="{{ user.street_address }}">
+                </div>
+              </div>
+
+              <div class="col-md-4 col-sm-6">
+                <div class="form-group">
+                  <input type="text" id="edit_town" name="town" class="form-control" placeholder="Town" value="{{ user.town }}">
+                </div>
+              </div>
+
+              <div class="col-md-4 col-sm-6">
+                <div class="form-group">
+                  <input type="text" id="edit_county" name="county" class="form-control" placeholder="County" value="{{ user.county }}">
+                </div>
+              </div>
+
+              <div class="col-md-4 col-sm-6">
+                <div class="form-group">
+                  <input type="text" id="edit_postcode" name="postcode" class="form-control" placeholder="Postcode" value="{{ user.postcode }}">
+                </div>
+              </div>
+
+              <div class="col-md-4 col-sm-6">
+                <div class="form-group">
+                  <button type="submit" class="btn btn-primary" style="width:100%;">Save</button>
+                </div>
+              </div>
+            </div>
+          </form>
+          <form onsubmit="Ctesius.Actions.updateUser(this, ['password']); return false;">
+            <div class="row">
+              <div class="col-md-4 col-sm-6">
+                <div class="form-group">
+                  <input type="password" name="password" class="form-control" placeholder="Password">
+                </div>
+              </div>
+              <div class="col-md-4 col-sm-6">
+                <div class="form-group">
+                  <input type="password" name="password_confirmation" class="form-control" placeholder="Confirm Password">
+                </div>
+              </div>
+              <div class="col-md-4 col-sm-6">
+                <div class="form-group">
+                  <input type="submit" value="Reset Password" class="btn btn-primary pull-right">
+                </div>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <div id="user_details" style="margin-top: 20px;">
+          <div class="row">
+            <div class="col-md-4">
+              <div class="form-group">
+                <input type="text" class="form-control" value="{{ user.first_name }} {{ user.last_name }}" readonly>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="form-group">
+                <input type="text" class="form-control" value="{{ user.email }}" readonly>
+              </div>
+            </div>
+
+            {% if user.address_html %}
+              <div class="col-md-4 col-sm-6">
+                <div class="form-group">
+                  <input type="text" class="form-control" value="{{ user.street_address }}" readonly>
+                </div>
+              </div>
+
+              <div class="col-md-4 col-sm-6">
+                <div class="form-group">
+                  <input type="text" class="form-control" value="{{ user.town }}" readonly>
+                </div>
+              </div>
+
+              <div class="col-md-4 col-sm-6">
+                <div class="form-group">
+                  <input type="text" class="form-control" value="{{ user.county }}" readonly>
+                </div>
+              </div>
+
+              <div class="col-md-4 col-sm-6">
+                <div class="form-group">
+                  <input type="text" class="form-control" value="{{ user.postcode }}" readonly>
+                </div>
+              </div>
+
+            {% else %}
+              <div class="col-md-4 col-sm-6">
+                <a onclick='javascript: $("#user_update_form").removeClass("hidden"); $("#user_details").addClass("hidden");' class="appear-under-form">
+                  Click here to add your address</p>
+                </a>
+              </div>
+            {% endif %}
+
+            <div class="col-md-4">
+              <div class="form-group">
+                {% if user.tel_home %}
+                  <input type="text" class="form-control" value="{{ user.tel_home }}" readonly>
+                {% else %}
+                  <a onclick='javascript: $("#user_update_form").removeClass("hidden"); $("#user_details").addClass("hidden"); ' class="appear-under-form">
+                    Click here to add your telephone number</p>
+                  </a>
+                {% endif %}
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </div> <!-- end row -->
+{% endif %}
+</div>
+
+
+
+      
+
+      
+
+      
+<div class="profile_tab_content hidden" id="profile_tab_forgotten_password_content">
+  <div class="row">
+    {% if user_type == 'local' %}
+      <div class="col-md-6">
+        <div class="why-register">
+          <h2 class="profile-content__title">Why Register?</h2>
+          <div class="email-alerts"></div>
+          <h2>Find out about new properties first</h2>
+          <p>Set up automatic email alerts based on your search criteria and be notified as soon as relevant properties come onto the market.</p>
+          <div class="save-properties"></div>
+          <h2>Save favourite properties</h2>
+          <p>Save properties of interest so they are easy to find once you log back in.</p>
+          <div class="save-search"></div>
+          <h2>Save searches</h2>
+          <p>Search for your ideal house and then save that search so you can run it again in future with just one click.</p>
+        </div>
+      </div>
+
+      <div class="col-xs-12 col-md-6">
+        <div class="registerArea">
+          <h2 class="text-center"><b>My</b> Clee Tompkinson Francis</h2>
+          <h3>Reset password</h3>
+          <p>Enter your email address and we'll send you instructions for resetting your password.</p>
+
+          <div class="row">
+            <div class="col-md-6">
+              <div id="user_update_form">
+                <form  onsubmit="Ctesius.Actions.resetPassword(this); return false;">
+                  <fieldset>
+                    <div class="form-group">
+                      <input type="text" id="reset_password" name="email" class="form-control" placeholder="Email" pattern="[a-zA-Z0-9._%+-]*@[a-zA-Z0-9\.\-]*\.[a-zA-Z]{1,}$">
+                    </div>
+                    <div class="form-group">
+                      <input type="submit" value="Reset Password" class="btn btn-primary pull-right">
+                    </div>
+                  </fieldset>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    {% else %}
+      <div class="col-xs-12 col-md-6">
+      <div class="header">
+        <h3>Update password</h3>
+        <p>Use the form below to update your password</p>
+      </div>
+      <div id="user_update_form">
+        <form  onsubmit="Ctesius.Actions.updateUser(this, ['password']); return false;" class="form-horizontal">
+          <fieldset>
+            <div class="form-group">
+              <label for="update_password">Password</label>
+              <input type="text" id="update_password" name="password" class="form-control" placeholder="">
+            </div>
+            <div class="form-group">
+              <label for="update_password_confirmation">Confirm password</label>
+              <input type="text" id="update_password_confirmation" name="password_confirmation" class="form-control" placeholder="">
+            </div>
+            <div class="form-group">
+              <input type="submit" value="Reset Password" class="btn btn-primary pull-right">
+            </div>
+          </fieldset>
+        </form>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+
+
+      
+
+      
+
+      
+<div class="profile_tab_content hidden" id="profile_tab_alerts_content">
+  <div class="row">
+    {% if user_type != 'local'%}
+    <div class="col-md-4 col-sm-6">
+      <a href="#/user/alerts">
+        <div class="profileNav profileNav--current">
+          <div class="profileNav-search"></div>
+          <p>My Alerts & Searches ({{ saved_searches.length }})</p>
+        </div>
+      </a>
+    </div>
+    {% endif %}
+
+    {% for search in saved_searches %}
+      <div class="col-md-4 col-sm-6">
+        <div class="savedSearch-block">
+          <a class="removeSearch" onclick='Ctesius.Actions.removeSavedSearch("{{ search.search_id }}");'>x</a>
+
+          <h4>
+            {% if search.performed_data %}
+            {{ search.performed_data.pagination.total_count }} properties
+            {% else %}
+            Properties
+            {% endif %}
+            {{ search.description }}
+          </h4>
+
+          <a href="{{ search.link }}" class="runSearch">Run Search</a>
+
+          <select class="form-control" onchange="updateSearch(this)">
+            <option {%if search.alert_frequency == 'I'%}selected{%endif%} value="{{search.search_id}}_I">Email me immediately</option>
+            <option {%if search.alert_frequency == 'W'%}selected{%endif%} value="{{search.search_id}}_W">Email me weekly</option>
+            <option {%if search.alert_frequency == 'M'%}selected{%endif%} value="{{search.search_id}}_M">Email me monthly</option>
+            <option {% unless search.alert_frequency %} selected {% endunless %} value="{{search.search_id}}_">Email me never</option>
+          </select>
+        </div>
+      </div>
+    {% endfor %}
+
+    {% if user_type != 'local'%}
+    <div class="col-md-4 col-sm-6">
+      <a href="#user">
+        <div class="profileNav">
+          <div class="profileNav-profile"></div>
+          <p>My Profile</p>
+        </div>
+      </a>
+    </div>
+    <div class="col-md-4 col-sm-6">
+      <a href="#/user/saved_properties">
+        <div class="profileNav">
+          <div class="profileNav-properties"></div>
+          <p>My Saved Properties ({{ saved_properties.length }})</p>
+        </div>
+      </a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+
+
+      
+
+      
+
+      
+  <div class='profile_tab_content hidden' id="profile_tab_saved_properties_content">
+    <div class="row">
+      {% if user_type != 'local'%}
+      <div class="col-md-4 col-sm-6">
+        <a href="#/user/saved_properties">
+          <div class="profileNav profileNav--current">
+            <div class="profileNav-properties"></div>
+            <p>My Saved Properties ({{ saved_properties.length }})</p>
+          </div>
+        </a>
+      </div>
+      {% endif %}
+
+      {% assign saved_properties_length = saved_properties | size %}
+      {% if saved_properties_length == 0 %}
+        <div class="col-lg-4">
+          <h2>No saved properties</h2>
+          <p>Sign in or register to view your profile</p>
+          <a class="btn btn-primary" href="#user">My Profile</a>
+        </div>
+      {% endif %}
+
+      {% for property in saved_properties %}
+        {% if property.property_id %}
+          <div class="col-md-4 col-sm-6">
+            <div class="savedProperty-block">
+              <a href="#" class="removeSavedProperty" onclick="Ctesius.Actions.removeSavedProperty({{ property.property_id }}); return false;">x</a>
+              <a href="{{ property.property_url }}">
+                <img src="{{ property.small_photo }}" alt="">
+              </a>
+
+              <div>
+                <a href="{{ property.property_url }}">
+                  <p><b>{{ property.price }}</b></p>
+                  <p>
+                    {% unless property.bedrooms == 0 %}
+                      {{ property.bedrooms }} {% if property.bedrooms == 1 %}bedroom{% else %}bedrooms{% endif %}
+                    {% endunless %}
+
+                    {% unless property.acreage == 0 %} | {{ property.acreage }} acres {% endunless %}
+                  </p>
+                  <p>{{ property.display_address }}</p>
+                </a>
+              </div>
+            </div>
+          </div>
+        {% endif %}
+      {% endfor %}
+
+      {% if user_type != 'local'%}
+      <div class="col-md-4 col-sm-6">
+        <a href="#user">
+          <div class="profileNav">
+            <div class="profileNav-profile"></div>
+            <p>My Profile</p>
+          </div>
+        </a>
+      </div>
+      <div class="col-md-4 col-sm-6">
+        <a href="#/user/alerts">
+          <div class="profileNav">
+            <div class="profileNav-search"></div>
+            <p>My Alerts & Searches ({{ saved_searches.length }})</p>
+          </div>
+        </a>
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+
+
+
+      
+
+      
+
+      
+<div id="profile_tab_marketing_preferences_content">
+    {% if user_type == 'persisted' %}
+        <p>Update your marketing and data preferences below.</p>
+        <div class="row">
+            <div class="span6">
+                <div id='user_update_form'>
+                    {% if user.is_opted_in_to_marketing %}
+                        {% assign contact_option = 'OPTED IN to' %}
+                    {% else %}
+                        {% assign contact_option = 'OPTED OUT of' %}
+                    {% endif %}
+                    <span>You are currently {{ contact_option }} marketing communications</span>
+                    {% if user.is_opted_in_to_marketing %}
+                        <p>You opted in on {{ user.marketing_opt_in_at }}</p>
+                    {% endif %}
+                    <form onsubmit="Ctesius.Actions.updateMarketingPreferences(this, '{{ user.marketing_preference_id }}'); return false;" class="form-horizontal" id="marketing_pref_form">   
+                        <div>
+                            <input id="marketing_pref__optin" 
+                                    class="marketing_pref_radio-input" 
+                                    value="optin"
+                                    type="radio" 
+                                    name="opt_in_marketing_at" 
+                                    {% if user.is_opted_in_to_marketing %}Checked{% endif %}
+                                    >
+                            <span>I wish to OPT IN for marketing communications</span>
+                        </div>
+                        <div>
+                            <input id="marketing_pref__optout" 
+                                    class="marketing_pref_radio-input" 
+                                    value="optout" 
+                                    type="radio" 
+                                    name="opt_in_marketing_at"
+                                    {% if contact_option == "OPTED OUT of" %}Checked{% endif %}
+                                    >
+                            <span>I wish to OPT OUT for marketing communications</span>
+                        </div>
+                        <div class="control-group buttoned-control-group">
+                            <div class="controls pull-right">
+                                <button type="submit" id="update_button" class="btn btn-primary">Update</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <p>* If you wish to delete your account and all data associated with it please contact {{ user.agency.name }}{% if user.agency.email %} on {{ user.agency.email }}{% endif %}</p>
+            </div>
+        </div>
+        <style>
+            .updating {
+                background-image: none;
+                background-color: green;
+            }    
+            .updating:hover {
+                background-image: none;
+                background-color: green;
+            } 
+        </style>
+    {% elsif user_type == 'local' %}
+
+        
+            <p>Please <a href="#user">log in</a> to update your marketing preference.</p>
+        
+</div>
+
+<style>
+    .updating {
+        background-image: none;
+        background-color: green;
+    }    
+    .updating:hover {
+        background-image: none;
+        background-color: green;
+    } 
+</style>
+
+
+    {% endif %}
+
+
+
+      
+
+      {% if user_type != 'local' %}
+        <div class="userSignOut">
+          <a
+            href="#"
+            onclick="Ctesius.Actions.logUserOut()"
+          >
+            Sign out
+          </a>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</script>
+<div id ='user_profile_view' style='display:none;'></div>
+
+
+
+
+
+
+  <script id="saved_properties_template" type="text/liquid">
+    <div style="height: 100%;" id="shortlist" class="block nomargin">
+      <h2>My Property Shortlist</h2>
+      <div id='favourite_property_list'></div>
+    </div>
+  </script>
+  <script id="saved_property_template" type="text/liquid">
+    <div id="mini_property_{{property.property_id}}" class="mini_property mini_property_{{property.property_id}} clearfix" style="position:relative;">
+      <img src="/assets/delete.png" id="remove_icon_{{property.property_id}}" class="remove_icon" onclick="javascript:Ctesius.Actions.removeSavedProperty({{property.property_id}})">
+      <a href="{{property.property_url}}"><img src="{{ property.photo }}"></a>
+      <div id="featured_property_data">
+        <ul>
+          <li>{{ property.bedrooms }} bedrooms</li>
+          <li><strong>{{ property.price }}</strong></li>
+          <li>{{ property.display_address }}</li>
+        </ul>
+      </div>
+    </div>
+  </script>
+
+
+
+
+  <script>console.log('properties#index')</script>
+
+
+  
+  <link rel="preload" as="image" href="//mr0.homeflow-assets.co.uk/files/photo/image/46996/4125/378x235/2626-PRC11410-1-fs.jpg" media="(max-width: 375px)" fetchpriority="high" />
+  <link rel="preload" as="image" href="//mr0.homeflow-assets.co.uk/files/photo/image/46996/4125/425x_/2626-PRC11410-1-fs.jpg" media="(min-width: 376px) and (max-width: 425px)" fetchpriority="high" />
+  <link rel="preload" as="image" href="//mr0.homeflow-assets.co.uk/files/photo/image/46996/4125/768x_/2626-PRC11410-1-fs.jpg" media="(min-width: 426px) and (max-width: 768px)" fetchpriority="high" />
+  <link rel="preload" as="image" href="//mr0.homeflow-assets.co.uk/files/photo/image/46996/4125/378x235/2626-PRC11410-1-fs.jpg" media="(min-width: 769px)" fetchpriority="high" />
+
+
+
+  <script type="text/javascript">
+    
+  </script>
+</head>
+
+<body class="">
+
+  
+
+<script id="next_and_previous_property_template" type="text/liquid">
+  <div class="col-xs-6 col-md-4">
+    {% if previous_property %}
+    <div class="otherPropertiesNav-previousProperty">
+      <a href="{{ previous_property.property_url }}">< Previous <span class="hidden-xs">property</span></a>
+    </div>
+    {% else %}
+      &nbsp;
+    {% endif %}
+  </div>
+  <div class="col-xs-6 col-md-4 col-md-push-4">
+    {% if next_property %}
+    <div class="otherPropertiesNav-nextProperty">
+      <a href="{{ next_property.property_url }}">Next <span class="hidden-xs">property </span>></a>
+    </div>
+    {% else %}
+      &nbsp;
+    {% endif %}
+  </div>
+</script>
+
+<script id="most_recent_search_template" type="text/liquid">
+  <div class="col-md-4 col-md-push-4 otherPropertiesNav-backToSearch">
+    <div>
+      <a href="{{ search.link }}"><span class="visible-xs-inline">< </span>Back to search</a>
+    </div>
+  </div>
+</script>
+
+
+
+
+  <div id="admin-bar" style="display: none;">
+  
+  
+  <a href="https://ctf-uk.content.homeflow.co.uk">Admin</a>
+  
+  
+  
+  
+      <a href="https://ctf-uk.homeflow.co.uk/admin/properties/list">Edit properties</a>
+  
+  
+  
+    
+  <a href="https://ctf-uk.content.homeflow.co.uk/site_content_chunks">Content chunks</a>
+
+
+  
+
+  <a href="#" class="admin-bar__link--right">Hide</a>
+
+  <script>
+  
+
+  var admin_hovered;
+
+    $(function() {
+      var $admin_bar = $('#admin-bar');
+      var $admin_bar_link = $('.admin-bar__link--right');
+      var $showAdminLink = $('#show-admin-bar-link');
+
+      if ($admin_bar.length) {
+
+        var cookieFromLogos = false;
+        var logosObject;
+
+          // look for regular cookie set from Logos
+          _(document.cookie.split(';')).each(function(cookie) {
+            splitCookie = cookie.split('=')
+            // if we find it, set the logosObject
+            if (splitCookie[0].strip() == 'logosLogin') {
+              cookieFromLogos = true;
+              logosObject = splitCookie[1].split(',');
+            }
+          });
+
+          // if there was no cookie, look for localStorage item
+          if (!cookieFromLogos) {
+            var logosString = localStorage.getItem('logosLogin');
+            if (logosString) {
+              logosObject = logosString.split(',');
+            }
+          }
+
+          if (logosObject) {
+            var userType = logosObject[0];
+            var subdomain = logosObject[1];
+            var timestamp = logosObject[2];
+
+            var within24Hours = Math.abs(new Date(timestamp) - new Date()) / 36e5 < 24;
+
+            if (within24Hours && (userType == 'Superuser' || subdomain == 'ctf-uk')) {
+              // custom theme offsets to push content down
+              $('.nav-bauhaus').css('top', '30px');
+              $admin_bar.show();
+            }
+
+            $('*[data-content-type]').each(function(i) {
+              var $el = $(this);
+              var id = $el.data('content-id');
+              var name = $el.data('content-name');
+              var type = $el.data('content-type');
+              var branchId = $el.data('content-branch-id');
+              var href;
+
+              if (id) {
+                var app = type == "properties" ? "properties" : "content";
+
+                if(type === 'staff' && branchId){
+                  href = 'https://ctf-uk.' + app + '.homeflow.co.uk/' + 'branches/' + branchId + '/employees/' + id + '/edit';
+                } else if (type == 'staff') {
+                  href = "https://ctf-uk.homeflow.co.uk/configure/business/" + type + "/" + id + "/edit";
+                } else {
+                  href = "https://ctf-uk." + app + ".homeflow.co.uk/" + type + "/" + id + "/edit";
+                }
+              } else {
+                href = '#';
+              }
+
+              $el.append('<a href="' + href + '" target="_blank" class="admin-edit-button" style="display: none;">Edit</a>');
+            });
+
+            $('*[data-content-type]').click(function(e) {
+              if (!$(e.target).hasClass('admin-edit-button')) return null;
+
+              $el = $(this);
+              id = $el.data('content-id');
+              name = $el.data('content-name');
+
+              if (id) return null;
+
+              $clone = $el.clone();
+              $clone.find('a.admin-edit-button').remove()
+              content = encodeURI($clone.html().replace(/^\s+/g, '').replace(/ +(?= )/g,''));
+              var $form = $('<form action="https://ctf-uk.content.homeflow.co.uk/site_content_chunks/new/prefill" method="POST">' +
+              '<input type="hidden" name="content" value="' + content + '">' +
+              '<input type="hidden" name="name" value="' + name + '">' +
+              '</form>');
+              $('body').append($form);
+              $form.submit();
+            });
+
+            $('*[data-content-type]').mouseenter(function(e) {
+              ele = $(this);
+              ele.addClass('admin-editable');
+              ele.find('.admin-edit-button').show();
+              admin_hovered = ele;
+            });
+
+            $('*[data-content-type]').mouseleave(function(e) {
+              admin_hovered = null;
+              var ele = $(this);
+              ele.find('.admin-edit-button').hide();
+              if (admin_hovered == null || ele == null || admin_hovered.get(0) !== ele.get(0)) ele.removeClass('admin-editable');
+            });
+          }
+        }
+
+        $admin_bar_link.on('click',function(){
+          $('.nav-bauhaus').css('top', '0');
+          $admin_bar.hide();
+          $showAdminLink.show();
+        });
+
+        $showAdminLink.on('click', function(e) {
+          $('.nav-bauhaus').css('top', '30px');
+          e.preventDefault();
+          $showAdminLink.hide()
+          $admin_bar.show();
+        });
+    });
+</script>
+
+  <style>
+/* admin layout   */
+
+#admin-bar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 5000;
+  height: 30px;
+  padding: 5px;
+  color: white;
+  background-color: rgba(0, 0, 0, 0.8);
+  font-size: 14px;
+}
+
+#admin-bar a {
+  color: white;
+  margin: 0 10px;
+}
+
+#admin-bar .admin-bar__link--right {
+  float: right;
+  cursor: pointer;
+}
+.admin-editable {
+  position: relative;
+  opacity: 0.8;
+}
+
+.admin-editable:before {
+  content: "";
+  position: absolute;
+  left: -2px;
+  right: -2px;
+  top: -2px;
+  bottom: -2px;
+  border: 2px dashed #999;
+  z-index: 2;
+  background-color: rgba(255, 255, 255, 0.2);
+  pointer-events: none;
+}
+
+.admin-edit-button {
+  font-size: 14px;
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  display: inline-block;
+  color: #fff;
+  background-color: grey;
+  padding: 5px 10px;
+  cursor: pointer;
+  z-index: 10;
+  opacity: 1;
+}
+
+.admin-edit-button:hover {
+  text-decoration: none;
+  color: #FFF;
+  background-color: #5B5B5B;
+}
+
+#admin-bar .full_environment_details {
+  display: none;
+}
+
+#admin-bar .environment_details {
+  display: inline-block;
+}
+
+#admin-bar .environment_details:hover .full_environment_details {
+  position: absolute;
+  display: inline-block;
+  background-color: rgba(0, 0, 0, 0.8);
+  padding: 5px 10px;
+  margin-top: 7px;
+}
+
+#show-admin-bar-link {
+  position: fixed;
+  right: 8px;
+  top: 2px;
+  color: #fff;
+  z-index: 10000;
+  font-size: 14px;
+}
+
+</style>
+
+
+</div>
+
+<a href="#" id="show-admin-bar-link" style="display: none;">Show admin</a>
+
+
+  
+
+<div class="heroGalleryContainer heroGalleryContainer--greyBg heroGalleryContainer--noMinHeight">
+  <div class="container">
+    <div
+      class="
+        mainNavbar
+        mainNavbar--collapsed
+      "
+    >
+      <div class="mainNavbar-header">
+  <a class="mainNavbar-brand" href="/" aria-label="Back to homepage">
+    <img src="//mr3.homeflow-assets.co.uk/files/site_asset/image/6431/0843/_x_/logo-min.png" alt="Clee Tompkinson Francis Logo" fetchpriority="high">
+  </a>
+  <div class="menu-container">
+    <a
+      type="button"
+      class="user_sign-in"
+      href="#user"
+      aria-label="User panel"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512" width="28" height="28" fill="">
+        <path d="M224 256A128 128 0 1 0 224 0a128 128 0 1 0 0 256zm-45.7 48C79.8 304 0 383.8 0 482.3C0 498.7 13.3 512 29.7 512H418.3c16.4 0 29.7-13.3 29.7-29.7C448 383.8 368.2 304 269.7 304H178.3z"/>
+      </svg>
+    </a>
+    <button
+      type="button"
+      class="mainNavbar-toggle collapsed"
+      data-toggle="collapse"
+      data-target="#site-navbar"
+      aria-expanded="false"
+    >
+      Menu
+      <span class="close">x</span>
+    </button>
+  </div>
+</div>
+
+      <div class="mainNavbarNavWrapper">
+  <div id="site-navbar" class="navbar-collapse collapse">
+    <ul class="mainNavbar-nav">
+      
+      
+        
+        
+          <li
+            
+          >
+            <a
+              
+              href="/"
+              
+            >
+              Home
+            </a>
+          </li>
+        
+      
+        
+        
+          <li
+            
+          >
+            <a
+              
+              href="/properties/sales"
+              
+                style="color: #e11e2c"
+              
+            >
+              Properties for Sale
+            </a>
+          </li>
+        
+      
+        
+        
+          <li
+            
+          >
+            <a
+              
+              href="/properties/lettings"
+              
+                style="color: #e11e2c"
+              
+            >
+              Properties to Let
+            </a>
+          </li>
+        
+      
+        
+        
+          <li
+            
+          >
+            <a
+              
+              href="/pages/commercial"
+              
+            >
+              Commercial
+            </a>
+          </li>
+        
+      
+        
+        
+          <li
+            
+          >
+            <a
+              
+              href="/pages/agricultural-and-rural-services"
+              
+            >
+              Agricultural & Rural Services
+            </a>
+          </li>
+        
+      
+        
+        
+          <li
+            
+          >
+            <a
+              
+              href="/pages/land-and-new-homes"
+              
+            >
+              Land and New homes
+            </a>
+          </li>
+        
+      
+        
+        
+          <li
+            
+          >
+            <a
+              
+              href="/pages/surveys-and-valuations"
+              
+            >
+              Surveys and Valuations
+            </a>
+          </li>
+        
+      
+        
+        
+          <li
+            
+          >
+            <a
+              
+              href="/pages/auctions"
+              
+            >
+              Property Auctions
+            </a>
+          </li>
+        
+      
+        
+        
+          <li
+            
+          >
+            <a
+              
+              href="/branches"
+              
+            >
+              Branches
+            </a>
+          </li>
+        
+      
+        
+        
+          <li
+            
+          >
+            <a
+              
+              href="/pages/reviews"
+              
+            >
+              Reviews
+            </a>
+          </li>
+        
+      
+        
+        
+          <li
+            
+          >
+            <a
+              
+              href="/pages/about-us"
+              
+            >
+              About Us
+            </a>
+          </li>
+        
+      
+    </ul>
+  </div>
+</div>
+
+    </div>
+
+    <div class="mainNavbarMenuContent mainNavbarMenuContent--hiddenNav">
+  <span class="mainNavbarMenuContent-leftBorder"></span>
+  
+  
+    
+  
+    
+  
+    
+  
+    
+  
+    
+  
+    
+  
+    
+  
+    
+  
+    
+  
+    
+  
+    
+  
+</div>
+
+
+    <div class="headerTabsWrapper">
+  <ul id="user_micro_view" class="headerTabs__micro"></ul>
+  <ul class="headerTabs">
+    <li class="headerTabs-telephone">
+      <a href="/branches">
+        <span class="sr-only">Tel</span>
+        <i class="fa fa-phone" aria-hidden="true"></i>
+      </a>
+    </li>
+  </ul>
+</div>
+
+    <div class="advancedSearch">
+
+  <a
+    class="advancedSearch-heading visible-xs-block"
+    role="button"
+    data-toggle="collapse"
+    href="#search_form"
+    aria-expanded="false"
+    aria-controls="search_form"
+  >
+    Search form &#9660;
+  </a>
+
+  <form
+    id="search_form"
+    action="/search"
+    method="get"
+    class="advancedSearch-form form-inline collapse"
+    accept-charset="utf-8"
+  >
+    <fieldset id="search-fields">
+      <div class="form-group">
+        <div
+          class="btn-group btn-group-justified radioButtons"
+          data-toggle="searchTypebuttons"
+        >
+          <label class="btn btn-default btn-radio-buy active">
+            <input
+              id="buy"
+              type="radio"
+              name="channel"
+              value="sales"
+              checked
+            > Buy
+          </label>
+          <label class="btn btn-default btn-radio-let">
+            <input
+              id="let"
+              type="radio"
+              name="channel"
+              value="lettings"
+            > Rent
+          </label>
+        </div>
+      </div>
+      <div class="form-group second">
+        
+          
+        
+
+        <label class="sr-only" for="location">Location /web find no.</label>
+        <input
+          data-provide="typeahead"
+          class="form-control search"
+          placeholder="Location /web find no."
+          type="text"
+          id="location"
+          name="location"
+          value=""
+        >
+      </div>
+      <div class="form-group third">
+        <label class="sr-only" for="within">Radius</label>
+        <select
+          id="within"
+          class="search form-control"
+        >
+          <option value="">This Area Only</option>
+          <option value="2-miles">Within 2 Miles</option>
+          <option value="5-miles">Within 5 Miles</option>
+          <option value="10-miles">Within 10 Miles</option>
+          <option value="15-miles">Within 15 Miles</option>
+          <option value="20-miles">Within 20 Miles</option>
+          <option value="50-miles">Within 50 Miles</option>
+        </select>
+      </div>
+      <div class="form-group second fourth">
+        <label class="sr-only" for="min_beds">Min bedrooms</label>
+        <select
+          id="min_beds"
+          class="form-control search"
+          name="min_beds"
+        >
+          <option value="" title="Min beds">Min Bedrooms</option>
+          <option value="1" title="1 Bed">1 bed</option>
+          <option value="2" title="2 Beds">2 beds</option>
+          <option value="3" title="3 Beds">3 beds</option>
+          <option value="4" title="4 Beds">4 beds</option>
+          <option value="5" title="5 Beds">5 beds</option>
+          <option value="6" title="6 Beds">6 beds</option>
+          <option value="7" title="7 Beds">7 beds</option>
+        </select>
+      </div>
+
+      
+        
+        <div class="form-group">
+          <label class="sr-only">Specialist search</label>
+          <select id="type" class="formelement_bg search form-control" name="type">
+      <option value="">No Preference</option>
+      <option value="clee-rural">Rural Property</option>
+      <option value="clee-rural-land">Rural Land</option>
+      <option value="clee-development-land">Development Land</option>
+      <option value="clee-commercial-property">Commercial Property</option>
+      <option value="clee-new-homes">New Homes</option>
+  		<option value="clee-auction">Property & Land Auctions</option>
+</select>
+        </div>
+        
+      
+
+      <div class="form-group second third">
+        <label class="sr-only" for="min_price">Min price</label>
+        <select
+          id="min_price"
+          class="search form-control"
+          name="priceMin"
+        >
+          <option title="Min price">Min Price</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="sr-only" for="max_price">Max price</label>
+        <select
+          id="max_price"
+          class="search form-control"
+          name="priceMax"
+        >
+          <option title="Max price">Max Price</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="sr-only" for="secondary_type">Property type</label>
+        <select
+          id="secondary_type"
+          class="form-control search"
+          name="secondary_type"
+        >
+          
+            
+              <option value="">Property Type</option>
+              <option value="">No Preference</option>
+              <option value="detached-house">Detached House</option>
+              <option value="attached-house">Attached House</option>
+              <option value="bungalow">Bungalow</option>
+              <option value='apartment'>Apartment</option>
+              <option value="development-property">Development Property</option>
+              <option value="land">Land</option>
+              <option value="industrial">Industrial</option>
+              <option value="office">Office</option>
+              <option value="retail">Retail</option>
+              <option value="sporting">Sporting</option>
+            
+          
+        </select>
+      </div>
+      <div class="form-group second">
+        <label class="sr-only" for="min_acreage">Acreage</label>
+        <select
+          id="min_acreage"
+          class="form-control search"
+        >
+          <option value="" title="1 Bed">Acreage</option>
+          <option value="1">1+</option>
+          <option value="10">10+</option>
+          <option value="25">25+</option>
+          <option value="50">50+</option>
+          <option value="100">100+</option>
+          <option value="250">250+</option>
+        </select>
+      </div>
+      
+        <div class="checkbox second">
+          <label
+            class="checkbox"
+            id="status_checkbox"
+          >
+            <input
+              type="checkbox"
+              id="status"
+              class="search"
+              name="status"
+              value="all"
+            >
+              <span class="js-statusLettings hidden">Include LET</span>
+              <span class="js-statusSales ">Include Sold STC</span>
+          </label>
+        </div>
+      
+
+      <input type="hidden" id="place_id" name="place_id" value="" class="search">
+
+      <div class="form-group">
+        <button onclick="Ctesius.Actions.submitSearchForm(); return false;" id="search_form_button" type="button" value="search" class="btn btn-primary">Search</button>
+      </div>
+    </fieldset>
+  </form>
+</div>
+
+
+  </div>
+</div>
+
+<div class="container">
+  <div class="searchResultsHeader">
+    <div class="row">
+      <div class="col-md-5">
+        <h1 class="searchResultsHeader-heading">
+          5 auction properties for sale
+          
+
+          <small id="map_info"></small>
+        </h1>
+      </div>
+      <div class="col-md-7">
+        <div class="searchResultsToolbar">
+
+          <a
+            id="save_search_link"
+            onclick="Ctesius.Actions.saveCurrentSearch();"
+            class="btn btn-default"
+          >Save search</a>
+
+          <div class="btn-group js-searchViewToggles" role="group">
+            <a
+              class="js-buttonGridAndList hidden"
+              data-target="#grid_and_list_view"
+            >
+              Grid and List
+            </a>
+            <a
+              href="#grid"
+              class="btn btn-plain active js-buttonGrid"
+            >Grid <i class="fa fa-th" aria-hidden="true"></i></a>
+            <a
+              href="#list"
+              class="btn btn-plain js-buttonList hidden-xs"
+            >List <i class="fa fa-list" aria-hidden="true"></i></a>
+            
+            <a
+              href="#map"
+              class="btn btn-plain searchResultsToolbar-drawAMap js-buttonMap"
+            >Draw a map <i class="fa fa-pencil" aria-hidden="true"></i></a>
+          </div>
+
+          <select
+            class="form-control results_sort"
+          >
+            <option
+              value="most-expensive-first"
+              
+              data-url="/properties/sales/tag-auction/most-expensive-first"
+            >
+              High to low
+            </option>
+            <option
+              value="least-expensive-first"
+              
+              data-url="/properties/sales/tag-auction/least-expensive-first"
+            >
+              Low to high
+            </option>
+            <option
+              value="most-recent-first"
+              
+              data-url="/properties/sales/tag-auction/most-recent-first"
+            >
+              Most recent first
+            </option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  
+    
+  
+
+  <div class="tab-content">
+    <div
+      id="grid_and_list_view"
+      role="tabpanel"
+      class="tab-pane active searchResults searchResults--grid"
+    >
+      <div id="infinite_pages">
+        <div class="infinite_page">
+
+          
+            <div class="propertyTeaser propertyTeaser--withMarginBottom">
+              <div class="propertyTeaser-wrapper">
+                
+                <div class="propertyTeaser-mainPhoto">
+                  <a href="/properties/21602209/sales">
+                    <picture class="propertyTeaser-mainPhoto__picture">
+                      <source media="(max-width: 375px)" srcset="//mr0.homeflow-assets.co.uk/files/photo/image/46996/4125/378x235/2626-PRC11410-1-fs.jpg" />
+                      <source media="(min-width: 376px) and (max-width: 425px)" srcset="//mr0.homeflow-assets.co.uk/files/photo/image/46996/4125/425x_/2626-PRC11410-1-fs.jpg" />
+                      <source media="(min-width: 426px) and (max-width: 768px)" srcset="//mr0.homeflow-assets.co.uk/files/photo/image/46996/4125/768x_/2626-PRC11410-1-fs.jpg" />
+                      <source media="(min-width: 769px)" srcset="//mr0.homeflow-assets.co.uk/files/photo/image/46996/4125/378x235/2626-PRC11410-1-fs.jpg" />
+                      <img 
+                        class="propertyTeaser-mainPhoto__picture-img" src="//mr0.homeflow-assets.co.uk/files/photo/image/46996/4125/378x235/2626-PRC11410-1-fs.jpg" 
+                        alt="" 
+                        height="235"
+                        width="378"
+                        
+                          fetchpriority="high"
+                        
+                      />
+                    </picture>
+                  </a>
+                </div>
+                <div class="propertyTeaser-summary">
+                  <div class="propertyTeaser-description">
+                    <a href="/properties/21602209/sales">
+                      <span class="u-line">Talog, Carmarthen, Carmarthenshire.</span>
+                    </a>
+                    <span class="u-line u-bold">
+                      Guide £165,000
+                      Freehold
+
+                      
+
+                      
+                        | 4 bedrooms
+                      
+
+                      
+
+                    </span>
+
+                    <p class="propertyShortDesc hidden-xs">** ON LINE AUCTION MON 11th MAY TO WEDS 13th MAY 2026 - GUIDE PRICE £175,000+ ** - **EXCELLENT POTENTIAL ON OFFER** - A delightfully positioned 4 bed detached country property having an idyllic riv...</p>
+                  </div>
+
+                  <div class="propertyTeaser-actions">
+                    <a
+                      class="propertyTeaser-shortlist js-addToFavourites"
+                      data-id="21602209"
+                      href="#"
+                      onclick="Ctesius.Actions.addSavedProperty(21602209); return false;"
+                    >
+                      Shortlist
+                      <i class="fa fa-heart-o" aria-hidden="true"></i>
+                    </a>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+
+            
+
+          
+            <div class="propertyTeaser propertyTeaser--withMarginBottom">
+              <div class="propertyTeaser-wrapper">
+                
+                <div class="propertyTeaser-mainPhoto">
+                  <a href="/properties/21567329/sales">
+                    <picture class="propertyTeaser-mainPhoto__picture">
+                      <source media="(max-width: 375px)" srcset="//mr2.homeflow-assets.co.uk/files/photo/image/46926/8914/378x235/2626-PRE12709-2-fs.jpg" />
+                      <source media="(min-width: 376px) and (max-width: 425px)" srcset="//mr2.homeflow-assets.co.uk/files/photo/image/46926/8914/425x_/2626-PRE12709-2-fs.jpg" />
+                      <source media="(min-width: 426px) and (max-width: 768px)" srcset="//mr2.homeflow-assets.co.uk/files/photo/image/46926/8914/768x_/2626-PRE12709-2-fs.jpg" />
+                      <source media="(min-width: 769px)" srcset="//mr2.homeflow-assets.co.uk/files/photo/image/46926/8914/378x235/2626-PRE12709-2-fs.jpg" />
+                      <img 
+                        class="propertyTeaser-mainPhoto__picture-img" src="//mr2.homeflow-assets.co.uk/files/photo/image/46926/8914/378x235/2626-PRE12709-2-fs.jpg" 
+                        alt="" 
+                        height="235"
+                        width="378"
+                        
+                          fetchpriority="high"
+                        
+                      />
+                    </picture>
+                  </a>
+                </div>
+                <div class="propertyTeaser-summary">
+                  <div class="propertyTeaser-description">
+                    <a href="/properties/21567329/sales">
+                      <span class="u-line">Gnoll Park Road, Neath, Neath Port Talbot.</span>
+                    </a>
+                    <span class="u-line u-bold">
+                      Guide £140,000
+                      Freehold
+
+                      
+
+                      
+                        | 3 bedrooms
+                      
+
+                      
+
+                    </span>
+
+                    <p class="propertyShortDesc hidden-xs">Going to auction alongside our partners Auction House Wales, bidding will commence at midday on Monday the 11th to midday on Wednesday the 13th of May.</p>
+                  </div>
+
+                  <div class="propertyTeaser-actions">
+                    <a
+                      class="propertyTeaser-shortlist js-addToFavourites"
+                      data-id="21567329"
+                      href="#"
+                      onclick="Ctesius.Actions.addSavedProperty(21567329); return false;"
+                    >
+                      Shortlist
+                      <i class="fa fa-heart-o" aria-hidden="true"></i>
+                    </a>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+
+            
+
+          
+            <div class="propertyTeaser propertyTeaser--withMarginBottom">
+              <div class="propertyTeaser-wrapper">
+                
+                <div class="propertyTeaser-mainPhoto">
+                  <a href="/properties/21640750/sales">
+                    <picture class="propertyTeaser-mainPhoto__picture">
+                      <source media="(max-width: 375px)" srcset="//mr3.homeflow-assets.co.uk/files/photo/image/47067/1990/378x235/2626-PRI11832-1-fs.jpg" />
+                      <source media="(min-width: 376px) and (max-width: 425px)" srcset="//mr3.homeflow-assets.co.uk/files/photo/image/47067/1990/425x_/2626-PRI11832-1-fs.jpg" />
+                      <source media="(min-width: 426px) and (max-width: 768px)" srcset="//mr3.homeflow-assets.co.uk/files/photo/image/47067/1990/768x_/2626-PRI11832-1-fs.jpg" />
+                      <source media="(min-width: 769px)" srcset="//mr3.homeflow-assets.co.uk/files/photo/image/47067/1990/378x235/2626-PRI11832-1-fs.jpg" />
+                      <img 
+                        class="propertyTeaser-mainPhoto__picture-img" src="//mr3.homeflow-assets.co.uk/files/photo/image/47067/1990/378x235/2626-PRI11832-1-fs.jpg" 
+                        alt="" 
+                        height="235"
+                        width="378"
+                        
+                          fetchpriority="high"
+                        
+                      />
+                    </picture>
+                  </a>
+                </div>
+                <div class="propertyTeaser-summary">
+                  <div class="propertyTeaser-description">
+                    <a href="/properties/21640750/sales">
+                      <span class="u-line">High Street, Llandybie, Ammanford, Carmarthenshire.</span>
+                    </a>
+                    <span class="u-line u-bold">
+                      Guide £139,000
+                      
+
+                      
+
+                      
+
+                      
+
+                    </span>
+
+                    <p class="propertyShortDesc hidden-xs">An excellent opportunity to acquire the Llandybie Church Hall, a charming Grade II listed building located in the very centre of Llandybie village. Rich in character and local heritage, the propert...</p>
+                  </div>
+
+                  <div class="propertyTeaser-actions">
+                    <a
+                      class="propertyTeaser-shortlist js-addToFavourites"
+                      data-id="21640750"
+                      href="#"
+                      onclick="Ctesius.Actions.addSavedProperty(21640750); return false;"
+                    >
+                      Shortlist
+                      <i class="fa fa-heart-o" aria-hidden="true"></i>
+                    </a>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+
+            
+
+          
+            <div class="propertyTeaser propertyTeaser--withMarginBottom">
+              <div class="propertyTeaser-wrapper">
+                
+                <div class="propertyTeaser-mainPhoto">
+                  <a href="/properties/21456451/sales">
+                    <picture class="propertyTeaser-mainPhoto__picture">
+                      <source media="(max-width: 375px)" srcset="//mr3.homeflow-assets.co.uk/files/photo/image/46691/9559/378x235/2626-PRM12347-1-fs.jpg" />
+                      <source media="(min-width: 376px) and (max-width: 425px)" srcset="//mr3.homeflow-assets.co.uk/files/photo/image/46691/9559/425x_/2626-PRM12347-1-fs.jpg" />
+                      <source media="(min-width: 426px) and (max-width: 768px)" srcset="//mr3.homeflow-assets.co.uk/files/photo/image/46691/9559/768x_/2626-PRM12347-1-fs.jpg" />
+                      <source media="(min-width: 769px)" srcset="//mr3.homeflow-assets.co.uk/files/photo/image/46691/9559/378x235/2626-PRM12347-1-fs.jpg" />
+                      <img 
+                        class="propertyTeaser-mainPhoto__picture-img" src="//mr3.homeflow-assets.co.uk/files/photo/image/46691/9559/378x235/2626-PRM12347-1-fs.jpg" 
+                        alt="" 
+                        height="235"
+                        width="378"
+                        
+                        fetchpriority="low"
+                        loading="lazy"
+                      
+                      />
+                    </picture>
+                  </a>
+                </div>
+                <div class="propertyTeaser-summary">
+                  <div class="propertyTeaser-description">
+                    <a href="/properties/21456451/sales">
+                      <span class="u-line">Carlton Terrace, Swansea, City And County of Swansea.</span>
+                    </a>
+                    <span class="u-line u-bold">
+                      Guide £80,000
+                      Freehold
+
+                      
+
+                      
+                        | 2 bedrooms
+                      
+
+                      
+
+                    </span>
+
+                    <p class="propertyShortDesc hidden-xs">We are delighted to offer this unique and characterful former chapel, thoughtfully converted into a two-bedroom residential home. Ideally located in Swansea city centre, the home is within walking ...</p>
+                  </div>
+
+                  <div class="propertyTeaser-actions">
+                    <a
+                      class="propertyTeaser-shortlist js-addToFavourites"
+                      data-id="21456451"
+                      href="#"
+                      onclick="Ctesius.Actions.addSavedProperty(21456451); return false;"
+                    >
+                      Shortlist
+                      <i class="fa fa-heart-o" aria-hidden="true"></i>
+                    </a>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+
+            
+
+          
+            <div class="propertyTeaser propertyTeaser--withMarginBottom">
+              <div class="propertyTeaser-wrapper">
+                
+                <div class="propertyTeaser-mainPhoto">
+                  <a href="/properties/21627941/sales">
+                    <picture class="propertyTeaser-mainPhoto__picture">
+                      <source media="(max-width: 375px)" srcset="//mr2.homeflow-assets.co.uk/files/photo/image/47042/4660/378x235/2626-PRC11409-1-fs.jpg" />
+                      <source media="(min-width: 376px) and (max-width: 425px)" srcset="//mr2.homeflow-assets.co.uk/files/photo/image/47042/4660/425x_/2626-PRC11409-1-fs.jpg" />
+                      <source media="(min-width: 426px) and (max-width: 768px)" srcset="//mr2.homeflow-assets.co.uk/files/photo/image/47042/4660/768x_/2626-PRC11409-1-fs.jpg" />
+                      <source media="(min-width: 769px)" srcset="//mr2.homeflow-assets.co.uk/files/photo/image/47042/4660/378x235/2626-PRC11409-1-fs.jpg" />
+                      <img 
+                        class="propertyTeaser-mainPhoto__picture-img" src="//mr2.homeflow-assets.co.uk/files/photo/image/47042/4660/378x235/2626-PRC11409-1-fs.jpg" 
+                        alt="" 
+                        height="235"
+                        width="378"
+                        
+                        fetchpriority="low"
+                        loading="lazy"
+                      
+                      />
+                    </picture>
+                  </a>
+                </div>
+                <div class="propertyTeaser-summary">
+                  <div class="propertyTeaser-description">
+                    <a href="/properties/21627941/sales">
+                      <span class="u-line">Gwendraeth Town, Kidwelly, Carmarthenshire.</span>
+                    </a>
+                    <span class="u-line u-bold">
+                      Guide £55,000
+                      Freehold
+
+                      
+
+                      
+                        | 3 bedrooms
+                      
+
+                      
+
+                    </span>
+
+                    <p class="propertyShortDesc hidden-xs">** ON LINE AUCTION MON 11th MAY TO WEDS 13th MAY 2026 - GUIDE PRICE £55,000+ ** - An ideal investment 3 bedroom mid terraced property located within easy walking distance to the town centre of Kidw...</p>
+                  </div>
+
+                  <div class="propertyTeaser-actions">
+                    <a
+                      class="propertyTeaser-shortlist js-addToFavourites"
+                      data-id="21627941"
+                      href="#"
+                      onclick="Ctesius.Actions.addSavedProperty(21627941); return false;"
+                    >
+                      Shortlist
+                      <i class="fa fa-heart-o" aria-hidden="true"></i>
+                    </a>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+
+            
+
+          
+        </div>
+      </div>
+    </div>
+
+    <div
+      id="map"
+      role="tabpanel"
+      class="tab-pane"
+    >
+      <div id="draggable_map_view"></div>
+    </div>
+
+  </div>
+
+</div>
+
+<div class="js-backToTopWrapper">
+  <div class="backToTop js-backToTop">
+    <div class="container">
+      <a
+        class="backToTop-link"
+        href="#top"
+      >
+        <i class="fa fa-lg fa-chevron-up" aria-hidden="true"></i>
+        Back to top
+      </a>
+    </div>
+  </div>
+</div>
+
+<script>
+
+var sticky_offset;
+var original_position_offset;
+$(document).ready(function() {
+
+  function checkStatus() {
+    var urlArray = window.location.pathname.split('/');
+    var excludeTickBoxesEnabled = Ctesius.getConfig('exclude_sold_let_checkbox')
+    var urlIndex;
+    var searchStatus = "available"
+
+    if(searchStatus === 'all' || excludeTickBoxesEnabled === 'true') {
+      $('#status').prop('checked', true);
+    } else {
+      $('#status').prop('checked', false);
+    }
+
+    if(excludeTickBoxesEnabled && Ctesius.getSearch().attributes.status === undefined) {
+      $('#status_dummy').prop('checked', true)
+    }
+  }
+
+  function dummyStatusCheck() {
+    if ($('#status_dummy').is(':checked')) {
+      $('#status').val(Ctesius.getConfig('default_search_status'))
+    } else {
+      $('#status').val('all')
+    }
+  }
+
+  checkStatus();
+  dummyStatusCheck();
+
+  $('#status_dummy').on('change', function() {
+    dummyStatusCheck();
+  })
+
+  original_position_offset = $('.js-backToTopWrapper').offset();
+  sticky_offset = original_position_offset.top;
+
+  $('.js-backToTop').addClass('backToTop--fixed');
+
+  $(window).scroll(function () {
+    var sticky_height = $('.js-backToTop').outerHeight();
+    var where_scroll = $(window).scrollTop();
+    var window_height = $(window).height();
+
+
+    if((where_scroll + window_height) > sticky_offset) {
+      $('.js-backToTop').removeClass('backToTop--fixed');
+    }
+
+    if((where_scroll + window_height) < (sticky_offset + sticky_height))  {
+      $('.js-backToTop').addClass('backToTop--fixed');
+    }
+
+  });
+
+  Ctesius.registerEvent('performed_next_infinite_scroll', function(a){
+    setTimeout(function() {
+      sticky_offset = $('.js-backToTopWrapper').offset().top;
+    }, 500);
+  });
+
+  $("a[href='#top']").click(function() {
+    $("html, body").animate({ scrollTop: 0 }, "slow");
+    return false;
+  });
+
+});
+
+
+
+$(window).load(function(){
+  $('.js-searchViewToggles a').on('click', function(){
+    $('.js-searchViewToggles a').removeClass('active');
+    $(this).addClass('active');
+  });
+});
+
+var total = 5;
+
+var hasNextPage = false;
+
+var controller = 'properties';
+
+if (history.pushState && total != 0) {
+  Ctesius.addConfig('enable_infinite_scroll', true);
+}
+</script>
+
+
+<script id="infinite_scroll_properties_template" type="text/liquid">
+  
+    
+      
+    
+  
+  {% for property in properties %}
+    <div class="propertyTeaser propertyTeaser--withMarginBottom">
+      <div class="propertyTeaser-wrapper">
+        {% unless property.status == "For sale" or property.status == "To let" %}
+        <span class="propertyTeaser-sash">
+          {{ property.status | replace: 'Offers in excess of', 'OIEO' | replace: 'Price on application', 'POA' | replace: 'Offers in the region of', 'OIRO' | replace: 'Guide price', 'Guide' | replace: 'SSTC', 'Sale Agreed' }}
+        </span>
+        {% endunless %}
+        <div class="propertyTeaser-mainPhoto">
+          <a href="{{ property.property_url }}">
+            <img src="{{ property.photo | url_for_property_asset : "378x235" }}" alt="">
+          </a>
+        </div>
+        <div class="propertyTeaser-summary">
+          <div class="propertyTeaser-description">
+            <a href="{{ property.property_url }}">
+              <span class="u-line">{{ property.display_address }}</span>
+            </a>
+            <span class="u-line u-bold">
+              {{ property.price | replace: 'Offers in excess of', 'OIEO' | replace: 'Price on application', 'POA' | replace: 'Offers in the region of', 'OIRO' | replace: 'Guide price', 'Guide' | replace: 'SSTC', 'Sale Agreed' }}
+              {{ property.tenure }}
+
+              {% if property.channel == 'lettings' %}
+                <span class="lettingFeesText">
+                  <a class="fees" href="/pages/information-for-tenants">*Tenant Info</a>
+                </span>
+              {% endif %}
+
+              {% unless property.bedrooms == 0 %}
+                | {{ property.bedrooms }} {% if property.bedrooms == 1 %}bedroom{% else %}bedrooms{% endif %}
+              {% endunless %}
+
+              {% unless property.acreage == 0 %}
+                | {{ property.acreage }} acres
+              {% endunless %}
+
+            </span>
+
+            <p class="propertyShortDesc hidden-xs">{{ property.short_description | truncate: 200 }}</p>
+          </div>
+          <div class="propertyTeaser-actions">
+            <a
+              class="propertyTeaser-shortlist js-addToFavourites"
+              data-id="{{ property.property_id }}"
+              href="#"
+              onclick="Ctesius.Actions.addSavedProperty({{property.property_id}}); return false;"
+            >
+              Shortlist
+              <i class="fa fa-heart-o" aria-hidden="true"></i>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {% if forloop.index == 7 %}
+      {% if property.channel == 'lettings' %}
+
+        {% if advert_no == "1" %}
+        
+
+        
+        
+        
+
+        
+        {% elsif advert_no == "2" %}
+        
+
+        
+        
+        
+
+        
+        {% elsif advert_no == "0" %}
+        
+
+        
+        
+        
+
+        
+
+        {% endif %}
+
+      {% elsif property.channel == 'sales' %}
+
+        {% if advert_no == "1" %}
+        
+
+        
+        
+        
+
+        
+        {% elsif advert_no == "2" %}
+        
+
+        
+        
+        
+
+        
+        {% elsif advert_no == "0" %}
+        
+
+        
+        
+        
+
+        
+
+        {% endif %}
+
+      {% endif %}
+
+    {% endif %}
+
+  {% endfor %}
+</script>
+
+
+
+
+  <div class="footer">
+    
+      
+        <div class="footer-main" style="width: 100%; float: left; background: #2f4fa0;">
+<div class="row">
+<div class="col-sm-2"><img style="padding-left: 35px;" src="https://mr1.homeflow-assets.co.uk/files/site_asset/image/3965/9876/_x_/logo.png" alt="" /></div>
+<div class="col-sm-3">
+<p style="color: white;">We specialise in sales and lettings of urban, rural and coastal properties. Our professional services include valuations, surveys, energy reports, compensation and utility claims, expert witness reports, advice and evidence.</p>
+</div>
+<div class="col-sm-2">
+<h3 style="margin-top: 0px; color: #fff;">Browse our Services</h3>
+<a href="../../../../../pages/sales">Estate agents</a> <br /><a href="../../../../../pages/lettings">Letting agents</a><br /> <a href="../../../../../pages/auctions/">Property Auctioneers</a><br /> <a href="../../../../../pages/livestock/">Livestock</a><br /> <a href="../../../../../pages/surveys-and-valuations/">Surveys &amp; Valuations</a> <a href="../../../../../pages/commercial/">Commercial</a></div>
+<div class="col-sm-3">
+<h3 style="margin-top: 0px; color: #fff;">Find a Branch</h3>
+<div class="row">
+<div class="col-sm-6"><a href="../../../../../branches/ammanford">Ammanford</a><br /><a href="../../../../../branches/brecon">Brecon</a><br /><a href="../../../../../branches/carmarthen">Carmarthen</a><br /><a href="../../../../../branches/crickhowell">Crickhowell</a><br /><a href="../../../../../branches/llandeilo">Llandeilo</a><br /> <a href="../../../../../branches/llandovery">Llandovery</a></div>
+<div class="col-sm-6"><a href="../../../../../branches/morriston">Morriston</a><br /><a href="../../../../../branches/neath">Neath</a><br /> <a href="../../../../../branches/pontardawe">Pontardawe</a><br /><a href="../../../../../branches/port-talbot">Port Talbot</a><br /> <a href="../../../../../branches/swansea">Swansea</a><br /> <a href="../../../../../branches/ystradgynlais">Ystradgynlais</a></div>
+</div>
+</div>
+<div class="col-sm-2">
+<h3 style="margin-top: 0px; color: #fff;">Follow us</h3>
+<div><a href="https://twitter.com/CleesSwansea" target="_blank"> <img style="height: 45px;" src="https://mr1.homeflow-assets.co.uk/files/site_asset/image/4752/5257/twitter-compressor.png" alt="" /> </a> <a href="https://www.facebook.com/cleeswansea" target="_blank"> <img style="height: 45px;" title="" src="https://mr1.homeflow-assets.co.uk/files/site_asset/image/4752/5256/facebook-compressor.png" alt="" /> </a> <a href="https://www.linkedin.com/in/christhomas82/" target="_blank"> <img style="height: 45px;" src="https://mr1.homeflow-assets.co.uk/files/site_asset/image/4752/5254/linkedin.png" alt="" /> </a> <a href="https://www.instagram.com/cleeswan/" target="_blank"><img style="height: 45px;" title="" src="https://mr1.homeflow-assets.co.uk/files/site_asset/image/4752/5240/instagram-compressor.png" alt="" /></a></div>
+<br />
+<div id="docs"><a href="https://mr1.homeflow-assets.co.uk/files/site_asset/image/6891/4919/CT_F_Privacy_Policy_-_Customers_Suppliers_etc.pdf" target="_blank"> Privacy Policy</a><br /> <a href="https://mr1.homeflow-assets.co.uk/files/site_asset/image/4750/8189/client-money-protection-scheme-rules-rics.pdf" target="_blank">Client Money Protection</a><br /> <a href="https://mr1.homeflow-assets.co.uk/files/site_asset/image/6078/8598/Tannant-Fees-Wales-merged.pdf" target="_blank">Lettings Fees</a></div>
+<a href="https://mr1.homeflow-assets.co.uk/files/site_asset/image/6623/2806/complaints_procedure.pdf" target="_blank">Complaints Procedure</a></div>
+</div>
+</div>
+<div class="portal-logos row" style="padding-left: 35px;"><a href="https://www.zoopla.co.uk/find-agents/?company_name=Clee%20Tompkinson%20Francis&amp;radius=0&amp;search_source=find-agents" target="blank"><img title="" src="https://mr1.homeflow.co.uk/files/site_asset/image/4413/3485/zoopla.png?1620904654" alt="" /></a> <a href="https://www.onthemarket.com/agents/search/?agent-name=Clee+Tompkinson+Francis&amp;agent-search-type=branches" target="blank"><img src="https://mr1.homeflow-assets.co.uk/files/site_asset/image/5537/0675/image_5_.png" alt="" /></a> <a href="https://www.rightmove.co.uk/estate-agents/find.html?branchType=ALL&amp;brandName=clee+Tompkinson&amp;radius=40.0&amp;locationIdentifier=REGION%5E1305" target="blank"><img title="" src="https://mr2.homeflow.co.uk/files/site_asset/image/4413/3482/Rightmove__2_.png?1620904654" alt="" /></a> <a href="https://www.ricsfirms.com/office/017561/Clee-Tompkinson-and-Francis" target="blank"><img title="" src="https://mr0.homeflow.co.uk/files/site_asset/image/4413/3488/RICS.png?1620904654" alt="" /></a></div>
+<div class="row" style="color: white; padding-left: 35px;">Copyright Clee Tompkinson Francis 2020 | <a href="../../../../../pages/terms-of-use">Terms of Use</a>&nbsp;|&nbsp;<a href="../../../../../pages/cookies">Cookies</a>&nbsp;|<a href="https://mr1.homeflow-assets.co.uk/files/site_asset/image/6891/4919/CT_F_Privacy_Policy_-_Customers_Suppliers_etc.pdf"> Privacy Policy</a> | Powered by <a href="https://www.homeflow.co.uk/" target="_blank">Homeflow</a></div>
+      
+    
+  </div>
+
+  <script>
+
+  $(document).ready(function(){
+
+     $('.js-heroGallery').slick({
+      slidesToShow: 1,
+      slidesToScroll: 1,
+      arrows: false,
+      fade: true,
+      autoplay: true,
+      autoplaySpeed: 3500,
+      speed: 2500,
+    });
+
+    $('.js-contentSlider').slick({
+      dots: false,
+      infinite: false,
+      speed: 300,
+      slidesToShow: 5,
+      slidesToScroll: 5,
+      responsive: [
+        {
+          breakpoint: 1024,
+          settings: {
+            slidesToShow: 3,
+            slidesToScroll: 3,
+            // infinite: false,
+            // dots: false
+          }
+        },
+        {
+          breakpoint: 600,
+          settings: {
+            slidesToShow: 2,
+            slidesToScroll: 2
+          }
+        },
+        {
+          breakpoint: 480,
+          settings: {
+            slidesToShow: 1,
+            slidesToScroll: 1
+          }
+        }
+        // You can unslick at a given breakpoint now by adding:
+        // settings: "unslick"
+        // instead of a settings object
+      ]
+    });
+
+    $('.js-staffSlider').slick({
+      dots: false,
+      infinite: false,
+      speed: 300,
+      slidesToShow: 4,
+      slidesToScroll: 4,
+      responsive: [
+        {
+          breakpoint: 1024,
+          settings: {
+            slidesToShow: 4,
+            slidesToScroll: 4,
+          }
+        },
+        {
+          breakpoint: 600,
+          settings: {
+            slidesToShow: 2,
+            slidesToScroll: 2
+          }
+        },
+        {
+          breakpoint: 480,
+          settings: {
+            slidesToShow: 1,
+            slidesToScroll: 1
+          }
+        }
+        // You can unslick at a given breakpoint now by adding:
+        // settings: "unslick"
+        // instead of a settings object
+      ]
+    });
+
+    $('.js-featuedPropertiesSlider').slick({
+      dots: false,
+      infinite: false,
+      speed: 300,
+      slidesToShow: 1,
+      slidesToScroll: 1,
+      // responsive: [
+      // {
+      //   breakpoint: 991,
+      //   settings: "unslick"
+      // },
+      //   {
+      //     breakpoint: 600,
+      //     settings: {
+      //       slidesToShow: 2,
+      //       slidesToScroll: 2
+      //     }
+      //   },
+      //   {
+      //     breakpoint: 480,
+      //     settings: {
+      //       slidesToShow: 1,
+      //       slidesToScroll: 1
+      //     }
+      //   }
+      //   // You can unslick at a given breakpoint now by adding:
+      //   // settings: "unslick"
+      //   // instead of a settings object
+      // ]
+    });
+
+    $(".mainNavbar-nav > li").hover(
+      function () {
+        if (! $(this).attr('data-show_dropdown_content')) {
+          return;
+        }
+        MenuOpenCloseErgoTimer (
+          300,
+          function (node) {
+            $('[data-dropdown_content]').hide();
+            var showDropdown = $(node).attr('data-show_dropdown_content');
+            $('[data-dropdown_content="' + showDropdown + '"]').show();
+            $('.mainNavbarMenuContent').show();
+          },
+          this
+          );
+      },
+      function () {
+        MenuOpenCloseErgoTimer (
+          200,
+          function () {
+            $('.mainNavbarMenuContent').hide();
+            $('[data-dropdown_content]').hide();
+          }
+          );
+      }
+    );
+
+    $("[data-dropdown_content]").hover (
+      function () {
+        MenuOpenCloseErgoTimer (
+          0,
+          function () {
+            $('.mainNavbarMenuContent').show();
+            $(this).show();
+          }
+          );
+      },
+      function () {
+        MenuOpenCloseErgoTimer (
+          200,
+          function () {
+            $('.mainNavbarMenuContent').hide();
+            $('[data-dropdown_content]').hide();
+          }
+          );
+      }
+    );
+
+    function MenuOpenCloseErgoTimer (dDelay, fActionFunction, node) {
+      if (typeof this.delayTimer == "number") {
+        clearTimeout (this.delayTimer);
+        this.delayTimer = '';
+      }
+      if (node) {
+        this.delayTimer = setTimeout (function() { fActionFunction (node); }, dDelay);
+      }
+      else {
+        this.delayTimer = setTimeout (function() { fActionFunction (); }, dDelay);
+      }
+    }
+
+    $(document).ready(function(){
+      if ($('#let').attr('checked')) {
+        activateLetRadioButtonLabel();
+      };
+
+      $('#let').on('click', function(){
+        activateLetRadioButtonLabel();
+      });
+      $('#buy').on('click', function(){
+        activateBuyRadioButtonLabel();
+      });
+
+      function activateLetRadioButtonLabel (){
+        $('.btn-radio-buy').removeClass('active current');
+        $('#buy').attr('checked', false);
+        $('.btn-radio-let').addClass('active current');
+      }
+
+      function activateBuyRadioButtonLabel (){
+        $('.btn-radio-let').removeClass('active current');
+        $('#let').attr('checked', false);
+        $('.btn-radio-buy').addClass('active current');
+      }
+    });
+
+  });
+
+  </script>
+
+  <script type="text/javascript" src="https://maps.google.com/maps/api/js?key=AIzaSyC1fBGiO75NYKYrCh_Wd_qQqe0YPdu1dqA"></script>
+
+  <div id="valuation-render-section"></div>
+
+<script type="text/template" id="valuation-template">
+  <div id="valuation-modal-background" style="display: none">
+    <div id="valuation-section">
+      <div class="valuations-modal-close">
+          &#10005;
+      </div>
+      <div class="valuations-modal-back" style="display: none;">
+          <p>< Back</p>
+      </div>
+      <div class="address-container">
+  <div class="top">
+    <div class="top">
+      <img
+        src="//mr3.homeflow-assets.co.uk/files/site_asset/image/6431/0843/_x_/logo-min.png"
+        alt="Clee Tompkinson Francis logo"
+        class="agency-logo"
+      />
+      <h2>Instant Online Valuation</h2>
+      <h3>Interested in your property value?</h3>
+    </div>
+  </div>
+
+  <div class="main">
+    <form id="first-address-form" onsubmit="return false;">
+      <input type="hidden" id="valuation_house-number" name="house" class="address" />
+      <input type="hidden" name="address" class="address" />
+      <input
+        class="postcode-input"
+        id="valuation_postcode"
+        type="text"
+        value=""
+        placeholder="Enter full postcode (with a space)..."
+      />
+      <select id="address_dropdown">
+        <option disabled selected hidden>Then select address...</option>
+      </select>
+      <select id="valuation_bedrooms" name="bedrooms">
+        <option disabled="disabled" selected="selected" hidden>Number of bedrooms</option>
+        <option value="0">0 / Studio</option>
+        <option value="1">1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+        <option value="5">5</option>
+        <option value="6">6</option>
+      </select>
+      <select id="valuation_property-type" name="property-type">
+        <option disabled="disabled" selected="selected" hidden>Property type</option>
+        <option value="t">Terraced</option>
+        <option value="t">End-of-terrace</option>
+        <option value="d">Detached</option>
+        <option value="s">Semi-detached</option>
+        <option value="f">Flat</option>
+        <option value="106">Maisonette</option>
+        <option value="5">Bungalow</option>
+      </select>
+      <input type="submit" value="Next Step" class="next-step btn btn-primary button-primary">
+
+      
+        
+      
+    </form>
+
+    <div id="valuation_not-found-message"></div>
+  </div>
+</div>
+
+      <form id="similar-properties-form" style="display: none" onsubmit="return false;">
+  <div class="similar-properties-top">
+    <h3>Select properties that are similar to yours</h3>
+    <h4>Skip this step if none are similar</h4>
+  </div>
+  <fieldset id="similar-properties">
+  </fieldset>
+
+  <div class="get-valuation-button">
+    <input type="submit" value="Get your valuation" class="next-step btn btn-primary button button-primary">
+  </div>
+
+</form>
+
+<div id="spinner-background" style="display:none;">
+  <div class="loader">Calculating...</div>
+</div>
+
+<style>
+ #similar-properties label {
+  min-height: 30px;
+ }
+</style>
+
+      <div class="personal-details-container" style="display:none;">
+    <div class="top">
+      <h2>Your Details</h2>
+      <h3>We won't share your information.</h3>
+    </div>
+    <div>
+      <form id="details-form" onsubmit="return false;">
+        <input type="hidden" name="lead[is_valuation_request]" value="1"/>
+        <input type="hidden" name="lead[channel]" id="valuation_channel" value=""/>
+        <div class="detail-input">
+          <input type="text" id="valuation_first_name" name="user[first_name]" class="name first_name" placeholder="First Name*" style="">
+          <input type="text" id="valuation_last_name" name="user[last_name]" class="name last_name" placeholder="Last Name*" style="">
+        </div>
+        <div class="detail-input">
+          <input type="text" id="valuation_email" name="user[email]" class="email" placeholder="Email Address*">
+        </div>
+        <div class="detail-input">
+          <input type="tel" id="valuation_phone" name="user[tel_home]" class="phone" placeholder="Phone Number*">
+        </div>
+        <div class="detail-input">
+          <select id="valuation_interest" name="interest" class="interest">
+            <option value="select" disabled="disabled" selected="selected" hidden>Moving Plans*</option>
+            <option value="asap">ASAP</option>
+            <option value="3 months">3 months</option>
+            <option value="6 months">6 months</option>
+            <option value="9 months">9 months</option>
+            <option value="12 months">12 months</option>
+            <option value="not sure">Not sure</option>
+          </select>
+        </div>
+        <div class="detail-input">
+          <select id="valuation_reason" name="reason" class="reason">
+            <option value="select" disabled="disabled" selected="selected" hidden>Reason for valuation*</option>
+            <option value="selling">Selling only</option>
+            <option value="selling and buying">Selling &amp; buying</option>
+            <option value="buying">Buying only</option>
+            <option value="letting">Renting out my property</option>
+            <option value="just curious">Just curious</option>
+          </select>
+        </div>
+        
+          <div class='optin_container__opt_in_marketing valuation_prefs'><label class='statement_text  optin-label__opt_in_marketing'><input class='checkbox_class_opt_in_marketing' type='checkbox' name='marketing_preferences[opt_in_marketing]' /><span> Get emails with the latest news and information on the local property market, our products and services. You can unsubscribe at any time. </span></label></div><div class='optin_container__account_confirmation_status valuation_prefs'><label class='statement_text  optin-label__account_confirmation_status'><input class='checkbox_class_account_confirmation_status' type='checkbox' name='marketing_preferences[account_confirmation_status]' /><span> Create an account to view your saved properties and searches and keep your personal details up-to-date. </span></label></div><div class='optin_container__opt_in_terms valuation_prefs'><label class='statement_text  optin-label__opt_in_terms'><input class='checkbox_class_opt_in_terms' type='checkbox' name='marketing_preferences[opt_in_terms]' required/><span> I have read and agree to the <a href="/pages/terms-of-use">Terms and Conditions</a>, <a href="/pages/privacy-policy">Privacy Policy</a> and <a href="/pages/cookies">Cookies Policy</a>. </span></label></div><input type='hidden' name='[marketing_preferences][opt_in_marketing_statement]' value='Get emails with the latest news and information on the local property market, our products and services. You can unsubscribe at any time.'/>
+        
+        <input type="submit" value="Next Step" class="next-step btn btn-primary button button-primary">
+        <div id="valuation_result" style="display:none;"><h3>Your results</h3></div>
+      </form>
+    </div>
+</div>
+
+      <div class="result-container" style="display:none;">
+  <div class="inner-wrapper">
+    <div class="top">
+      <img src="//mr3.homeflow-assets.co.uk/files/site_asset/image/6431/0843/_x100/logo-min.png" alt="Clee Tompkinson Francis logo" class="agency-logo" />
+      <h2>Your Valuation in the region of...</h2>
+    </div>
+    <div class="main">
+      <div id="valuation-wrapper">
+        <div class="sell-let-switch">
+          <div class="sell-switch active">To sell</div>
+          <div class="let-switch">To let</div>
+        </div>
+        <div id="valuation-details">
+          <div id="min-valuation" class="val-box">
+            <span>Minimum:</span>
+            <strong id="min_price_1">£000,000</strong>
+          </div>
+          <div id="valuation" class="val-box">
+            <strong id="price_1">£000,000</strong>
+          </div>
+          <div id="max-valuation" class="val-box">
+            <span>Potential:</span>
+            <strong id="max_price_1">£000,000</strong>
+          </div>
+        </div>
+      </div>
+
+      
+        
+          <div id="no_results">
+            <p>Unfortunately we do not have enough data to give you an accurate valuation.
+              Your local Clee Tompkinson Francis property expert will be in touch to arrange an accurate valuation taking
+              into account improvements to your property,
+              the local market and more.
+              Or arrange a valuation now by clicking
+              <a id='contact_form_link' href="/#contact_form"> here.</a>
+            </p>
+          </div>
+        
+      
+
+      <p id="property_expert">Whilst this instant valuation provides a guideline,
+         your local Clee Tompkinson Francis property expert will be in touch to provide a more accurate valuation taking into
+         account improvements to your property, the local market and more.
+      </p>
+
+      <div id="streetview-wrapper"></div>
+
+      <div id="valuation-map"></div>
+
+      <div id="valuation-map-no-streetview"></div>
+
+      <div style="clear: both;"></div>
+
+      <div class="recently-sold">
+        <h3>Recently sold in the area</h3>
+        <p>These properties near you were sold recently.</p>
+        <ul id="recently-sold-list">
+        </ul>
+      </div>
+
+      <div id="content-wrapper">
+        <div id="valuation-details">
+          <div id="sub-details">
+
+            <span id="address-wrapper" class="sub-detail">
+              <span id="address-container">STREET NAME, TOWN, POSTCODE, UNITED KINGDOM</span>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="clear"></div>
+    </div>
+  </div>
+  <div class="cell">&nbsp;</div>
+</div>
+
+
+      <div class="valuation_start_again">
+        <p>Start again?</p>
+      </div>
+    </div>
+  </div>
+</script>
+
+<style>
+  #spinner-background .loader,
+  #spinner-background .loader:before,
+  #spinner-background .loader:after {
+    background: #e11e2c;
+  }
+
+  #spinner-background .loader {
+    color: #e11e2c;
+  }
+
+  #valuation-section .sell-switch, #valuation-section .let-switch {
+    border: solid #e11e2c 2px;
+  }
+
+  #valuation-section .sell-let-switch .active {
+    background-color: #e11e2c;
+  }
+</style>
+
+  
+</body>
+</html>
