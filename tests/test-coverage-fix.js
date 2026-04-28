@@ -128,6 +128,18 @@ console.log('\nretry-queue: exponential backoff math');
   const { DEFER_BACKOFF_MS } = _internals;
   assert(DEFER_BACKOFF_MS === 15 * 60 * 1000, 'DEFER_BACKOFF_MS = 15 minutes (covers OS Places 10-min breaker + buffer)');
   assert(DEFER_BACKOFF_MS < BASE_BACKOFF_MS, 'defer is shorter than retry: a deferred row should re-enter the drain before a retried one');
+
+  // Locks the bug-fix contract: enqueueRetry treats reason='circuit_open'
+  // as defer (no attempts++). Production observed 411 OS Places rows
+  // exhausted via repeated scrape-time enqueues during a tripped breaker
+  // — pre-fix, every scrape's failed enqueue ticked attempts up.
+  const { NON_STRIKE_REASONS } = _internals;
+  assert(NON_STRIKE_REASONS instanceof Set,
+    'NON_STRIKE_REASONS exported as a Set (callers can introspect)');
+  assert(NON_STRIKE_REASONS.has('circuit_open'),
+    'circuit_open is non-strike: enqueueRetry must NOT increment attempts');
+  assert(!NON_STRIKE_REASONS.has('api_error') && !NON_STRIKE_REASONS.has('timeout') && !NON_STRIKE_REASONS.has('no_match'),
+    'real failures (api_error, timeout, no_match) DO strike — they tried and failed');
 }
 
 // ── stampSource — used by extractor.js for catalogue-path provenance ──
