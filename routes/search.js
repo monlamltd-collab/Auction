@@ -1125,11 +1125,15 @@ async function buildAllLotsResponse({ isSignedIn, includePast }) {
     }
     if (staleSynth > 0) log.info('all-lots: stale-synth dates', { count: staleSynth, graceDays: 14 });
 
-    // ── Server-side future-only filtering (7-day grace period) ──
+    // ── Server-side future-only filtering (no grace period) ──
+    // Default view hides any lot whose auction date is strictly in the past.
+    // Today's auctions are still shown (auction is live during the day).
+    // Users opt back in to past auctions via the "Show past auctions" checkbox
+    // in index.html (#fShowPast → ?includePast=true). Lots with no auction date
+    // (source doesn't publish one and stale-synth hasn't fired yet) are kept —
+    // hiding them would silently drop legitimate undated catalogues.
     if (!includePast) {
-      const cutoff = new Date();
-      cutoff.setDate(cutoff.getDate() - 7);
-      const cutoffStr = cutoff.toISOString().slice(0, 10);
+      const cutoffStr = new Date().toISOString().slice(0, 10);
       const beforeFilter = lots.length;
       const filtered = lots.filter(lot => {
         if (!lot._auctionDate) return true; // Include lots with no date
