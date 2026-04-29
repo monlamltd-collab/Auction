@@ -398,16 +398,64 @@ router.post('/api/smart-search', async (req, res) => {
   const _searchIp = req.ip || 'unknown';
   const _searchKey = `aisearch:${_searchIp}`;
 
+  // Tracks whether we already atomically incremented the auth-user counter
+  // upfront via the RPC. When true, incrementSearchCounter() is a no-op for
+  // this request — the bump already happened.
+  let userIncrementedAtomically = false;
+
   if (searchLimit !== Infinity) {
     if (user) {
-      const userSearchDate = user.ai_searches_date ? new Date(user.ai_searches_date).toISOString().slice(0, 10) : null;
-      if (userSearchDate === searchToday) searchesUsed = user.ai_searches_today || 0;
-      if (searchesUsed >= searchLimit) {
-        return res.status(429).json({
-          error: 'rate_limited',
-          message: `You've used all ${searchLimit} AI searches for today. Upgrade to Pro for unlimited.`,
-          searchesUsed, searchLimit,
-        });
+      // Atomic check-and-increment via increment_ai_search RPC.
+      // Replaces a read-then-check-then-write race (issue #10 from the
+      // 2026-04-29 code review): two concurrent requests at counter=N
+      // both passed the limit check and both wrote N+1, silently
+      // exceeding the daily quota.
+      try {
+        const { data: rpcRows, error: rpcErr } = await supabase
+          .rpc('increment_ai_search', {
+            p_user_id: user.id,
+            p_today: searchToday,
+            p_limit: searchLimit,
+          });
+        const rpc = Array.isArray(rpcRows) ? rpcRows[0] : rpcRows;
+        if (rpcErr || !rpc) {
+          // Fail open — better to allow the search than to lock a paying
+          // user out due to an RPC hiccup. The cached read below is the
+          // backstop for blatantly over-quota requests.
+          log.warn('increment_ai_search RPC failed; falling back to non-atomic check', { err: rpcErr?.message, userId: user.id });
+          const userSearchDate = user.ai_searches_date ? new Date(user.ai_searches_date).toISOString().slice(0, 10) : null;
+          if (userSearchDate === searchToday) searchesUsed = user.ai_searches_today || 0;
+          if (searchesUsed >= searchLimit) {
+            return res.status(429).json({
+              error: 'rate_limited',
+              message: `You've used all ${searchLimit} AI searches for today. Upgrade to Pro for unlimited.`,
+              searchesUsed, searchLimit,
+            });
+          }
+          // Fallback path lets the request proceed; the trailing
+          // incrementSearchCounter() will do a non-atomic bump later.
+        } else {
+          searchesUsed = rpc.searches_used ?? 0;
+          if (!rpc.allowed) {
+            return res.status(429).json({
+              error: 'rate_limited',
+              message: `You've used all ${searchLimit} AI searches for today. Upgrade to Pro for unlimited.`,
+              searchesUsed, searchLimit,
+            });
+          }
+          userIncrementedAtomically = true;
+        }
+      } catch (err) {
+        log.warn('increment_ai_search RPC threw; falling back to non-atomic check', { err: err.message, userId: user.id });
+        const userSearchDate = user.ai_searches_date ? new Date(user.ai_searches_date).toISOString().slice(0, 10) : null;
+        if (userSearchDate === searchToday) searchesUsed = user.ai_searches_today || 0;
+        if (searchesUsed >= searchLimit) {
+          return res.status(429).json({
+            error: 'rate_limited',
+            message: `You've used all ${searchLimit} AI searches for today. Upgrade to Pro for unlimited.`,
+            searchesUsed, searchLimit,
+          });
+        }
       }
     } else {
       try {
@@ -424,10 +472,15 @@ router.post('/api/smart-search', async (req, res) => {
     }
   }
 
-  // Helper: increment search counter AFTER successful response
+  // Helper: increment search counter AFTER successful response.
+  // For authenticated users where the RPC already incremented atomically
+  // upfront, this is a no-op (skips the redundant DB write). For
+  // authenticated users on the fallback path (RPC hiccup) it does the
+  // non-atomic bump as before. Anon users still use rate_limits.
   async function incrementSearchCounter() {
     try {
       if (user) {
+        if (userIncrementedAtomically) return; // already done by the RPC
         await supabase.from('users').update({ ai_searches_today: searchesUsed + 1, ai_searches_date: searchToday }).eq('id', user.id);
       } else {
         const { data: sr } = await supabase.from('rate_limits').select('requests').eq('ip', _searchKey).eq('date', searchToday).single();
