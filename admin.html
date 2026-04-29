@@ -848,7 +848,10 @@ function doLogin() {
   // Test with a lightweight endpoint
   apiFetch('/api/cache-status').then(data => {
     if (data.error) { document.getElementById('auth-err').style.display = 'block'; return; }
-    localStorage.setItem('ab_admin_secret', SECRET);
+    // sessionStorage (not localStorage) — admin secret is scoped to this tab
+    // session and cleared when the tab closes. localStorage persisted across
+    // browser restarts and was readable by any same-origin XSS or extension.
+    sessionStorage.setItem('ab_admin_secret', SECRET);
     document.getElementById('auth-gate').style.display = 'none';
     document.getElementById('dashboard').style.display = 'block';
     refreshAll();
@@ -873,15 +876,26 @@ async function archiveStaleAlerts() {
 }
 
 function logout() {
+  sessionStorage.removeItem('ab_admin_secret');
+  // Belt-and-braces: also clear any legacy localStorage entry written by
+  // older versions of this page so we don't leave a stale secret behind.
   localStorage.removeItem('ab_admin_secret');
   SECRET = '';
   document.getElementById('auth-gate').style.display = 'flex';
   document.getElementById('dashboard').style.display = 'none';
 }
 
-// Check saved secret
+// Check saved secret. Tab-scoped sessionStorage now — re-enter on new tab.
+// One-time migration: if an older localStorage secret exists, transfer it
+// to sessionStorage and purge the persistent copy. After this runs once
+// per browser, the persistent secret is gone.
 (function() {
-  const saved = localStorage.getItem('ab_admin_secret');
+  const legacy = localStorage.getItem('ab_admin_secret');
+  if (legacy && !sessionStorage.getItem('ab_admin_secret')) {
+    sessionStorage.setItem('ab_admin_secret', legacy);
+  }
+  if (legacy) localStorage.removeItem('ab_admin_secret');
+  const saved = sessionStorage.getItem('ab_admin_secret');
   if (saved) { SECRET = saved; doLogin(); }
   document.getElementById('secret-input').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 })();

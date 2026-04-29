@@ -549,8 +549,10 @@ router.post('/api/smart-search', async (req, res) => {
     const effectiveSold = sqParsed.filters.statusOverride || sf;
     const sortCol = sqParsed.filters.sortBy === 'yield' ? 'est_gross_yield' : 'score';
 
-    // UI-supplied postcode/town + radius (from catalogue dropdowns)
-    dbQuery = applyUiLoc(dbQuery);
+    // UI-supplied postcode/town + radius is applied inside buildLayer1Query()
+    // via applyUiLoc(); no outer dbQuery exists in this scope. The previous
+    // `dbQuery = applyUiLoc(dbQuery)` line here threw ReferenceError on every
+    // non-preset AI search and was caught + logged as a generic failure.
 
     // ── Concept-based broadening — build OR conditions for semantic intent ──
     const conceptOrClauses = [];
