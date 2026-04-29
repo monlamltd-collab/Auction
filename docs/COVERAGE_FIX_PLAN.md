@@ -20,12 +20,16 @@ Coverage measured against 10,366 lots in the live `lots` table:
 | `flood_risk` | (not in plan) | **71.5%** | Modest gap |
 | `field_sources` non-empty | (not in plan) | **13.3%** | Exactly matches `uprn` count → provenance is currently only stamped by the OS Places path. Fix #6's catalogue-path stamping (live in `lib/pipeline/extractor.js`) should lift this on the next scrape cycle |
 
-**Bug uncovered by the baseline:** 196 retry-queue rows are `exhausted` (5/5 attempts) with `reason='circuit_open'`. The drain in `lib/pipeline/enrichment-wave.js` Pass 6 burned 5 attempts per row while the OS Places circuit breaker was tripped, instead of skipping. Filed as a follow-up — drain should call `getCircuitStatus()` from `lib/os-places.js` and bail without incrementing attempts when the breaker is open.
+**Bug uncovered by the baseline (RESOLVED 2026-04-29):** 196 retry-queue rows were `exhausted` (5/5 attempts) with `reason='circuit_open'` — drain burned 5 attempts per row while the OS Places circuit breaker was tripped. Resolution arrived in three commits:
+  - `1416361` (2026-04-27): drain returns `'defer'` instead of `'retry'` when breaker is open — attempts counter untouched.
+  - `a4d07a0` (2026-04-28): enqueue path also defers for `reason='circuit_open'` — closes the scrape-time analogue of the same bug.
+  - `03ead25` (2026-04-29): added `peekOpen()` to `lib/os-places.js` so observability reads (drain pre-check, status endpoints) don't silently half-open the breaker. `getCircuitStatus()` switched to use it.
+  - Migration `migrations/2026-04-29-reset-circuit-open-exhausted.sql`: one-shot data fix to bring the legacy exhausted rows back into the active queue (resets attempts to 0, idempotent — re-running it is a no-op).
 
 **Headline takeaway:** The plan's "image/price coverage is the problem" framing was wrong. Image and price are already at 96–98%. The real gaps are UPRN (13%), EPC (36%), and a small handful of broken-extractor houses. Fixes #1+#2 still ship value (they unlock returning-lot UPRN recovery + dense provenance + retry infrastructure), but the next item should be sized against the real gaps, not the imagined ones.
 
 **Recommended next item (revises the rollout table below):**
-1. **Fix the retry-queue circuit_open bug** — small, blocks the UPRN gap-filler from making progress.
+1. ~~**Fix the retry-queue circuit_open bug**~~ — DONE 2026-04-29 (see resolved bug above). Apply migration `2026-04-29-reset-circuit-open-exhausted.sql` to flush the legacy exhausted rows.
 2. **Rollout #4 (per-lot quality score + targeted alerts)** — empirically justified now that we know the gaps are house-concentrated, not pipeline-wide. SLA-style alerts will catch the next `Charles Darrow`-style extractor break automatically.
 3. **Investigate `Charles Darrow` + `landwood` image extractors** — a self-healing-harness task, not a fix from this plan.
 4. **Investigate `edwardmellor` postcode extractor** — same.
