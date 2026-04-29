@@ -95,19 +95,33 @@ router.get('/api/auth/me', async (req, res) => {
   const user = await validateUserFromReq(req);
   if (!user) return res.status(401).json({ error: 'Authentication required' });
 
+  // Allowlist of fields safe to send to the client. Adding a new sensitive
+  // column to the SELECT below (e.g. another stripe_*, an internal flag,
+  // a server-only setting) is safe because it won't show up in the response
+  // unless its name is also added here. Previous denylist pattern silently
+  // leaked any new column.
+  const PUBLIC_USER_FIELDS = [
+    'id', 'email', 'name', 'tier', 'analyses_count', 'tier_expires_at',
+    'consent_auction_alerts', 'consent_partner_marketing',
+    'onboarding_complete', 'experience_level', 'budget_max', 'interests',
+  ];
+  function toPublicUser(row) {
+    const out = {};
+    for (const f of PUBLIC_USER_FIELDS) if (f in row) out[f] = row[f];
+    out.hasSubscription = !!row.stripe_subscription_id;
+    out.stripeEnabled = STRIPE_ENABLED;
+    return out;
+  }
+
   try {
     const { data } = await supabase
       .from('users')
       .select('id, email, name, tier, analyses_count, tier_expires_at, stripe_subscription_id, consent_auction_alerts, consent_partner_marketing, onboarding_complete, experience_level, budget_max, interests')
       .eq('id', user.id)
       .single();
-    const safe = data || user;
-    // Don't expose internal Stripe IDs to the client
-    const { stripe_subscription_id, stripe_customer_id, ...publicFields } = safe;
-    res.json({ ...publicFields, hasSubscription: !!stripe_subscription_id, stripeEnabled: STRIPE_ENABLED });
+    res.json(toPublicUser(data || user));
   } catch (err) {
-    const { stripe_subscription_id, stripe_customer_id, ...publicFields } = user;
-    res.json({ ...publicFields, hasSubscription: !!stripe_subscription_id, stripeEnabled: STRIPE_ENABLED });
+    res.json(toPublicUser(user));
   }
 });
 

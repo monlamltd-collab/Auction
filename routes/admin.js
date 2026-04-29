@@ -6,6 +6,7 @@ import { readFileSync } from 'fs';
 import { JSDOM } from 'jsdom';
 import { supabase } from '../lib/supabase.js';
 import { safeCompare, rateLimit, getClientIP, validateUserFromReq } from '../lib/auth.js';
+import { validateUrl } from '../lib/security.js';
 import { log } from '../lib/logging.js';
 import { MAX_PUPPETEER_PAGES, MAX_LOTS_PER_SCRAPE, MAX_AUCTIONS_PER_HOUSE } from '../lib/config.js';
 import { HOUSE_ROOTS, PUPPETEER_IMAGE_HOUSES, detectAuctionHouse, HOUSE_DISPLAY_NAMES } from '../lib/houses.js';
@@ -92,9 +93,11 @@ router.get('/api/cache-status', async (req, res) => {
   }
 });
 
-router.post('/api/refresh-cache', async (req, res) => {
-  const { secret } = req.body || {};
-  if (!process.env.ADMIN_SECRET || !safeCompare(secret, process.env.ADMIN_SECRET)) {
+router.post('/api/refresh-cache', rateLimit(60000, 5), async (req, res) => {
+  // Header-only auth (was: req.body.secret) — see /api/admin/backfill-images
+  // for the rationale. Tight rate limit because this triggers a full pipeline run.
+  const adminToken = req.headers['x-admin-secret'] || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(adminToken, process.env.ADMIN_SECRET)) {
     return res.status(403).json({ error: 'Invalid admin secret' });
   }
   res.json({ message: 'Auto-analysis triggered. Check server logs for progress.' });
@@ -103,8 +106,11 @@ router.post('/api/refresh-cache', async (req, res) => {
 });
 
 // Admin: backfill images for all cached catalogues (no AI tokens used)
-router.post('/api/admin/backfill-images', async (req, res) => {
-  const adminToken = req.headers['x-admin-secret'] || req.body?.secret || '';
+router.post('/api/admin/backfill-images', rateLimit(60000, 20), async (req, res) => {
+  // Header-only auth — req.body.secret used to be a fallback but it leaked the
+  // secret into request loggers and Railway log drains. Same change applied to
+  // all admin endpoints in this file and routes/calendar.js.
+  const adminToken = req.headers['x-admin-secret'] || '';
   if (!process.env.ADMIN_SECRET || !safeCompare(adminToken, process.env.ADMIN_SECRET)) {
     return res.status(403).json({ error: 'Admin access required' });
   }
@@ -186,7 +192,7 @@ router.post('/api/admin/backfill-images', async (req, res) => {
 // markdown + image count. For self-healing extractor diagnostics — when
 // curl returns a JS-shell, this gives the real rendered DOM. Costs 1
 // Firecrawl credit per call.
-router.post('/api/admin/firecrawl-probe', async (req, res) => {
+router.post('/api/admin/firecrawl-probe', rateLimit(60000, 10), async (req, res) => {
   const adminToken = req.headers['x-admin-secret'] || '';
   if (!process.env.ADMIN_SECRET || !safeCompare(adminToken, process.env.ADMIN_SECRET)) {
     return res.status(403).json({ error: 'Admin access required' });
@@ -195,6 +201,11 @@ router.post('/api/admin/firecrawl-probe', async (req, res) => {
   if (!url || typeof url !== 'string') {
     return res.status(400).json({ error: 'url (string) is required' });
   }
+  // SSRF guard — admin credentials don't relax this. Defence in depth keeps
+  // Firecrawl from being weaponised against http://railway.internal/...,
+  // 169.254.169.254 metadata endpoints, etc.
+  const urlCheck = await validateUrl(url);
+  if (!urlCheck.ok) return res.status(400).json({ error: urlCheck.error });
   try {
     const formats = ['rawHtml'];
     if (withImages) formats.push('images');
@@ -417,6 +428,10 @@ router.post('/api/admin/test-extractor', rateLimit(60000, 5), async (req, res) =
 
   const { url } = req.body || {};
   if (!url) return res.status(400).json({ error: 'url is required' });
+
+  // SSRF guard — same rationale as /firecrawl-probe.
+  const urlCheck = await validateUrl(url);
+  if (!urlCheck.ok) return res.status(400).json({ error: urlCheck.error });
 
   const house = req.body.house || detectAuctionHouse(url);
 
@@ -938,8 +953,8 @@ router.get('/api/cost-monitor', async (req, res) => {
 // If `slug` is provided, watches only that Cat B house. Otherwise all.
 // `force=true` bypasses the "already has upcoming entry" early-exit.
 // Returns { results: [...] } from the watcher.
-router.post('/api/admin/run-watcher', async (req, res) => {
-  const token = req.headers['x-admin-secret'] || req.body?.secret || '';
+router.post('/api/admin/run-watcher', rateLimit(60000, 20), async (req, res) => {
+  const token = req.headers['x-admin-secret'] || '';
   if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
     return res.status(403).json({ error: 'Invalid admin secret' });
   }
@@ -1053,8 +1068,8 @@ router.get('/api/discovery/candidates', async (req, res) => {
   res.json({ candidates, budget: getDiscoveryBudget() });
 });
 
-router.post('/api/discovery/approve', async (req, res) => {
-  const token = req.headers['x-admin-secret'] || req.body?.secret || '';
+router.post('/api/discovery/approve', rateLimit(60000, 20), async (req, res) => {
+  const token = req.headers['x-admin-secret'] || '';
   if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
@@ -1091,8 +1106,8 @@ router.get('/api/manager/report', async (req, res) => {
   res.json(report || { message: 'No manager cycle has run yet' });
 });
 
-router.post('/api/manager/cycle', async (req, res) => {
-  const token = req.headers['x-admin-secret'] || req.body?.secret || '';
+router.post('/api/manager/cycle', rateLimit(60000, 20), async (req, res) => {
+  const token = req.headers['x-admin-secret'] || '';
   if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
@@ -1100,8 +1115,8 @@ router.post('/api/manager/cycle', async (req, res) => {
   res.json(report);
 });
 
-router.post('/api/manager/config', async (req, res) => {
-  const token = req.headers['x-admin-secret'] || req.body?.secret || '';
+router.post('/api/manager/config', rateLimit(60000, 20), async (req, res) => {
+  const token = req.headers['x-admin-secret'] || '';
   if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }

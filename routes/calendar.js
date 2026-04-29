@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { supabase } from '../lib/supabase.js';
-import { safeCompare } from '../lib/auth.js';
+import { safeCompare, rateLimit } from '../lib/auth.js';
 import { log } from '../lib/logging.js';
 import { HOUSE_ROOTS, HOUSE_DISPLAY_NAMES } from '../lib/houses.js';
 import { HEADERS } from '../lib/config.js';
@@ -29,9 +29,10 @@ router.get('/api/auctions', async (req, res) => {
 });
 
 // Admin: seed the Supabase calendar from hardcoded data
-router.post('/api/admin/seed-calendar', async (req, res) => {
-  const { secret } = req.body || {};
-  if (!process.env.ADMIN_SECRET || !safeCompare(secret, process.env.ADMIN_SECRET)) {
+router.post('/api/admin/seed-calendar', rateLimit(60000, 20), async (req, res) => {
+  // Header-only auth (was: req.body.secret).
+  const token = req.headers['x-admin-secret'] || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
     return res.status(403).json({ error: 'Invalid admin secret' });
   }
   try {
@@ -86,8 +87,8 @@ router.post('/api/admin/calendar', async (req, res) => {
 });
 
 // Admin: deduplicate the calendar — remove duplicate rows keeping the best one per house+date+url
-router.post('/api/admin/dedup-calendar', async (req, res) => {
-  const token = req.headers['x-admin-secret'] || req.body?.secret || '';
+router.post('/api/admin/dedup-calendar', rateLimit(60000, 20), async (req, res) => {
+  const token = req.headers['x-admin-secret'] || '';
   if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
     return res.status(403).json({ error: 'Invalid admin secret' });
   }
@@ -124,8 +125,8 @@ router.post('/api/admin/dedup-calendar', async (req, res) => {
 });
 
 // Admin: trigger self-healing for a specific house or view healing status
-router.post('/api/admin/heal', async (req, res) => {
-  const token = req.headers['x-admin-secret'] || req.body?.secret || '';
+router.post('/api/admin/heal', rateLimit(60000, 20), async (req, res) => {
+  const token = req.headers['x-admin-secret'] || '';
   if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
     return res.status(403).json({ error: 'Invalid admin secret' });
   }
@@ -165,9 +166,12 @@ router.post('/api/admin/heal', async (req, res) => {
 });
 
 // Admin: delete an auction by ID
-router.delete('/api/admin/calendar/:id', async (req, res) => {
-  const { secret } = req.body || {};
-  if (!process.env.ADMIN_SECRET || !safeCompare(secret, process.env.ADMIN_SECRET)) {
+router.delete('/api/admin/calendar/:id', rateLimit(60000, 20), async (req, res) => {
+  // Header-only auth (was: req.body.secret) — DELETE with a JSON body is
+  // allowed by RFC 7231 but proxies sometimes strip it; the header path is
+  // also consistent with every other admin endpoint.
+  const token = req.headers['x-admin-secret'] || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
     return res.status(403).json({ error: 'Invalid admin secret' });
   }
   try {
