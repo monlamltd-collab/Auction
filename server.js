@@ -188,6 +188,7 @@ import { initAnalysis, autoAnalyseAll, healBrokenHouse, runEnrichmentWave } from
 import { auditStatusDrift } from './lib/harness/sub-agents.js';
 import { initWatcher, watchAuctionCalendar } from './lib/pipeline/auction-watcher.js';
 import { pickNextHouseForDrift } from './lib/pipeline/drift-scheduler.js';
+import { initRentals } from './lib/rentals/index.js';
 
 initAnalysis({
   // Resource budget (new: centralised resource state)
@@ -231,6 +232,11 @@ initWatcher({
   fireAlert: harnessFireAlert,
   budget,
 });
+
+// Wire rental-scraper deps (rollout #7 — postcode rental comps).
+// Plain HTTP, no Firecrawl credit, monthly cadence. Drained via the
+// admin /api/admin/rentals/drain endpoint or future cron.
+initRentals({ supabase });
 
 // ═══════════════════════════════════════════════════════════════
 // THREE-TIER SCHEDULING

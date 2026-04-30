@@ -1805,4 +1805,30 @@ router.post('/api/admin/alerts/cleanup', async (req, res) => {
   }
 });
 
+// ── Rental-comp scraper trigger (rollout #7) ──
+// Drains the postcode-rental backlog. Either:
+//   POST { postcodes: ["SW1A 1AA", ...] }  → explicit list, all sources
+//   POST { limit: 20, force: false }       → next N stale postcodes per
+//                                             freshness ledger
+// Sources are SpareRoom + OnTheMarket (plain HTTP, zero Firecrawl credit).
+// Monthly cadence: a (postcode, source) tuple is "stale" if not scraped
+// in the last 30 days. force=true bypasses the freshness check.
+router.post('/api/admin/rentals/drain', rateLimit(60000, 5), async (req, res) => {
+  const token = req.headers['x-admin-secret'] || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  const { drainStaleRentals } = await import('../lib/rentals/index.js');
+  const limit = Math.max(1, Math.min(200, parseInt(req.body?.limit) || 20));
+  const force = !!req.body?.force;
+  const postcodes = Array.isArray(req.body?.postcodes) ? req.body.postcodes : null;
+  try {
+    const result = await drainStaleRentals({ limit, force, postcodes });
+    res.json({ ok: true, ...result });
+  } catch (e) {
+    log.error('Rental drain error', { error: e.message });
+    res.status(500).json({ error: 'Drain failed', detail: e.message });
+  }
+});
+
 export default router;
