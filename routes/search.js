@@ -1508,4 +1508,105 @@ router.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
   }
 });
 
+// ── GET /api/lots/:id/comps — postcode-level sales + rental comps for one lot ──
+// Returns up to 10 nearest sold prices (postcode_sales), up to 10 nearest
+// rentals (postcode_rentals), and median/p25/p75 bands for both. The
+// frontend lot card consumes this for the "Comparable sales" / "Rental
+// estimate" disclosures.
+router.get('/api/lots/:id/comps', rateLimit(60000, 60), async (req, res) => {
+  try {
+    const id = req.params.id;
+    if (!id || !/^[0-9a-f-]{36}$/i.test(id)) {
+      return res.status(400).json({ error: 'invalid_lot_id' });
+    }
+
+    // 1. Fetch the lot itself for postcode + propType + beds + price.
+    const { data: lot } = await supabase
+      .from('lots')
+      .select('id, postcode, prop_type, beds, price, address')
+      .eq('id', id)
+      .maybeSingle();
+    if (!lot) return res.status(404).json({ error: 'lot_not_found' });
+    if (!lot.postcode) {
+      return res.json({
+        lot_id: id,
+        postcode: null,
+        sales: { items: [], stats: null },
+        rentals: { items: [], stats: null },
+        yield_band: null,
+      });
+    }
+
+    // 2. Sales + rentals in parallel.
+    const [salesResp, rentalsResp] = await Promise.all([
+      supabase.from('postcode_sales')
+        .select('address, sold_price, sold_date, property_type')
+        .eq('postcode', lot.postcode)
+        .order('sold_date', { ascending: false })
+        .limit(10),
+      supabase.from('postcode_rentals')
+        .select('source, url, rent_pcm, beds, property_type, is_room_share, scraped_at')
+        .eq('postcode', lot.postcode)
+        .eq('is_room_share', false)
+        .gt('rent_pcm', 0)
+        .order('scraped_at', { ascending: false })
+        .limit(10),
+    ]);
+
+    const sales = salesResp.data || [];
+    const rentals = rentalsResp.data || [];
+
+    // 3. Stats per group.
+    const sStats = computeStats(sales.map(s => s.sold_price));
+    const rStats = computeStats(rentals.map(r => r.rent_pcm));
+
+    // 4. Yield band — annualised rent / lot price, bracketed by the
+    //    rental p25/p50/p75. Only meaningful when we have a price + ≥3
+    //    rental comps.
+    let yieldBand = null;
+    if (lot.price && lot.price > 0 && rStats && rStats.count >= 3) {
+      const toYield = pcm => Math.round((pcm * 12 / lot.price) * 1000) / 10;
+      yieldBand = {
+        p25: toYield(rStats.p25),
+        median: toYield(rStats.median),
+        p75: toYield(rStats.p75),
+        sample: rStats.count,
+      };
+    }
+
+    res.json({
+      lot_id: id,
+      postcode: lot.postcode,
+      prop_type: lot.prop_type,
+      beds: lot.beds,
+      price: lot.price,
+      sales: { items: sales, stats: sStats },
+      rentals: { items: rentals, stats: rStats },
+      yield_band: yieldBand,
+    });
+  } catch (e) {
+    log.error('lot comps error', { error: e.message, lotId: req.params.id });
+    res.status(500).json({ error: 'comps_failed' });
+  }
+});
+
+// Pure helper — median + quartile + count from a numeric array.
+// Defined locally so the endpoint is self-contained.
+function computeStats(values) {
+  const nums = (values || []).filter(n => Number.isFinite(n) && n > 0).sort((a, b) => a - b);
+  if (nums.length === 0) return null;
+  const at = pct => nums[Math.min(nums.length - 1, Math.floor(nums.length * pct))];
+  const median = nums.length % 2 === 0
+    ? Math.round((nums[nums.length / 2 - 1] + nums[nums.length / 2]) / 2)
+    : nums[Math.floor(nums.length / 2)];
+  return {
+    count: nums.length,
+    median,
+    p25: at(0.25),
+    p75: at(0.75),
+    min: nums[0],
+    max: nums[nums.length - 1],
+  };
+}
+
 export default router;
