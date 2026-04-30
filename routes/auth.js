@@ -260,9 +260,18 @@ router.post('/api/alerts/unsold', async (req, res) => {
 });
 
 // ── CRON: Send unsold lot alert emails ──
-router.post('/api/cron/unsold-alerts', async (req, res) => {
-  const secret = req.headers['x-admin-secret'] || req.body?.secret;
-  if (!safeCompare(secret || '', process.env.ADMIN_SECRET || '')) {
+// Refactored 2026-04-30 (review item #12): the previous handler had three
+// N+1 layers — N user fetches, N identical 1000-row lot queries, and an
+// uncapped outer alerts query. Plus the SQL had no frequency gate, so
+// expired-but-not-yet-due alerts were scanned every run and skipped in JS.
+// Now: one alerts query (capped, frequency-gated), one users query, one
+// lots query, then per-alert in-memory filter + email send. Same email
+// output, dramatically less DB work.
+router.post('/api/cron/unsold-alerts', rateLimit(60000, 1), async (req, res) => {
+  // Header-only auth (was: also `req.body?.secret`, which leaked the secret
+  // into request loggers — same fix as the #6 batch).
+  const secret = req.headers['x-admin-secret'] || '';
+  if (!process.env.ADMIN_SECRET || !safeCompare(secret, process.env.ADMIN_SECRET)) {
     return res.status(403).json({ error: 'Forbidden' });
   }
 
@@ -270,45 +279,50 @@ router.post('/api/cron/unsold-alerts', async (req, res) => {
   if (!resendKey) return res.json({ sent: 0, error: 'RESEND_API_KEY not configured' });
 
   try {
-    // Get all active alerts that haven't been sent in the last 23 hours (daily) or 6.5 days (weekly)
+    const now = new Date();
+    const todayStr = now.toISOString().slice(0, 10);
+    const dailyCutoffIso = new Date(now.getTime() - 23 * 3600000).toISOString();
+    const weeklyCutoffIso = new Date(now.getTime() - 156 * 3600000).toISOString();
+
+    // ── Batch 1: alerts that are actually due ──
+    // SQL filter: never sent OR (daily + > 23h ago) OR (weekly + > 156h ago).
+    // Cap at 500 — should be loose-fitting until the subscriber base grows
+    // significantly; if we ever hit it, the rest wait for the next cron.
     const { data: alerts, error: alertsErr } = await supabase
       .from('unsold_alerts')
       .select('id, user_id, filters, frequency, last_sent_at')
-      .eq('active', true);
+      .eq('active', true)
+      .or(`last_sent_at.is.null,and(frequency.eq.daily,last_sent_at.lt.${dailyCutoffIso}),and(frequency.eq.weekly,last_sent_at.lt.${weeklyCutoffIso})`)
+      .limit(500);
 
     if (alertsErr) { log.error('Unsold alerts query error', { error: alertsErr.message }); return res.status(500).json({ error: 'Failed to fetch alerts' }); }
-    if (!alerts || alerts.length === 0) return res.json({ sent: 0 });
+    if (!alerts || alerts.length === 0) return res.json({ sent: 0, total: 0 });
 
-    const now = new Date();
+    // ── Batch 2: all users for those alerts in ONE query (was: N queries) ──
+    const userIds = [...new Set(alerts.map(a => a.user_id).filter(Boolean))];
+    const { data: userRows } = await supabase
+      .from('users')
+      .select('id, email, name')
+      .in('id', userIds);
+    const userMap = new Map((userRows || []).map(u => [u.id, u]));
+
+    // ── Batch 3: unsold lots fetched ONCE (was: same query N times) ──
+    const { data: unsoldRows } = await supabase
+      .from('lots')
+      .select(LOTS_SELECT)
+      .or(`status.eq.unsold,and(auction_date.lt.${todayStr},or(status.eq.available,status.is.null))`)
+      .limit(1000);
+    const allUnsold = (unsoldRows || []).map(dbRowToFrontendLot);
+
     let sent = 0;
 
     for (const alert of alerts) {
-      // Check frequency gate
-      if (alert.last_sent_at) {
-        const lastSent = new Date(alert.last_sent_at);
-        const hoursSince = (now - lastSent) / 3600000;
-        if (alert.frequency === 'daily' && hoursSince < 23) continue;
-        if (alert.frequency === 'weekly' && hoursSince < 156) continue;
-      }
+      const user = userMap.get(alert.user_id);
+      if (!user?.email) continue;
 
-      // Get user email
-      const { data: user, error: userErr } = await supabase.from('users').select('email, name').eq('id', alert.user_id).single();
-      if (userErr || !user?.email) continue;
-
-      // Get unsold lots from lots table
-      const todayStr = now.toISOString().slice(0, 10);
-      const { data: unsoldRows, error: unsoldErr } = await supabase
-        .from('lots')
-        .select(LOTS_SELECT)
-        .or(`status.eq.unsold,and(auction_date.lt.${todayStr},or(status.eq.available,status.is.null))`)
-        .limit(1000);
-
-      if (unsoldErr || !unsoldRows) continue;
-
-      let unsoldLots = unsoldRows.map(dbRowToFrontendLot);
-
-      // Apply user's saved filters (price, type, location)
+      // Apply user's saved filters (price, type, location) in-memory.
       const f = alert.filters || {};
+      let unsoldLots = allUnsold;
       if (f.minPrice) unsoldLots = unsoldLots.filter(l => l.price >= f.minPrice);
       if (f.maxPrice) unsoldLots = unsoldLots.filter(l => l.price <= f.maxPrice);
       if (f.propType) unsoldLots = unsoldLots.filter(l => l.propType === f.propType);
