@@ -55,6 +55,37 @@ jobs:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           ADMIN_SECRET: ${{ secrets.ADMIN_SECRET }}
 
+      # Visual audit — Human-Eye Auditor (scripts/visual-audit.mjs).
+      # Calls the in-process admin endpoint so we don't need new Supabase secrets in CI.
+      # Started in DRY-RUN (writeAlerts=false): findings come back as JSON only,
+      # nothing is upserted to pipeline_alerts. Once we've watched 2-3 nights of
+      # output and confirmed signal beats noise, flip writeAlerts to true to enable
+      # auto-creation of `visual_audit_issue` alerts that queue with the heal session.
+      - name: Run visual audit (DRY-RUN — flip to writeAlerts:true after 2-3 clean nights)
+        if: inputs.mode != 'full'
+        continue-on-error: true
+        run: |
+          curl -fsSL --max-time 120 -X POST \
+            "https://auctions.bridgematch.co.uk/api/admin/visual-audit" \
+            -H "x-admin-secret: $ADMIN_SECRET" \
+            -H "Content-Type: application/json" \
+            -d '{"writeAlerts": false}' \
+            -o visual-audit-result.json
+          # Print summary to logs (full findings live in the artifact)
+          if [ -s visual-audit-result.json ]; then
+            jq -r '"Visual audit: \(.scannedRows) rows in \(.ms)ms — \(.findingCount) findings (errors: \([.findings[]|select(.severity=="error")]|length), warns: \([.findings[]|select(.severity=="warn")]|length), infos: \([.findings[]|select(.severity=="info")]|length)) — alertsWritten: \(.alertsWritten)"' visual-audit-result.json || cat visual-audit-result.json
+          fi
+        env:
+          ADMIN_SECRET: ${{ secrets.ADMIN_SECRET }}
+
+      - name: Upload visual audit findings
+        if: inputs.mode != 'full' && hashFiles('visual-audit-result.json') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-audit-${{ github.run_id }}
+          path: visual-audit-result.json
+          retention-days: 30
+
       - name: Commit and push fixes
         run: |
           git config user.name "Auction Health Bot"
