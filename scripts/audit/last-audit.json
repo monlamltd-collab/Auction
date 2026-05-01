@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-05-01T07:22:39.226Z",
+  "timestamp": "2026-05-01T18:53:05.099Z",
   "results": [
     {
       "house": "savills",
@@ -1083,7 +1083,7 @@
       "house": "woolleyandwallis",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 202,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": []
     },
@@ -1243,7 +1243,7 @@
       "house": "taylerandfletcher",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 202,
+      "httpStatus": 403,
       "imgCoverage": null,
       "issues": []
     },
@@ -1305,7 +1305,7 @@
       "house": "gherbertbanks",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 202,
+      "httpStatus": 403,
       "imgCoverage": null,
       "issues": []
     },
