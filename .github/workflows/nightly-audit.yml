@@ -65,9 +65,13 @@ jobs:
         if: inputs.mode != 'full'
         continue-on-error: true
         run: |
+          # Origin header is required by csrfCheck middleware (lib/security.js).
+          # Without it the request is rejected with 403 before reaching the
+          # admin-secret check. Use the canonical app origin.
           curl -fsSL --max-time 120 -X POST \
             "https://auctions.bridgematch.co.uk/api/admin/visual-audit" \
             -H "x-admin-secret: $ADMIN_SECRET" \
+            -H "Origin: https://auctions.bridgematch.co.uk" \
             -H "Content-Type: application/json" \
             -d '{"writeAlerts": false, "autoFix": true, "includeMarkdown": true}' \
             -o visual-audit-result.json
