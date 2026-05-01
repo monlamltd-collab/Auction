@@ -45,6 +45,10 @@ graphify-out/
 # debug exports
 all_lots.json
 
+# Self-healing snapshots — captured ad-hoc during heal-debug sessions, not
+# referenced by any test. Stay on disk for the active session, untracked.
+.heal-snap/
+
 # remember plugin local buffer
 .remember/
 
