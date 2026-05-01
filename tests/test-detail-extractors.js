@@ -132,9 +132,49 @@ assert(fssResult?.tenure === 'Freehold', `tenure is Freehold (got: "${fssResult?
 assert(fssResult?.beds === 4, `beds is 4 (got: ${fssResult?.beds})`);
 assert(fssResult?.price === 325000, `price is 325000 (got: ${fssResult?.price})`);
 
+// ─── Edward Mellor synthetic ───
+// EM listing cards lose the inward postcode — extractor recovers it from the
+// detail page's `.description > p` paragraph. See alert
+// `extractor_postcode_regression` 2026-05-01.
+const syntheticEm = `
+<!DOCTYPE html><html><head>
+  <meta property="og:title" content="1 bed Ground Floor Flat For Auction">
+</head><body>
+  <h1>1 bed Ground Floor Flat For Auction</h1>
+  <div class="description">
+    <p>TO BE SOLD BY ONLINE AUCTION ON 13TH MAY 2026</p>
+    <p>3, Roger Browning House, Maidenburgh Street, Colchester, Essex, CO1 1TT</p>
+    <p>An attractive investment opportunity to acquire a one-bedroom...</p>
+  </div>
+</body></html>`;
+
+console.log('\n── Edward Mellor detail extractor ──');
+const emResult = extractLotDetail(
+  syntheticEm,
+  'edwardmellor',
+  'https://edwardmellor.co.uk/property-for-sale/10168218'
+);
+assert(emResult !== null, 'returns a result');
+assert(emResult?.postcode === 'CO1 1TT', `postcode is "CO1 1TT" (got: "${emResult?.postcode}")`);
+assert(emResult?.address && emResult.address.includes('Roger Browning House'), `address contains "Roger Browning House" (got: "${emResult?.address}")`);
+
+// Fallback path: no `.description`, but $propertyNameField inline JS has the postcode
+const syntheticEmFallback = `
+<!DOCTYPE html><html><body>
+  <h1>Auction Lot</h1>
+  <script>
+    $propertyNameField.val('99 Some Road, Sometown, AB1 2CD');
+    $propertyUrlField.val('https://edwardmellor.co.uk/property-for-sale/9999/');
+  </script>
+</body></html>`;
+const emFallback = extractLotDetail(syntheticEmFallback, 'edwardmellor', 'https://edwardmellor.co.uk/property-for-sale/9999');
+assert(emFallback?.postcode === 'AB1 2CD', `fallback postcode is "AB1 2CD" (got: "${emFallback?.postcode}")`);
+
 // ─── Real-world snapshots (if present) ───
 console.log('\n── Real-world snapshots ──');
 const snapshotsDir = join(__dirname, 'snapshots');
+const POSTCODE_RE = /\b[A-Z]{1,2}\d{1,2}[A-Z]?\s+\d[A-Z]{2}\b/i;
+
 for (const slug of ['maggsandallen', 'hollismorgan', 'fssproperty']) {
   const path = join(snapshotsDir, `${slug}-detail.html`);
   if (!existsSync(path)) {
@@ -146,6 +186,20 @@ for (const slug of ['maggsandallen', 'hollismorgan', 'fssproperty']) {
   assert(result !== null, `${slug}: extractor returned a result`);
   assert(result?.address && result.address.length >= 5, `${slug}: address (got "${result?.address}")`);
   assert(Array.isArray(result?.images) && result.images.length > 0, `${slug}: at least one image`);
+}
+
+// edwardmellor snapshot: assert postcode (not image — EM extractor only handles address+postcode)
+{
+  const path = join(snapshotsDir, 'edwardmellor-detail.html');
+  if (!existsSync(path)) {
+    console.log('  · edwardmellor-detail.html not present — skipping');
+  } else {
+    const html = readFileSync(path, 'utf8');
+    const result = extractLotDetail(html, 'edwardmellor', 'https://edwardmellor.co.uk/');
+    assert(result !== null, 'edwardmellor: extractor returned a result');
+    assert(result?.postcode && POSTCODE_RE.test(result.postcode), `edwardmellor: postcode looks like a UK postcode (got "${result?.postcode}")`);
+    assert(result?.address && result.address.length >= 10, `edwardmellor: address present (got "${result?.address}")`);
+  }
 }
 
 console.log(`\n${'═'.repeat(50)}`);
