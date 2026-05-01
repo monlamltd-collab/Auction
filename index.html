@@ -3738,7 +3738,7 @@ function renderLots(){
     // Beds
     if(minBeds&&l.beds&&l.beds<minBeds) return false;
     // Type / Deal / Tenure
-    if(ft&&l.propType!==ft) return false;
+    if(ft&&!SMART_RESULTS&&l.propType!==ft) return false;
     if(fd&&l.dealType!==fd) return false;
     if(ften&&l.tenure!==ften) return false;
     // Condition
