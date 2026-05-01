@@ -1168,7 +1168,7 @@ footer .logo-f span{color:var(--green)}
         <option value="">Region</option>
         <option value="london">London</option><option value="south east">South East</option><option value="south west">South West</option><option value="east">East of England</option><option value="west midlands">West Midlands</option><option value="east midlands">East Midlands</option><option value="north west">North West</option><option value="north east">North East</option><option value="yorkshire">Yorkshire</option><option value="wales">Wales</option><option value="scotland">Scotland</option>
       </select>
-      <input class="tb-search" type="text" id="fTown" placeholder="Town" oninput="onTownInput()" aria-label="Search by town" style="max-width:140px">
+      <input class="tb-search" type="text" id="fTown" placeholder="Town or city" oninput="onTownInput()" aria-label="Search by town or city" style="max-width:140px">
       <input class="tb-search" type="text" id="fPostcode" placeholder="Postcode" oninput="onPostcodeInput()" aria-label="Search by postcode" style="max-width:110px">
       <select class="tb-select" id="fRadius" onchange="debouncedRender();updateMoreDot()" aria-label="Distance from town or postcode" title="Distance from the town or postcode above">
         <option value="">Distance from</option><option value="1">Within 1 mile</option><option value="5">Within 5 miles</option><option value="10">Within 10 miles</option><option value="25">Within 25 miles</option><option value="50">Within 50 miles</option>
@@ -1429,6 +1429,7 @@ footer .logo-f span{color:var(--green)}
 </main>
 
 <script src="/public/supabase.min.js"></script>
+<script src="/public/town-match.js"></script>
 <script>
 const SUPABASE_URL = window.__SUPABASE_URL__ || '';
 const SUPABASE_ANON_KEY = window.__SUPABASE_ANON_KEY__ || '';
@@ -3738,7 +3739,7 @@ function renderLots(){
     // Beds
     if(minBeds&&l.beds&&l.beds<minBeds) return false;
     // Type / Deal / Tenure
-    if(ft&&l.propType!==ft) return false;
+    if(ft&&!SMART_RESULTS&&l.propType!==ft) return false;
     if(fd&&l.dealType!==fd) return false;
     if(ften&&l.tenure!==ften) return false;
     // Condition
@@ -3754,12 +3755,12 @@ function renderLots(){
     // Postcode / town / radius
     if(_radiusSearch){
       if(l._lat&&l._lng){ if(haversine(_searchCentre.lat,_searchCentre.lng,l._lat,l._lng)>fradius) return false; }
-      else if(fpc){ if(!(l.address||'').toUpperCase().includes(fpc)) return false; }
-      else if(ftown){ if(!(l.address||'').toLowerCase().includes(ftownLower)) return false; }
+      else if(fpc){ if(!(l.address||'').toUpperCase().includes(fpc)&&!(l.postcode||'').toUpperCase().startsWith(fpc)) return false; }
+      else if(ftown){ if(!window.AB_townMatch.townMatchesLot(l,ftown)) return false; }
     } else if(_prefixSearch){
-      if(!(l.address||'').toUpperCase().includes(fpc)) return false;
+      if(!(l.address||'').toUpperCase().includes(fpc)&&!(l.postcode||'').toUpperCase().startsWith(fpc)) return false;
     } else if(_townSearch){
-      if(!(l.address||'').toLowerCase().includes(ftownLower)) return false;
+      if(!window.AB_townMatch.townMatchesLot(l,ftown)) return false;
     }
     // Affordability
     if(fa==='affordable'&&fp.cash&&l._affTag==='out_of_reach') return false;
