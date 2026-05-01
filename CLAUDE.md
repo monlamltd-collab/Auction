@@ -304,6 +304,7 @@ These are computed from lot data fields: `price`, `estGrossYield`, `opportunitie
 | `FIRECRAWL_SKIP_HOUSES` | Comma-separated house slugs to skip Firecrawl for |
 | `FIRECRAWL_MIN_GAP_MS` | Min gap between Firecrawl calls in ms (default 300) |
 | `PORT` | Server port (Railway sets this) |
+| `ROLE` | Process role: `web` (HTTP only, no schedulers), `worker` (HTTP + schedulers, intended for the worker service when scaling beyond one instance), or unset (single-process default — both run together). |
 | `SUPABASE_URL` | Supabase project URL (future auth) |
 | `SUPABASE_ANON_KEY` | Supabase anon key (future auth) |
 | `BRIDGEMATCH_API_URL` | BridgeMatch API base URL for fundability badge (default: `https://www.bridgematch.co.uk`) |

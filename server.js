@@ -377,10 +377,27 @@ function scheduleTick() {
 // ═══════════════════════════════════════════════════════════════
 // START SERVER
 // ═══════════════════════════════════════════════════════════════
+// Process role gate. With Railway running >1 web instance the schedulers and
+// cache warmer would duplicate work (two boot full-passes, two cron ticks
+// every minute, two cache warmers stomping on each other).
+//   ROLE=web    → HTTP only, no scheduled jobs
+//   ROLE=worker → scheduled jobs (HTTP listener still runs as a health target)
+//   unset       → both, as before (single-process backwards-compatible default)
+// TODO(scheduler): once >1 worker instance is configured, wrap scheduleTick
+// and warmAllLotsCache in pg_try_advisory_lock so concurrent workers can't
+// re-run the same tick. Requires a migration to expose the lock helper.
+const ROLE = process.env.ROLE || '';
+const RUN_SCHEDULERS = ROLE !== 'web';
+
 app.listen(PORT, () => {
-  console.log(`Bridgematch running on port ${PORT}`);
+  console.log(`Bridgematch running on port ${PORT}${ROLE ? ` (role=${ROLE})` : ''}`);
   if (!process.env.SUPABASE_URL) console.warn('SUPABASE_URL not set');
   if (!process.env.SUPABASE_SERVICE_KEY) console.warn('SUPABASE_SERVICE_KEY not set');
+
+  if (!RUN_SCHEDULERS) {
+    console.log('SCHEDULE: skipping boot/tick/cache-warm — ROLE=web');
+    return;
+  }
 
   // Boot decision after 60s — gives DB connection time to settle
   setTimeout(bootDecision, 60000);
