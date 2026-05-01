@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { supabase } from '../lib/supabase.js';
-import { safeCompare, rateLimit } from '../lib/auth.js';
+import { rateLimit, requireAdmin } from '../lib/auth.js';
 import { log } from '../lib/logging.js';
 import { HOUSE_ROOTS, HOUSE_DISPLAY_NAMES } from '../lib/houses.js';
 import { HEADERS } from '../lib/config.js';
@@ -29,12 +29,7 @@ router.get('/api/auctions', async (req, res) => {
 });
 
 // Admin: seed the Supabase calendar from hardcoded data
-router.post('/api/admin/seed-calendar', rateLimit(60000, 20), async (req, res) => {
-  // Header-only auth (was: req.body.secret).
-  const token = req.headers['x-admin-secret'] || '';
-  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
-    return res.status(403).json({ error: 'Invalid admin secret' });
-  }
+router.post('/api/admin/seed-calendar', rateLimit(60000, 20), requireAdmin, async (req, res) => {
   try {
     const rows = FALLBACK_CALENDAR.map(a => ({
       house: a.house, house_slug: a.houseSlug, logo: a.logo,
@@ -52,12 +47,8 @@ router.post('/api/admin/seed-calendar', rateLimit(60000, 20), async (req, res) =
 });
 
 // Admin: add/update a single auction
-router.post('/api/admin/calendar', async (req, res) => {
-  const { secret, auction } = req.body || {};
-  const token = req.headers['x-admin-secret'] || secret || '';
-  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
-    return res.status(403).json({ error: 'Invalid admin secret' });
-  }
+router.post('/api/admin/calendar', requireAdmin, async (req, res) => {
+  const { auction } = req.body || {};
   if (!auction || !auction.house || !auction.date || !auction.url) {
     return res.status(400).json({ error: 'Missing required fields: house, date, url' });
   }
@@ -87,11 +78,7 @@ router.post('/api/admin/calendar', async (req, res) => {
 });
 
 // Admin: deduplicate the calendar — remove duplicate rows keeping the best one per house+date+url
-router.post('/api/admin/dedup-calendar', rateLimit(60000, 20), async (req, res) => {
-  const token = req.headers['x-admin-secret'] || '';
-  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
-    return res.status(403).json({ error: 'Invalid admin secret' });
-  }
+router.post('/api/admin/dedup-calendar', rateLimit(60000, 20), requireAdmin, async (req, res) => {
   try {
     const { data, error } = await supabase.from('auction_calendar').select('id, house, date, url, catalogue_ready');
     if (error) throw error;
@@ -125,11 +112,7 @@ router.post('/api/admin/dedup-calendar', rateLimit(60000, 20), async (req, res) 
 });
 
 // Admin: trigger self-healing for a specific house or view healing status
-router.post('/api/admin/heal', rateLimit(60000, 20), async (req, res) => {
-  const token = req.headers['x-admin-secret'] || '';
-  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
-    return res.status(403).json({ error: 'Invalid admin secret' });
-  }
+router.post('/api/admin/heal', rateLimit(60000, 20), requireAdmin, async (req, res) => {
   const { slug } = req.body || {};
   if (!slug) {
     // Return healing status for all houses
@@ -166,14 +149,9 @@ router.post('/api/admin/heal', rateLimit(60000, 20), async (req, res) => {
 });
 
 // Admin: delete an auction by ID
-router.delete('/api/admin/calendar/:id', rateLimit(60000, 20), async (req, res) => {
-  // Header-only auth (was: req.body.secret) — DELETE with a JSON body is
+router.delete('/api/admin/calendar/:id', rateLimit(60000, 20), requireAdmin, async (req, res) => {
   // allowed by RFC 7231 but proxies sometimes strip it; the header path is
   // also consistent with every other admin endpoint.
-  const token = req.headers['x-admin-secret'] || '';
-  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
-    return res.status(403).json({ error: 'Invalid admin secret' });
-  }
   try {
     const { error } = await supabase.from('auction_calendar').delete().eq('id', req.params.id);
     if (error) throw error;
@@ -189,12 +167,8 @@ router.delete('/api/admin/calendar/:id', rateLimit(60000, 20), async (req, res) 
 // ═══════════════════════════════════════════════════════════════
 // Scrapes a house's root/listing page and uses Claude to extract catalogue links.
 // This handles URL format changes (date slugs, query params, auction IDs) automatically.
-router.post('/api/admin/discover-catalogues', async (req, res) => {
-  const { secret, houses } = req.body || {};
-  if (!process.env.ADMIN_SECRET || !safeCompare(secret, process.env.ADMIN_SECRET)) {
-    return res.status(403).json({ error: 'Invalid admin secret' });
-  }
-
+router.post('/api/admin/discover-catalogues', requireAdmin, async (req, res) => {
+  const { houses } = req.body || {};
   const targetHouses = houses || Object.keys(HOUSE_ROOTS);
   const results = [];
 

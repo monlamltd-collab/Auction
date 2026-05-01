@@ -5,7 +5,7 @@ import { dirname, join } from 'path';
 import { readFileSync } from 'fs';
 import { JSDOM } from 'jsdom';
 import { supabase } from '../lib/supabase.js';
-import { safeCompare, rateLimit, getClientIP, validateUserFromReq } from '../lib/auth.js';
+import { rateLimit, getClientIP, validateUserFromReq, requireAdmin } from '../lib/auth.js';
 import { validateUrl } from '../lib/security.js';
 import { log } from '../lib/logging.js';
 import { MAX_PUPPETEER_PAGES, MAX_LOTS_PER_SCRAPE, MAX_AUCTIONS_PER_HOUSE } from '../lib/config.js';
@@ -42,12 +42,7 @@ import { invalidateAllLotsCache } from './search.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const router = Router();
 
-router.get('/api/cache-status', async (req, res) => {
-  // Require admin auth to prevent internal state leakage
-  const adminToken = req.headers['x-admin-secret'] || '';
-  if (!process.env.ADMIN_SECRET || !safeCompare(adminToken, process.env.ADMIN_SECRET)) {
-    return res.status(403).json({ error: 'Admin access required' });
-  }
+router.get('/api/cache-status', requireAdmin, async (req, res) => {
   try {
     const { data: cached } = await supabase
       .from('cached_analyses')
@@ -93,27 +88,19 @@ router.get('/api/cache-status', async (req, res) => {
   }
 });
 
-router.post('/api/refresh-cache', rateLimit(60000, 5), async (req, res) => {
+router.post('/api/refresh-cache', rateLimit(60000, 5), requireAdmin, async (req, res) => {
   // Header-only auth (was: req.body.secret) — see /api/admin/backfill-images
   // for the rationale. Tight rate limit because this triggers a full pipeline run.
-  const adminToken = req.headers['x-admin-secret'] || '';
-  if (!process.env.ADMIN_SECRET || !safeCompare(adminToken, process.env.ADMIN_SECRET)) {
-    return res.status(403).json({ error: 'Invalid admin secret' });
-  }
   res.json({ message: 'Auto-analysis triggered. Check server logs for progress.' });
   // Run async — don't block the response
   autoAnalyseAll().catch(e => console.error('Manual refresh failed:', e));
 });
 
 // Admin: backfill images for all cached catalogues (no AI tokens used)
-router.post('/api/admin/backfill-images', rateLimit(60000, 20), async (req, res) => {
+router.post('/api/admin/backfill-images', rateLimit(60000, 20), requireAdmin, async (req, res) => {
   // Header-only auth — req.body.secret used to be a fallback but it leaked the
   // secret into request loggers and Railway log drains. Same change applied to
   // all admin endpoints in this file and routes/calendar.js.
-  const adminToken = req.headers['x-admin-secret'] || '';
-  if (!process.env.ADMIN_SECRET || !safeCompare(adminToken, process.env.ADMIN_SECRET)) {
-    return res.status(403).json({ error: 'Admin access required' });
-  }
 
   try {
     // Get active catalogues (metadata only)
@@ -192,11 +179,7 @@ router.post('/api/admin/backfill-images', rateLimit(60000, 20), async (req, res)
 // markdown + image count. For self-healing extractor diagnostics — when
 // curl returns a JS-shell, this gives the real rendered DOM. Costs 1
 // Firecrawl credit per call.
-router.post('/api/admin/firecrawl-probe', rateLimit(60000, 10), async (req, res) => {
-  const adminToken = req.headers['x-admin-secret'] || '';
-  if (!process.env.ADMIN_SECRET || !safeCompare(adminToken, process.env.ADMIN_SECRET)) {
-    return res.status(403).json({ error: 'Admin access required' });
-  }
+router.post('/api/admin/firecrawl-probe', rateLimit(60000, 10), requireAdmin, async (req, res) => {
   const { url, waitFor, withMarkdown = false, withImages = true } = req.body || {};
   if (!url || typeof url !== 'string') {
     return res.status(400).json({ error: 'url (string) is required' });
@@ -230,11 +213,7 @@ router.post('/api/admin/firecrawl-probe', rateLimit(60000, 10), async (req, res)
 
 // Admin: run the "Human-Eye" visual auditor in-process. Returns findings
 // JSON (and optionally writes alerts). See scripts/visual-audit.mjs.
-router.post('/api/admin/visual-audit', async (req, res) => {
-  const adminToken = req.headers['x-admin-secret'] || '';
-  if (!process.env.ADMIN_SECRET || !safeCompare(adminToken, process.env.ADMIN_SECRET)) {
-    return res.status(403).json({ error: 'Admin access required' });
-  }
+router.post('/api/admin/visual-audit', requireAdmin, async (req, res) => {
   try {
     const { runAudit, writeAlerts, applyAutoFixes, renderReport } = await import('../scripts/visual-audit.mjs');
     const writeAlertsFlag = req.body?.writeAlerts !== false; // default true
@@ -274,11 +253,7 @@ router.post('/api/admin/visual-audit', async (req, res) => {
   }
 });
 
-router.post('/api/admin/clear-cache', async (req, res) => {
-  const adminToken = req.headers['x-admin-secret'] || '';
-  if (!process.env.ADMIN_SECRET || !safeCompare(adminToken, process.env.ADMIN_SECRET)) {
-    return res.status(403).json({ error: 'Admin access required' });
-  }
+router.post('/api/admin/clear-cache', requireAdmin, async (req, res) => {
 
   try {
     const house = req.body?.house;
@@ -310,11 +285,7 @@ router.post('/api/admin/clear-cache', async (req, res) => {
 });
 
 // Admin-only: rescrape a specific house (clear cache + trigger immediate re-analysis)
-router.post('/api/admin/rescrape', async (req, res) => {
-  const adminToken = req.headers['x-admin-secret'] || '';
-  if (!process.env.ADMIN_SECRET || !safeCompare(adminToken, process.env.ADMIN_SECRET)) {
-    return res.status(403).json({ error: 'Admin access required' });
-  }
+router.post('/api/admin/rescrape', requireAdmin, async (req, res) => {
   const { house } = req.body || {};
   if (!house) return res.status(400).json({ error: 'house slug is required' });
 
@@ -365,11 +336,7 @@ router.post('/api/admin/rescrape', async (req, res) => {
 });
 
 // Admin-only: GET broken extractors list
-router.get('/api/admin/broken-extractors', async (req, res) => {
-  const adminToken = req.headers['x-admin-secret'] || '';
-  if (!process.env.ADMIN_SECRET || !safeCompare(adminToken, process.env.ADMIN_SECRET)) {
-    return res.status(403).json({ error: 'Admin access required' });
-  }
+router.get('/api/admin/broken-extractors', requireAdmin, async (req, res) => {
   res.json({
     broken: [...BROKEN_EXTRACTORS],
     count: BROKEN_EXTRACTORS.size,
@@ -377,11 +344,7 @@ router.get('/api/admin/broken-extractors', async (req, res) => {
 });
 
 // Admin-only: POST enable/disable broken extractors
-router.post('/api/admin/broken-extractors', async (req, res) => {
-  const adminToken = req.headers['x-admin-secret'] || '';
-  if (!process.env.ADMIN_SECRET || !safeCompare(adminToken, process.env.ADMIN_SECRET)) {
-    return res.status(403).json({ error: 'Admin access required' });
-  }
+router.post('/api/admin/broken-extractors', requireAdmin, async (req, res) => {
 
   const { house, action, reason } = req.body || {};
   if (!house || !action) {
@@ -440,11 +403,7 @@ router.post('/api/admin/broken-extractors', async (req, res) => {
 });
 
 // Admin-only: test DOM extractor on a URL (diagnostics)
-router.post('/api/admin/test-extractor', rateLimit(60000, 5), async (req, res) => {
-  const adminToken = req.headers['x-admin-secret'] || '';
-  if (!process.env.ADMIN_SECRET || !safeCompare(adminToken, process.env.ADMIN_SECRET)) {
-    return res.status(403).json({ error: 'Admin access required' });
-  }
+router.post('/api/admin/test-extractor', rateLimit(60000, 5), requireAdmin, async (req, res) => {
 
   const { url } = req.body || {};
   if (!url) return res.status(400).json({ error: 'url is required' });
@@ -499,11 +458,7 @@ router.post('/api/admin/test-extractor', rateLimit(60000, 5), async (req, res) =
 });
 
 // Admin-only: analyse all catalogue-ready auctions
-router.post('/api/analyse-all', async (req, res) => {
-  const adminToken = req.headers['x-admin-secret'] || '';
-  if (!process.env.ADMIN_SECRET || !safeCompare(adminToken, process.env.ADMIN_SECRET)) {
-    return res.status(403).json({ error: 'Admin access required' });
-  }
+router.post('/api/analyse-all', requireAdmin, async (req, res) => {
 
   // Trigger auto-analysis and wait for it to complete
   try {
@@ -516,11 +471,7 @@ router.post('/api/analyse-all', async (req, res) => {
 });
 
 // Scrape only houses that have never been cached — much lighter than autoAnalyseAll
-router.post('/api/analyse-new', async (req, res) => {
-  const adminToken = req.headers['x-admin-secret'] || '';
-  if (!process.env.ADMIN_SECRET || !safeCompare(adminToken, process.env.ADMIN_SECRET)) {
-    return res.status(403).json({ error: 'Admin access required' });
-  }
+router.post('/api/analyse-new', requireAdmin, async (req, res) => {
 
   try {
     // Get all catalogue-ready auctions
@@ -617,11 +568,7 @@ router.get('/check', (req, res) => {
   res.sendFile(join(__dirname, '..', 'bridgematch-lite.html'));
 });
 
-router.get('/api/admin/daily-stats', async (req, res) => {
-  const token = req.headers['x-admin-secret'] || '';
-  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
-    return res.status(403).json({ error: 'Invalid admin token' });
-  }
+router.get('/api/admin/daily-stats', requireAdmin, async (req, res) => {
 
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
@@ -645,11 +592,7 @@ router.get('/api/admin/daily-stats', async (req, res) => {
 });
 
 // ── Per-house skill files (health dashboard) ──
-router.get('/api/skills', async (req, res) => {
-  const token = req.headers['x-admin-secret'] || '';
-  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
-    return res.status(403).json({ error: 'Invalid admin token' });
-  }
+router.get('/api/skills', requireAdmin, async (req, res) => {
   try {
     const { data, error } = await supabase.from('house_skills').select('*').order('slug');
     if (error) throw error;
@@ -665,11 +608,7 @@ router.get('/api/skills', async (req, res) => {
 });
 
 // ── AI cost monitoring endpoint ──
-router.get('/api/admin/ai-costs', async (req, res) => {
-  const token = req.headers['x-admin-secret'] || '';
-  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
-    return res.status(403).json({ error: 'Invalid admin token' });
-  }
+router.get('/api/admin/ai-costs', requireAdmin, async (req, res) => {
   try {
     const summary = getAICostSummary();
     const todayStart = new Date();
@@ -706,11 +645,7 @@ router.get('/api/admin/ai-costs', async (req, res) => {
 });
 
 // ── Consolidated system health endpoint ──
-router.get('/api/admin/system-health', async (req, res) => {
-  const token = req.headers['x-admin-secret'] || '';
-  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
-    return res.status(403).json({ error: 'Invalid admin token' });
-  }
+router.get('/api/admin/system-health', requireAdmin, async (req, res) => {
   try {
     // 1. Broken extractors
     const brokenExtractors = [...BROKEN_EXTRACTORS];
@@ -858,11 +793,7 @@ router.get('/api/admin/system-health', async (req, res) => {
 });
 
 // ── Missing images admin endpoint ──
-router.get('/api/admin/missing-images', async (req, res) => {
-  const token = req.headers['x-admin-secret'] || '';
-  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
-    return res.status(403).json({ error: 'Invalid admin token' });
-  }
+router.get('/api/admin/missing-images', requireAdmin, async (req, res) => {
 
   try {
     const houseFilter = req.query.house || '';
@@ -924,11 +855,7 @@ router.get('/api/admin/missing-images', async (req, res) => {
   }
 });
 
-router.get('/api/cost-monitor', async (req, res) => {
-  const token = req.headers['x-admin-secret'] || '';
-  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
-    return res.status(403).json({ error: 'Invalid admin token' });
-  }
+router.get('/api/cost-monitor', requireAdmin, async (req, res) => {
   try {
     const { data: cached } = await supabase.from('cached_analyses').select('house, expires_at');
     const now = new Date();
@@ -973,11 +900,7 @@ router.get('/api/cost-monitor', async (req, res) => {
 // If `slug` is provided, watches only that Cat B house. Otherwise all.
 // `force=true` bypasses the "already has upcoming entry" early-exit.
 // Returns { results: [...] } from the watcher.
-router.post('/api/admin/run-watcher', rateLimit(60000, 20), async (req, res) => {
-  const token = req.headers['x-admin-secret'] || '';
-  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
-    return res.status(403).json({ error: 'Invalid admin secret' });
-  }
+router.post('/api/admin/run-watcher', rateLimit(60000, 20), requireAdmin, async (req, res) => {
   try {
     const { slug, force } = req.body || {};
     if (slug) {
@@ -992,11 +915,7 @@ router.post('/api/admin/run-watcher', rateLimit(60000, 20), async (req, res) => 
   }
 });
 
-router.get('/api/quality-report', async (req, res) => {
-  const token = req.headers['x-admin-secret'] || '';
-  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
-    return res.status(403).json({ error: 'Invalid admin token' });
-  }
+router.get('/api/quality-report', requireAdmin, async (req, res) => {
   try {
     // Get cache metadata (no lots JSONB) and lots from lots table
     const [{ data: cached }, { data: lotRows }] = await Promise.all([
@@ -1071,39 +990,23 @@ router.get('/api/quality-report', async (req, res) => {
 // HARNESS ADMIN ENDPOINTS
 // ═══════════════════════════════════════════════════════════════
 
-router.get('/api/house-health', async (req, res) => {
-  const token = req.headers['x-admin-secret'] || '';
-  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
+router.get('/api/house-health', requireAdmin, async (req, res) => {
   res.json(getAllHealth());
 });
 
-router.get('/api/discovery/candidates', async (req, res) => {
-  const token = req.headers['x-admin-secret'] || '';
-  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
+router.get('/api/discovery/candidates', requireAdmin, async (req, res) => {
   const candidates = await getDiscoveryQueue();
   res.json({ candidates, budget: getDiscoveryBudget() });
 });
 
-router.post('/api/discovery/approve', rateLimit(60000, 20), async (req, res) => {
-  const token = req.headers['x-admin-secret'] || '';
-  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
+router.post('/api/discovery/approve', rateLimit(60000, 20), requireAdmin, async (req, res) => {
   const { url } = req.body || {};
   if (!url) return res.status(400).json({ error: 'url required' });
   const ok = await approveCandidate(url);
   res.json({ approved: ok });
 });
 
-router.get('/api/enrichment/report', async (req, res) => {
-  const token = req.headers['x-admin-secret'] || '';
-  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
+router.get('/api/enrichment/report', requireAdmin, async (req, res) => {
   const house = req.query.house || null;
   // Get lots from lots table to generate report
   if (house) {
@@ -1117,40 +1020,24 @@ router.get('/api/enrichment/report', async (req, res) => {
   res.json({ message: 'Provide ?house=slug for per-house report' });
 });
 
-router.get('/api/manager/report', async (req, res) => {
-  const token = req.headers['x-admin-secret'] || '';
-  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
+router.get('/api/manager/report', requireAdmin, async (req, res) => {
   const report = getManagerReport();
   res.json(report || { message: 'No manager cycle has run yet' });
 });
 
-router.post('/api/manager/cycle', rateLimit(60000, 20), async (req, res) => {
-  const token = req.headers['x-admin-secret'] || '';
-  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
+router.post('/api/manager/cycle', rateLimit(60000, 20), requireAdmin, async (req, res) => {
   const report = await runManagerCycle();
   res.json(report);
 });
 
-router.post('/api/manager/config', rateLimit(60000, 20), async (req, res) => {
-  const token = req.headers['x-admin-secret'] || '';
-  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
+router.post('/api/manager/config', rateLimit(60000, 20), requireAdmin, async (req, res) => {
   const { config } = req.body || {};
   if (!config) return res.status(400).json({ error: 'config object required' });
   const updated = setManagerConfig(config);
   res.json(updated);
 });
 
-router.get('/api/harness/status', async (req, res) => {
-  const token = req.headers['x-admin-secret'] || '';
-  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
+router.get('/api/harness/status', requireAdmin, async (req, res) => {
   const health = getAllHealth();
   const healthCounts = { healthy: 0, degraded: 0, broken: 0 };
   for (const h of Object.values(health)) {
@@ -1168,11 +1055,7 @@ router.get('/api/harness/status', async (req, res) => {
 });
 
 // ── Pipeline Alerts API endpoint ──
-router.get('/api/admin/alerts', async (req, res) => {
-  const token = req.headers['x-admin-secret'] || '';
-  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
-    return res.status(403).json({ error: 'Invalid admin token' });
-  }
+router.get('/api/admin/alerts', requireAdmin, async (req, res) => {
   try {
     const { data: active } = await supabase
       .from('pipeline_alerts')
@@ -1196,11 +1079,7 @@ router.get('/api/admin/alerts', async (req, res) => {
 });
 
 // ── Data Freshness API endpoint ──
-router.get('/api/admin/freshness', async (req, res) => {
-  const token = req.headers['x-admin-secret'] || '';
-  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
-    return res.status(403).json({ error: 'Invalid admin token' });
-  }
+router.get('/api/admin/freshness', requireAdmin, async (req, res) => {
   try {
     const { data: houses } = await supabase
       .from('house_skills')
@@ -1250,11 +1129,7 @@ async function fetchUmamiMetrics(startAt, endAt, type) {
 }
 
 // ── Analytics API endpoint ──
-router.get('/api/admin/analytics', async (req, res) => {
-  const token = req.headers['x-admin-secret'] || '';
-  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
-    return res.status(403).json({ error: 'Invalid admin token' });
-  }
+router.get('/api/admin/analytics', requireAdmin, async (req, res) => {
   try {
     const days = parseInt(req.query.days) || 30;
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -1283,11 +1158,7 @@ router.get('/api/admin/analytics', async (req, res) => {
 });
 
 // ── Seed today's snapshot on demand ──
-router.post('/api/admin/seed-snapshot', async (req, res) => {
-  const token = req.headers['x-admin-secret'] || '';
-  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
-    return res.status(403).json({ error: 'Invalid admin token' });
-  }
+router.post('/api/admin/seed-snapshot', requireAdmin, async (req, res) => {
   try {
     await saveDailySnapshot();
     res.json({ ok: true, message: 'Snapshot saved' });
@@ -1297,11 +1168,7 @@ router.post('/api/admin/seed-snapshot', async (req, res) => {
 });
 
 // ── Re-enrich lots with missing data ──
-router.post('/api/admin/re-enrich', async (req, res) => {
-  const token = req.headers['x-admin-secret'] || '';
-  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
-    return res.status(403).json({ error: 'Invalid admin token' });
-  }
+router.post('/api/admin/re-enrich', requireAdmin, async (req, res) => {
   try {
     const limit = Math.min(req.body?.limit || 200, 500);
     const house = req.body?.house || null; // optional: target specific house
@@ -1382,11 +1249,7 @@ router.post('/api/admin/re-enrich', async (req, res) => {
 });
 
 // ── Manual trigger for enrichment waves ──
-router.post('/api/admin/enrich-waves', async (req, res) => {
-  const token = req.headers['x-admin-secret'] || '';
-  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
-    return res.status(403).json({ error: 'Invalid admin token' });
-  }
+router.post('/api/admin/enrich-waves', requireAdmin, async (req, res) => {
   if (isEnrichmentWaveRunning()) return res.json({ ok: false, message: 'Enrichment wave already running' });
   runEnrichmentWave().catch(e => console.error('Manual enrichment wave failed:', e.message));
   res.json({ ok: true, message: 'Enrichment wave started in background' });
@@ -1408,11 +1271,7 @@ router.post('/api/track/event', rateLimit(60000, 60), async (req, res) => {
 // search patterns, lot pipeline, house performance, and billing
 // signals in one round-trip so the admin UI doesn't N+1.
 // ═══════════════════════════════════════════════════════════════
-router.get('/api/admin/intel', async (req, res) => {
-  const token = req.headers['x-admin-secret'] || '';
-  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
-    return res.status(403).json({ error: 'Invalid admin token' });
-  }
+router.get('/api/admin/intel', requireAdmin, async (req, res) => {
 
   try {
     const now = new Date();
@@ -1803,11 +1662,7 @@ async function _patternIntel(sb, sinceISO) {
 // ── Stale alert cleanup — archive resolved/old pipeline_alerts ──
 // Currently 6,800+ unresolved alerts most of which are noise from temporary
 // scraper failures that have long since resolved themselves.
-router.post('/api/admin/alerts/cleanup', async (req, res) => {
-  const token = req.headers['x-admin-secret'] || '';
-  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
-    return res.status(403).json({ error: 'Invalid admin token' });
-  }
+router.post('/api/admin/alerts/cleanup', requireAdmin, async (req, res) => {
   const olderThanDays = Math.max(1, Math.min(365, parseInt(req.body?.olderThanDays) || 7));
   const cutoff = new Date(Date.now() - olderThanDays * 24 * 60 * 60 * 1000).toISOString();
   try {
@@ -1833,11 +1688,7 @@ router.post('/api/admin/alerts/cleanup', async (req, res) => {
 // Sources are SpareRoom + OnTheMarket (plain HTTP, zero Firecrawl credit).
 // Monthly cadence: a (postcode, source) tuple is "stale" if not scraped
 // in the last 30 days. force=true bypasses the freshness check.
-router.post('/api/admin/rentals/drain', rateLimit(60000, 5), async (req, res) => {
-  const token = req.headers['x-admin-secret'] || '';
-  if (!process.env.ADMIN_SECRET || !safeCompare(token, process.env.ADMIN_SECRET)) {
-    return res.status(403).json({ error: 'Admin access required' });
-  }
+router.post('/api/admin/rentals/drain', rateLimit(60000, 5), requireAdmin, async (req, res) => {
   const { drainStaleRentals } = await import('../lib/rentals/index.js');
   const limit = Math.max(1, Math.min(200, parseInt(req.body?.limit) || 20));
   const force = !!req.body?.force;
