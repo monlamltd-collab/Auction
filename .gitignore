@@ -12,8 +12,10 @@ node_modules/
 # Audit script persistent state (auto-generated)
 scripts/audit/*.json
 
-# Visual audit reports (auto-generated, .gitkeep preserves dir)
-audits/visual-audit-*.md
+# Visual audit reports — committed by nightly workflow as the human-readable
+# artifact (per the heal skill's Hard Rule 17). Replaces yesterday's, no
+# accumulation. Ignoring would suppress them and break the heal loop.
+# .gitkeep preserves the directory so first-run mkdir is a no-op.
 
 # Internal docs (not production)
 AGENT_ORGANISATION_COMPLETE.md
