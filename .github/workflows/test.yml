@@ -28,41 +28,7 @@ jobs:
 
       - run: npm ci
 
-      - name: test-extractors
-        run: node tests/test-extractors.js
-
-      - name: test-detail-extractors
-        run: node tests/test-detail-extractors.js
-
-      - name: test-scoring
-        run: node tests/test-scoring.js
-
-      - name: test-fundability
-        run: node tests/test-fundability.js
-
-      - name: test-image-coverage
-        run: node tests/test-image-coverage.js
-
-      - name: test-missing-images-endpoint
-        run: node tests/test-missing-images-endpoint.js
-
-      - name: test-manifest
-        run: node tests/test-manifest.js
-
-      - name: test-auth-cache
-        run: node tests/test-auth-cache.js
-
-      - name: test-gating
-        run: node tests/test-gating.js
-
-      - name: test-cache-ttl
-        run: node tests/test-cache-ttl.js
-
-      - name: test-status-drift
-        run: node tests/test-status-drift.js
-
-      - name: test-enrichment
-        run: node tests/test-enrichment.js
-
-      - name: test-harness
-        run: node tests/test-harness.js
+      # Single source of truth — same list as `npm test` locally. If you add
+      # a test, add it to package.json's "test" script, not here.
+      - name: npm test
+        run: npm test
