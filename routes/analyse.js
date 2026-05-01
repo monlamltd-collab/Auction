@@ -633,7 +633,7 @@ router.post('/api/lot', async (req, res) => {
     const { url } = req.body || {};
     if (!url || typeof url !== 'string') return res.status(400).json({ error: 'url is required' });
 
-    const urlCheck = validateUrl(url);
+    const urlCheck = await validateUrl(url);
     if (!urlCheck.ok) return res.status(400).json({ error: urlCheck.error || 'invalid URL' });
 
     const house = detectAuctionHouse(url);
