@@ -450,6 +450,54 @@ function renderReport({ findings, scannedRows, ms }) {
   return md;
 }
 
+// ── Auto-fix recipes for known-mechanical findings ──
+// V1 only handles hero_image_bleed (pure column update, no constraint risk —
+// UNIQUE (house, url) on lots doesn't include image_url). Each recipe must be
+// idempotent: running twice should null 0 rows on the second pass. The next
+// scrape's backfill repopulates per-card images.
+//
+// slug_case_dup, retired_slug_straggler, stale_lot_wall deferred — they involve
+// DELETEs or could collide with UNIQUE (house, url).
+async function applyAutoFixes(findings) {
+  const summary = { hero_image_bleed: { houses_affected: 0, rows_nulled: 0, details: [] } };
+  const bleedFindings = (findings || []).filter(f => f.heuristic === 'hero_image_bleed');
+  if (bleedFindings.length === 0) return summary;
+
+  const housesTouched = new Set();
+  for (const f of bleedFindings) {
+    const slug = (f.house || '').toLowerCase();
+    const url = f.meta?.image_url;
+    if (!slug || !url) continue;
+    // Cannot use lower(house) in a Supabase JS client filter directly — fetch
+    // matching rows by image_url first, then filter slug client-side. With a
+    // single equality on image_url this is cheap (one image_url per finding).
+    const { data: matches, error: selErr } = await supabase
+      .from('lots')
+      .select('id, house')
+      .eq('image_url', url);
+    if (selErr) {
+      console.warn(`AUTO-FIX: select failed for ${slug} ${url}: ${selErr.message}`);
+      continue;
+    }
+    const ids = (matches || []).filter(r => (r.house || '').toLowerCase() === slug).map(r => r.id);
+    if (ids.length === 0) continue;
+    const { error: updErr } = await supabase
+      .from('lots')
+      .update({ image_url: null })
+      .in('id', ids);
+    if (updErr) {
+      console.warn(`AUTO-FIX: update failed for ${slug}: ${updErr.message}`);
+      continue;
+    }
+    housesTouched.add(slug);
+    summary.hero_image_bleed.rows_nulled += ids.length;
+    summary.hero_image_bleed.details.push({ house: slug, image_url: url, rows_nulled: ids.length });
+    console.log(`AUTO-FIX: hero_image_bleed — ${slug}: nulled ${ids.length} row(s) sharing ${url}`);
+  }
+  summary.hero_image_bleed.houses_affected = housesTouched.size;
+  return summary;
+}
+
 // ── Upsert findings as pipeline_alerts (idempotent on (house, heuristic)) ──
 async function writeAlerts(findings) {
   if (DRY_RUN || findings.length === 0) return { inserted: 0, skipped: 0 };
@@ -523,7 +571,7 @@ async function main() {
 // Allow import as a module (for /api/admin/visual-audit) AND CLI usage
 const isMainModule = import.meta.url === `file://${process.argv[1].replace(/\\/g, '/')}` || import.meta.url.endsWith(process.argv[1].split(/[\\\/]/).pop());
 
-export { runAudit, renderReport, writeAlerts };
+export { runAudit, renderReport, writeAlerts, applyAutoFixes };
 
 if (isMainModule) {
   main().catch(err => {

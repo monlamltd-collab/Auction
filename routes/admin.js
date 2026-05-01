@@ -236,17 +236,37 @@ router.post('/api/admin/visual-audit', async (req, res) => {
     return res.status(403).json({ error: 'Admin access required' });
   }
   try {
-    const { runAudit, writeAlerts } = await import('../scripts/visual-audit.mjs');
+    const { runAudit, writeAlerts, applyAutoFixes, renderReport } = await import('../scripts/visual-audit.mjs');
     const writeAlertsFlag = req.body?.writeAlerts !== false; // default true
+    const autoFixFlag = req.body?.autoFix === true;          // default false
+    const includeMarkdown = req.body?.includeMarkdown === true; // default false
     const result = await runAudit();
     let alertsWritten = 0;
+    let autoFixApplied = null;
+    if (autoFixFlag) autoFixApplied = await applyAutoFixes(result.findings);
     if (writeAlertsFlag) alertsWritten = await writeAlerts(result.findings);
+
+    // Build markdown report — append auto-fix log if any rows were touched
+    let markdown = null;
+    if (includeMarkdown) {
+      markdown = renderReport(result);
+      const bleedRows = autoFixApplied?.hero_image_bleed?.rows_nulled || 0;
+      if (bleedRows > 0) {
+        markdown += `\n## Auto-fixes applied\n\n- **hero_image_bleed**: nulled ${bleedRows} row(s) across ${autoFixApplied.hero_image_bleed.houses_affected} house(s).\n`;
+        for (const d of autoFixApplied.hero_image_bleed.details) {
+          markdown += `  - \`${d.house}\` × ${d.rows_nulled} — \`${d.image_url}\`\n`;
+        }
+      }
+    }
+
     res.json({
       scannedRows: result.scannedRows,
       ms: result.ms,
       findingCount: result.findings.length,
       findings: result.findings,
       alertsWritten,
+      autoFixApplied,
+      ...(markdown !== null && { markdown }),
     });
   } catch (err) {
     log.warn('Visual audit failed', { err: err.message });
