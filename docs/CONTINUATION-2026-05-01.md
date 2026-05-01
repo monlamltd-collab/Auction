@@ -56,13 +56,15 @@ Nothing changed since 2026-04-30 doc; rollout #7 (rentals cron + materialised vi
 
 ### 🟢 High-leverage next builds
 
-3. **Per-house extractor & coverage audit** — Simon explicitly flagged this as a separate session. Goal: a `references/house-coverage-matrix.md` in `auction-self-healing` skill, one row per house, columns for each enriched field (postcode, image, beds, sqft, EPC, lat/lng, UPRN, prop_type, condition, tenure), flagging which fields are underserved per house and the per-house fix recipe (detail-page extractor / URL routing fix / captcha override / etc). Workflow:
-   1. Survey `pipeline_alerts` for unresolved `extractor_*_regression` rows by house
-   2. Run the visual audit's per-field heuristics across all 173 houses
-   3. Identify the worst N houses per field
-   4. Write a fix recipe per house
-   5. Stand up the matrix document + iteratively shipping the per-house fixes
-   ~Half-day of work. Best done after tomorrow's v2 PR lands so we know the alert auto-resolve loop is in place (otherwise the unresolved-alert backlog drowns the survey).
+3. **Per-house extractor & coverage audit** — Simon explicitly flagged this as a separate session. Goal: a `references/house-coverage-matrix.md` in `auction-self-healing` skill, one row per house, columns for each enriched field (postcode, image, beds, sqft, EPC, lat/lng, UPRN, prop_type, condition, tenure), flagging which fields are underserved per house and the per-house fix recipe (detail-page extractor / URL routing fix / captcha override / etc). Split into 3 phases — phase 0 is a prerequisite, then 3a/3b/3c are the audit itself.
+
+   **Phase 0 (prerequisite — lands via tomorrow's scheduled-agent PR):** implement the alert auto-resolve loop. Without it the 5,316-row unresolved-alert backlog drowns the by-house aggregation in 3a. Cheap to skip if the loop already ran (just check unresolved counts on `created_at > now() - interval '7 days'` and rely on the fresh window).
+
+   **3a — Survey** (~30 min, single session). Extend `scripts/visual-audit.mjs` to emit a companion `audits/coverage-gaps-{date}.md` artifact alongside the existing `audits/visual-audit-{date}.md`. Adds one SQL aggregate that joins per-field heuristic findings with `pipeline_alerts.event_type LIKE 'extractor_%_regression' AND created_at > now() - interval '7 days'`. Fold into the existing nightly workflow step. **Critically: don't touch `lib/extractors/details/*` here — Phase 1 is read-only diagnostics.**
+
+   **3b — Matrix** (~2 hours, single session). Read `audits/coverage-gaps-{latest}.md`. For each (house, field) gap row: pick a fix recipe from {detail-page extractor / URL routing / captcha override / domain probe / data-hygiene purge / dead-house removal}. Output: `references/house-coverage-matrix.md` in the auction-self-healing skill. Cross-reference each row to the existing CLASSIFY table entries. Don't ship any code here — just the document.
+
+   **3c — Execute** (ongoing, parallelizable). Each row in the matrix becomes a self-contained fix task. Naturally suited to scheduled remote agents — one agent per (house, field), each opens its own PR following the recipe. Could clear 30+ houses in a week of background runs. Track completion by adding a `status: open|in_progress|shipped` column to the matrix.
 4. **Charlesdarrow domain probe** (~30 min) — `house_skills.last_lot_count=6, status=degraded`, BUT 0 lots in `lots` table. Needs Firecrawl probe of HOUSE_ROOTS URL to classify as `merger`/`genuine_zero`/`auth_wall`. If genuine_zero (between auction cycles), no action; mark alert `acknowledged_no_action`.
 5. **Landwood zombie purge** (~15 min) — 93 rows from 2026-04-17 calendar-drift period frozen at `last_seen_at='2026-04-17'`, status='available', auction_date='2099-12-31'. Targeted DELETE clears row-level coverage. Destructive — confirm with Simon before running. Pattern: the lots-table purge gap that `purge.js` doesn't cover. Worth lifting into `purgeStaleLots()`.
 
