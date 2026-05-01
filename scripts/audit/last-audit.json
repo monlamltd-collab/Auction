@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-05-01T18:56:33.273Z",
+  "timestamp": "2026-05-01T19:00:35.092Z",
   "results": [
     {
       "house": "savills",
@@ -485,9 +485,15 @@
       "house": "auctionhousenorthwest",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
-      "issues": []
+      "issues": [
+        {
+          "type": "TIMEOUT",
+          "severity": "BROKEN",
+          "detail": "HTTP request timed out (30s)"
+        }
+      ]
     },
     {
       "house": "auctionhousenortheast",
@@ -501,9 +507,15 @@
       "house": "auctionhousewales",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
-      "issues": []
+      "issues": [
+        {
+          "type": "TIMEOUT",
+          "severity": "BROKEN",
+          "detail": "HTTP request timed out (30s)"
+        }
+      ]
     },
     {
       "house": "auctionhousebirmingham",
@@ -525,21 +537,27 @@
       "house": "auctionhousedevon",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
-      "issues": []
+      "issues": [
+        {
+          "type": "TIMEOUT",
+          "severity": "BROKEN",
+          "detail": "HTTP request timed out (30s)"
+        }
+      ]
     },
     {
       "house": "auctionhousewestmidlands",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 404,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": [
         {
-          "type": "URL_DEAD",
+          "type": "TIMEOUT",
           "severity": "BROKEN",
-          "detail": "HTTP 404 — page not found"
+          "detail": "HTTP request timed out (30s)"
         }
       ]
     },
@@ -547,17 +565,29 @@
       "house": "auctionhouseessex",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
-      "issues": []
+      "issues": [
+        {
+          "type": "TIMEOUT",
+          "severity": "BROKEN",
+          "detail": "HTTP request timed out (30s)"
+        }
+      ]
     },
     {
       "house": "auctionhousemanchester",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
-      "issues": []
+      "issues": [
+        {
+          "type": "TIMEOUT",
+          "severity": "BROKEN",
+          "detail": "HTTP request timed out (30s)"
+        }
+      ]
     },
     {
       "house": "romanway",
@@ -591,65 +621,113 @@
       "house": "auctionhousesouthyorkshire",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
-      "issues": []
+      "issues": [
+        {
+          "type": "TIMEOUT",
+          "severity": "BROKEN",
+          "detail": "HTTP request timed out (30s)"
+        }
+      ]
     },
     {
       "house": "auctionhousewestyorkshire",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
-      "issues": []
+      "issues": [
+        {
+          "type": "TIMEOUT",
+          "severity": "BROKEN",
+          "detail": "HTTP request timed out (30s)"
+        }
+      ]
     },
     {
       "house": "auctionhouseteesvalley",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
-      "issues": []
+      "issues": [
+        {
+          "type": "TIMEOUT",
+          "severity": "BROKEN",
+          "detail": "HTTP request timed out (30s)"
+        }
+      ]
     },
     {
       "house": "auctionhousehull",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
-      "issues": []
+      "issues": [
+        {
+          "type": "TIMEOUT",
+          "severity": "BROKEN",
+          "detail": "HTTP request timed out (30s)"
+        }
+      ]
     },
     {
       "house": "auctionhousecumbria",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
-      "issues": []
+      "issues": [
+        {
+          "type": "TIMEOUT",
+          "severity": "BROKEN",
+          "detail": "HTTP request timed out (30s)"
+        }
+      ]
     },
     {
       "house": "auctionhouselincolnshire",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
-      "issues": []
+      "issues": [
+        {
+          "type": "TIMEOUT",
+          "severity": "BROKEN",
+          "detail": "HTTP request timed out (30s)"
+        }
+      ]
     },
     {
       "house": "auctionhouseuklondon",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
-      "issues": []
+      "issues": [
+        {
+          "type": "TIMEOUT",
+          "severity": "BROKEN",
+          "detail": "HTTP request timed out (30s)"
+        }
+      ]
     },
     {
       "house": "auctionhousebedsandbucks",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
-      "issues": []
+      "issues": [
+        {
+          "type": "TIMEOUT",
+          "severity": "BROKEN",
+          "detail": "HTTP request timed out (30s)"
+        }
+      ]
     },
     {
       "house": "auctionhousenorthamptonshire",
@@ -663,9 +741,15 @@
       "house": "auctionhouseoxfordshire",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
-      "issues": []
+      "issues": [
+        {
+          "type": "TIMEOUT",
+          "severity": "BROKEN",
+          "detail": "HTTP request timed out (30s)"
+        }
+      ]
     },
     {
       "house": "auctionhouseleicestershire",
@@ -679,73 +763,127 @@
       "house": "auctionhousemidlands",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
-      "issues": []
+      "issues": [
+        {
+          "type": "TIMEOUT",
+          "severity": "BROKEN",
+          "detail": "HTTP request timed out (30s)"
+        }
+      ]
     },
     {
       "house": "auctionhousecoventry",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
-      "issues": []
+      "issues": [
+        {
+          "type": "TIMEOUT",
+          "severity": "BROKEN",
+          "detail": "HTTP request timed out (30s)"
+        }
+      ]
     },
     {
       "house": "auctionhousenottsandderby",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
-      "issues": []
+      "issues": [
+        {
+          "type": "TIMEOUT",
+          "severity": "BROKEN",
+          "detail": "HTTP request timed out (30s)"
+        }
+      ]
     },
     {
       "house": "auctionhousechesterfield",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
-      "issues": []
+      "issues": [
+        {
+          "type": "TIMEOUT",
+          "severity": "BROKEN",
+          "detail": "HTTP request timed out (30s)"
+        }
+      ]
     },
     {
       "house": "auctionhousestaffordshire",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
-      "issues": []
+      "issues": [
+        {
+          "type": "TIMEOUT",
+          "severity": "BROKEN",
+          "detail": "HTTP request timed out (30s)"
+        }
+      ]
     },
     {
       "house": "auctionhousenorthwales",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
-      "issues": []
+      "issues": [
+        {
+          "type": "TIMEOUT",
+          "severity": "BROKEN",
+          "detail": "HTTP request timed out (30s)"
+        }
+      ]
     },
     {
       "house": "auctionhousesouthwest",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
-      "issues": []
+      "issues": [
+        {
+          "type": "TIMEOUT",
+          "severity": "BROKEN",
+          "detail": "HTTP request timed out (30s)"
+        }
+      ]
     },
     {
       "house": "auctionhousenorthernireland",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
-      "issues": []
+      "issues": [
+        {
+          "type": "TIMEOUT",
+          "severity": "BROKEN",
+          "detail": "HTTP request timed out (30s)"
+        }
+      ]
     },
     {
       "house": "auctionhousenational",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
-      "issues": []
+      "issues": [
+        {
+          "type": "TIMEOUT",
+          "severity": "BROKEN",
+          "detail": "HTTP request timed out (30s)"
+        }
+      ]
     },
     {
       "house": "sarahmains",
@@ -1083,7 +1221,7 @@
       "house": "woolleyandwallis",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": 202,
       "imgCoverage": null,
       "issues": []
     },
