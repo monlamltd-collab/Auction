@@ -149,7 +149,7 @@ After every push that changes scraping behaviour:
 
 ## 5. REPORT (Telegram, always for ambiguous outcomes)
 
-Send a Telegram message via `lib/telegram.js` (port from `ContentBrain/lib/telegram.js` if not yet present in this repo — same `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` envs).
+Send a Telegram message via `lib/telegram.js`. Use `sendHealReport({ slug, cause, confidence, action, verify, decision, evidence, commits })` — it formats the §5 message template for you. Falls back gracefully (returns `false`, never throws) if `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` are not set, so heal sessions never crash on a Telegram outage. Plain text via `sendNotification(html)` is also exported.
 
 **Always Telegram-report when:**
 - Confidence < 0.75 in CLASSIFY.

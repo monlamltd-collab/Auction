@@ -311,6 +311,8 @@ These are computed from lot data fields: `price`, `estGrossYield`, `opportunitie
 | `EPC_API_EMAIL` | EPC register API email (paired with `EPC_API_KEY`) |
 | `EPC_API_KEY` | EPC register API key — fuels EPC enrichment + ?bedrooms backfill |
 | `SUPABASE_SERVICE_KEY` | Service-role key for server-side DB writes (lots upsert, manifest, etc.) |
+| `TELEGRAM_BOT_TOKEN` | Telegram bot token used by `lib/telegram.js` for self-healing REPORT messages. Optional — calls short-circuit gracefully if unset. |
+| `TELEGRAM_CHAT_ID` | Destination chat for `lib/telegram.js`. Required alongside `TELEGRAM_BOT_TOKEN` for the auction-self-healing skill's REPORT phase to fire. |
 
 ---
 
