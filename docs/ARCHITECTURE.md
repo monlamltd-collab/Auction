@@ -386,18 +386,20 @@ Cost per heal attempt: ~1-3 Firecrawl credits + 1 Gemini Pro call.
 
 ## Open simplification opportunities (priority ranked)
 
-| # | Action | Impact | Effort |
-|---|---|---|---|
-| 1 | Slim CLAUDE.md — drop stale file sizes, aspirational agent skills, double-counted scoring rows | Reduces context bloat on every session | XS |
-| 2 | Remove `auditLotFreshness()` (38 unused lines in sub-agents.js) | Dead code | XS |
-| 3 | Add `/api/admin/field-coverage` dashboard — % of lots with each field populated | Surfaces data-quality drift before users see it | S |
-| 4 | Tighten `initGenerator(supabase, callAI)` — supabase param is unused | Trivial cleanup | XS |
-| 5 | Wire Land Registry beyond comps — title number, ownership, charges | Biggest data-richness lever | M |
-| 6 | Refresh OS Places on lots whose URL changed catalogues (not just first-contact) | Closes the "stale UPRN" weakness | S |
-| 7 | Detail-page extraction on every lot (currently first-contact only) | Better tenure/lease/sqft coverage | M |
-| 8 | Split `lib/harness/manager.js` (754 lines) into manager + dashboard + ai-reasoning | Readability | S |
-| 9 | Consolidate `dbRowToLot` and `dbRowToFrontendLot` (drift risk) | Maintenance | S |
-| 10 | Move scheduled jobs from `server.js` Express callback to dedicated worker | Already env-gated; needs Railway service | S |
+| # | Action | Status | Impact | Effort |
+|---|---|---|---|---|
+| 1 | Slim CLAUDE.md — drop stale file sizes, aspirational agent skills, double-counted scoring rows | ✅ done (`ca3f2b1`) | Reduces context bloat on every session | XS |
+| 2 | Remove `auditLotFreshness()` (38 unused lines in sub-agents.js) | ✅ done (`5dc5f3c`) | Dead code | XS |
+| 3 | Tighten `initGenerator(supabase, callAI)` — supabase param is unused | ✅ done (`5dc5f3c`) | Trivial cleanup | XS |
+| 4 | Manager-on-failure trigger — only run cycle when alerts unresolved | ✅ done (Step 1 of Path 1, this commit) | ~95% Gemini cost cut for harness | XS |
+| 5 | Extractor reliability + enrichment safeguards | ⏭ next session (Step 2 of Path 1) | Investor value: thorough lot data | M-L |
+| 6 | Harness file flatten — Scenario A | ⏳ scheduled — remote agent fires 2026-05-30, decision based on `manager_cycles` data. Plan captured in `docs/PLANNED-harness-cleanup.md` | Codebase clarity | M |
+| 7 | Add `/api/admin/field-coverage` dashboard — % of lots with each field populated | open | Surfaces data-quality drift before users see it | S |
+| 8 | Wire Land Registry beyond comps — title number, ownership, charges | open | Biggest data-richness lever | M |
+| 9 | Refresh OS Places on lots whose URL changed catalogues (not just first-contact) | open | Closes the "stale UPRN" weakness | S |
+| 10 | Detail-page extraction on every lot (currently first-contact only) | open | Better tenure/lease/sqft coverage | M |
+| 11 | Consolidate `dbRowToLot` and `dbRowToFrontendLot` (drift risk) | open | Maintenance | S |
+| 12 | Move scheduled jobs from `server.js` Express callback to dedicated worker | open (env-gated since `c09179d`; needs Railway service) | Multi-instance scale | S |
 
 ---
 

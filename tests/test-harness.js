@@ -6,7 +6,7 @@
 import { validateLot, validateBatch } from '../lib/harness/data-contract.js';
 import { detectRegression } from '../lib/harness/regression-detector.js';
 import { evaluateGate, checkEndedLotRatio, checkCalendarDateSanity } from '../lib/harness/quality-gate.js';
-import { initAlerts, fireAlert, resolveAlert, getUnresolved, getDedupStats } from '../lib/harness/alert-router.js';
+import { initAlerts, fireAlert, resolveAlert, getUnresolved, getDedupStats, getUnresolvedCount, _resetUnresolvedCountCacheForTests } from '../lib/harness/alert-router.js';
 import { updateHealth, getHealth, getAllHealth, isCircuitOpen, getBaseline } from '../lib/harness/house-health.js';
 import { enrichBatch, getEnrichmentReport } from '../lib/harness/enrichment-engine.js';
 import { initDiscovery, getDiscoveryBudget } from '../lib/harness/house-discovery.js';
@@ -470,6 +470,90 @@ setManagerConfig({ enabled: false });
 const skippedReport = await runManagerCycle();
 assert(skippedReport.skipped === true, 'Disabled manager skips cycle');
 setManagerConfig({ enabled: true }); // re-enable
+
+// ═══════════════════════════════════════════════════════════════
+// 10. ALERT ROUTER — getUnresolvedCount (manager-on-failure gate)
+// ═══════════════════════════════════════════════════════════════
+section('alert-router: getUnresolvedCount cache + DB shape');
+
+// Build a thin supabase stub that records the query shape we expect
+// (from('pipeline_alerts').select('id', { count: 'exact', head: true })
+//  .eq('resolved', false)) and returns a configurable count.
+function makeAlertCountStub(returnCount, opts = {}) {
+  let calls = 0;
+  const stub = {
+    from(table) {
+      stub._lastTable = table;
+      return {
+        select(_cols, selOpts) {
+          stub._lastSelOpts = selOpts;
+          return {
+            eq(col, val) {
+              stub._lastEq = [col, val];
+              return new Promise((resolve, reject) => {
+                calls++;
+                if (opts.throw) reject(new Error('simulated DB failure'));
+                else resolve({ count: returnCount, error: null });
+              });
+            },
+          };
+        },
+      };
+    },
+    callCount: () => calls,
+  };
+  return stub;
+}
+
+// Case 1: zero unresolved alerts → count is 0 → manager-on-failure gate
+// would skip the cycle (caller checks !== 0).
+{
+  _resetUnresolvedCountCacheForTests();
+  initAlerts(makeAlertCountStub(0));
+  const count = await getUnresolvedCount();
+  assert(count === 0, 'Returns 0 when DB has no unresolved alerts');
+}
+
+// Case 2: ≥1 unresolved alert → count > 0 → manager runs.
+{
+  _resetUnresolvedCountCacheForTests();
+  const stub = makeAlertCountStub(7);
+  initAlerts(stub);
+  const count = await getUnresolvedCount();
+  assert(count === 7, `Returns the actual count (got ${count})`);
+  assert(stub._lastTable === 'pipeline_alerts', 'Queries pipeline_alerts table');
+  assert(stub._lastSelOpts && stub._lastSelOpts.count === 'exact' && stub._lastSelOpts.head === true,
+    'Uses head-only count: exact query (no row payload)');
+  assert(stub._lastEq[0] === 'resolved' && stub._lastEq[1] === false,
+    'Filters resolved=false');
+}
+
+// Case 3: 30s in-memory cache prevents redundant DB hits.
+{
+  _resetUnresolvedCountCacheForTests();
+  const stub = makeAlertCountStub(3);
+  initAlerts(stub);
+  await getUnresolvedCount();
+  await getUnresolvedCount();
+  await getUnresolvedCount();
+  assert(stub.callCount() === 1, `3 calls within TTL → 1 DB hit (got ${stub.callCount()})`);
+}
+
+// Case 4: DB error returns -1 (manager-gate fail-open policy).
+{
+  _resetUnresolvedCountCacheForTests();
+  initAlerts(makeAlertCountStub(0, { throw: true }));
+  const count = await getUnresolvedCount();
+  assert(count === -1, `DB throw → returns -1 (got ${count})`);
+}
+
+// Case 5: no supabase client → returns 0 safely (init not yet called).
+{
+  _resetUnresolvedCountCacheForTests();
+  initAlerts(null);
+  const count = await getUnresolvedCount();
+  assert(count === 0, 'No supabase client → returns 0 safely');
+}
 
 // ═══════════════════════════════════════════════════════════════
 // SUMMARY
