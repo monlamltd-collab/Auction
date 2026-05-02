@@ -104,7 +104,7 @@ initAI(genAI, supabase);
 initAlerts(supabase);
 initHouseHealth(supabase).catch(e => console.warn('Harness: health init failed:', e.message));
 initDiscovery(supabase, callAI);
-initGenerator(supabase, callAI);
+initGenerator(callAI);
 
 // Inject server-level dependencies into lib/houses.js (rewriteUrl needs these)
 initHouses({
