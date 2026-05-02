@@ -2804,83 +2804,202 @@ function getFreshnessBadges(l){
   return chips.length ? '<div class="freshness-row">' + chips.join('') + '</div>' : '';
 }
 
+// ─── Editorial-redesign helpers (Trading Desk lot card v2) ───
+//
+// Live alongside card() so the rest of app.js can call them too.
+// Produce small markup fragments shared between the search card and
+// the lot-detail header.
+
+function splitAddressPostcode(full) {
+  if (!full) return { addr: 'Address not available', pc: '' };
+  // UK postcode at end of string. Match across optional comma/space sep.
+  const m = String(full).match(/^(.*?)[,\s]+([A-Z]{1,2}\d{1,2}[A-Z]?\s*\d[A-Z]{2})\s*$/i);
+  if (m) {
+    const pcRaw = m[2].toUpperCase().replace(/\s+/g, ' ');
+    const pc = /\s/.test(pcRaw) ? pcRaw : pcRaw.replace(/(.{3,4})(.{3})$/, '$1 $2');
+    return { addr: m[1].trim(), pc };
+  }
+  return { addr: String(full).trim(), pc: '' };
+}
+
+function formatAuctionDateShort(iso) {
+  if (!iso || typeof iso !== 'string' || iso.length < 10) return '';
+  const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+  const d = parseInt(iso.slice(8, 10), 10);
+  const m = parseInt(iso.slice(5, 7), 10) - 1;
+  if (isNaN(d) || isNaN(m) || m < 0 || m > 11) return '';
+  return d + ' ' + months[m];
+}
+
+function statusForStrip(l) {
+  // Map lot.status to the editorial strip's dot colour + label.
+  const s = (l.status || 'live').toLowerCase();
+  if (s === 'sold' || s === 'stc') return { dot: 'red', label: 'SOLD' };
+  if (s === 'unsold') return { dot: 'amber', label: 'UNSOLD · OPEN TO OFFERS' };
+  if (s === 'withdrawn') return { dot: 'red', label: 'WITHDRAWN' };
+  return { dot: 'green', label: 'LIVE' };
+}
+
+function epcSquareColor(rating) {
+  if (!rating) return null;
+  const r = String(rating).toUpperCase()[0];
+  if ('ABC'.includes(r)) return 'green';
+  if (r === 'D') return 'amber';
+  return 'red';
+}
+
+function scoreBadgeKind(s) {
+  // Score is 0-10 in this codebase (see lib/pipeline/scoring.js). Map
+  // to green >=8, amber >=6.5, neutral otherwise -- same thresholds the
+  // old .lot-score-good / .lot-score-mid rules used.
+  if (s == null || isNaN(s)) return '';
+  if (s >= 8) return 'green';
+  if (s >= 6.5) return 'amber';
+  return '';
+}
+
 function card(l){
-  // Price display
-  let priceText = 'POA';
-  if (l.priceText) priceText = l.priceText;
-  else if (l.price) priceText = 'Guide £' + l.price.toLocaleString();
+  // Editorial Trading Desk card (v2). The handoff README maps each
+  // section explicitly -- preserve that vocabulary so future edits are
+  // easy to trace.
 
-  // Property details pills (with tooltips and data gap warnings)
-  let detailPills = [];
-  if (l.propType) detailPills.push({text: l.propType, tip: 'Property type — affects lender eligibility and valuation approach'});
-  if (l.beds != null) detailPills.push({text: l.beds + ' bed', tip: 'Number of bedrooms — key driver for rental yield estimates'});
+  const idx = l._idx;
+  const houseLabel = l._house || (l.house || '').toString();
+  const lotNum = l.lot != null ? String(l.lot).padStart(2, '0') : '—';
+  const dateShort = formatAuctionDateShort(l._auctionDate);
+  const status = statusForStrip(l);
+
+  const parsed = splitAddressPostcode(l.address);
+  const addr = parsed.addr;
+  const pc = parsed.pc;
+
+  // Guide price
+  let guideText = 'POA';
+  if (l.priceText && !l.price) guideText = l.priceText;
+  else if (l.price) guideText = '£' + l.price.toLocaleString();
+
+  // Yield
+  const showYield = l.estGrossYield && !l.blurred && !l.anonGated && !l._yieldEstimateWarning;
+  const yieldText = showYield ? l.estGrossYield.toFixed(1) : null;
+
+  // Score
+  const scoreKind = scoreBadgeKind(l.score);
+  const scoreNum = (l.score != null && !isNaN(l.score)) ? Math.round(l.score) : null;
+
+  // Opportunity + risk tags (cap at 4 to keep cards balanced)
+  const oppTags = (l.opps || []).slice(0, 3).map(function(o){
+    return '<span class="tag green">+ ' + esc(o) + '</span>';
+  });
+  const riskTags = (l.risks || []).slice(0, 3).map(function(r){
+    return '<span class="tag red">! ' + esc(r) + '</span>';
+  });
+  const tagBudget = 4;
+  const tags = oppTags.concat(riskTags).slice(0, tagBudget);
+  const overflow = (oppTags.length + riskTags.length) - tags.length;
+  if (overflow > 0) tags.push('<span class="tag" style="opacity:.7">+' + overflow + ' more</span>');
+
+  // Meta line: PROPTYPE · BEDS · TENURE · FZ · EPC
+  const metaParts = [];
+  if (l.propType) metaParts.push('<span>' + esc(String(l.propType).toUpperCase()) + '</span>');
+  if (l.beds != null) metaParts.push('<span>' + l.beds + ' BED</span>');
   if (l.tenure) {
-    let tenureLabel = l.tenure;
-    let tenureTip = l.tenure === 'Freehold' ? 'Freehold — you own the building and land outright' : 'Leasehold — you own the property for a fixed term. Under 80 years = expensive to extend';
-    let tenureWarn = false;
-    if (l.tenure === 'Leasehold' && l.leaseLength) {
-      tenureLabel += ' (' + l.leaseLength + 'yr)';
-      if (l.leaseLength < 80) { tenureWarn = true; tenureTip = 'SHORT LEASE (' + l.leaseLength + 'yr) — Under 80 years. Lease extension is expensive and may need marriage value payment. Many lenders won\'t fund below 70yr. Factor £10k–£50k+ extension cost.'; }
-      else if (l.leaseLength < 125) { tenureTip = 'Leasehold (' + l.leaseLength + 'yr) — Acceptable length for most lenders but will need extending within your ownership. Budget for extension.'; }
-    }
-    detailPills.push({text: tenureLabel, tip: tenureTip, gap: tenureWarn, warn: tenureWarn});
+    const tenLabel = l.tenure.toUpperCase() + (l.tenure === 'Leasehold' && l.leaseLength ? ' (' + l.leaseLength + 'YR)' : '');
+    metaParts.push('<span>' + esc(tenLabel) + '</span>');
   }
-  if (l.daysSinceAuction != null && l.status === 'unsold') {
-    if (l._relistStatus === 'sold' || l._relistStatus === 'stc') {
-      detailPills.push({text: 'Since Sold' + (l._relistPrice ? ' £' + l._relistPrice.toLocaleString() : ''), tip: 'This property was relisted and sold at a later auction (' + l._relistDate + ')', relistDanger: true});
-    } else if (l._relistStatus === 'available') {
-      detailPills.push({text: 'Relisted', tip: 'This property has been relisted at a future auction', relistWarn: true});
-    } else {
-      detailPills.push({text: 'Unsold ' + l.daysSinceAuction + 'd ago \u2713', tip: 'Verified unsold — not relisted at a later auction. Vendor may accept lower offers.'});
-    }
+  if (l.floodZone && l.floodZone !== '1') {
+    const fzCls = l.floodZone === '3' ? 'fz red' : 'fz amber';
+    metaParts.push('<span class="' + fzCls + '">FZ' + esc(l.floodZone) + '</span>');
+  } else if (l.floodZone === '1') {
+    metaParts.push('<span>FZ1</span>');
   }
-  if (l.estGrossYield && !l.blurred && !l.anonGated && !l._yieldEstimateWarning) {
-    const yv = l.estGrossYield;
-    const yStyle = yv >= 7 ? 'color:var(--signal-pos);font-weight:600' : yv >= 5 ? 'color:var(--accent-warn);font-weight:600' : 'color:var(--accent-danger);font-weight:600';
-    detailPills.push({text: '~' + yv.toFixed(1) + '% yield', tip: 'Estimated gross rental yield at guide price', yieldStyle: yStyle});
+  if (l.epcRating) {
+    const epcCls = epcSquareColor(l.epcRating);
+    metaParts.push('<span>EPC<span class="epc-square ' + epcCls + '">' + esc(String(l.epcRating).toUpperCase()[0]) + '</span></span>');
   }
-
-  // Signal chips (max 3 + overflow)
-  const chipsHtml = getSignalChips(l);
-
-  // Bullet points (AI analysis, signed-in users only, max 2)
-  const bulletsOnCard = (!l.blurred && !l.anonGated && l.bullets && l.bullets.length)
-    ? '<ul class="card-bullets">' + l.bullets.slice(0, 2).map(b => '<li>' + esc(b) + '</li>').join('') + '</ul>'
+  const metaLine = metaParts.length
+    ? '<div class="lcv2-meta">' + metaParts.join('<span class="sep">·</span>') + '</div>'
     : '';
 
-  // Category label
-  const catLabel = 'Lot ' + esc(l.lot || '—') + ' · ' + esc(l.blurred ? '—' : l.anonGated ? 'Sign up for deal type' : (l.dealType || 'Standard'));
+  // Optional editor's pull-quote -- surfaces the first AI bullet for signed-in users.
+  const quoteHtml = (!l.blurred && !l.anonGated && l.bullets && l.bullets.length)
+    ? '<div class="lcv2-quote">"' + esc(l.bullets[0]) + '"</div>'
+    : '';
 
-  // Card footer links
-  const viewLink = l.url ? '<a href="' + safeHref(l.url) + '" target="_blank" rel="noopener noreferrer" class="card-view-link" onclick="event.stopPropagation()">View listing ↗</a>' : '<span></span>';
-  const favActive = isFavourite(l);
-  const favBtn = '<button class="fav-btn' + (favActive ? ' fav-active' : '') + '" onclick="toggleFav(' + l._idx + ',event)" aria-label="' + (favActive ? 'Remove from' : 'Add to') + ' favourites">' + (favActive ? '&#9829;' : '&#9825;') + '</button>';
+  // Hero -- image vs stripe
+  let heroHtml;
+  let addressRowHtml;
+  if (l.imageUrl && typeof isValidImageUrl === 'function' && isValidImageUrl(l.imageUrl)) {
+    const imgSrc = (typeof optimImg === 'function') ? optimImg(l.imageUrl, 600) : l.imageUrl;
+    heroHtml = '<div class="lcv2-hero-img" style="background-image:url(\'' + esc(imgSrc) + '\')"></div>';
+    addressRowHtml = '<div class="lcv2-addr">' +
+      '<h3>' + esc(addr) + '</h3>' +
+      (pc ? '<span class="pc">' + esc(pc) + '</span>' : '') +
+    '</div>';
+  } else {
+    heroHtml = '<div class="lcv2-hero-stripe">' +
+      '<span class="noimg-label">▢ NO CATALOGUE IMAGE · ADDRESS ONLY</span>' +
+      '<h3 class="addr">' + esc(addr) + '</h3>' +
+      (pc ? '<span class="pc">' + esc(pc) + '</span>' : '') +
+    '</div>';
+    addressRowHtml = '';
+  }
 
-  const endedClass = (l._auctionDate && l._auctionDate < new Date().toISOString().slice(0,10)) ? ' card-ended' : '';
+  // Stat block
+  const statsHtml = '<div class="lcv2-stats">' +
+    '<div class="cell guide">' +
+      '<span class="eyebrow">GUIDE</span>' +
+      '<span class="num tabular">' + esc(guideText) + '</span>' +
+    '</div>' +
+    (yieldText
+      ? '<div class="cell yield"><span class="eyebrow">GROSS YIELD</span><span class="num tabular">' + yieldText + '<span class="pct-glyph">%</span></span></div>'
+      : '<div class="cell yield"><span class="eyebrow">GROSS YIELD</span><span class="num tabular" style="color:var(--muted-2)">—</span></div>'
+    ) +
+    (scoreNum != null
+      ? '<div class="cell score"><div class="lcv2-score-badge ' + scoreKind + '"><span class="lbl">SCORE</span><span class="num">' + scoreNum + '</span></div></div>'
+      : '') +
+  '</div>';
+
+  // Footer CTAs
+  const viewHref = l.url ? safeHref(l.url) : '#';
+  const bmHref = (l.fundability && l.fundability.bridgematchUrl)
+    ? safeHref(l.fundability.bridgematchUrl)
+    : '/check?lot=' + esc(idx);
+  const footerHtml = '<div class="lcv2-foot">' +
+    '<a class="view" href="' + viewHref + '" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">View lot <span class="arr">→</span></a>' +
+    '<a class="bm card-bm-btn" href="' + bmHref + '" onclick="event.stopPropagation()">BridgeMatch it £ <span class="arr">→</span></a>' +
+  '</div>';
+
+  // Stacks tick
+  const _act = (window._userActions && window._userActions[(l._house || '') + '|' + (l.url || '')]) || null;
+  const stacksTick = _act && _act.stacks ? '<div class="stacks-tick" title="This deal stacks">✅</div>' : '';
+
   const blurredClass = l.blurred ? ' blurred' : '';
   const blurTextAttr = l.blurred ? ' data-blur-text="Sign in free for full details"' : '';
-  // Stacks tick: shown when the user has a saved scenario for this lot that stacks
-  const _act = (window._userActions && window._userActions[(l._house || '') + '|' + (l.url || '')]) || null;
-  const stacksTick = _act && _act.stacks ? '<div class="stacks-tick" title="This deal stacks">\u2705</div>' : '';
-  return '<div class="lot-card' + endedClass + blurredClass + '"' + blurTextAttr + ' id="lot-' + l._idx + '" tabindex="0" role="article" aria-label="Lot ' + esc(l.lot || '') + ' — ' + esc(l.address || 'Address not available') + '" onclick="expandCard(LOTS[' + l._idx + '])" onkeydown="if(event.key===\'Enter\'){this.click()}">' +
+
+  return '<article class="lot-card-v2' + blurredClass + '"' + blurTextAttr +
+    ' id="lot-' + idx + '" tabindex="0" role="article"' +
+    ' aria-label="Lot ' + esc(l.lot || '') + ' — ' + esc(addr) + '"' +
+    ' onclick="expandCard(LOTS[' + idx + '])"' +
+    ' onkeydown="if(event.key===\'Enter\'){this.click()}">' +
     stacksTick +
-    getCardImageHtml(l) +
-    '<div class="card-body">' +
-      '<div class="card-row1"><span class="card-lot-info">' + catLabel + '</span><span class="card-price">' + esc(priceText) + '</span></div>' +
-      '<div class="card-address">' + esc(l.address || 'Address not available') + '</div>' +
-      '<div class="card-details">' + detailPills.map(d => '<span class="detail-pill' + (d.gap ? ' epd-gap-pill' : '') + (d.warn ? ' lease-warn' : '') + '" data-tip="' + esc(d.tip) + '"' + (d.relistDanger ? ' style="color:var(--accent-danger);font-weight:600;border:1px solid var(--accent-danger)"' : d.relistWarn ? ' style="color:var(--accent-warn);font-weight:600;border:1px dashed var(--accent-warn)"' : d.warn ? ' style="color:var(--accent-danger);border:1px dashed var(--accent-danger)"' : d.gap ? ' style="color:var(--accent-warn);border:1px dashed var(--accent-warn)"' : d.yieldStyle ? ' style="' + d.yieldStyle + '"' : '') + '>' + esc(d.text) + '</span>').join('') + '</div>' +
-      (l.epcRating || (l.floodZone && l.floodZone !== '1') || l._yieldEstimateWarning ? '<div style="display:flex;gap:5px;margin-top:4px;flex-wrap:wrap">' +
-        (l.epcRating ? '<span class="detail-pill" style="color:' + (/[AB]/.test(l.epcRating) ? 'var(--signal-pos)' : /[CD]/.test(l.epcRating) ? 'var(--accent-warn)' : 'var(--accent-danger)') + ';font-weight:600" data-tip="Energy Performance Certificate. A-B = efficient, C-D = average, E-G = poor. F/G cannot be legally let to tenants (MEES regulations).">EPC ' + esc(l.epcRating) + (/[FG]/i.test(l.epcRating) ? ' — Unlettable' : '') + '</span>' : '') +
-        ((l.floodZone === '2' || l.floodZone === '3') ? '<span class="detail-pill" style="color:' + (l.floodZone === '3' ? 'var(--accent-danger)' : 'var(--accent-warn)') + ';font-weight:600" data-tip="' + (l.floodZone === '3' ? 'Flood Zone 3 = high probability of flooding. Insurance difficult/expensive. Some lenders won\'t fund.' : 'Flood Zone 2 = medium probability. Most lenders will fund but may affect valuation.') + '">FZ' + esc(l.floodZone) + '</span>' : '') +
-        (l._yieldEstimateWarning ? '<span class="detail-pill" style="color:var(--accent-warn);font-weight:600" data-tip="Yield over 30% — likely unrealistic. Very low guide prices produce inflated yield estimates. Verify actual achievable rent independently.">Yield unverified</span>' : '') +
-      '</div>' : '') +
-      getFreshnessBadges(l) +
-      (chipsHtml ? '<div class="card-chips">' + chipsHtml + '</div>' : '') +
-      bulletsOnCard +
-      getFundabilityBadgeHtml(l) +
+    '<div class="lcv2-strip">' +
+      '<span class="lcv2-strip-l">' + esc((houseLabel || 'AUCTION HOUSE').toUpperCase()) + ' · LOT ' + lotNum + '</span>' +
+      '<span class="lcv2-strip-r">' +
+        '<span class="dot ' + status.dot + '"></span>' +
+        '<span>' + status.label + '</span>' +
+        (dateShort ? '<span class="date">· ' + dateShort + '</span>' : '') +
+      '</span>' +
     '</div>' +
-    '<div class="card-footer">' + viewLink + favBtn + '</div>' +
-  '</div>';
+    heroHtml +
+    addressRowHtml +
+    statsHtml +
+    '<div class="lcv2-body">' +
+      (tags.length ? '<div class="lcv2-tags">' + tags.join('') + '</div>' : '') +
+      metaLine +
+      quoteHtml +
+    '</div>' +
+    footerHtml +
+  '</article>';
 }
 
 // SDLT/LBTT/LTT calculator (2025/26 — England, Scotland & Wales)
@@ -3873,6 +3992,13 @@ function expandCard(lot) {
     existing.style.display = 'none';
     existing.classList.remove('expanded-panel-visible');
   }
+  // Bug fix (handoff §): clear stale .expanded class from any previously
+  // expanded card before applying it to the new one. Without this, a
+  // click on card B left card A's red border / outline showing because
+  // the old card never had its class removed.
+  document.querySelectorAll('.lot-card.expanded, .lot-card-v2.expanded').forEach(function(el){
+    el.classList.remove('expanded');
+  });
 
   const cardEl = document.getElementById('lot-' + lot._idx);
   if (!cardEl) return;

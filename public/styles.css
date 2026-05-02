@@ -21,6 +21,22 @@
   --tech:#1A1A18;
   --radius:12px;--radius-sm:8px;
   --font-main:'IBM Plex Sans',sans-serif;--font-mono:'IBM Plex Mono',monospace;
+  /* ── Editorial redesign tokens (handoff: search-v2 + lot-detail) ── */
+  /* The colour palette already aligned in an earlier pass; these are the
+   * additional surfaces, hairlines and the display-serif family the new
+   * "Trading Desk" + "Lot Detail" screens need. Old aliases above are
+   * preserved so existing components keep rendering during the rollout.
+   */
+  --paper:        #FBF7EE;  /* warm card surface — slightly warmer than white */
+  --bg-2:         #EFE9DD;  /* deeper cream for striped fills + alt rows */
+  --ink:          #1A1A18;  /* explicit alias of --text for editorial markup */
+  --ink-2:        #2C2C28;  /* body copy */
+  --muted-2:      #8A8A82;
+  --border-strong:#C9C2B3;  /* hairline rules between cards/sections */
+  --red-soft:     #F4E0DC;
+  --signal-green: #2F7D4F;  /* "ok" markers in DD checks; distinct from old --signal-pos */
+  --signal-amber: #B8761A;  /* caution */
+  --font-display: 'IBM Plex Serif','Times New Roman',serif;
 }
 *{margin:0;padding:0;box-sizing:border-box}
 html{overflow-x:hidden}
@@ -872,3 +888,800 @@ footer .logo-f span{color:var(--green)}
 
 /* ── Short lease warning ── */
 .lease-warn{color:var(--accent-danger) !important;font-weight:600 !important}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * EDITORIAL REDESIGN — Trading Desk + Lot Detail
+ * Source: AuctionBrain pages/design_handoff_search_and_lot_detail
+ * ═══════════════════════════════════════════════════════════════════════
+ *
+ * High-fidelity reproduction of the design handoff. Border-radius is 0
+ * throughout these components (intentional — the editorial direction).
+ * The new lot-card markup is emitted by card() in public/app.js; the new
+ * expanded panel is emitted by expandCard() (via the magazine-layout
+ * helpers introduced alongside this CSS).
+ *
+ * Tokens are defined in :root above. Old chrome remains for components
+ * not in the redesign (search panel, modals, hero).
+ */
+
+/* ── Utility classes ── */
+.eyebrow{font-family:var(--font-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.eyebrow.ink{color:var(--ink)}
+.tabular{font-variant-numeric:tabular-nums}
+.serif{font-family:var(--font-display);font-weight:400;letter-spacing:-.01em}
+.dot{display:inline-block;width:8px;height:8px;background:var(--ink);vertical-align:middle}
+.dot.red{background:var(--red)}.dot.green{background:var(--signal-green)}.dot.amber{background:var(--signal-amber)}
+
+.tag{
+  display:inline-flex;align-items:center;gap:6px;
+  font-family:var(--font-mono);font-size:11px;letter-spacing:.04em;
+  padding:3px 8px;border:1px solid var(--ink);background:transparent;color:var(--ink);
+  border-radius:0;white-space:nowrap;line-height:1.4
+}
+.tag.green{border-color:var(--signal-green);color:var(--signal-green)}
+.tag.red  {border-color:var(--red);color:var(--red)}
+.tag.amber{border-color:var(--signal-amber);color:var(--signal-amber)}
+
+.chip-ed{
+  height:30px;padding:0 12px;font:14px/1 var(--font-main);
+  background:var(--paper);border:1px solid var(--border-strong);
+  color:var(--ink);border-radius:0;cursor:pointer;display:inline-flex;align-items:center;gap:6px
+}
+.chip-ed:hover{border-color:var(--ink)}
+.chip-ed.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+
+.btn-ed{
+  height:38px;padding:0 18px;font:700 14px var(--font-main);
+  border:1px solid var(--ink);background:var(--ink);color:var(--bg);
+  border-radius:0;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none
+}
+.btn-ed.red  {background:var(--red);border-color:var(--red);color:#fff}
+.btn-ed.ghost{background:transparent;color:var(--ink)}
+.btn-ed.sm   {height:30px;padding:0 12px;font-size:12px}
+.btn-ed:hover{text-decoration:none}
+.btn-ed .arr {font-family:var(--font-mono);font-weight:400}
+
+/* ── New Lot Card (Trading Desk V2) ──
+ * Replaces the old .lot-card markup. Emitted by card() in app.js.
+ * Old .lot-card rules above still apply to expanded-panel cached
+ * fragments and any legacy contexts; the v2 modifier scopes to grid cells
+ * rendered with the new structure.
+ */
+.lot-card-v2{
+  background:var(--paper);
+  border:1px solid var(--ink);
+  display:flex;flex-direction:column;
+  border-radius:0;box-shadow:none;
+  cursor:pointer;
+  transition:border-color .15s,outline-color .15s;
+  position:relative;
+}
+.lot-card-v2:hover{border-color:var(--red)}
+.lot-card-v2.expanded{border-color:var(--red);outline:2px solid var(--red);outline-offset:-3px}
+
+/* Header strip */
+.lcv2-strip{
+  background:var(--ink);color:var(--bg);
+  padding:8px 14px;
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase
+}
+.lcv2-strip-l{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.lcv2-strip-r{display:inline-flex;align-items:center;gap:6px;flex-shrink:0}
+.lcv2-strip-r .date{opacity:.6}
+
+/* Hero: image mode */
+.lcv2-hero-img{
+  height:180px;background-size:cover;background-position:center;
+  border-bottom:1px solid var(--border-strong)
+}
+
+/* Hero: no-image mode (diagonal stripe) */
+.lcv2-hero-stripe{
+  padding:22px 18px;min-height:130px;
+  border-bottom:1px solid var(--border-strong);
+  background:repeating-linear-gradient(135deg,var(--paper),var(--paper) 12px,var(--bg-2) 12px,var(--bg-2) 13px)
+}
+.lcv2-hero-stripe .noimg-label{
+  font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--muted);display:block;margin-bottom:10px
+}
+.lcv2-hero-stripe .addr{
+  font-family:var(--font-display);font-size:30px;line-height:1.05;font-weight:400;
+  letter-spacing:-.01em;color:var(--ink);margin:0 0 6px
+}
+.lcv2-hero-stripe .pc{font-family:var(--font-mono);font-size:11px;color:var(--muted)}
+
+/* Address row (only when image is shown) */
+.lcv2-addr{padding:14px 18px 6px}
+.lcv2-addr h3{
+  font-family:var(--font-display);font-weight:400;font-size:22px;line-height:1.15;
+  color:var(--ink);margin:0
+}
+.lcv2-addr .pc{font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-top:4px;display:block}
+
+/* Stat block (Guide / Yield / Score) */
+.lcv2-stats{
+  display:grid;grid-template-columns:1fr 1fr auto;
+  margin:0 18px;border-top:0;
+}
+.lcv2-stats .cell{padding:14px 0;display:flex;flex-direction:column;gap:3px}
+.lcv2-stats .cell.guide{padding-right:0}
+.lcv2-stats .cell.yield{padding:14px 16px;border-left:1px solid var(--border-strong)}
+.lcv2-stats .cell.score{padding:14px 0 14px 16px;border-left:1px solid var(--border-strong);align-items:flex-start}
+.lcv2-stats .num{
+  font-family:var(--font-main);font-weight:700;font-size:26px;color:var(--ink);
+  font-variant-numeric:tabular-nums;line-height:1
+}
+.lcv2-stats .num.red{color:var(--red)}
+.lcv2-stats .pct-glyph{font-family:var(--font-mono);font-size:14px;color:var(--muted);margin-left:2px;font-weight:400}
+.lcv2-score-badge{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  border:1px solid var(--muted);padding:5px 10px;min-width:44px;
+}
+.lcv2-score-badge.green{border-color:var(--signal-green)}
+.lcv2-score-badge.green .num,.lcv2-score-badge.green .lbl{color:var(--signal-green)}
+.lcv2-score-badge.amber{border-color:var(--signal-amber)}
+.lcv2-score-badge.amber .num,.lcv2-score-badge.amber .lbl{color:var(--signal-amber)}
+.lcv2-score-badge .lbl{font-family:var(--font-mono);font-size:9px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
+.lcv2-score-badge .num{font-family:var(--font-main);font-weight:700;font-size:18px;line-height:1;margin-top:2px;color:var(--ink);font-variant-numeric:tabular-nums}
+
+/* Body chips section */
+.lcv2-body{padding:0 18px 14px}
+.lcv2-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.lcv2-meta{
+  display:flex;align-items:center;flex-wrap:wrap;gap:16px;
+  font-family:var(--font-mono);font-size:11px;color:var(--ink);margin-top:10px;
+  text-transform:uppercase;letter-spacing:.06em
+}
+.lcv2-meta .sep{color:var(--border-strong)}
+.lcv2-meta .epc-square{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:16px;height:16px;color:#fff;font-size:10px;font-weight:700;font-family:var(--font-main);
+  margin-left:6px;border-radius:0
+}
+.lcv2-meta .epc-square.green{background:var(--signal-green)}
+.lcv2-meta .epc-square.amber{background:var(--signal-amber)}
+.lcv2-meta .epc-square.red  {background:var(--red)}
+.lcv2-meta .fz.red{color:var(--red)}
+.lcv2-meta .fz.amber{color:var(--signal-amber)}
+
+/* Editor's pull-quote (optional) */
+.lcv2-quote{
+  margin-top:12px;padding:8px 12px;background:var(--bg);
+  border-left:2px solid var(--ink);
+  font-family:var(--font-display);font-style:italic;font-size:14px;line-height:1.4;color:var(--ink-2)
+}
+
+/* Footer (CTA row) */
+.lcv2-foot{
+  display:grid;grid-template-columns:1fr 1fr;
+  border-top:1px solid var(--ink);margin-top:auto
+}
+.lcv2-foot a{
+  padding:12px 16px;font:700 13px var(--font-main);
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  text-decoration:none;border-radius:0
+}
+.lcv2-foot a.view{color:var(--ink);background:transparent;border-right:1px solid var(--ink)}
+.lcv2-foot a.view:hover{background:var(--bg)}
+.lcv2-foot a.bm  {color:var(--bg);background:var(--red)}
+.lcv2-foot a.bm:hover{background:var(--red-hover)}
+.lcv2-foot .arr{font-family:var(--font-mono);font-weight:400}
+
+/* Bug fix #1: blurred lots shouldn't show the BridgeMatch CTA */
+.lot-card.blurred .card-bm-btn,
+.lot-card-v2.blurred .lcv2-foot a.bm{display:none}
+
+/* Status colour for the strip header */
+.lcv2-status-live{color:#bde6c7}
+.lcv2-status-unsold{color:#f3c76e}
+
+/* Stacks tick for new card */
+.lot-card-v2 .stacks-tick{position:absolute;top:8px;right:8px;z-index:2;font-size:14px;background:var(--paper);padding:2px 4px;border:1px solid var(--ink)}
+
+/* ── Trading Desk masthead + filter bar ──
+ * Editorial newspaper styling for the search header. Lives ABOVE the
+ * results grid in the results view. The old .search-panel is still
+ * used on the home view; .ab-masthead is the v2 results-view header.
+ */
+.ab-masthead{
+  display:grid;grid-template-columns:auto 1fr auto;align-items:baseline;
+  gap:24px;padding:28px 0 16px;border-bottom:1px solid var(--ink)
+}
+.ab-masthead .left{display:flex;flex-direction:column;gap:6px}
+.ab-masthead .left .big{font-family:var(--font-display);font-size:44px;font-weight:400;letter-spacing:-.02em;line-height:1;color:var(--ink);font-variant-numeric:tabular-nums}
+.ab-masthead .left .lbl{font-family:var(--font-main);font-size:18px;color:var(--muted);margin-left:8px}
+.ab-masthead .right{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.ab-masthead .right .stamp{font-family:var(--font-mono);font-size:13px;color:var(--ink)}
+
+.ab-meta-row{
+  display:flex;align-items:center;justify-content:space-between;gap:16px;
+  padding:12px 16px;border-bottom:1px solid var(--ink);flex-wrap:wrap
+}
+.ab-meta-row .left{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ab-meta-row .matched-num{font-family:var(--font-display);font-size:28px;line-height:1;font-weight:400;color:var(--ink);font-variant-numeric:tabular-nums}
+.ab-meta-row .of{font-family:var(--font-mono);font-size:12px;color:var(--muted)}
+.ab-meta-row .show-all{font-family:var(--font-mono);font-size:12px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:.06em;text-decoration:none}
+.ab-meta-row .show-all:hover{text-decoration:underline}
+.ab-meta-row .right{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ab-meta-row .right .lbl{font-family:var(--font-mono);font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+
+/* Editorial filter bar — replaces .sp-filter-row look in results view */
+.ab-filter-bar{
+  display:flex;flex-wrap:wrap;gap:8px;align-items:center;
+  padding:14px 0;border-bottom:1px solid var(--border-strong)
+}
+
+/* Pagination polish (bug fix #2: focus-visible on .btn-page) */
+.btn-page{height:30px;padding:0 12px;font:500 12px var(--font-mono);background:var(--paper);border:1px solid var(--border-strong);color:var(--ink);border-radius:0;cursor:pointer}
+.btn-page:hover{border-color:var(--ink)}
+.btn-page.active,.btn-page[aria-current="page"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn-page:focus-visible{outline:2px solid var(--red);outline-offset:2px;box-shadow:0 0 0 4px rgba(192,57,43,.15)}
+
+.ab-pagination{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 0;flex-wrap:wrap}
+.ab-pagination .showing{font-family:var(--font-mono);font-size:12px;color:var(--muted)}
+.ab-pagination .pages{display:flex;gap:6px;flex-wrap:wrap}
+
+/* Lot card grid for the v2 results layout */
+.lot-grid-v2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:780px){
+  .lot-grid-v2{grid-template-columns:1fr}
+  .ab-masthead{grid-template-columns:1fr;gap:8px}
+  .ab-masthead .right{align-items:flex-start}
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * EDITORIAL REDESIGN — Lot Detail (expanded panel)
+ * Magazine-style 2-column rebuild. The expanded panel is injected by
+ * expandCard() in public/app.js. The new chrome wraps existing feature
+ * blocks (yield analysis, comparables, deal stack, lender summary) so
+ * the rich functionality is preserved — only the visual structure
+ * changes.
+ * ═══════════════════════════════════════════════════════════════════════
+ */
+.expanded-panel.exp-v2{
+  background:transparent;border:none;padding:0;margin:24px 0 32px;
+  display:grid;grid-template-columns:1fr 320px;gap:20px;border-radius:0
+}
+@media (max-width:980px){
+  .expanded-panel.exp-v2{grid-template-columns:1fr}
+}
+
+/* Header card spans both columns */
+.exp-v2 .exp-v2-header{
+  grid-column:1 / -1;
+  background:var(--paper);border:1px solid var(--ink);border-radius:0
+}
+.exp-v2 .exp-v2-header .strip{
+  background:var(--ink);color:var(--bg);padding:8px 18px;
+  font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;
+  display:flex;align-items:center;justify-content:space-between;gap:12px
+}
+.exp-v2 .exp-v2-header .body{display:grid;grid-template-columns:1fr 320px;gap:0}
+@media (max-width:780px){.exp-v2 .exp-v2-header .body{grid-template-columns:1fr}}
+.exp-v2 .exp-v2-header .left{padding:26px}
+.exp-v2 .exp-v2-header .left h1{
+  font-family:var(--font-display);font-size:44px;line-height:1.05;font-weight:400;
+  letter-spacing:-.02em;color:var(--ink);margin:6px 0
+}
+.exp-v2 .exp-v2-header .left .pc{font-family:var(--font-mono);font-size:13px;color:var(--muted)}
+.exp-v2 .exp-v2-header .left .desc{
+  font-family:var(--font-display);font-size:17px;line-height:1.55;color:var(--ink-2);
+  max-width:520px;margin-top:18px
+}
+.exp-v2 .exp-v2-header .right{
+  padding:26px;background:var(--bg-2);border-left:1px solid var(--border-strong);
+  display:flex;flex-direction:column;justify-content:space-between;gap:18px
+}
+.exp-v2 .exp-v2-header .right .num-xl{
+  font-family:var(--font-main);font-weight:700;font-size:56px;line-height:.95;
+  color:var(--ink);font-variant-numeric:tabular-nums
+}
+.exp-v2 .exp-v2-header .right .below-mkt{
+  font-family:var(--font-mono);font-size:12px;color:var(--signal-green);margin-top:6px
+}
+.exp-v2 .exp-v2-header .right .below-mkt.over{color:var(--red)}
+.exp-v2 .exp-v2-header .right .ctas{display:flex;gap:8px;align-items:center}
+
+/* Section cards */
+.exp-v2 .exp-v2-left{display:flex;flex-direction:column;gap:16px}
+.exp-v2 .exp-v2-right{display:flex;flex-direction:column;gap:16px}
+
+.exp-v2 .sec{
+  background:var(--paper);border:1px solid var(--border-strong);border-radius:0
+}
+.exp-v2 .sec.bold{border-color:var(--ink)}
+.exp-v2 .sec .head{
+  padding:12px 18px;border-bottom:1px solid var(--border-strong);
+  display:flex;align-items:center;justify-content:space-between;gap:12px
+}
+.exp-v2 .sec .head.bold{background:var(--ink);color:var(--bg);border-bottom:none}
+.exp-v2 .sec .body{padding:18px}
+
+/* Due-diligence list */
+.exp-v2 .dd-list{list-style:none;margin:0;padding:0}
+.exp-v2 .dd-list li{
+  padding:12px 18px;display:flex;align-items:center;gap:10px;
+  border-top:1px solid var(--border);font-size:14px;color:var(--ink)
+}
+.exp-v2 .dd-list li:first-child{border-top:none}
+.exp-v2 .dd-icon{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:14px;height:14px;font-size:10px;font-weight:700;color:#fff;font-family:var(--font-main)
+}
+.exp-v2 .dd-icon.ok{background:var(--signal-green)}
+.exp-v2 .dd-icon.warn{background:var(--signal-amber)}
+.exp-v2 .dd-icon.bad{background:var(--red)}
+
+/* Why-this-scores list */
+.exp-v2 .ws-list{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;list-style:none}
+.exp-v2 .ws-list li{display:flex;align-items:flex-start;gap:8px;font-size:14px;color:var(--ink)}
+.exp-v2 .ws-mark{font-family:var(--font-mono);font-weight:700;font-size:14px;line-height:1.3;flex-shrink:0;width:14px}
+.exp-v2 .ws-mark.opp{color:var(--signal-green)}
+.exp-v2 .ws-mark.risk{color:var(--red)}
+
+/* Comparables */
+.exp-v2 .cmp-top{display:flex;align-items:center;gap:18px;margin-bottom:14px}
+.exp-v2 .cmp-num{font-family:var(--font-main);font-weight:700;font-size:44px;line-height:.95;color:var(--ink);font-variant-numeric:tabular-nums}
+.exp-v2 .cmp-cap{font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;color:var(--muted);text-transform:uppercase}
+.exp-v2 .cmp-bar-wrap{flex:1;position:relative}
+.exp-v2 .cmp-bar{height:28px;background:var(--bg-2);border:1px solid var(--border-strong);position:relative}
+.exp-v2 .cmp-bar .band{position:absolute;top:0;bottom:0;background:rgba(26,26,24,.06)}
+.exp-v2 .cmp-bar .tick{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--ink)}
+.exp-v2 .cmp-bar .tick.guide{background:var(--red)}
+.exp-v2 .cmp-bar-labels{display:flex;justify-content:space-between;margin-top:6px;font-family:var(--font-mono);font-size:11px;color:var(--muted)}
+.exp-v2 .cmp-verdict{
+  border-top:1px solid var(--border-strong);padding-top:14px;
+  display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap
+}
+.exp-v2 .cmp-verdict .text{font-family:var(--font-display);font-size:18px;line-height:1.3;color:var(--ink);max-width:440px}
+.exp-v2 .cmp-verdict .text .red{color:var(--red);font-weight:500}
+.exp-v2 .cmp-verdict .more-link{font-family:var(--font-mono);font-size:12px;color:var(--ink);text-decoration:underline}
+
+/* Deal stack rows */
+.exp-v2 .ds-row{display:flex;align-items:baseline;justify-content:space-between;gap:12px;font-size:13px;line-height:1.7;color:var(--muted)}
+.exp-v2 .ds-row .v{font-family:var(--font-mono);color:var(--ink);font-variant-numeric:tabular-nums}
+.exp-v2 .ds-row.bold{color:var(--ink);font-weight:600;font-size:15px}
+.exp-v2 .ds-row.bold .v{font-weight:700;font-size:15px}
+.exp-v2 .ds-row.red{color:var(--red);font-weight:600;font-size:15px}
+.exp-v2 .ds-row.red .v{color:var(--red);font-weight:700}
+.exp-v2 .ds-divider{border:0;border-top:1px solid var(--ink);margin:10px 0}
+.exp-v2 .ds-callout{
+  margin-top:14px;padding:10px 12px;background:var(--bg-2);border-left:2px solid var(--red);
+  font-family:var(--font-display);font-size:13px;line-height:1.4;color:var(--ink-2)
+}
+
+/* Fundability row */
+.exp-v2 .fund-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.exp-v2 .fund-row .lbl{font-size:14px;color:var(--ink)}
+.exp-v2 .fund-row .num-lg{font-family:var(--font-main);font-weight:700;font-size:28px;line-height:1;font-variant-numeric:tabular-nums;color:var(--ink)}
+.exp-v2 .fund-tiers{display:flex;gap:6px;margin:10px 0}
+.exp-v2 .fund-tiers .tag{flex:1;justify-content:center}
+
+/* Auction logistics */
+.exp-v2 .log-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0;font-size:13px;line-height:1.7;border-bottom:1px dotted var(--border-strong)}
+.exp-v2 .log-row:last-child{border-bottom:none}
+.exp-v2 .log-row .k{color:var(--muted)}
+.exp-v2 .log-row .v{color:var(--ink);font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+
+/* Breadcrumb above the panel */
+.exp-v2-crumb{font-family:var(--font-mono);font-size:12px;color:var(--muted);margin-bottom:14px}
+.exp-v2-crumb a{color:var(--muted)}
+.exp-v2-crumb a:hover{color:var(--ink)}
+
+/* ── Editorial restyle of the existing .expanded-panel ──
+ * Phase 2 pragmatic path: rather than restructuring the panel's HTML
+ * (which would risk breaking the premium-feature gating, deal-stack
+ * scenario picker, comparables, lender summary, etc.), we apply the
+ * editorial visual language to the existing structure. Hairline
+ * borders, paper background, no rounding, Plex Serif headings.
+ *
+ * The full magazine 2-column restructure (left = DD/Why-scores/Comps,
+ * right sticky deal stack) is left as a future Phase 2b once the data
+ * shape is confirmed to support it without losing premium features.
+ */
+.expanded-panel{
+  background:var(--paper);
+  border:1px solid var(--ink);
+  border-radius:0;
+  padding:24px;
+  margin:16px 0 24px;
+  position:relative;
+  box-shadow:none
+}
+.expanded-panel.expanded-panel-visible{display:block}
+
+.expanded-panel .exp-close-btn{
+  position:absolute;top:12px;right:12px;
+  width:32px;height:32px;
+  border:1px solid var(--ink);background:transparent;
+  font-size:18px;line-height:1;color:var(--ink);cursor:pointer;
+  border-radius:0;font-family:var(--font-mono)
+}
+.expanded-panel .exp-close-btn:hover{background:var(--ink);color:var(--bg)}
+
+.expanded-panel .exp-top{margin-bottom:18px}
+.expanded-panel .exp-tools{margin-top:18px;display:flex;flex-direction:column;gap:14px}
+
+.expanded-panel .exp-signal-row{
+  display:flex;align-items:center;gap:8px;padding:6px 0;
+  font-size:14px;color:var(--ink)
+}
+.expanded-panel .exp-signal-chip{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:18px;height:18px;font-family:var(--font-mono);font-weight:700;font-size:12px;
+  border-radius:0;flex-shrink:0
+}
+
+/* Premium feature accordions inside the panel */
+.expanded-panel .premium-feature{
+  border:1px solid var(--border-strong);border-radius:0;background:var(--paper);
+  margin-bottom:0
+}
+.expanded-panel .premium-feature summary{
+  padding:12px 16px;cursor:pointer;font-family:var(--font-display);font-weight:500;font-size:16px;
+  color:var(--ink);border-bottom:1px solid var(--border-strong);
+  list-style:none;display:flex;align-items:center;justify-content:space-between
+}
+.expanded-panel .premium-feature summary::-webkit-details-marker{display:none}
+.expanded-panel .premium-feature summary::after{
+  content:'+';font-family:var(--font-mono);font-size:18px;color:var(--muted);
+  transition:transform .15s
+}
+.expanded-panel .premium-feature[open] summary::after{content:'−'}
+.expanded-panel .premium-feature .pf-content{padding:14px 16px;font-size:13px;line-height:1.6;color:var(--ink)}
+.expanded-panel .premium-feature .pf-blurred{padding:14px 16px;position:relative}
+.expanded-panel .premium-feature .pf-blur-content{filter:blur(4px);pointer-events:none;user-select:none;font-size:13px}
+.expanded-panel .premium-feature .pf-upgrade-cta{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  text-align:center;background:var(--bg);padding:14px 20px;
+  border:1px solid var(--ink);border-radius:0
+}
+.expanded-panel .premium-feature .pf-upgrade-cta button{
+  margin-top:8px;height:32px;padding:0 16px;
+  background:var(--red);color:#fff;border:1px solid var(--red);
+  font:700 12px var(--font-main);cursor:pointer;border-radius:0
+}
+
+/* Deal stack widget inside the panel */
+.expanded-panel .deal-stack-widget{
+  background:var(--paper);border:1px solid var(--border-strong);
+  border-radius:0;padding:18px
+}
+.expanded-panel .ds-grid{
+  display:grid;grid-template-columns:1fr 1fr;gap:12px
+}
+.expanded-panel .ds-label{
+  display:block;font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;
+  color:var(--muted);text-transform:uppercase;margin-bottom:4px
+}
+.expanded-panel .ds-input{
+  width:100%;height:36px;padding:0 10px;
+  border:1px solid var(--border-strong);background:var(--bg);
+  font-family:var(--font-main);font-size:14px;color:var(--ink);
+  border-radius:0;outline:none
+}
+.expanded-panel .ds-input:focus{border-color:var(--ink)}
+.expanded-panel .ds-btn{
+  height:30px;padding:0 12px;font:600 12px var(--font-main);
+  background:var(--ink);color:var(--bg);border:1px solid var(--ink);
+  border-radius:0;cursor:pointer
+}
+.expanded-panel .ds-btn:hover{background:transparent;color:var(--ink)}
+.expanded-panel .ds-btn-danger{background:var(--red);border-color:var(--red)}
+.expanded-panel .ds-btn-danger:hover{background:transparent;color:var(--red)}
+.expanded-panel .ds-btn[disabled]{opacity:.4;cursor:not-allowed}
+.expanded-panel .ds-options{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px}
+.expanded-panel .ds-check{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink-2);cursor:pointer}
+.expanded-panel .ds-check input[type="checkbox"]{accent-color:var(--ink)}
+.expanded-panel .ds-hint{font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-top:4px;letter-spacing:.04em;text-transform:uppercase}
+
+/* Lender summary row */
+.expanded-panel .lender-summary{
+  font-size:13px;padding:10px 12px;
+  background:var(--bg-2);border:1px solid var(--border-strong);
+  font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.06em
+}
+.expanded-panel .ls-loading{color:var(--muted)}
+
+/* The card-state .expanded outline override (replaces old colored outline). */
+.lot-card.expanded{outline:2px solid var(--red);outline-offset:-3px;border-color:var(--red)}
+
+/* ── Phase 3 — Editorial restyle of the existing search panel ──
+ * The existing .search-panel layout (sp-search-row / sp-filter-row /
+ * chip-row) keeps its JS-driven structure, but the visuals shift to
+ * editorial tokens: hairline ink borders, no rounding, mono labels,
+ * paper backgrounds, ink active states.
+ */
+.search-panel{
+  background:var(--paper);
+  border:1px solid var(--ink);
+  border-radius:0;
+  box-shadow:none
+}
+
+/* Search input pill -> hard-bordered search */
+.search-panel .tb-search,
+.sp-filter-row .tb-search,
+.search-input{
+  border-radius:0;
+  border:1px solid var(--ink);
+  background:var(--bg);
+  font-family:var(--font-main);
+  color:var(--ink)
+}
+.search-panel .tb-search:focus,
+.sp-filter-row .tb-search:focus,
+.search-input:focus{
+  border-color:var(--red);
+  box-shadow:none;
+  outline:none
+}
+
+/* Selects */
+.sp-filter-row .tb-select,
+.search-panel .tb-select,
+.tb-select{
+  border-radius:0;
+  border:1px solid var(--border-strong);
+  background:var(--paper);
+  font-family:var(--font-main);
+  color:var(--ink)
+}
+.tb-select:hover{border-color:var(--ink)}
+
+/* Search submit button — flush red */
+.sp-ai-group .btn-main,
+.btn-main{
+  border-radius:0;
+  background:var(--red);color:#fff;border:1px solid var(--red);
+  font-family:var(--font-main);font-weight:700;letter-spacing:.02em
+}
+.sp-ai-group .tb-search{border-radius:0}
+.sp-ai-group .btn-main{border-left:none}
+.btn-main:hover{background:var(--red-hover);border-color:var(--red-hover)}
+
+/* Filter chips — square, mono-ish */
+.chip-row .ex-btn,
+.sp-filter-row .ex-btn,
+.ex-btn{
+  border-radius:0;
+  background:var(--paper);
+  border:1px solid var(--border-strong);
+  color:var(--ink);
+  font-family:var(--font-main);font-weight:500
+}
+.ex-btn:hover{
+  background:var(--paper);
+  border-color:var(--ink);
+  color:var(--ink)
+}
+.ex-btn.on,
+.ex-btn[aria-pressed="true"]{
+  background:var(--ink);color:var(--bg);border-color:var(--ink)
+}
+
+/* Filter labels — mono uppercase */
+.sp-filter-label,
+.sp-filter-row label,
+.filter-field label,
+.mf-field label{
+  font-family:var(--font-mono);
+  text-transform:uppercase;
+  letter-spacing:.06em;
+  font-size:.7rem;
+  color:var(--muted)
+}
+
+/* "Clear all" + "more filters" */
+.clear-all-btn{
+  border-radius:0;border-color:var(--red);color:var(--red);
+  background:transparent;font-family:var(--font-main);font-weight:600
+}
+.clear-all-btn:hover{background:var(--red);color:#fff}
+
+.more-filters-btn{
+  border-radius:0;border-color:var(--ink);background:var(--paper);
+  color:var(--ink);font-family:var(--font-main);font-weight:500
+}
+.more-filters-btn:hover{border-color:var(--red);color:var(--red)}
+.more-filters-pop{
+  border-radius:0;border:1px solid var(--ink);background:var(--paper);
+  box-shadow:0 8px 24px rgba(26,26,24,.18)
+}
+
+/* Price dropdown */
+.price-dd-btn{
+  border-radius:0;border-color:var(--border-strong);background:var(--paper);
+  color:var(--ink);font-family:var(--font-main)
+}
+.price-dd-btn:hover{border-color:var(--ink)}
+.price-dd-btn.active-filter{border-color:var(--ink);color:var(--ink);font-weight:600}
+.price-pop{
+  border-radius:0;border:1px solid var(--ink);background:var(--paper);
+  box-shadow:0 8px 24px rgba(26,26,24,.18)
+}
+
+/* Favourite heart -- editorial square */
+.fav-btn{
+  border-radius:0;
+  border:1px solid var(--border-strong);
+  background:var(--paper);
+  color:var(--muted);font-family:var(--font-main)
+}
+.fav-btn:hover{
+  border-color:var(--red);
+  color:var(--red);
+  transform:none;background:var(--paper)
+}
+.fav-btn.fav-active{
+  border-color:var(--red);color:var(--red);
+  background:var(--red-soft)
+}
+
+/* ── Stats grid in results header — newspaper inserts ── */
+.stats-grid{
+  background:var(--paper);
+  border:1px solid var(--ink);
+  border-radius:0;
+  padding:0;
+  display:grid;
+  grid-template-columns:repeat(5,1fr);
+  gap:0;
+  margin-bottom:20px
+}
+.stats-grid .stat-card{
+  background:transparent;
+  border:none;
+  border-right:1px solid var(--border-strong);
+  border-radius:0;
+  padding:18px 16px;
+  text-align:left
+}
+.stats-grid .stat-card:last-child{border-right:none}
+.stats-grid .stat-card .v{
+  font-family:var(--font-display);
+  font-size:30px;
+  font-weight:400;
+  line-height:1;
+  letter-spacing:-.02em;
+  color:var(--ink);
+  font-variant-numeric:tabular-nums
+}
+.stats-grid .stat-card .l{
+  font-family:var(--font-mono);
+  font-size:10px;
+  letter-spacing:.1em;
+  color:var(--muted);
+  margin-top:6px
+}
+.stats-grid .v.g{color:var(--signal-green)}
+.stats-grid .v.y{color:var(--signal-amber)}
+.stats-grid .v.p{color:var(--ink)}
+
+/* ── Result header h2 -> editorial display ── */
+.result-header h2{
+  font-family:var(--font-display);
+  font-size:1.6rem;
+  font-weight:400;
+  letter-spacing:-.02em;
+  color:var(--ink)
+}
+
+/* ── View toggle (grid/list) -> hairline tabs ── */
+.view-toggle{
+  background:transparent;
+  padding:0;
+  border:1px solid var(--ink);
+  border-radius:0;
+  gap:0
+}
+.view-toggle .vtog{
+  border-radius:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--font-mono);
+  text-transform:uppercase;
+  letter-spacing:.06em;
+  font-size:11px;
+  padding:8px 14px
+}
+.view-toggle .vtog.active{
+  background:var(--ink);
+  color:var(--bg);
+  box-shadow:none
+}
+
+/* ── Toolbar -> hairline ── */
+.toolbar .tb-btn{
+  border-radius:0;
+  border:1px solid var(--border-strong);
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--font-main)
+}
+.toolbar .tb-btn:hover{border-color:var(--ink);background:var(--paper);color:var(--ink)}
+
+/* ── Back button -> editorial mono ── */
+.back-btn{
+  border-radius:0;
+  border:1px solid var(--border-strong);
+  background:var(--paper);
+  font-family:var(--font-mono);
+  text-transform:uppercase;
+  letter-spacing:.06em;
+  font-size:11px;
+  color:var(--ink)
+}
+.back-btn:hover{
+  background:var(--ink);
+  color:var(--bg);
+  border-color:var(--ink)
+}
+
+/* ── Hero CTAs override -> editorial flush buttons ── */
+.cta-primary{
+  border-radius:0;
+  background:var(--red);
+  color:#fff;
+  border:1px solid var(--red);
+  box-shadow:none;
+  font-family:var(--font-main);font-weight:700
+}
+.cta-primary:hover{
+  background:var(--red-hover);
+  border-color:var(--red-hover);
+  transform:none;
+  box-shadow:none
+}
+.cta-secondary{
+  border-radius:0;
+  background:var(--paper);
+  color:var(--ink);
+  border:1px solid var(--ink);
+  box-shadow:none;
+  font-family:var(--font-main);font-weight:600
+}
+.cta-secondary:hover{
+  background:var(--ink);
+  color:var(--bg);
+  border-color:var(--ink)
+}
+
+/* ── Hero h1 -> editorial display ── */
+.hero h1{
+  font-family:var(--font-display);
+  font-weight:400;
+  letter-spacing:-.02em;
+  color:var(--ink)
+}
+.hero h1 em{font-style:italic;color:var(--red);font-weight:500}
+
+.hero-badge{
+  border-radius:0;
+  border:1px solid var(--ink);
+  background:var(--paper);
+  font-family:var(--font-mono);
+  text-transform:uppercase;
+  letter-spacing:.08em;
+  box-shadow:none
+}
+
+/* ── Nav -> editorial ink with mono red brand mark ── */
+.nav{background:var(--ink);border-bottom:none}
+.nav-cta{
+  border-radius:0;
+  background:var(--red);color:#fff;border:1px solid var(--red);
+  font-family:var(--font-main);font-weight:700;letter-spacing:.02em
+}
+.nav-cta:hover{background:var(--red-hover);border-color:var(--red-hover)}
+.nav-link-bm{
+  border-radius:0;
+  border-color:rgba(255,255,255,.25);
+  font-family:var(--font-main);font-weight:600
+}
+.nav-link-bm:hover{background:rgba(255,255,255,.08)}
+.logo{font-family:var(--font-display);font-weight:400;letter-spacing:-.01em;font-size:1.3rem}
+.logo span{font-family:var(--font-mono);font-weight:500;color:var(--red-text-dark);letter-spacing:.02em}
+.logo-sub{font-family:var(--font-mono);letter-spacing:.06em;text-transform:uppercase}
