@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<!-- Synthetic fixture for tests/test-openrent.js — not real OpenRent HTML.
+     Mirrors the shape we rely on: numeric listing-detail links + a
+     price string + a bed/property-type token within the same parent.
+     If OpenRent's class names churn, this fixture stays valid because
+     the parser is selector-free. -->
+<html><head><title>Properties to rent in BS1</title></head>
+<body>
+<header><nav>Site nav with /login (low-numbered link) — should NOT match</nav></header>
+<main>
+
+<!-- 2-bed flat, simple case -->
+<div class="pli">
+  <a href="/2156789/">
+    <h2>2 Bed Flat in Bristol</h2>
+    <p class="pim-pricing">£1,450 pcm</p>
+    <span>BS1 4AB</span>
+  </a>
+</div>
+
+<!-- 1-bed studio, lower-cased "pcm" -->
+<div class="listing-card">
+  <a href="/2156790-studio-bristol">
+    <span>Studio Apartment</span>
+    <strong>£950 pcm</strong>
+  </a>
+</div>
+
+<!-- 3-bed house with weekly price; should convert to pcm via × 52 / 12 -->
+<div class="property-list-item">
+  <a href="/2156791/">
+    <span>3 Bed House Share in Clifton</span>
+    <span>£250 pw</span>
+  </a>
+</div>
+
+<!-- House (whole property) at higher rent -->
+<div class="property-list-item">
+  <a href="/2156792">
+    <h3>4 Bedroom House in Bedminster</h3>
+    <p>£2,200 pcm</p>
+  </a>
+</div>
+
+<!-- Duplicate id appearing twice (e.g. "featured" + main grid). Should
+     dedupe to a single listing. -->
+<div class="featured">
+  <a href="/2156789/">
+    <span>2 Bed Flat in Bristol — featured</span>
+    <span>£1,450 pcm</span>
+  </a>
+</div>
+
+<!-- Listing without a price — should be skipped (parser requires £…pcm/pw) -->
+<div class="pli">
+  <a href="/2156793/">
+    <span>1 Bed Flat — Coming soon</span>
+  </a>
+</div>
+
+<!-- Internal link with low number (likely UI/nav) — should NOT match the
+     /\d{5,9}/ regex -->
+<a href="/123">Login</a>
+
+<!-- A range price ("£1,200 to £1,400 pcm") — parser takes the lower bound -->
+<div class="listing-card">
+  <a href="/2156794/">
+    <span>Range Listing — 2 Bed</span>
+    <span>£1,200 to £1,400 pcm</span>
+  </a>
+</div>
+
+<!-- Deposit-only mention without rent — parser must NOT pick up the
+     "£500 deposit" if there's no pcm/pw qualifier. -->
+<div class="pli">
+  <a href="/2156795/">
+    <span>1 Bed Flat — Just Listed</span>
+    <span>£500 deposit refundable</span>
+  </a>
+</div>
+
+</main>
+</body>
+</html>

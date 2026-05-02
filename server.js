@@ -188,7 +188,7 @@ import { initAnalysis, autoAnalyseAll, healBrokenHouse, runEnrichmentWave } from
 import { auditStatusDrift } from './lib/harness/sub-agents.js';
 import { initWatcher, watchAuctionCalendar } from './lib/pipeline/auction-watcher.js';
 import { pickNextHouseForDrift } from './lib/pipeline/drift-scheduler.js';
-import { initRentals } from './lib/rentals/index.js';
+import { initRentals, drainStaleRentals } from './lib/rentals/index.js';
 
 initAnalysis({
   // Resource budget (new: centralised resource state)
@@ -250,7 +250,7 @@ initRentals({ supabase });
 // Boot   — Runs free enrichment after 60s. Triggers full pass only if last
 //          DB scrape was >25h ago, or if FORCE_BOOT_SCRAPE=true is set.
 
-const _scheduleState = { lastFullPass: 0, lastFreeEnrich: 0, lastStatusDrift: 0 };
+const _scheduleState = { lastFullPass: 0, lastFreeEnrich: 0, lastStatusDrift: 0, lastRentalDrain: 0 };
 
 function getUkHourMinute() {
   const ukNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/London' }));
@@ -371,6 +371,19 @@ function scheduleTick() {
   if (hour >= 9 && hour <= 18 && minute < 5 && now - _scheduleState.lastStatusDrift > 50 * 60 * 1000) {
     _scheduleState.lastStatusDrift = now;
     withTier('status-drift', () => statusDriftTick());
+  }
+
+  // Tier 4: Rental drain daily at 04:00 UK — runs after the 03:00 full
+  // pass settles and before status-drift starts at 09:00. Limit 50 means
+  // we cycle through ~500 active-auction postcodes × 3 sources every ~30
+  // days — exactly the freshness window in lib/rentals/index.js.
+  // OpenRent is Firecrawl-backed; SpareRoom + OnTheMarket are plain HTTP.
+  if (hour === 4 && minute < 5 && now - _scheduleState.lastRentalDrain > 60 * 60 * 1000) {
+    _scheduleState.lastRentalDrain = now;
+    console.log('SCHEDULE: 04:00 UK — running drainStaleRentals(limit=50)');
+    drainStaleRentals({ limit: 50 })
+      .then(r => console.log(`SCHEDULE rental drain: attempted=${r.attempted} ok=${r.ok} errors=${r.errors} skipped=${r.skipped || 0}`))
+      .catch(e => console.error('SCHEDULE rental drain failed:', e.message));
   }
 }
 
