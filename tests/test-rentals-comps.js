@@ -20,6 +20,7 @@ const enrichmentMod = await import('../lib/enrichment.js');
 const {
   getPostcodeDistrict,
   compsTypesForLot,
+  isHmoLot,
   estimateMonthlyRentSmart,
   initEnrichment,
 } = enrichmentMod;
@@ -264,6 +265,152 @@ console.log('\nestimateMonthlyRentSmart: 6-month recency cutoff applied');
     const drift = Math.abs(cutoffMs - expectedMs);
     assert(drift < 3 * 24 * 60 * 60 * 1000, `cutoff is ~6 months ago (drift ${Math.round(drift / 86400000)}d)`);
   }
+}
+
+// ─── isHmoLot ─────────────────────────────────────────────────────────
+console.log('\nisHmoLot: positive matches (HMO-shaped lots)');
+{
+  assert(isHmoLot({ bullets: ['HMO licence in place'] }) === true, 'HMO licence → HMO');
+  assert(isHmoLot({ bullets: ['hmo'] }) === true, 'lowercase hmo → HMO');
+  assert(isHmoLot({ title: 'House share opportunity in Bristol' }) === true, 'house share → HMO');
+  assert(isHmoLot({ title: 'Houseshare' }) === true, 'no-space houseshare → HMO');
+  assert(isHmoLot({ opps: ['Multi-let — 5 rooms'] }) === true, 'multi-let → HMO');
+  assert(isHmoLot({ bullets: ['Currently let by the room'] }) === true, 'let by the room → HMO');
+  assert(isHmoLot({ bullets: ['Article 4 area — HMO consent required'] }) === true, 'Article 4 → HMO');
+  assert(isHmoLot({ bullets: ['HMO LICENCE'], opps: [], title: '' }) === true, 'opps/title empty but bullets HMO → HMO');
+}
+
+console.log('\nisHmoLot: negative matches (regular residential)');
+{
+  assert(isHmoLot({ title: '2 Bed Flat in Clifton', bullets: ['Vacant', 'Freehold'] }) === false, 'plain flat → NOT HMO');
+  assert(isHmoLot({ title: 'Family home', bullets: ['4 bedrooms'] }) === false, '4-bed family home → NOT HMO');
+  assert(isHmoLot({ title: 'home with shared garden' }) === false, 'shared garden ≠ house share');
+  assert(isHmoLot({}) === false, 'empty input → false');
+  assert(isHmoLot() === false, 'no input → false');
+  assert(isHmoLot({ title: null, bullets: null, opps: null }) === false, 'all-null fields → false');
+}
+
+// ─── HMO branch in estimateMonthlyRentSmart ───────────────────────────
+console.log('\nestimateMonthlyRentSmart: HMO Tier 1 wins for HMO lot');
+{
+  let queriesSeen = 0;
+  initEnrichment({ supabase: makeSupabaseStub(filters => {
+    queriesSeen++;
+    const isRoomShare = filters.some(f => f[0] === 'eq' && f[1] === 'is_room_share' && f[2] === true);
+    if (isRoomShare && isUnitScope(filters)) return rows([550, 600, 650, 700]);
+    return empty();
+  }) });
+
+  const r = await estimateMonthlyRentSmart({
+    address: '99 Cotham Brow',
+    beds: 5,                       // HMO income = median × 5
+    units: 1,
+    postcode: 'BS6 6BA',
+    propType: 'house',
+    bullets: ['HMO licence in place', 'C4 use class'],
+  });
+  assert(r.source === 'comps_hmo_unit', `source=comps_hmo_unit (got ${r.source})`);
+  assert(r.sample === 4, `sample=4 (got ${r.sample})`);
+  // median(550, 600, 650, 700) = 625 ; × 5 beds = 3125
+  assert(r.rent === 3125, `median(550,600,650,700)=625 × 5 = 3125 (got ${r.rent})`);
+  assert(queriesSeen === 1, 'stops at HMO Tier 1');
+}
+
+console.log('\nestimateMonthlyRentSmart: HMO falls Tier 1 → Tier 2 (district room-shares)');
+{
+  let queriesSeen = 0;
+  initEnrichment({ supabase: makeSupabaseStub(filters => {
+    queriesSeen++;
+    const isRoomShare = filters.some(f => f[0] === 'eq' && f[1] === 'is_room_share' && f[2] === true);
+    if (isRoomShare && isDistrictScope(filters)) return rows([500, 600, 700]);
+    return empty();
+  }) });
+
+  const r = await estimateMonthlyRentSmart({
+    address: '7 Park Pl',
+    beds: 4,
+    units: 1,
+    postcode: 'BS6 6BA',
+    propType: 'house',
+    title: 'House share — 4 lettable rooms',
+  });
+  assert(r.source === 'comps_hmo_district', `source=comps_hmo_district (got ${r.source})`);
+  // median(500, 600, 700) = 600 ; × 4 beds = 2400
+  assert(r.rent === 2400, `median(500,600,700)=600 × 4 = 2400 (got ${r.rent})`);
+}
+
+console.log('\nestimateMonthlyRentSmart: HMO with thin room-share data falls through to whole-property tiers');
+{
+  // HMO Tier 1: 0 listings (room-share thin)
+  // HMO Tier 2: 0 listings
+  // Non-HMO Tier 1 (whole-property + same beds + same postcode): 3 listings → win
+  let queriesSeen = 0;
+  initEnrichment({ supabase: makeSupabaseStub(filters => {
+    queriesSeen++;
+    const isRoomShare = filters.some(f => f[0] === 'eq' && f[1] === 'is_room_share' && f[2] === true);
+    if (isRoomShare) return empty();   // HMO tiers thin
+    if (isUnitScope(filters) && isBedsExact(filters)) return rows([1800, 1900, 2000]);
+    return empty();
+  }) });
+
+  const r = await estimateMonthlyRentSmart({
+    address: '1 The HMO',
+    beds: 4,
+    units: 1,
+    postcode: 'BS6 6BA',
+    propType: 'house',
+    bullets: ['HMO licence'],
+  });
+  assert(r.source === 'comps_unit_typed', `falls through to comps_unit_typed (got ${r.source})`);
+  assert(r.rent === 1900, `median(1800,1900,2000)=1900 (got ${r.rent})`);
+  assert(queriesSeen >= 3, 'tried HMO Tier 1, HMO Tier 2, and at least one whole-property tier');
+}
+
+console.log('\nestimateMonthlyRentSmart: non-HMO lot does NOT enter HMO branch');
+{
+  // If a non-HMO 4-bed flat had `is_room_share=true` data lying around,
+  // we must NOT borrow it. Stub returns plenty of room-share data.
+  let hmoQueriesSeen = 0;
+  initEnrichment({ supabase: makeSupabaseStub(filters => {
+    const isRoomShare = filters.some(f => f[0] === 'eq' && f[1] === 'is_room_share' && f[2] === true);
+    if (isRoomShare) hmoQueriesSeen++;
+    if (isRoomShare) return rows([500, 600, 700, 800, 900]); // would-be wrong if reached
+    if (isUnitScope(filters) && isBedsExact(filters)) return rows([1500, 1600, 1700]);
+    return empty();
+  }) });
+
+  const r = await estimateMonthlyRentSmart({
+    address: '1 Plain Place',
+    beds: 4,
+    units: 1,
+    postcode: 'BS6 6BA',
+    propType: 'house',
+    bullets: ['Freehold', 'Vacant possession'], // no HMO keywords
+  });
+  assert(r.source === 'comps_unit_typed', `non-HMO source=comps_unit_typed (got ${r.source})`);
+  assert(hmoQueriesSeen === 0, 'no room-share queries fired for non-HMO lot');
+  assert(r.rent === 1600, 'whole-property median used (× units=1)');
+}
+
+console.log('\nestimateMonthlyRentSmart: HMO requires beds >= 1 — no beds, no HMO branch');
+{
+  let hmoQueriesSeen = 0;
+  initEnrichment({ supabase: makeSupabaseStub(filters => {
+    const isRoomShare = filters.some(f => f[0] === 'eq' && f[1] === 'is_room_share' && f[2] === true);
+    if (isRoomShare) hmoQueriesSeen++;
+    return empty();
+  }) });
+
+  const r = await estimateMonthlyRentSmart({
+    address: '1 Mystery',
+    beds: 0,                           // no bed count
+    units: 1,
+    postcode: 'BS6 6BA',
+    propType: 'house',
+    bullets: ['HMO opportunity'],      // HMO keyword present
+  });
+  assert(hmoQueriesSeen === 0, 'no HMO queries fired without a bed count to multiply by');
+  assert(r.source === 'static', 'falls through to static (no whole-property comps either)');
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
