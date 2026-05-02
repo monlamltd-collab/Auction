@@ -196,11 +196,17 @@ if (runCache) {
 if (runUngated) {
   console.log('\n=== Ungated Display Tests ===');
 
-  const indexHtml = readFileSync(join(__dirname, '..', 'index.html'), 'utf-8');
+  // After Issue 8 frontend split, render code lives in public/app.js, not
+  // inline in index.html. Scan both so the contract still holds wherever the
+  // tokens currently live.
+  const frontendSrc = [
+    readFileSync(join(__dirname, '..', 'index.html'), 'utf-8'),
+    readFileSync(join(__dirname, '..', 'public', 'app.js'), 'utf-8'),
+  ].join('\n');
 
   // Verify EPC display exists
-  assert(indexHtml.includes('epcRating'), 'index.html references epcRating');
-  assert(indexHtml.includes('floodZone'), 'index.html references floodZone');
+  assert(frontendSrc.includes('epcRating'), 'frontend (index.html + app.js) references epcRating');
+  assert(frontendSrc.includes('floodZone'), 'frontend (index.html + app.js) references floodZone');
 
   // Verify NO tier-gating on enrichment data
   // Search for EPC/flood references that are near gating classes
@@ -208,7 +214,7 @@ if (runUngated) {
 
   for (const cls of gatingClasses) {
     // Find all occurrences of the gating class
-    const lines = indexHtml.split('\n');
+    const lines = frontendSrc.split('\n');
     let gatedEnrichment = false;
 
     for (let i = 0; i < lines.length; i++) {
@@ -225,7 +231,7 @@ if (runUngated) {
   }
 
   // Verify enrichment section doesn't check isPremium() or tier
-  const enrichLines = indexHtml.split('\n').filter(l =>
+  const enrichLines = frontendSrc.split('\n').filter(l =>
     l.includes('epcRating') || l.includes('floodZone') || l.includes('exp-enrichment')
   );
 
