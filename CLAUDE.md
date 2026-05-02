@@ -10,12 +10,14 @@ Bridgematch is a UK property auction directory and AI-powered catalogue analyser
 **Domain:** `auctions.bridgematch.co.uk` (the root `bridgematch.co.uk` serves the Bridging Finance tool)
 **Stack:** Node.js (Express), Firecrawl (primary scraper) + Puppeteer (fallback), Google Gemini API (free tier), vanilla JS frontend
 
+**Architecture map:** `docs/ARCHITECTURE.md` — file layout, data flow, tables, weakness audit. **Read that first** if you've just opened this codebase. This CLAUDE.md is conventions + gotchas; the architecture map is canonical.
+
 ---
 
 ## Architecture
 
 ```
-server.js (Express, ~131K)
+server.js (Express, 428 lines — keep thin)
 ├── GET  /api/auctions        → Returns upcoming auction dates (curated list)
 ├── POST /api/analyse          → Scrapes catalogue URL, Gemini extracts lots, scores them
 ├── GET  /api/cost-monitor     → Firecrawl credit usage stats
@@ -24,11 +26,14 @@ server.js (Express, ~131K)
 ├── GET  /analyse              → Serves index.html (analyser view)
 └── GET  /                     → Serves index.html
 
-script.js (~105K)
-└── Frontend JS — handles UI, filtering, lot display, analysis triggers
+index.html (572 lines — thin shell, post Issue 8 split)
+├── inline env-shim (window.__SUPABASE_URL__ etc — server substitutes at boot)
+└── loads /public/styles.css + /public/app.js + /public/town-match.js
 
-index.html (~79K)
-└── Single-page app with tab switching between /auctions and /analyse views
+public/app.js (~4,680 lines — main frontend, extracted from index.html)
+└── Auth, search, filters, render, admin UI
+
+public/styles.css (~870 lines — design tokens + components)
 
 admin.html
 └── Admin dashboard — auction management, calendar, "Add Auction URL" form, backfill triggers
@@ -52,10 +57,10 @@ lib/quality/field-source.js
 
 ### Phase A — First-Contact Maximisation (live)
 
-When a brand-new lot URL is detected (`!existingMap.has(url)` in persist-lots.js),
+When a brand-new lot URL is detected (`!existingMap.has(url)` in `lib/pipeline/persist-lots.js`),
 the pipeline runs the kitchen-sink pass:
 - Forced detail-page fetch (overrides `never-deep` profile, runs even when the
-  catalogue card has every field — see `lib/scraper.js:1488`)
+  catalogue card has every field — see `lib/scraper/lot-detail.js:fetchLotPage`)
 - OS Data Hub Places API lookup → stamps UPRN, canonical address, lat/lng,
   classification code with `'os-places'` provenance
 - Snapshot row written to `lot_history` for time-on-market analytics
@@ -83,12 +88,12 @@ New schema additions (see `migrations/2026-04-26-*.sql` and `schema.sql:380+`):
 ## How the Analyser Works
 
 1. User pastes an auction catalogue URL or selects an auction house
-2. Server fetches catalogue pages (direct HTTP or Puppeteer for JS-rendered sites)
-3. Each page's HTML is stripped and sent to Gemini (Flash for known houses, Pro for unknown/PDF) with extraction instructions
-4. Gemini returns structured lot data as JSON
-5. Server runs the **scoring engine** on each lot
-6. Results cached in memory/database per auction house
-7. Frontend displays lots with filters (price, type, score, opportunities)
+2. Server fetches catalogue pages via Firecrawl (primary), Puppeteer (fallback), or HTTP (last resort) — `lib/scraper/rendering.js:scrapeRenderedPage`
+3. DOM extractors parse the HTML (`lib/extractors/`); if they return <3 lots, the stripped HTML is sent to Gemini (Flash for known houses, Pro for unknown/PDF) with extraction instructions
+4. DOM→Gemini merge: re-runs the DOM extractor on the original HTML and fills URL/imageUrl gaps in Gemini results by lot number
+5. Server runs the **scoring engine** (`lib/pipeline/scoring.js:analyseLot`) on each lot
+6. Results cached in `lots` table; `lot_history` snapshots written when fields change
+7. Frontend (`public/app.js`) displays lots with filters (price, type, score, opportunities)
 
 ### Extraction Pipeline
 - **Primary:** DOM extractors — custom per-house selectors that parse HTML directly via JSDOM
@@ -168,17 +173,21 @@ When a house that previously had lots returns 0, the system automatically attemp
 
 Each lot gets an investment score based on detected signals:
 
+Source of truth: `lib/pipeline/scoring.js:analyseLot()` (lines 114-151). Update the table below if you change the scorer.
+
 | Signal | Score |
 |---|---|
 | Needs modernisation | +2.0 |
 | Poor/derelict condition | +2.5 |
 | Executor/probate | +1.5 |
-| Receivership/distressed | +2.0 |
-| Development potential | +2.0 |
+| Receivership | +2.0 |
+| Development potential (dwellings) | +2.0 |
+| Development potential (land) | +0.5 |
 | Extension/HMO potential | +1.5 |
-| Vacant (residential) | +1.0 |
-| Freehold house | +0.5 |
+| Vacant (house/bungalow/flat) | +1.0 |
+| Freehold (house/bungalow) | +0.5 |
 | Low £/sqft (<£200) | +2.0 |
+| Mid-tier £/sqft (£200-300) | +1.0 |
 | Good yield (6-8% GIY) | +1.5 |
 | High yield (>8% GIY) | +2.5 |
 | Quick completion | +0.5 |
@@ -240,8 +249,8 @@ manager.js
 
 ## Auction Houses
 
-### Currently Configured (~173 houses)
-`lib/houses.js` exports 173 entries in `HOUSE_ROOTS`, with 147 having custom DOM extractors in `lib/extractors/index.js` (the rest fall back to the universal extractor + Gemini AI). Health is tracked nightly via `scripts/audit.mjs`. Some houses that were previously failing were fixed by:
+### Currently Configured (~171 houses)
+`lib/houses.js` exports 171 entries in `HOUSE_ROOTS`. 44 per-house DOM extractors live in `lib/extractors/houses/`, plus platform-family extractors (`lib/extractors/platforms/`) and a universal fallback (`lib/extractors/universal.js`). 8 detail-page extractors in `lib/extractors/detail/`. Houses without a custom extractor fall back to the universal extractor + Gemini AI. Health is tracked nightly via `scripts/audit.mjs`. Some houses that were previously failing were fixed by:
 - **BidX1** (90 lots) — DOM extraction fix
 - **Edward Mellor** (24 lots) — DOM extraction fix
 - **Bradley Hall** — URL moved to `auction.bradleyhall.co.uk`
@@ -266,18 +275,11 @@ These are computed from lot data fields: `price`, `estGrossYield`, `opportunitie
 
 ## Frontend Design
 
-- **Light theme** — clean, professional look (distinct from Bridging Brain's dark theme)
 - **Mobile-first** responsive design
-- Colour palette:
-  - Backgrounds: `--bg-primary: #f5f7fa`, `--bg-secondary: #ffffff`, `--bg-card: #eef2f7`
-  - Accent: `--accent: #2e7d32` (forest green), `--accent-match: #4a9e2f`, `--accent-hover: #1b5e20`
-  - Status: `--accent-warn: #e67e22` (orange), `--accent-danger: #c0392b` (red), `--accent-info: #2e86c1` (blue)
-  - Text: `--text: #1a2a3a` (dark navy), `--text-muted: #6b7c8d`
-  - Navy header gradient: `linear-gradient(135deg, #1a3a5c, #2a5a8c)`
-  - Brand colours: "Bridge" in white, "Match" in `#8bc34a` (light green)
-- Fonts: `--font-main: 'Outfit'`, `--font-brand: 'Sora'`, `--font-mono: 'JetBrains Mono'`
+- **Design tokens are canonical in `public/styles.css:34-51`** — read that file rather than relying on this section staying in sync. Includes the `:root` block with all current colours and font choices.
 - Use native HTML elements like `<details>/<summary>` for accordions — these are more reliable across browsers than JS-driven alternatives (learned the hard way)
 - Avoid `overflow:hidden` on parent containers that need click events
+- **Editing the frontend?** Edit `public/app.js` (JS) or `public/styles.css` (CSS), NOT inline in `index.html`. The env-shim block at `index.html:564-568` is the only inline JS that should remain — `server.js` does string substitution on it at startup.
 
 ---
 
@@ -288,7 +290,7 @@ These are computed from lot data fields: `price`, `estGrossYield`, `opportunitie
 3. **DOM extractor failures** — When a house redesigns their site, the DOM extractor breaks and falls back to Gemini API. The DOM→Gemini merge pattern mitigates URL/image loss during fallback.
 4. **Cascading image loss** — If DOM extractor returns < 3 lots → Gemini fallback strips HTML → lots get empty URLs/images → backfill can't match. Fixed by DOM→Gemini merge but monitor image coverage for regressions.
 5. **Firecrawl lazy-load images** — Firecrawl's `rawHtml` doesn't reliably capture lazy-loaded images. Mitigated with `executeJavascript` action + `images` format + two-pass backfill.
-6. **Pagination** — Each auction house has different pagination patterns; these are handled per-house in server.js
+6. **Pagination** — handled in `lib/scraper/pagination.js` (`detectTotalPages`, `scrapeAllPages`, `buildPageUrl`) with per-house overrides via `lib/extractors/houses/`
 7. ~~**vercel.json still present**~~ — **RESOLVED**: Deleted (was legacy Vercel config, now on Railway)
 8. ~~**`/api/diag` endpoint**~~ — **RESOLVED**: Deleted (was temporary debugging endpoint)
 
@@ -321,12 +323,14 @@ These are computed from lot data fields: `price`, `estGrossYield`, `opportunitie
 
 - [ ] Redesign auction frontend
 - [ ] Connect more auction houses
-- [ ] Automated calendar scraping via cron
+- [x] Automated calendar scraping via cron — done (Tier 1-4 schedulers in `server.js:scheduleTick`)
 - [ ] Email alerts when new catalogues drop
 - [ ] Blog/content section for SEO
-- [ ] Land Registry comps integration
-- [ ] EPC rating lookups
-- [ ] **Integration with Bridgematch bridging finance tool** (see below)
+- [~] Land Registry comps integration — **partial**: street_avg + street_sales captured. Still missing: title number, ownership type, charges, deeper historical pulls
+- [x] EPC rating lookups — done (`lib/enrichment.js`, EPC_API_KEY env var)
+- [ ] **Integration with Bridgematch bridging finance tool** (see below) — fundability badge live; deeper deal-stack flow still outstanding
+- [ ] Score transparency in the UI — show breakdown per signal, optionally per-user weights
+- [ ] AI search reconsideration — measure whether it's helping or whether modified-scoring filters would do better
 
 ---
 
@@ -394,66 +398,17 @@ See `BRIDGING_FINANCE_KNOWLEDGE_PACK.md` in this repo for comprehensive domain k
 
 ---
 
-## Agent Skills Reference
+## Skills
 
-Each agent listed below owns specific parts of the codebase. Before making changes, Claude Code should identify which agent's domain is affected and apply the relevant skills. Gaps or issues discovered should be noted.
+Two skills exist in `.claude/skills/`:
+- `auction-conventions` — invoke before any code edits (architecture, naming, file structure, API patterns, scoring rules, DOM extractor conventions, manifest stamping, harness alert signature)
+- `auction-self-healing` — invoke when a house returns 0 lots or you suspect breakage; full diagnose-classify-fix-verify-report playbook
 
-### DevOps Agent
-Owns: autoAnalyseAll(), caching layer, Puppeteer orchestration, Railway config
-Must check before changes:
-- Pagination caps (MAX_PUPPETEER_PAGES, MAX_LOTS_PER_SCRAPE)
-- Lookahead limit (max 2 upcoming auctions per house)
-- Credit exhaustion guard (creditExhausted flag)
-- HTML change detection (contentHash comparison)
-- Tiered cache TTLs (CACHE_TIERS)
-- Puppeteer skip list (PUPPETEER_SKIP)
-- Rate limit awareness (Gemini free tier: 15 RPM, 1500 RPD)
-
-### Frontend Agent
-Owns: index.html, welcome.html, all CSS and client-side JS
-Must check before changes:
-- Page load performance: lots per page should be configurable, default ≤ 100
-- Pagination UX: user should never wait for more than 100 lots to render
-- Lazy loading: images must lazy load
-- Filter/sort state: preserved across pagination
-- Mobile responsiveness: test at 375px width
-- SEO: meta title, description, OG tags, JSON-LD structured data per page
-- Lighthouse score awareness: flag anything scoring below 70
-- Design system: use existing CSS variables, do not introduce new colour values
-
-### Auction House Recruiter Agent
-Owns: DOM_EXTRACTORS object, HOUSE_ROOTS, detectAuctionHouse()
-Must check before changes:
-- DOM extractor returns > 0 lots on a live test before committing
-- Pagination detection: does the house paginate? How many pages?
-- Skip list: if extractor consistently returns 0, add to PUPPETEER_SKIP
-- Image URL extraction: at least one image URL per lot where available
-- Lot deduplication: no duplicate lot numbers in output
-- Fallback awareness: broken DOM extractor = Gemini API fallback (free but rate-limited)
-
-### AI Extraction Agent
-Owns: extractLotsWithAI(), callGemini(), batch logic, prompt templates
-Must check before changes:
-- Batch size: keep batches to ≤ 3 pages or ≤ 21000 chars
-- Model: use gemini-2.5-flash-lite for known houses (fast tier), gemini-2.5-pro for unknown/PDF (capable tier)
-- Rate limit guard: check creditExhausted flag before every batch (triggers on 429 / quota errors)
-- Structured output: validate response has expected lot fields before caching
-- Rate limiting: callGemini() enforces a configurable gap between calls via `GEMINI_MIN_GAP_MS` (default 100ms for paid tier; set to 4100 for free-tier 15 RPM safe margin)
-
-### Property Data Manager Agent
-Owns: enrichLots(), Land Registry calls, VOA calls, scoring logic
-Must check before changes:
-- Address normalisation before Land Registry lookup
-- Title split detection: false positive rate should stay below 5%
-- Yield calculation: uses guide price, not sold price
-- Score capping: score range 0-10, never exceed
-- EPC lookups: only call if not already cached
-- Fundability badge: mapLotToDeal() maps propType/condition/price to BridgeMatch DealEssentials. Cache key is price+type+refurb. Never blocks analysis pipeline.
-
-### DI Manager (coordination)
-Reviews output of all other agents. Produces weekly quality report covering:
-- Houses with 0 lots (extractor broken)
-- Houses where Gemini API fallback triggered > 3 times consecutively
-- Image coverage rate (target > 70%)
-- Cache hit rate (target > 60%)
-- Gemini API daily request count vs 1500 RPD free tier limit
+Operational rules to remember when working in any area:
+- **Score range 0-10**, always clamped (`Math.max(0, Math.min(10, ...))`)
+- **Firecrawl primary, Puppeteer fallback, HTTP last** — never reverse the order
+- **Silent failures banned** — every skipped/failed lookup records a reason in `lots.enrichment_manifest`
+- **Manifest gating on yield + below-market** to prevent double-counting in scoring (`canScoreYield` / `canScoreBelowMarket`)
+- **`lib/scoring.js` was deleted** — never reintroduce; use `lib/pipeline/scoring.js::analyseLot`
+- **Harness alerts** use the single-object signature: `fireAlert({ type, severity, house, message, meta })`
+- **Don't reintroduce the `server.js` monolith** — logic lives in `routes/`, `lib/`, `lib/pipeline/`, `lib/harness/`
