@@ -43,9 +43,9 @@
 
 <nav class="nav" aria-label="Main navigation">
   <div class="nav-inner">
-    <div class="logo" role="img" aria-label="Auction Brain — powered by BridgeMatch">Auction <span>Brain</span><span class="logo-sub">powered by BridgeMatch</span></div>
+    <a href="/" class="logo" aria-label="Auction Brain — home">Auction <span>Brain</span></a>
     <div class="nav-right">
-      <a href="/check" class="nav-link-bm" title="Check if you can finance a deal">🧩 Can I fund this?</a>
+      <a href="https://www.bridgematch.co.uk/blog" target="_blank" rel="noopener" class="nav-link-blog" title="Open the BridgeMatch blog">Blog <span class="ext-arr">↗</span></a>
       <div class="nav-account" id="navAccount">
         <button class="nav-cta" id="navCta" onclick="requireSignup()" aria-label="Sign in to Auction Brain">Sign in</button>
         <div class="account-dropdown" id="accountDropdown">
@@ -308,12 +308,12 @@
         <option value="all">Lot status</option><option value="available">Available only</option><option value="unsold">Unsold (no sale)</option><option value="sold">Sold</option><option value="stc">Sale Agreed</option><option value="withdrawn">Withdrawn</option><option value="everything">All (inc. sold)</option>
       </select>
       <select class="tb-select" id="fSort" onchange="debouncedRender()" aria-label="Sort lots by">
-        <option value="date_asc">Auction date (soonest)</option>
-        <option value="price_asc">Price (low → high)</option>
-        <option value="price_desc">Price (high → low)</option>
-        <option value="yield">Yield (high → low)</option>
-        <option value="score">Score (high → low)</option>
-        <option value="days_unsold">Days unsold (longest first)</option>
+        <option value="date_asc">Soonest first</option>
+        <option value="price_asc">Price low → high</option>
+        <option value="price_desc">Price high → low</option>
+        <option value="yield">Best yield</option>
+        <option value="score">Best score</option>
+        <option value="days_unsold">Longest unsold</option>
       </select>
       <div class="more-filters-dd" id="moreFiltersDD">
         <button class="more-filters-btn" id="moreFiltersBtn" onclick="toggleMoreFilters(event)">Pro filters <span class="mf-dot" id="mfDot" style="display:none"></span></button>

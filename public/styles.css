@@ -1682,9 +1682,40 @@ footer .logo-f span{color:var(--green)}
   font-family:var(--font-main);font-weight:600
 }
 .nav-link-bm:hover{background:rgba(255,255,255,.08)}
-.logo{font-family:var(--font-display);font-weight:400;letter-spacing:-.01em;font-size:1.3rem}
-.logo span{font-family:var(--font-mono);font-weight:500;color:var(--red-text-dark);letter-spacing:.02em}
-.logo-sub{font-family:var(--font-mono);letter-spacing:.06em;text-transform:uppercase}
+.logo{font-family:var(--font-display);font-weight:400;letter-spacing:-.02em;font-size:1.45rem;color:var(--white);text-decoration:none;line-height:1;display:inline-flex;align-items:baseline;gap:0}
+.logo:hover{text-decoration:none;color:var(--white)}
+.logo span{font-family:var(--font-mono);font-weight:500;color:var(--red-text-dark);letter-spacing:.02em;font-size:1.2rem;margin-left:.05em}
+/* logo-sub kept for backward-compat if any cached HTML still ships it */
+.logo-sub{display:none}
+
+/* Editorial ghost link in the masthead — hairline ink-on-ink, mono caps,
+ * matches the chip vocabulary from the filter bar. The trailing ↗ glyph
+ * uses the mono family so it renders crisp at every size (vs. the old
+ * 🧩 emoji which always rendered chunky on Windows + Android).
+ * .nav-link-bm is the legacy class kept for any cached-HTML transition;
+ * .nav-link-blog is the new class for the BridgeMatch blog link. */
+.nav-link-blog,
+.nav-link-bm{
+  font-family:var(--font-mono);
+  font-size:11px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  font-weight:500;
+  color:#e8e4dc;
+  padding:8px 12px;
+  border:1px solid rgba(255,255,255,.25);
+  border-radius:0;
+  background:transparent;
+  white-space:nowrap;
+  text-decoration:none !important;
+  display:inline-flex;align-items:center;gap:6px
+}
+.nav-link-blog:hover,
+.nav-link-bm:hover{
+  border-color:#fff;color:#fff;background:transparent;text-decoration:none !important
+}
+.nav-link-blog .ext-arr,
+.nav-link-bm .ext-arr{font-family:var(--font-mono);font-weight:400;font-size:12px;opacity:.7}
 
 /* ── Filter-bar polish — tighter editorial chips ──
  * The previous pass already squared off corners and aligned the palette.
@@ -1695,8 +1726,33 @@ footer .logo-f span{color:var(--green)}
  * to restructure the underlying HTML.
  */
 
-/* Compact the wrapping rows themselves */
-.sp-filter-row{padding:8px 14px;gap:6px 8px;background:var(--paper);border-bottom:1px solid var(--border-strong)}
+/* Filter row layout — flex with auto-grow.
+ * Earlier the row was a grid with `auto-fill, minmax(140px, 1fr)`, but
+ * with our 11 chips in a 6-col grid the second row always had one empty
+ * cell on the right. Flex-wrap with `flex: 1 1 140px` on every child
+ * lets remaining chips on each row stretch to fill the available space,
+ * so there's never a trailing gap regardless of viewport width.
+ * 140px stays the comfortable minimum width — chips below that get
+ * cramped labels. */
+.sp-filter-row{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  align-items:stretch;
+  padding:10px 14px;
+  background:var(--paper);
+  border-bottom:1px solid var(--border-strong)
+}
+.sp-filter-row > *{
+  flex:1 1 140px;
+  min-width:140px;
+  min-height:0
+}
+.sp-filter-row .tb-select,
+.sp-filter-row .tb-search,
+.sp-filter-row .price-dd-btn,
+.sp-filter-row .more-filters-btn,
+.sp-filter-row .clear-all-btn{width:100%}
 .sp-secondary{padding:4px 14px;background:var(--paper);border-bottom:1px solid var(--border-strong)}
 .chip-row{padding:8px 14px;gap:6px}
 .sp-search-row{padding:10px 14px;border-bottom:1px solid var(--ink)}
@@ -1727,14 +1783,26 @@ footer .logo-f span{color:var(--green)}
 .sp-filter-row .tb-select,
 .sp-secondary .tb-select{padding-right:22px}
 
-/* Plain text inputs (Town, Postcode) — keep them readable rather than
- * mono-uppercase, but still match the height + hairline. */
+/* Plain text inputs (Town, Postcode) — match the chip vocabulary.
+ * Mono-uppercase placeholder so they line up with the SELECT chips
+ * around them (REGION, BEDROOMS, etc.). The user-typed value stays
+ * mono but in the entered case so it's still legible — `text-transform`
+ * does NOT apply to the typed value, only the rendering. */
 .sp-filter-row input.tb-search,
 .sp-secondary input.tb-search{
-  font-family:var(--font-main);
-  text-transform:none;
-  letter-spacing:.02em;
-  font-size:12px
+  font-family:var(--font-mono);
+  text-transform:uppercase;
+  letter-spacing:.06em;
+  font-size:11px
+}
+.sp-filter-row input.tb-search::placeholder,
+.sp-secondary input.tb-search::placeholder{
+  font-family:var(--font-mono);
+  text-transform:uppercase;
+  letter-spacing:.06em;
+  font-size:11px;
+  color:var(--ink);
+  opacity:.55
 }
 
 /* Hover */
@@ -1825,13 +1893,12 @@ footer .logo-f span{color:var(--green)}
   padding:1px 4px;margin-left:4px;border-radius:0
 }
 
-/* Visual grouping — vertical hairline separators between filter clusters.
- * Apply to elements I can target without restructuring HTML: the WHERE
- * cluster (region/town/postcode/distance) and the WHEN cluster
- * (status/sort) get a left hairline that visually separates them from
- * the WHAT cluster (price/beds/type) before. */
-.sp-filter-row #fLocation{margin-left:6px;padding-left:14px;border-left:1px solid var(--border-strong)}
-.sp-filter-row #fSoldTop{margin-left:6px;padding-left:14px;border-left:1px solid var(--border-strong)}
+/* Visual grouping — superseded by the grid auto-fill layout above. The
+ * grid gives each chip its own slot; the per-chip left-hairlines that
+ * used to mark cluster boundaries would now read as random cell-internal
+ * padding. Left here as a no-op for future fine-tuning. */
+.sp-filter-row #fLocation,
+.sp-filter-row #fSoldTop{margin-left:0;padding-left:10px;border-left:0}
 
 /* Make the search submit button a touch tighter to match the chip row */
 .sp-search-row .btn-main,
