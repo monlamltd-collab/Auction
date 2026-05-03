@@ -1685,3 +1685,178 @@ footer .logo-f span{color:var(--green)}
 .logo{font-family:var(--font-display);font-weight:400;letter-spacing:-.01em;font-size:1.3rem}
 .logo span{font-family:var(--font-mono);font-weight:500;color:var(--red-text-dark);letter-spacing:.02em}
 .logo-sub{font-family:var(--font-mono);letter-spacing:.06em;text-transform:uppercase}
+
+/* ── Filter-bar polish — tighter editorial chips ──
+ * The previous pass already squared off corners and aligned the palette.
+ * This pass tightens the chip sizing, switches placeholder labels to
+ * mono uppercase, and makes the active-filter state visible at a glance
+ * (ink-fill instead of just a border-colour change). Vertical hairline
+ * separators at strategic gaps group filters by purpose without needing
+ * to restructure the underlying HTML.
+ */
+
+/* Compact the wrapping rows themselves */
+.sp-filter-row{padding:8px 14px;gap:6px 8px;background:var(--paper);border-bottom:1px solid var(--border-strong)}
+.sp-secondary{padding:4px 14px;background:var(--paper);border-bottom:1px solid var(--border-strong)}
+.chip-row{padding:8px 14px;gap:6px}
+.sp-search-row{padding:10px 14px;border-bottom:1px solid var(--ink)}
+
+/* Tighter, mono-styled chips throughout the filter row */
+.sp-filter-row .tb-select,
+.sp-filter-row .tb-search,
+.sp-filter-row .price-dd-btn,
+.sp-filter-row .more-filters-btn,
+.sp-filter-row .clear-all-btn,
+.sp-secondary .tb-select,
+.sp-secondary .tb-search{
+  height:32px;
+  min-height:32px;
+  padding:0 10px;
+  font-family:var(--font-mono);
+  font-size:11px;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  border-radius:0;
+  background:var(--paper);
+  border:1px solid var(--border-strong);
+  color:var(--ink);
+  line-height:1
+}
+
+/* Selects need slightly more right padding for the native arrow */
+.sp-filter-row .tb-select,
+.sp-secondary .tb-select{padding-right:22px}
+
+/* Plain text inputs (Town, Postcode) — keep them readable rather than
+ * mono-uppercase, but still match the height + hairline. */
+.sp-filter-row input.tb-search,
+.sp-secondary input.tb-search{
+  font-family:var(--font-main);
+  text-transform:none;
+  letter-spacing:.02em;
+  font-size:12px
+}
+
+/* Hover */
+.sp-filter-row .tb-select:hover,
+.sp-filter-row .tb-search:hover,
+.sp-filter-row .price-dd-btn:hover,
+.sp-filter-row .more-filters-btn:hover{
+  border-color:var(--ink);
+  background:var(--paper);
+  color:var(--ink)
+}
+
+/* Active filter state — ink-fill so a glance shows what's applied */
+.sp-filter-row .tb-select.active-filter,
+.sp-filter-row .price-dd-btn.active-filter,
+.sp-filter-row .tb-search:not(:placeholder-shown){
+  background:var(--ink);
+  color:var(--bg);
+  border-color:var(--ink)
+}
+.sp-filter-row .tb-select.active-filter option{
+  background:var(--paper);
+  color:var(--ink);
+  text-transform:none;
+  font-family:var(--font-main);
+  letter-spacing:0
+}
+
+/* Clear all stays red but compact */
+.sp-filter-row .clear-all-btn{
+  color:var(--red);
+  border-color:var(--red);
+  background:transparent
+}
+.sp-filter-row .clear-all-btn:hover{
+  background:var(--red);
+  color:#fff;
+  border-color:var(--red)
+}
+
+/* "Pro filters" disclosure — same chip dimensions but with the dot */
+.sp-filter-row .more-filters-btn{gap:6px}
+.sp-filter-row .more-filters-btn .mf-dot{
+  width:6px;height:6px;background:var(--red);display:inline-block;border-radius:0
+}
+
+/* The page-info text + per-page select live in the search row — make
+ * them mono and quiet. */
+.sp-page-info{font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.sp-search-row .sp-per-page{
+  height:32px;min-height:32px;padding:0 10px;
+  font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;
+  border:1px solid var(--border-strong);background:var(--paper);color:var(--ink);
+  border-radius:0
+}
+
+/* View toggle — slightly thinner */
+.view-toggle{height:32px}
+.view-toggle .vtog{height:30px;padding:0 10px;font-size:10px}
+
+/* Secondary chip row presets (Unsold lots / Favourites / Analysed / Save search)
+ * are visually noisy. Demote them: smaller, hairline-only, no fill. */
+.chip-row .ex-btn{
+  height:28px;
+  padding:0 10px;
+  font-family:var(--font-mono);
+  font-size:11px;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  border:1px solid var(--border-strong);
+  background:transparent;
+  color:var(--ink);
+  border-radius:0
+}
+.chip-row .ex-btn:hover{border-color:var(--ink);background:transparent;color:var(--ink)}
+.chip-row .ex-btn.on,
+.chip-row .ex-btn[aria-pressed="true"]{
+  background:var(--ink);color:var(--bg);border-color:var(--ink)
+}
+.chip-row .adv-toggle{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.chip-row .adv-toggle:hover{color:var(--ink)}
+
+/* Favourites/Analysed/Unsold-lots count-badges inside chips */
+.chip-row .ex-btn .count,
+.chip-row .ex-btn span[class*=badge]{
+  font-family:var(--font-mono);font-size:10px;
+  background:var(--ink);color:var(--bg);
+  padding:1px 4px;margin-left:4px;border-radius:0
+}
+
+/* Visual grouping — vertical hairline separators between filter clusters.
+ * Apply to elements I can target without restructuring HTML: the WHERE
+ * cluster (region/town/postcode/distance) and the WHEN cluster
+ * (status/sort) get a left hairline that visually separates them from
+ * the WHAT cluster (price/beds/type) before. */
+.sp-filter-row #fLocation{margin-left:6px;padding-left:14px;border-left:1px solid var(--border-strong)}
+.sp-filter-row #fSoldTop{margin-left:6px;padding-left:14px;border-left:1px solid var(--border-strong)}
+
+/* Make the search submit button a touch tighter to match the chip row */
+.sp-search-row .btn-main,
+.sp-ai-group .btn-main{
+  height:36px;
+  padding:0 16px;
+  font-size:12px;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  border-radius:0
+}
+
+/* Search input itself — slightly tighter, mono placeholder, hairline ink */
+.sp-ai-group .tb-search,
+.sp-search-row .tb-search{
+  height:36px;
+  border-radius:0;
+  border:1px solid var(--ink);
+  font-family:var(--font-main);
+  font-size:13px
+}
+.sp-ai-group .tb-search::placeholder{
+  font-family:var(--font-mono);
+  font-size:11px;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  color:var(--muted-2)
+}

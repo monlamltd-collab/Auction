@@ -157,6 +157,10 @@ const _indexHtmlCache = (() => {
     html = html.replace("window.__SUPABASE_URL__ || ''", JSON.stringify(SUPABASE_URL || ''));
     html = html.replace("window.__SUPABASE_ANON_KEY__ || ''", JSON.stringify(SUPABASE_ANON_KEY || ''));
     html = html.replace("window.__AUTH_ENABLED__ || false", AUTH_ENABLED ? 'true' : 'false');
+    // Live house count — beats the old hardcoded "30+" / "173" sprinkled through
+    // the landing copy. Single source of truth = HOUSE_ROOTS in lib/houses.js.
+    const houseCount = Object.keys(HOUSE_ROOTS).length;
+    html = html.replaceAll('__HOUSE_COUNT__', String(houseCount));
     if (process.env.UMAMI_WEBSITE_ID) {
       html = html.replace('data-website-id=""', `data-website-id="${process.env.UMAMI_WEBSITE_ID}"`);
     }
