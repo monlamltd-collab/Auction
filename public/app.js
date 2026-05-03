@@ -809,18 +809,32 @@ function getPostcodePrefix(addr){
 
 function matchesRegion(addr, region){
   if(!addr || !region) return false;
-  const addrUpper=addr.toUpperCase();
-  const addrLower=addr.toLowerCase();
 
-  // Try postcode prefix first
-  const pc=getPostcodePrefix(addr);
-  if(pc && (REGION_POSTCODES[region]||[]).includes(pc)) return true;
+  // 1) Try postcode prefix — the authoritative signal
+  const pc = getPostcodePrefix(addr);
+  if (pc) {
+    if ((REGION_POSTCODES[region] || []).includes(pc)) return true;
 
-  // Fallback: match town/city names in address (word boundary to avoid street name false positives)
-  const towns=REGION_TOWNS[region]||[];
-  for(const town of towns){
-    const re=new RegExp('\\b'+town.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\b','i');
-    if(re.test(addr)) return true;
+    // CRITICAL: if the postcode resolves to a DIFFERENT region, don't
+    // fall through to the town-name fallback. Otherwise street names
+    // like "Gloucester Road" in Liverpool L6 falsely match South West
+    // (because 'gloucester' is in the SW town list). The postcode wins.
+    // Reported by Simon: "12 Gloucester Road, Anfield, Liverpool L6 4DS"
+    // showing under the South West filter.
+    let pcRegion = null;
+    for (const r in REGION_POSTCODES) {
+      if (REGION_POSTCODES[r].includes(pc)) { pcRegion = r; break; }
+    }
+    if (pcRegion && pcRegion !== region) return false;
+  }
+
+  // 2) Fallback: town-name match only when the postcode didn't tell us
+  // anything definitive (no UK postcode in the string). Word-boundary
+  // regex avoids partial matches inside other words.
+  const towns = REGION_TOWNS[region] || [];
+  for (const town of towns) {
+    const re = new RegExp('\\b' + town.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i');
+    if (re.test(addr)) return true;
   }
   return false;
 }
@@ -1228,6 +1242,14 @@ function onSignIn(session) {
   // Reset the inactivity clock so a fresh sign-in doesn't get kicked out on
   // the next 5-min check by a stale lastActivityTime.
   recordActivity();
+  // Grace window: for 8s after sign-in, the fetch wrapper treats 401s as
+  // transient (server-side JWT cache warming, JWKS key-rotation race,
+  // brand-new-user creation race) instead of immediately bouncing the
+  // user back to the sign-in modal. Without this guard, any /api 401
+  // during the post-sign-in burst (consent / likes / analysed / all-lots)
+  // triggers signOut + showSessionExpiredModal — the OAuth-loop bug
+  // reported on 2026-05-03.
+  window.__lastSignInAt = Date.now();
   currentSession = session;
   currentUser = session.user;
   const email = currentUser.email || '';
@@ -1501,6 +1523,18 @@ window.fetch = async function(...args) {
     const isOurApi = url.startsWith('/api/') || url.startsWith(window.location.origin + '/api/');
 
     if (sentOurToken && isOurApi) {
+      // Grace window: never sign the user out within 8s of a fresh
+      // sign-in. The post-sign-in burst (/api/auth/consent, /api/me/*,
+      // /api/all-lots) can race with server-side JWT validation cache
+      // warming + JWKS key-rotation. A single 401 during this window
+      // should NOT eject the user back to the sign-in modal — that's
+      // exactly what produced the OAuth-loop bug.
+      const sinceSignIn = Date.now() - (window.__lastSignInAt || 0);
+      if (sinceSignIn < 8000) {
+        console.warn('[fetch wrapper] 401 within sign-in grace window (' + sinceSignIn + 'ms) — letting it pass', { url });
+        return response;
+      }
+
       _handlingExpiry = true;
       try {
         // Double-check the session is actually gone before signing out (avoids
@@ -3956,6 +3990,351 @@ function getSignalChips(lot) {
   return html;
 }
 
+// ─── Magazine-style Lot Detail panel helpers (handoff: lot-detail.jsx) ───
+//
+// These compose the new 2-column expanded panel. Each returns an HTML
+// string for one section. The assembler in expandCard() wires them into
+// the .exp-v2 grid. Premium-feature gating + deal-stack widget + lender
+// summary all flow through unchanged — only the chrome around them is new.
+
+function buildExpV2Header(lot, dealStackHtmlRef) {
+  const houseLabel = (lot._house || lot.house || '').toString().toUpperCase();
+  const lotNum = lot.lot != null ? String(lot.lot).padStart(2, '0') : '—';
+  const status = (typeof statusForStrip === 'function') ? statusForStrip(lot) : { dot: 'green', label: 'LIVE' };
+
+  // Date formatting: prefer the full long form for the header strip
+  // (e.g. "FRIDAY 22 MAY 2026 · 11:00") since this card is the headline,
+  // unlike the search card which uses the compact "22 MAY".
+  let dateLong = '';
+  if (lot._auctionDate && typeof lot._auctionDate === 'string' && lot._auctionDate.length >= 10) {
+    const days = ['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'];
+    const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+    const d = new Date(lot._auctionDate + 'T12:00:00');
+    if (!isNaN(d.getTime())) {
+      dateLong = days[d.getDay()] + ' ' + d.getDate() + ' ' + months[d.getMonth()] + ' ' + d.getFullYear();
+      if (lot._auctionTime) dateLong += ' · ' + lot._auctionTime;
+    }
+  }
+
+  const parsed = (typeof splitAddressPostcode === 'function')
+    ? splitAddressPostcode(lot.address)
+    : { addr: lot.address || 'Address not available', pc: '' };
+
+  // Eyebrow: PROPTYPE · MID-TERRACE · TENURE  (mid-terrace etc. only when
+  // we have a building-style field; tenure shown when known)
+  const eyebrowParts = [];
+  if (lot.propType) eyebrowParts.push(String(lot.propType).toUpperCase());
+  if (lot.buildingStyle) eyebrowParts.push(String(lot.buildingStyle).toUpperCase());
+  if (lot.tenure) eyebrowParts.push(String(lot.tenure).toUpperCase());
+  const eyebrow = eyebrowParts.length ? eyebrowParts.join(' · ') : 'AUCTION LOT';
+
+  // Description: prefer lot.description, fall back to first 2 bullets
+  let description = '';
+  if (lot.description && lot.description.length > 30) description = lot.description;
+  else if (lot.bullets && lot.bullets.length) description = lot.bullets.slice(0, 2).join(' ');
+
+  // Guide price + below-market badge
+  let guideText = 'TBA';
+  if (lot.priceText && !lot.price) guideText = lot.priceText;
+  else if (lot.price) guideText = '£' + lot.price.toLocaleString();
+
+  let belowMktHtml = '';
+  if (lot.belowMarket != null && lot.price) {
+    const b = lot.belowMarket;
+    if (b > 0) {
+      belowMktHtml = '<div class="below-mkt">▼ ' + Math.round(b) + '% below local median sold</div>';
+    } else if (b < 0) {
+      belowMktHtml = '<div class="below-mkt over">▲ ' + Math.round(Math.abs(b)) + '% above local median sold</div>';
+    }
+  }
+
+  const favActive = (typeof isFavourite === 'function') && isFavourite(lot);
+  const favBtn = '<button class="exp-v2-fav' + (favActive ? ' fav-active' : '') + '" onclick="toggleFav(' + lot._idx + ',event)" title="' + (favActive ? 'Saved' : 'Save lot') + '" aria-label="' + (favActive ? 'Remove from favourites' : 'Add to favourites') + '">' + (favActive ? '♥' : '♡') + '</button>';
+
+  const bidHref = lot.url ? safeHref(lot.url) : '#';
+  const bidBtn = lot.url
+    ? '<a class="exp-v2-bid" href="' + bidHref + '" target="_blank" rel="noopener noreferrer" onclick="if(window.umami)umami.track(\'lot_outbound_click\',{lot:' + (lot.lot || 0) + ',house:\'' + esc((lot._house || '').replace(/\'/g, '')) + '\'})">I want to bid <span class="arr">→</span></a>'
+    : '<span class="exp-v2-bid disabled">No external link</span>';
+
+  return '<div class="exp-v2-header">' +
+    '<div class="strip">' +
+      '<span>' + esc(houseLabel || 'AUCTION HOUSE') + ' · LOT ' + lotNum + (dateLong ? ' · ' + dateLong : '') + '</span>' +
+      '<span style="display:inline-flex;align-items:center;gap:6px"><span class="dot ' + status.dot + '"></span>' + status.label + ' LOT</span>' +
+    '</div>' +
+    '<div class="body">' +
+      '<div class="left">' +
+        '<div class="eyebrow">' + esc(eyebrow) + '</div>' +
+        '<h1>' + esc(parsed.addr) + '</h1>' +
+        (parsed.pc ? '<div class="pc">' + esc(parsed.pc) + '</div>' : '') +
+        (description ? '<p class="desc">' + esc(description) + '</p>' : '') +
+      '</div>' +
+      '<div class="right">' +
+        '<div>' +
+          '<div class="eyebrow">Guide price</div>' +
+          '<div class="num-xl">' + esc(guideText) + '</div>' +
+          belowMktHtml +
+        '</div>' +
+        '<div class="ctas">' + bidBtn + favBtn + '</div>' +
+      '</div>' +
+    '</div>' +
+  '</div>';
+}
+
+function buildExpV2DD(lot) {
+  // Due-diligence checklist derived from the data we actually have:
+  //   - Flood zone (1 = lowest = ✓; 2 amber; 3 = bad)
+  //   - Tenure (Freehold ✓; Leasehold ✓ if length known and >80yr; otherwise warn)
+  //   - EPC (A-D ✓; E-G warn — not lettable below F)
+  //   - Vacant possession (derived from opps[]) — ✓ if found
+  // Items that resolve to "unknown" become amber-warn so the user knows
+  // verification is still needed.
+  const items = [];
+
+  // Flood zone
+  if (lot.floodZone === '1') {
+    items.push({ icon: 'ok', label: 'Flood zone 1 (lowest)' });
+  } else if (lot.floodZone === '2') {
+    items.push({ icon: 'warn', label: 'Flood zone 2 — insurance check' });
+  } else if (lot.floodZone === '3') {
+    items.push({ icon: 'bad', label: 'Flood zone 3 — high risk' });
+  } else {
+    items.push({ icon: 'warn', label: 'Flood zone TBD' });
+  }
+
+  // Tenure
+  if (lot.tenure === 'Freehold') {
+    items.push({ icon: 'ok', label: 'Freehold confirmed' });
+  } else if (lot.tenure === 'Share of Freehold') {
+    items.push({ icon: 'ok', label: 'Share of freehold confirmed' });
+  } else if (lot.tenure === 'Leasehold') {
+    if (lot.leaseLength && lot.leaseLength >= 80) {
+      items.push({ icon: 'ok', label: 'Leasehold (' + lot.leaseLength + 'yr) — comfortable' });
+    } else if (lot.leaseLength && lot.leaseLength < 80) {
+      items.push({ icon: 'bad', label: 'Leasehold (' + lot.leaseLength + 'yr) — short, plan extension' });
+    } else {
+      items.push({ icon: 'warn', label: 'Leasehold — verify lease length' });
+    }
+  } else {
+    items.push({ icon: 'warn', label: 'Tenure TBD' });
+  }
+
+  // EPC
+  if (lot.epcRating) {
+    const r = String(lot.epcRating).toUpperCase()[0];
+    if ('ABCD'.includes(r)) {
+      items.push({ icon: 'ok', label: 'EPC ' + r + (lot.epcScore ? ' · ' + lot.epcScore + '/100' : '') });
+    } else if (r === 'E') {
+      items.push({ icon: 'warn', label: 'EPC E — verify if letting' });
+    } else {
+      items.push({ icon: 'bad', label: 'EPC ' + r + ' — unlettable until upgraded' });
+    }
+  } else {
+    items.push({ icon: 'warn', label: 'EPC TBD' });
+  }
+
+  // Vacant possession (signal from opps array)
+  const oppsLower = (lot.opps || []).map(o => String(o).toLowerCase()).join(' ');
+  if (oppsLower.includes('vacant')) {
+    items.push({ icon: 'ok', label: 'Vacant possession' });
+  } else if (oppsLower.includes('tenanted') || oppsLower.includes('sitting tenant')) {
+    items.push({ icon: 'warn', label: 'Tenanted — review tenancy terms' });
+  } else {
+    items.push({ icon: 'warn', label: 'Occupancy TBD' });
+  }
+
+  const cleared = items.filter(i => i.icon === 'ok').length;
+  const total = items.length;
+
+  const liHtml = items.map(function (it, i) {
+    const sym = it.icon === 'ok' ? '✓' : it.icon === 'warn' ? '!' : '✕';
+    return '<li><span class="dd-icon ' + it.icon + '">' + sym + '</span><span>' + esc(it.label) + '</span></li>';
+  }).join('');
+
+  const summaryColor = cleared === total ? 'var(--signal-green)' : (cleared >= total - 1 ? 'var(--signal-green)' : 'var(--signal-amber)');
+
+  return '<section class="sec">' +
+    '<div class="head">' +
+      '<span class="eyebrow ink">§1 · Due diligence checks</span>' +
+      '<span style="font-family:var(--font-mono);font-size:11px;color:' + summaryColor + '">' + cleared + ' of ' + total + ' cleared</span>' +
+    '</div>' +
+    '<ul class="dd-list">' + liHtml + '</ul>' +
+  '</section>';
+}
+
+function buildExpV2Scores(lot) {
+  const opps = (lot.opps || []).slice(0, 8);
+  const risks = (lot.risks || []).slice(0, 6);
+  if (!opps.length && !risks.length) return '';
+
+  const oppHtml = opps.map(function (o) {
+    return '<li><span class="ws-mark opp">+</span><span>' + esc(o) + '</span></li>';
+  }).join('');
+  const riskHtml = risks.map(function (r) {
+    return '<li><span class="ws-mark risk">!</span><span>' + esc(r) + '</span></li>';
+  }).join('');
+
+  return '<section class="sec">' +
+    '<div class="head">' +
+      '<span class="eyebrow ink">§2 · Why this lot scores</span>' +
+      '<a href="/scoring" class="eyebrow" style="color:var(--red);text-decoration:none">Scoring methodology →</a>' +
+    '</div>' +
+    '<div class="body">' +
+      (opps.length ? '<div class="eyebrow ink" style="margin-bottom:8px">Opportunities</div><ul class="ws-list" style="margin-bottom:14px">' + oppHtml + '</ul>' : '') +
+      (risks.length ? '<div class="eyebrow ink" style="margin-bottom:8px">Risks to verify</div><ul class="ws-list">' + riskHtml + '</ul>' : '') +
+    '</div>' +
+  '</section>';
+}
+
+function buildExpV2Comparables(lot, premium) {
+  if (!premium) {
+    return '<section class="sec">' +
+      '<div class="head"><span class="eyebrow ink">§3 · Comparables on this street</span></div>' +
+      '<div class="body" style="text-align:center;padding:24px">' +
+        '<div style="font-family:var(--font-display);font-size:17px;color:var(--ink);margin-bottom:8px">Sign in free to see street-level comparables</div>' +
+        '<div style="font-family:var(--font-main);font-size:13px;color:var(--muted);margin-bottom:14px">Median sold price, sales count, and how this guide compares.</div>' +
+        '<button class="btn-ed red" onclick="showPaywall(\'comparables\')">Sign in free</button>' +
+      '</div>' +
+    '</section>';
+  }
+
+  const sa = lot.streetAvg;
+  const sales = lot.streetSalesCount || lot.salesCount || 0;
+  const bm = lot.belowMarket;
+  const guide = lot.price;
+
+  if (!sa || !sales) {
+    return '<section class="sec">' +
+      '<div class="head"><span class="eyebrow ink">§3 · Comparables on this street</span></div>' +
+      '<div class="body" style="font-family:var(--font-display);font-size:15px;color:var(--ink-2)">No comparable sales found for this street in the last 12 months.</div>' +
+    '</section>';
+  }
+
+  // Range bar — without min/max we can't draw a true range, but we can
+  // show guide-vs-median as two ticks on a guideline. If we have a range
+  // (lot.streetRange = [lo, hi]), use it; otherwise fall back to a
+  // ±20% window around the median.
+  let lo, hi;
+  if (lot.streetRange && lot.streetRange.length === 2) {
+    lo = lot.streetRange[0];
+    hi = lot.streetRange[1];
+  } else {
+    lo = Math.round(sa * 0.8);
+    hi = Math.round(sa * 1.25);
+  }
+  const span = Math.max(hi - lo, 1);
+  const guidePct = guide ? Math.max(0, Math.min(100, ((guide - lo) / span) * 100)) : null;
+  const medianPct = Math.max(0, Math.min(100, ((sa - lo) / span) * 100));
+
+  const fmt = function (n) { return '£' + Math.round(n / 1000) + 'K'; };
+  const fmtFull = function (n) { return '£' + n.toLocaleString(); };
+
+  const verdictLine = (bm != null && guide)
+    ? (bm > 0
+        ? 'Guide is <span class="red">' + Math.round(bm) + '% below the local median</span> — closest comparables sold around ' + fmtFull(sa) + '.'
+        : 'Guide is <span class="red">' + Math.round(Math.abs(bm)) + '% above the local median</span> — verify exit price carefully.')
+    : 'Guide ' + fmtFull(guide || 0) + ' vs local median ' + fmtFull(sa) + '.';
+
+  return '<section class="sec">' +
+    '<div class="head"><span class="eyebrow ink">§3 · Comparables on this street</span></div>' +
+    '<div class="body">' +
+      '<div class="cmp-top">' +
+        '<div>' +
+          '<div class="cmp-num">' + sales + '</div>' +
+          '<div class="cmp-cap">SOLD · LAST 12 MONTHS</div>' +
+        '</div>' +
+        '<div class="cmp-bar-wrap">' +
+          '<div class="cmp-bar">' +
+            '<div class="band" style="left:0;right:0"></div>' +
+            (guidePct != null ? '<div class="tick guide" style="left:' + guidePct.toFixed(1) + '%"></div>' : '') +
+            '<div class="tick" style="left:' + medianPct.toFixed(1) + '%"></div>' +
+            (guidePct != null ? '<span class="mono" style="position:absolute;left:' + guidePct.toFixed(1) + '%;top:-16px;font-size:10px;color:var(--red);transform:translateX(-50%);font-family:var(--font-mono)">GUIDE ' + fmt(guide) + '</span>' : '') +
+            '<span class="mono" style="position:absolute;left:' + medianPct.toFixed(1) + '%;bottom:-16px;font-size:10px;color:var(--ink);transform:translateX(-50%);font-family:var(--font-mono)">MEDIAN ' + fmt(sa) + '</span>' +
+          '</div>' +
+          '<div class="cmp-bar-labels"><span>' + fmt(lo) + '</span><span>' + fmt(hi) + '</span></div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="cmp-verdict">' +
+        '<div class="text">' + verdictLine + '</div>' +
+      '</div>' +
+    '</div>' +
+  '</section>';
+}
+
+function buildExpV2DealStackChrome(innerHtml) {
+  // Wraps the existing dealStackHtml (with its scenario picker, inputs,
+  // and results) inside the editorial deal-stack card chrome.
+  return '<div class="sec bold">' +
+    '<div class="head bold"><span class="eyebrow" style="color:var(--bg)">The deal stack</span></div>' +
+    '<div class="body">' + innerHtml + '</div>' +
+  '</div>';
+}
+
+function buildExpV2Fundability(lot) {
+  // Hooks into the existing #lender-summary-{idx} that gets populated
+  // asynchronously by fetchLenderSummary(). On first paint we show
+  // the cached fundability if present, else a loading state.
+  const cached = lot.fundability;
+  let countDisplay = '<span class="num-lg">…</span>';
+  let tiersHtml = '<span class="mono" style="color:var(--muted);font-size:11px">Checking lenders</span>';
+  if (cached && cached.lenderCount != null) {
+    countDisplay = '<span class="num-lg">' + cached.lenderCount + '</span>';
+    if (cached.lenderCount > 0) {
+      tiersHtml = '<div class="fund-tiers">' +
+        '<span class="tag green" style="flex:1;justify-content:center">Tier 1 ✓</span>' +
+        '<span class="tag green" style="flex:1;justify-content:center">Tier 2 ✓</span>' +
+        '<span class="tag green" style="flex:1;justify-content:center">Tier 3 ✓</span>' +
+      '</div>';
+    } else {
+      tiersHtml = '<span class="mono" style="color:var(--red);font-size:11px">No bridging matches at 70% LTV</span>';
+    }
+  }
+
+  const bmUrl = (cached && cached.bridgematchUrl) ? safeHref(cached.bridgematchUrl) : 'https://www.bridgematch.co.uk';
+
+  return '<div class="sec">' +
+    '<div class="head"><span class="eyebrow ink">Fundability</span></div>' +
+    '<div class="body" id="lender-summary-' + lot._idx + '">' +
+      '<div class="fund-row"><span class="lbl">Bridging matches</span>' + countDisplay + '</div>' +
+      '<div style="margin:10px 0">' + tiersHtml + '</div>' +
+      '<a href="' + bmUrl + '" target="_blank" rel="noopener noreferrer" class="btn-ed" style="width:100%;justify-content:space-between;background:var(--paper);color:var(--ink);border-color:var(--ink)">See all matches on BridgeMatch <span class="arr">→</span></a>' +
+    '</div>' +
+  '</div>';
+}
+
+function buildExpV2Logistics(lot) {
+  // Auction logistics card — most fields are derived from common auction
+  // norms when not explicitly captured per-lot. House-specific overrides
+  // can be added later.
+  let dateStr = '';
+  if (lot._auctionDate) {
+    const d = new Date(lot._auctionDate + 'T12:00:00');
+    if (!isNaN(d.getTime())) {
+      const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      dateStr = days[d.getDay()] + ' ' + d.getDate() + ' ' + months[d.getMonth()] + ' ' + d.getFullYear();
+      if (lot._auctionTime) dateStr += ', ' + lot._auctionTime;
+    }
+  }
+
+  const rows = [
+    { k: 'Date', v: dateStr || 'TBA' },
+    { k: 'Format', v: lot._auctionFormat || 'Live online' },
+    { k: 'Reserve', v: 'Disclosed at sale' },
+    { k: 'Buyer’s premium', v: '£1,500 + VAT (typical)' },
+    { k: 'Completion', v: '28 days (or per legal pack)' },
+    { k: 'Deposit', v: '10% on the fall' }
+  ];
+
+  const rowHtml = rows.map(function (r, i) {
+    return '<div class="log-row"><span class="k">' + esc(r.k) + '</span><span class="v">' + esc(r.v) + '</span></div>';
+  }).join('');
+
+  return '<div class="sec">' +
+    '<div class="head"><span class="eyebrow ink">Auction logistics</span></div>' +
+    '<div class="body">' + rowHtml + '</div>' +
+  '</div>';
+}
+
 function expandCard(lot) {
   if (lot.anonGated) { $('signupModal').classList.add('show'); return; }
   if (lot.blurred) { $('signupModal').classList.add('show'); return; }
@@ -4193,76 +4572,52 @@ function expandCard(lot) {
           '</button>' +
         '</div>');
 
+  // ─── Magazine-style panel assembly (handoff: lot-detail.jsx) ───
+  // Wraps the existing functional sections (yield analysis, deal stack
+  // widget, comparables, lender summary) in the new editorial chrome:
+  // ink-bordered header card + 2-col body with sticky right column.
+  panel.className = 'expanded-panel expanded-panel-visible exp-v2';
+
+  const premiumNow = (typeof isPremium === 'function') ? isPremium() : false;
+
+  // The deal-stack widget (input form + scenario picker) only renders
+  // for premium users. Wrap it in the editorial chrome regardless.
+  const dealStackPanelHtml = buildExpV2DealStackChrome(
+    dealStackHtml +
+    (lot.price ? '<div id="finance-summary-' + lot._idx + '" style="margin-top:10px"></div>' : '')
+  );
+
   panel.innerHTML =
     '<button class="exp-close-btn" onclick="closeExpandedPanel()" aria-label="Close panel" title="Close">&times;</button>' +
-    // ── Row 1: Signals + Yield (lot summary content lives on the card itself) ──
-    '<div class="exp-top">' +
-      (signalsHtml ? '<div class="exp-signals" style="margin-bottom:12px">' + signalsHtml + '</div>' : '') +
-      yieldSection +
-      // Lender summary stays — it's a unique panel-only datum
-      (lot.price ? '<div class="lender-summary" id="lender-summary-' + lot._idx + '" style="margin-top:10px">' + (lot.fundability && lot.fundability.lenderCount !== undefined ? '<span style="font-size:13px;color:var(--signal-pos);font-weight:600">' + lot.fundability.lenderCount + ' bridging lender' + (lot.fundability.lenderCount !== 1 ? 's' : '') + ' match at 70% LTV</span>' : '<span class="ls-loading">Checking lenders...</span>') + '</div>' : '') +
+    buildExpV2Header(lot) +
+    '<div class="exp-v2-left">' +
+      buildExpV2DD(lot) +
+      buildExpV2Scores(lot) +
+      buildExpV2Comparables(lot, premiumNow) +
     '</div>' +
-    // ── Row 2: Tools (Finance + Deal Stack as accordions) ──
-    '<div class="exp-tools">' +
-      '<details class="exp-tool-section" open>' +
-        '<summary class="exp-tool-summary">Finance Check <span class="exp-tool-badge">Powered by BridgeMatch</span></summary>' +
-        '<div class="finance-widget" id="finance-widget-' + lot._idx + '">' +
-          '<div class="fw-prefilled">' +
-            '<div class="fw-field"><div class="fw-field-label">PURCHASE PRICE</div><div class="fw-field-value">' + (lot.price ? '\u00a3' + lot.price.toLocaleString() : 'TBA') + '</div></div>' +
-            '<div class="fw-field"><div class="fw-field-label">PROPERTY TYPE</div><div class="fw-field-value">' + esc(lot.propType || 'Residential') + '</div></div>' +
-          '</div>' +
-          '<div class="fw-slider-row"><span class="fw-slider-label">Loan to Value</span><span class="fw-slider-value" id="ltv-val-' + lot._idx + '">70%</span></div>' +
-          '<input type="range" class="fw-range" id="ltv-slider-' + lot._idx + '" min="50" max="80" step="5" value="70" oninput="updateLTV(' + lot._idx + ',this.value)">' +
-          '<div id="fw-results-' + lot._idx + '" class="fw-empty">Adjust LTV and tap Check</div>' +
-          (lot.price ? '<button class="fw-cta" onclick="triggerFinanceCheck(' + lot._idx + ')">Check finance \u2192</button>' : '') +
-        '</div>' +
-      '</details>' +
-      '<details class="exp-tool-section">' +
-        '<summary class="exp-tool-summary">Deal Stacking Calculator</summary>' +
-        dealStackHtml +
-      '</details>' +
+    '<div class="exp-v2-right">' +
+      dealStackPanelHtml +
+      buildExpV2Fundability(lot) +
+      buildExpV2Logistics(lot) +
     '</div>' +
-    // ── Row 3: Comparables (full width) ──
-    '<div class="exp-bottom">' +
-      compSection +
-    '</div>' +
-    // ── Lot description bullets ──
-    (bulletsHtml ? '<ul class="exp-bullets">' + bulletsHtml + '</ul>' : '') +
-    // ── What happens next (auction process guide) ──
-    '<details class="whn-section" style="margin-top:12px;border:1px solid var(--border);border-radius:10px;background:var(--white)">' +
-      '<summary style="padding:12px 16px;font-weight:600;font-size:.88rem;cursor:pointer;color:var(--text);list-style:none;display:flex;align-items:center;gap:8px">' +
-        '<span style="font-size:1.1rem">&#x1f4cb;</span> What happens next — auction buying guide' +
-        '<span style="margin-left:auto;font-size:.75rem;color:var(--text3);font-weight:400">Expand</span>' +
+    // The "what happens next" buyer's guide stays as an opt-in details
+    // disclosure below the magazine grid.
+    '<details class="whn-section" style="grid-column:1 / -1;margin-top:24px;border:1px solid var(--border-strong);border-radius:0;background:var(--paper)">' +
+      '<summary style="padding:12px 18px;font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;color:var(--ink);list-style:none;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border-strong)">' +
+        'What happens next — auction buying guide' +
+        '<span style="margin-left:auto;font-family:var(--font-mono);font-size:14px;color:var(--muted)">+</span>' +
       '</summary>' +
-      '<div style="padding:0 16px 16px;font-size:.82rem;color:var(--text2);line-height:1.7">' +
+      '<div style="padding:18px;font-family:var(--font-display);font-size:15px;color:var(--ink-2);line-height:1.6">' +
         '<div style="display:grid;gap:12px">' +
-          '<div style="padding:10px 12px;background:var(--surface2);border-radius:8px">' +
-            '<div style="font-weight:600;color:var(--text);margin-bottom:4px">1. Get the legal pack</div>' +
-            '<div>Download the legal pack from the auction house website (usually free). It contains title deeds, local authority searches, property information forms, and any special conditions. <strong>Have a solicitor review it before you bid</strong> — budget ~' + String.fromCharCode(163) + '500-' + String.fromCharCode(163) + '1,000 for this.</div>' +
-          '</div>' +
-          '<div style="padding:10px 12px;background:var(--surface2);border-radius:8px">' +
-            '<div style="font-weight:600;color:var(--text);margin-bottom:4px">2. Arrange a survey</div>' +
-            '<div>Book a building survey or at minimum a HomeBuyer report before auction day. Budget ~' + String.fromCharCode(163) + '400-' + String.fromCharCode(163) + '700. For heavily distressed properties, consider a full structural survey (~' + String.fromCharCode(163) + '800-' + String.fromCharCode(163) + '1,500). Some auction houses allow viewings — always attend if possible.</div>' +
-          '</div>' +
-          '<div style="padding:10px 12px;background:var(--surface2);border-radius:8px">' +
-            '<div style="font-weight:600;color:var(--text);margin-bottom:4px">3. Arrange finance</div>' +
-            '<div>If using bridging finance, get a Decision in Principle (DIP) before auction. Use the Finance Check above to see which lenders will fund this deal. Most bridging lenders can complete in 5-10 working days. You typically need 10% deposit on the day + funds for completion within 28 days (or as stated in special conditions).</div>' +
-          '</div>' +
-          '<div style="padding:10px 12px;background:var(--surface2);border-radius:8px">' +
-            '<div style="font-weight:600;color:var(--text);margin-bottom:4px">4. Register to bid</div>' +
-            '<div>Register with the auction house before the sale. You will need: photo ID (passport/driving licence), proof of address, proof of funds (bank statement or DIP letter), and your solicitor\'s details. Most houses now allow online bidding — register early as verification can take 24-48 hours.</div>' +
-          '</div>' +
-          '<div style="padding:10px 12px;background:var(--surface2);border-radius:8px">' +
-            '<div style="font-weight:600;color:var(--text);margin-bottom:4px">5. Set your maximum bid</div>' +
-            '<div>Use the Deal Stacking Calculator above to work out your numbers. Set a firm maximum and <strong>do not exceed it</strong>. Remember to factor in: SDLT, legal fees (~' + String.fromCharCode(163) + '1,500), survey, bridging costs, and refurb. The guide price is often just a starting point — final prices frequently exceed it.</div>' +
-          '</div>' +
-          '<div style="padding:10px 12px;background:var(--surface2);border-radius:8px">' +
-            '<div style="font-weight:600;color:var(--text);margin-bottom:4px">6. After the hammer falls</div>' +
-            '<div>If you win: you pay 10% deposit immediately (plus buyer\'s premium if applicable, usually ~' + String.fromCharCode(163) + '1,200). Exchange happens at the fall of the hammer — this is legally binding. Completion is typically 28 days (check special conditions). Your solicitor handles the conveyancing from here.</div>' +
-          '</div>' +
+          '<div><strong style="font-family:var(--font-main);font-weight:600;color:var(--ink)">1. Get the legal pack.</strong> Download from the auction house website (usually free). Have a solicitor review it before you bid — budget ~£500–£1,000.</div>' +
+          '<div><strong style="font-family:var(--font-main);font-weight:600;color:var(--ink)">2. Arrange a survey.</strong> Building survey or HomeBuyer report before auction day. Budget ~£400–£700, more for distressed properties.</div>' +
+          '<div><strong style="font-family:var(--font-main);font-weight:600;color:var(--ink)">3. Arrange finance.</strong> Get a Decision in Principle for bridging before bidding. Most bridging lenders complete in 5–10 working days.</div>' +
+          '<div><strong style="font-family:var(--font-main);font-weight:600;color:var(--ink)">4. Register to bid.</strong> Photo ID, proof of address, proof of funds, solicitor details. Allow 24–48 hours for verification.</div>' +
+          '<div><strong style="font-family:var(--font-main);font-weight:600;color:var(--ink)">5. Set your maximum bid.</strong> Use the deal stack above. Set a firm cap and do not exceed it. Factor SDLT, legals, survey, bridging, refurb.</div>' +
+          '<div><strong style="font-family:var(--font-main);font-weight:600;color:var(--ink)">6. After the hammer falls.</strong> 10% deposit immediately + buyer’s premium. Exchange at the fall of the hammer is legally binding. Completion typically 28 days.</div>' +
         '</div>' +
-        '<div style="margin-top:12px;padding:8px 12px;background:#fef3e2;border-radius:8px;color:var(--accent-warn);font-weight:500;font-size:.78rem">' +
-          'Remember: at auction, the fall of the hammer creates a binding contract. Always do your due diligence before bidding, not after.' +
+        '<div style="margin-top:14px;padding:8px 12px;background:var(--bg-2);border-left:2px solid var(--red);font-family:var(--font-display);font-size:13px;line-height:1.4;color:var(--ink-2)">' +
+          'At auction, the fall of the hammer creates a binding contract. Do your due diligence before bidding, not after.' +
         '</div>' +
       '</div>' +
     '</details>';
