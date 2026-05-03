@@ -188,9 +188,10 @@ app.get('*', (req, res) => {
 // ═══════════════════════════════════════════════════════════════
 // DEPENDENCY INJECTION — wire up lib/analysis.js and harness/manager.js
 // ═══════════════════════════════════════════════════════════════
-import { initAnalysis, autoAnalyseAll, healBrokenHouse, runEnrichmentWave } from './lib/analysis.js';
+import { initAnalysis, autoAnalyseAll, healBrokenHouse, runEnrichmentWave, drainHygieneRetries } from './lib/analysis.js';
 import { auditStatusDrift } from './lib/harness/sub-agents.js';
 import { initWatcher, watchAuctionCalendar } from './lib/pipeline/auction-watcher.js';
+import { syncCalendar } from './lib/pipeline/calendar-sync.js';
 import { pickNextHouseForDrift } from './lib/pipeline/drift-scheduler.js';
 import { initRentals, drainStaleRentals } from './lib/rentals/index.js';
 
@@ -254,7 +255,7 @@ initRentals({ supabase });
 // Boot   — Runs free enrichment after 60s. Triggers full pass only if last
 //          DB scrape was >25h ago, or if FORCE_BOOT_SCRAPE=true is set.
 
-const _scheduleState = { lastFullPass: 0, lastFreeEnrich: 0, lastStatusDrift: 0, lastRentalDrain: 0 };
+const _scheduleState = { lastFullPass: 0, lastFreeEnrich: 0, lastStatusDrift: 0, lastRentalDrain: 0, lastRetryDrain: 0 };
 
 function getUkHourMinute() {
   const ukNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/London' }));
@@ -336,12 +337,13 @@ async function bootDecision() {
       _scheduleState.lastFullPass = Date.now();
       withTier('full', async () => {
         try { await watchAuctionCalendar(); } catch (e) { console.error('SCHEDULE boot watcher failed (non-fatal):', e.message); }
+        try { await syncCalendar({ supabase }); } catch (e) { console.error('SCHEDULE boot syncCalendar failed (non-fatal):', e.message); }
         await autoAnalyseAll();
       }).catch(e => console.error('SCHEDULE boot full pass failed:', e.message));
     } else {
       console.log(`SCHEDULE: boot — skipping full pass (last scrape ${hoursSince}h ago); running free enrichment`);
       _scheduleState.lastFreeEnrich = Date.now();
-      withTier('free-enrichment', () => runEnrichmentWave({ freeOnly: true })).catch(e => console.error('SCHEDULE boot enrichment failed:', e.message));
+      withTier('free-enrichment', () => runEnrichmentWave({ freeOnly: true, drainRetries: false })).catch(e => console.error('SCHEDULE boot enrichment failed:', e.message));
     }
   } catch (e) {
     console.warn('SCHEDULE: boot DB check failed, defaulting to free enrichment:', e.message);
@@ -360,21 +362,35 @@ function scheduleTick() {
     console.log('SCHEDULE: 03:00 UK — running auction-watcher then full autoAnalyseAll');
     withTier('full', async () => {
       try { await watchAuctionCalendar(); } catch (e) { console.error('SCHEDULE watcher failed (non-fatal):', e.message); }
+      try { await syncCalendar(supabase, { log }); } catch (e) { console.error('SCHEDULE syncCalendar failed (non-fatal):', e.message); }
       await autoAnalyseAll();
       invalidateAllLotsCache(); // fresh scrape data should appear immediately
     }).catch(e => console.error('SCHEDULE full pass failed:', e.message));
   }
 
-  // Tier 2: Free enrichment every 30 min
+  // Tier 2: Free enrichment every 30 min (retry drain excluded — runs on Tier 5)
   if (now - _scheduleState.lastFreeEnrich > 30 * 60 * 1000) {
     _scheduleState.lastFreeEnrich = now;
-    withTier('free-enrichment', () => runEnrichmentWave({ freeOnly: true })).catch(e => console.error('SCHEDULE free enrichment failed:', e.message));
+    withTier('free-enrichment', () => runEnrichmentWave({ freeOnly: true, drainRetries: false })).catch(e => console.error('SCHEDULE free enrichment failed:', e.message));
   }
 
   // Tier 3: Status drift hourly 09–18 UK
   if (hour >= 9 && hour <= 18 && minute < 5 && now - _scheduleState.lastStatusDrift > 50 * 60 * 1000) {
     _scheduleState.lastStatusDrift = now;
     withTier('status-drift', () => statusDriftTick());
+  }
+
+  // Tier 5: Enrichment retry drain — twice daily at 03:05 and 13:00 UK.
+  // Runs after the 03:00 full pass and at a quiet midday window. Kept off
+  // the 30-min enrichment tick to avoid continuous individual DB PATCHes.
+  if ((hour === 3 && minute >= 5 && minute < 10) || (hour === 13 && minute < 5)) {
+    if (now - _scheduleState.lastRetryDrain > 6 * 60 * 60 * 1000) {
+      _scheduleState.lastRetryDrain = now;
+      console.log(`SCHEDULE: ${hour}:${String(minute).padStart(2,'0')} UK — running enrichment retry drain`);
+      drainHygieneRetries()
+        .then(r => console.log(`SCHEDULE retry drain: attempted=${r.attempted} ok=${r.ok} retried=${r.retried} gaveUp=${r.gaveUp} deferred=${r.deferred}`))
+        .catch(e => console.error('SCHEDULE retry drain failed:', e.message));
+    }
   }
 
   // Tier 4: Rental drain daily at 04:00 UK — runs after the 03:00 full
