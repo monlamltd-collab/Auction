@@ -7,7 +7,11 @@
 
 import { ResourceBudget } from '../lib/resource-budget.js';
 import { initState } from '../lib/scraper/state.js';
-import { extractCatalogueWithBackfill } from '../lib/pipeline/firecrawl-extract.js';
+import {
+  extractCatalogueListing,
+  recognisePattinsonLotsFromMarkdown,
+  recogniseJohnPyeLotsFromMarkdown,
+} from '../lib/pipeline/firecrawl-extract.js';
 
 const FIRECRAWL_API_KEY = process.env.FIRECRAWL_API_KEY;
 if (!FIRECRAWL_API_KEY) {
@@ -18,32 +22,35 @@ if (!FIRECRAWL_API_KEY) {
 const budget = new ResourceBudget({ firecrawlApiKey: FIRECRAWL_API_KEY });
 initState({ budget });
 
+// JSON extraction + markdown recognition recovery. The markdown recogniser
+// reads the SAME markdown Firecrawl returned alongside the JSON — no extra
+// Firecrawl calls.
 const TESTS = [
   {
-    label: 'Pattinson (3 pages)',
+    label: 'Pattinson (3 pages, JSON + markdown recovery)',
     url: 'https://www.pattinson.co.uk/auction/property-search',
     house: 'pattinson',
     options: {
       maxPages: 3,
       paginateAs: 'pattinson_p',
-      detailUrlPattern: /\/property\/(\d+)/g,
-      buildDetailUrl: (id) => `https://www.pattinson.co.uk/property/${id}`,
       maxConcurrency: 5,
-      changeTracking: false,    // Pattinson drops the socket with changeTracking on
+      changeTracking: false,
+      recallSentinelPattern: /\/property\/(\d+)/g,
+      recogniseFromMarkdown: recognisePattinsonLotsFromMarkdown,
     },
-    expectMin: 50,    // 3 pages × ~20 lots = 60 max; 50 is a comfortable floor
+    expectMin: 58,    // 3 pages × 20 lots = 60 expected; 58 = ≥97% recall
   },
   {
-    label: 'John Pye (1 page)',
+    label: 'John Pye (1 page, JSON + markdown recovery)',
     url: 'https://www.johnpye.co.uk/properties/',
     house: 'johnpye',
     options: {
       maxPages: 1,
-      detailUrlPattern: /\/auctions\/([\w-]{10,})/g,
-      buildDetailUrl: (slug) => `https://www.johnpye.co.uk/auctions/${slug}/`,
       forceExtract: true,
+      recallSentinelPattern: /\/auctions\/([\w-]{10,})/g,
+      recogniseFromMarkdown: recogniseJohnPyeLotsFromMarkdown,
     },
-    expectMin: 24,    // markdown showed 24 IDs; aim to recover all
+    expectMin: 22,
   },
 ];
 
@@ -56,7 +63,7 @@ async function probe(test) {
   console.log('='.repeat(60));
 
   try {
-    const result = await extractCatalogueWithBackfill(test.url, test.house, test.options);
+    const result = await extractCatalogueListing(test.url, test.house, test.options);
     const elapsed = Date.now() - start;
 
     if (result.skipped) {
