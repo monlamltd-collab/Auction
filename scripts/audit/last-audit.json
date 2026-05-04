@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-05-03T07:13:52.023Z",
+  "timestamp": "2026-05-04T07:43:22.256Z",
   "results": [
     {
       "house": "savills",
@@ -21,7 +21,7 @@
       "house": "sdl",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -29,15 +29,9 @@
       "house": "network",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 403,
+      "httpStatus": 200,
       "imgCoverage": null,
-      "issues": [
-        {
-          "type": "BLOCKED",
-          "severity": "BROKEN",
-          "detail": "Bot detection (Cloudflare) — 403"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "bondwolfe",
@@ -167,7 +161,7 @@
       "house": "edwardmellor",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -311,7 +305,7 @@
       "house": "harmanhealy",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -327,7 +321,7 @@
       "house": "robinsonhall",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -359,7 +353,7 @@
       "house": "durrants",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -413,7 +407,7 @@
       "house": "andrewcraig",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -421,7 +415,7 @@
       "house": "buttersjohnbee",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -485,43 +479,25 @@
       "house": "auctionhousenorthwest",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
-      "issues": [
-        {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (30s)"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "auctionhousenortheast",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
-      "issues": [
-        {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (30s)"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "auctionhousewales",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
-      "issues": [
-        {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (30s)"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "auctionhousebirmingham",
@@ -543,15 +519,9 @@
       "house": "auctionhousedevon",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
-      "issues": [
-        {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (30s)"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "auctionhousewestmidlands",
@@ -615,15 +585,9 @@
       "house": "auctionhousesouthyorkshire",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
-      "issues": [
-        {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (30s)"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "auctionhousewestyorkshire",
@@ -661,43 +625,25 @@
       "house": "auctionhouselincolnshire",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
-      "issues": [
-        {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (30s)"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "auctionhouseuklondon",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
-      "issues": [
-        {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (30s)"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "auctionhousebedsandbucks",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
-      "issues": [
-        {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (30s)"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "auctionhousenorthamptonshire",
@@ -791,15 +737,9 @@
       "house": "auctionhousenational",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
-      "issues": [
-        {
-          "type": "TIMEOUT",
-          "severity": "BROKEN",
-          "detail": "HTTP request timed out (30s)"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "sarahmains",
@@ -913,7 +853,7 @@
       "house": "sheldonbosley",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -965,7 +905,7 @@
       "house": "bagshaws",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -973,7 +913,7 @@
       "house": "wilsons",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -981,7 +921,7 @@
       "house": "strakers",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -989,7 +929,7 @@
       "house": "johnpye",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -997,21 +937,15 @@
       "house": "symondsandsampson",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 403,
+      "httpStatus": null,
       "imgCoverage": null,
-      "issues": [
-        {
-          "type": "BLOCKED",
-          "severity": "BROKEN",
-          "detail": "Bot detection (Cloudflare) — 403"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "stags",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1019,7 +953,7 @@
       "house": "lsh",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1027,7 +961,7 @@
       "house": "carterjonas",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1035,7 +969,7 @@
       "house": "gth",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1043,7 +977,7 @@
       "house": "halls",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1051,7 +985,7 @@
       "house": "walkersingleton",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 202,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1059,7 +993,7 @@
       "house": "driversnorris",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1067,7 +1001,7 @@
       "house": "shonkibros",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1075,7 +1009,7 @@
       "house": "robinjessop",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1083,7 +1017,7 @@
       "house": "cleetompkinson",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1091,7 +1025,7 @@
       "house": "mccartneys",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1099,7 +1033,7 @@
       "house": "bramleys",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1107,7 +1041,7 @@
       "house": "cooperandtanner",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1115,7 +1049,7 @@
       "house": "brutonknowles",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1123,21 +1057,15 @@
       "house": "fisherGerman",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 403,
+      "httpStatus": null,
       "imgCoverage": null,
-      "issues": [
-        {
-          "type": "BLOCKED",
-          "severity": "BROKEN",
-          "detail": "Bot detection (Cloudflare) — 403"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "woolleyandwallis",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1145,7 +1073,7 @@
       "house": "hobbsparker",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1153,7 +1081,7 @@
       "house": "hairandson",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1161,21 +1089,15 @@
       "house": "phillipssmithanddunn",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 404,
+      "httpStatus": null,
       "imgCoverage": null,
-      "issues": [
-        {
-          "type": "URL_DEAD",
-          "severity": "BROKEN",
-          "detail": "HTTP 404 — page not found"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "webbers",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1183,7 +1105,7 @@
       "house": "ahlondon",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1191,7 +1113,7 @@
       "house": "starpropertyonline",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1199,21 +1121,15 @@
       "house": "brggibsondublin",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 404,
+      "httpStatus": null,
       "imgCoverage": null,
-      "issues": [
-        {
-          "type": "URL_DEAD",
-          "severity": "BROKEN",
-          "detail": "HTTP 404 — page not found"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "propertysolvers",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1221,7 +1137,7 @@
       "house": "pugh",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1229,7 +1145,7 @@
       "house": "markjenkinson",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1237,7 +1153,7 @@
       "house": "regionalauctioneers",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1245,21 +1161,15 @@
       "house": "clarkegammon",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 404,
+      "httpStatus": null,
       "imgCoverage": null,
-      "issues": [
-        {
-          "type": "URL_DEAD",
-          "severity": "BROKEN",
-          "detail": "HTTP 404 — page not found"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "nesbits",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1267,7 +1177,7 @@
       "house": "pearsons",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1275,21 +1185,15 @@
       "house": "foxgrant",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 404,
+      "httpStatus": null,
       "imgCoverage": null,
-      "issues": [
-        {
-          "type": "URL_DEAD",
-          "severity": "BROKEN",
-          "detail": "HTTP 404 — page not found"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "bradleysdevon",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1297,7 +1201,7 @@
       "house": "taylerandfletcher",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 403,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1305,15 +1209,9 @@
       "house": "luscombemaye",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 404,
+      "httpStatus": null,
       "imgCoverage": null,
-      "issues": [
-        {
-          "type": "URL_DEAD",
-          "severity": "BROKEN",
-          "detail": "HTTP 404 — page not found"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "aldreds",
@@ -1327,7 +1225,7 @@
       "house": "humberts",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1335,7 +1233,7 @@
       "house": "allwalesauction",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1343,7 +1241,7 @@
       "house": "johnfrancis",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1351,7 +1249,7 @@
       "house": "morrismarshall",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1359,7 +1257,7 @@
       "house": "gherbertbanks",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 403,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1367,7 +1265,7 @@
       "house": "hawkesford",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1375,7 +1273,7 @@
       "house": "howkinsandharrison",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1383,21 +1281,15 @@
       "house": "scargillmann",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 404,
+      "httpStatus": null,
       "imgCoverage": null,
-      "issues": [
-        {
-          "type": "URL_DEAD",
-          "severity": "BROKEN",
-          "detail": "HTTP 404 — page not found"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "mellerbraggins",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1405,7 +1297,7 @@
       "house": "smithandsons",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1413,7 +1305,7 @@
       "house": "wrightmarshall",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1421,7 +1313,7 @@
       "house": "purplebricksgoto",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1429,21 +1321,15 @@
       "house": "groundrentauctions",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 404,
+      "httpStatus": null,
       "imgCoverage": null,
-      "issues": [
-        {
-          "type": "URL_DEAD",
-          "severity": "BROKEN",
-          "detail": "HTTP 404 — page not found"
-        }
-      ]
+      "issues": []
     },
     {
       "house": "benjaminstevens",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1451,7 +1337,7 @@
       "house": "auctionhammermidlands",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1459,7 +1345,7 @@
       "house": "sharpesauctions",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1467,7 +1353,7 @@
       "house": "jjmorris",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1475,7 +1361,7 @@
       "house": "rendells",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1483,7 +1369,7 @@
       "house": "pearsonferrier",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1491,7 +1377,7 @@
       "house": "247propertyauctions",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1499,7 +1385,7 @@
       "house": "rogerparry",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1507,7 +1393,7 @@
       "house": "hmox",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1523,7 +1409,7 @@
       "house": "cityandruralpropertyauctions",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1531,7 +1417,7 @@
       "house": "williamhbrownleeds",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     },
@@ -1539,7 +1425,7 @@
       "house": "williamhbrownnorwich",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 200,
+      "httpStatus": null,
       "imgCoverage": null,
       "issues": []
     }
