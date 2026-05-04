@@ -4336,8 +4336,14 @@ function buildExpV2Logistics(lot) {
 }
 
 function expandCard(lot) {
-  if (lot.anonGated) { $('signupModal').classList.add('show'); return; }
-  if (lot.blurred) { $('signupModal').classList.add('show'); return; }
+  // Trust the live Supabase session over stale lot flags. anonGated/blurred
+  // is stamped server-side at fetch time, but a signed-in user can carry over
+  // anon-flagged lot objects from a pre-auth fetch or the IndexedDB cache.
+  // The header chip uses currentSession (line 1257); the click gate must agree.
+  if (!currentSession) {
+    if (lot.anonGated) { $('signupModal').classList.add('show'); return; }
+    if (lot.blurred) { $('signupModal').classList.add('show'); return; }
+  }
   if (window.umami) umami.track('lot_expand', {
     lot_number: lot.lot || '', house: lot._house || '', guide_price: lot.price || 0
   });
