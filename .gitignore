@@ -47,6 +47,7 @@ all_lots.json
 
 # house discovery script output (review locally, never commit)
 discovery-output.json
+discovery-output-search.json
 
 # Self-healing snapshots — captured ad-hoc during heal-debug sessions, not
 # referenced by any test. Stay on disk for the active session, untracked.
