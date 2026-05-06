@@ -322,35 +322,59 @@ setInterval(() => {
   }
 }, 10 * 60 * 1000);
 
-// Returns active catalogue rows from cached_analyses, or synthesises them
-// from recent lots if cached_analyses is empty (admin clear-cache, deploy
-// issue, etc). Same fallback pattern as buildAllLotsResponse() — keeps the
-// site usable when the cache pointer table gets wiped.
+// Returns the union of active catalogue URLs from BOTH:
+//   (a) cached_analyses with unexpired TTL (recently scraped via cron)
+//   (b) lots table with last_seen_at within the last 14 days
+//
+// Previously this was fallback-only — (b) only fired when (a) was empty. That
+// was a degenerate edge case in practice: when scrape failures accumulated,
+// (a) would shrink to a handful of houses but stay non-empty, so the fallback
+// never triggered and the frontend silently lost ~80% of its inventory. The
+// 2026-05-06 lot-drop incident was exactly this pattern.
+//
+// Union approach: cached_analyses entries take precedence on duplicate URLs
+// (their created_at reflects a successful recent cron). Lots-table entries
+// fill the long tail of houses whose cache happens to have lapsed but whose
+// lots were still scraped recently enough to be relevant.
 async function getActiveCataloguesWithFallback() {
-  const { data, error } = await supabase
+  const fbCutoff = new Date(Date.now() - 14 * 86400000).toISOString();
+  const merged = new Map();
+
+  // (a) cached_analyses — primary source, takes precedence on duplicates
+  const { data: cacheRows, error: cacheErr } = await supabase
     .from('cached_analyses')
     .select('url, house, created_at')
     .gt('expires_at', new Date().toISOString());
-  if (error) return { rows: null, error, fromFallback: false };
-  if (data && data.length > 0) return { rows: data, error: null, fromFallback: false };
+  if (cacheErr) return { rows: null, error: cacheErr, fromFallback: false };
+  for (const r of (cacheRows || [])) {
+    merged.set(r.url, { url: r.url, house: r.house, created_at: r.created_at });
+  }
 
-  // Fallback: derive distinct catalogue_urls from lots seen in the last 14 days
-  const fbCutoff = new Date(Date.now() - 14 * 86400000).toISOString();
-  const { data: fbRows, error: fbErr } = await supabase
+  // (b) lots-table-recent — backfill houses whose cache has lapsed but
+  // whose lots were scraped within the last 14 days. Skip URLs already
+  // seen via cached_analyses (a fresher source).
+  const { data: lotsRows, error: lotsErr } = await supabase
     .from('lots')
     .select('catalogue_url, house, last_seen_at')
     .gte('last_seen_at', fbCutoff)
     .not('catalogue_url', 'is', null)
     .limit(10000);
-  if (fbErr || !fbRows || fbRows.length === 0) return { rows: null, error: fbErr, fromFallback: true };
-  const seen = new Map();
-  for (const r of fbRows) {
-    if (!seen.has(r.catalogue_url) || r.last_seen_at > seen.get(r.catalogue_url).created_at) {
-      seen.set(r.catalogue_url, { url: r.catalogue_url, house: r.house, created_at: r.last_seen_at });
+  if (!lotsErr && lotsRows) {
+    for (const r of lotsRows) {
+      if (merged.has(r.catalogue_url)) continue;
+      merged.set(r.catalogue_url, {
+        url: r.catalogue_url,
+        house: r.house,
+        created_at: r.last_seen_at,
+      });
     }
+  } else if (lotsErr) {
+    log.warn('lots-table fallback query failed', { err: lotsErr.message });
   }
-  log.warn('cached_analyses empty — synthesised active catalogues from lots table', { synthesised: seen.size });
-  return { rows: [...seen.values()], error: null, fromFallback: true };
+
+  if (merged.size === 0) return { rows: null, error: null, fromFallback: true };
+  const usedFallback = (cacheRows || []).length === 0;
+  return { rows: [...merged.values()], error: null, fromFallback: usedFallback };
 }
 
 router.post('/api/smart-search', async (req, res) => {
