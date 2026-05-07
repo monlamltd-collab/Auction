@@ -1285,6 +1285,12 @@ function onSignIn(session) {
   if (_prevUserId !== _curUserId) {
     window.__lastSignedInUserId = _curUserId;
     _clearCachedLots().finally(() => loadAllLots({ force: true }));
+    // Per-user lot actions and onboarding only need to fire on real identity
+    // change. On a cross-tab INITIAL_SESSION re-fire, loadUserActions() ends
+    // in renderLots() which trips _currentPage=1 — losing the user's place
+    // in pagination whenever they tab away and return.
+    loadUserActions().then(migrateLegacyFavourites);
+    maybeShowOnboarding();
   }
 
   // Check Pro status
@@ -1293,12 +1299,6 @@ function onSignIn(session) {
   // Load saved searches and alert status
   loadSavedSearches();
   loadUnsoldAlertStatus();
-
-  // Load per-user lot actions (likes / analysed / stacks) and merge legacy localStorage favs
-  loadUserActions().then(migrateLegacyFavourites);
-
-  // Show onboarding for first-time users
-  maybeShowOnboarding();
 }
 
 // Pulls likes + analysed lots and indexes them into window._userActions
@@ -2374,9 +2374,18 @@ function renderLots(){
     if(fa==='in_budget'&&fp.cash&&l._affTag!=='in_budget'&&l._affTag!=='unknown') return false;
     if(fa==='full_finance'&&fp.cash&&l._affTag!=='full_finance') return false;
     // Status / date filtering
+    // 'recently_unsold' surfaces lots whose auction passed within the last
+    // 30 days AND ended unsold — these are motivated-seller territory; the
+    // post-auction-sweep cron tags them accurately so the filter is reliable.
     if(SMART_RESULTS){
       if(fsold==='available'&&!(l.status==='available'||!l.status)) return false;
       else if(fsold==='unsold'&&l.status!=='unsold') return false;
+      else if(fsold==='recently_unsold'){
+        if(l.status!=='unsold') return false;
+        if(!l._auctionDate) return false;
+        const cutoff=new Date(_today); cutoff.setDate(cutoff.getDate()-30);
+        if(l._auctionDate < cutoff.toISOString().slice(0,10)) return false;
+      }
       else if(fsold==='sold'&&l.status!=='sold') return false;
       else if(fsold==='stc'&&l.status!=='stc') return false;
       else if(fsold==='withdrawn'&&l.status!=='withdrawn') return false;
@@ -2385,6 +2394,12 @@ function renderLots(){
       if(!fsold||fsold==='all'){ if(!(((!l.status||l.status==='available'||l.status==='unsold')&&notEnded))) return false; }
       else if(fsold==='available'){ if(!((l.status==='available'||!l.status)&&notEnded)) return false; }
       else if(fsold==='unsold'&&l.status!=='unsold') return false;
+      else if(fsold==='recently_unsold'){
+        if(l.status!=='unsold') return false;
+        if(!l._auctionDate) return false;
+        const cutoff=new Date(_today); cutoff.setDate(cutoff.getDate()-30);
+        if(l._auctionDate < cutoff.toISOString().slice(0,10)) return false;
+      }
       else if(fsold==='sold'&&l.status!=='sold') return false;
       else if(fsold==='stc'&&l.status!=='stc') return false;
       else if(fsold==='withdrawn'&&l.status!=='withdrawn') return false;

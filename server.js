@@ -194,6 +194,7 @@ import { initWatcher, watchAuctionCalendar } from './lib/pipeline/auction-watche
 import { syncCalendar } from './lib/pipeline/calendar-sync.js';
 import { pickNextHouseForDrift } from './lib/pipeline/drift-scheduler.js';
 import { initRentals, drainStaleRentals } from './lib/rentals/index.js';
+import { sweepPostAuctionStatuses } from './lib/pipeline/post-auction-sweep.js';
 
 initAnalysis({
   // Resource budget (new: centralised resource state)
@@ -255,7 +256,7 @@ initRentals({ supabase });
 // Boot   — Runs free enrichment after 60s. Triggers full pass only if last
 //          DB scrape was >25h ago, or if FORCE_BOOT_SCRAPE=true is set.
 
-const _scheduleState = { lastFullPass: 0, lastFreeEnrich: 0, lastStatusDrift: 0, lastRentalDrain: 0, lastRetryDrain: 0 };
+const _scheduleState = { lastFullPass: 0, lastFreeEnrich: 0, lastStatusDrift: 0, lastRentalDrain: 0, lastRetryDrain: 0, lastPostAuctionSweep: 0 };
 
 function getUkHourMinute() {
   const ukNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/London' }));
@@ -404,6 +405,21 @@ function scheduleTick() {
     drainStaleRentals({ limit: 50 })
       .then(r => console.log(`SCHEDULE rental drain: attempted=${r.attempted} ok=${r.ok} errors=${r.errors} skipped=${r.skipped || 0}`))
       .catch(e => console.error('SCHEDULE rental drain failed:', e.message));
+  }
+
+  // Tier 6: Post-auction status sweep daily at 05:00 UK. For lots whose
+  // auction date passed 1–30 days ago AND status is still 'available' or
+  // 'unsold', re-fetch the detail page once and capture the source's final
+  // status (sold/unsold/withdrawn/stc). Crucial for surfacing the
+  // motivated-seller pipeline (genuinely-unsold lots) accurately —
+  // without this, ~500 lots stay frozen at 'available' forever.
+  // Batch limit 100 — clears typical daily backlog while staying cheap.
+  if (hour === 5 && minute < 5 && now - _scheduleState.lastPostAuctionSweep > 60 * 60 * 1000) {
+    _scheduleState.lastPostAuctionSweep = now;
+    console.log('SCHEDULE: 05:00 UK — running sweepPostAuctionStatuses');
+    sweepPostAuctionStatuses()
+      .then(r => console.log(`SCHEDULE post-auction sweep: eligible=${r.eligible} fetched=${r.fetched} updated=${r.statusUpdated} unchanged=${r.noChange} dead=${r.urlDead} failed=${r.fetchFailed}`))
+      .catch(e => console.error('SCHEDULE post-auction sweep failed:', e.message));
   }
 }
 
