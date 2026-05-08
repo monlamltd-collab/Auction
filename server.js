@@ -195,6 +195,7 @@ import { syncCalendar } from './lib/pipeline/calendar-sync.js';
 import { pickNextHouseForDrift } from './lib/pipeline/drift-scheduler.js';
 import { initRentals, drainStaleRentals } from './lib/rentals/index.js';
 import { sweepPostAuctionStatuses } from './lib/pipeline/post-auction-sweep.js';
+import { sweepMultiImages } from './lib/pipeline/multi-image-sweep.js';
 
 initAnalysis({
   // Resource budget (new: centralised resource state)
@@ -256,7 +257,7 @@ initRentals({ supabase });
 // Boot   — Runs free enrichment after 60s. Triggers full pass only if last
 //          DB scrape was >25h ago, or if FORCE_BOOT_SCRAPE=true is set.
 
-const _scheduleState = { lastFullPass: 0, lastFreeEnrich: 0, lastStatusDrift: 0, lastRentalDrain: 0, lastRetryDrain: 0, lastPostAuctionSweep: 0, lastBudgetLog: 0 };
+const _scheduleState = { lastFullPass: 0, lastFreeEnrich: 0, lastStatusDrift: 0, lastRentalDrain: 0, lastRetryDrain: 0, lastPostAuctionSweep: 0, lastBudgetLog: 0, lastMultiImageSweep: 0 };
 
 function getUkHourMinute() {
   const ukNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/London' }));
@@ -435,6 +436,19 @@ function scheduleTick() {
     sweepPostAuctionStatuses()
       .then(r => console.log(`SCHEDULE post-auction sweep: eligible=${r.eligible} fetched=${r.fetched} updated=${r.statusUpdated} unchanged=${r.noChange} dead=${r.urlDead} failed=${r.fetchFailed}`))
       .catch(e => console.error('SCHEDULE post-auction sweep failed:', e.message));
+  }
+
+  // Tier 7: Multi-image gallery sweep daily at 06:00 UK. Active lots with
+  // fewer than 3 images get their detail page fetched once (50/day, 14-day
+  // cooldown) so the carousel quietly fills out as the backlog drains.
+  // ~50 Firecrawl credits/day = ~1,500/month — fits inside the steady-state
+  // budget with comfortable headroom.
+  if (hour === 6 && minute < 5 && now - _scheduleState.lastMultiImageSweep > 60 * 60 * 1000) {
+    _scheduleState.lastMultiImageSweep = now;
+    console.log('SCHEDULE: 06:00 UK — running sweepMultiImages');
+    sweepMultiImages()
+      .then(r => console.log(`SCHEDULE multi-image sweep: eligible=${r.eligible} fetched=${r.fetched} galleries=${r.galleryAdded} partial=${r.galleryPartial} noimgs=${r.noImagesFound} dead=${r.urlDead} failed=${r.fetchFailed} +${r.totalImagesAdded}imgs`))
+      .catch(e => console.error('SCHEDULE multi-image sweep failed:', e.message));
   }
 }
 
