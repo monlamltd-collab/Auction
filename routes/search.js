@@ -1039,9 +1039,15 @@ async function buildAllLotsResponse({ isSignedIn, includePast }) {
     const unsoldCutoff = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
     const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
 
+    // Always call get_active_lots — after the 2026-05-06 RPC rewrite (Fix B,
+    // see migrations/2026-05-06-rewrite-get-active-lots-rpc.sql) the RPC
+    // queries the lots table directly with a status + last_seen_at filter,
+    // bypassing cached_analyses. The fallback's lot-fetch is now redundant
+    // (and worse — Supabase REST defaults cap fallback at ~1000 rows). The
+    // fallback STILL runs to synthesize activeCatalogues for the `sources`
+    // array, but we no longer use its lot rows.
     const [lotResult, unsoldResult, calendarResult, skillsResult] = await Promise.all([
-      // Skip the RPC if we already loaded lot rows in the fallback above
-      usedFallback ? Promise.resolve({ data: fallbackLotRows, error: null }) : supabase.rpc('get_active_lots'),
+      supabase.rpc('get_active_lots'),
       supabase.from('lots').select(LOTS_SELECT)
         .in('status', ['unsold', 'withdrawn'])
         .gte('auction_date', unsoldCutoff)
