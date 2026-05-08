@@ -256,7 +256,7 @@ initRentals({ supabase });
 // Boot   — Runs free enrichment after 60s. Triggers full pass only if last
 //          DB scrape was >25h ago, or if FORCE_BOOT_SCRAPE=true is set.
 
-const _scheduleState = { lastFullPass: 0, lastFreeEnrich: 0, lastStatusDrift: 0, lastRentalDrain: 0, lastRetryDrain: 0, lastPostAuctionSweep: 0 };
+const _scheduleState = { lastFullPass: 0, lastFreeEnrich: 0, lastStatusDrift: 0, lastRentalDrain: 0, lastRetryDrain: 0, lastPostAuctionSweep: 0, lastBudgetLog: 0 };
 
 function getUkHourMinute() {
   const ukNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/London' }));
@@ -355,6 +355,21 @@ async function bootDecision() {
 function scheduleTick() {
   const { hour, minute } = getUkHourMinute();
   const now = Date.now();
+
+  // Surface Firecrawl credit usage hourly (top of the hour). Cheap
+  // observability — every campaign-driven spike now leaves a trail in the
+  // server log so we can diagnose 9k-credit-day surprises immediately
+  // instead of two weeks later from the Firecrawl dashboard.
+  if (minute === 0 && now - _scheduleState.lastBudgetLog > 50 * 60 * 1000) {
+    _scheduleState.lastBudgetLog = now;
+    const fc = budget.getFirecrawlStatus();
+    console.log(
+      `BUDGET-FC: today=${fc.creditsUsedToday}/${fc.dailyBudget} ` +
+      `cycle=${fc.creditsUsed}/${fc.monthlyBudget} ` +
+      `tiers=${JSON.stringify(fc.creditsByTier)} ` +
+      `flags=${[fc.dailyCapHit && 'daily-cap', fc.monthlyCapHit && 'monthly-cap', fc.creditExhausted && 'plan-exhausted', fc.temporarilyDown && 'down'].filter(Boolean).join(',') || 'ok'}`
+    );
+  }
 
   // Tier 1: Full pass at 03:00 UK — watcher first (discovers Cat B URLs),
   // then autoAnalyseAll scrapes whatever the calendar now points at.
