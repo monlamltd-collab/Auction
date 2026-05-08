@@ -87,7 +87,7 @@ All configuration is via **environment variables**. No `.env` files are committe
 | Variable | Default | Purpose |
 |---|---|---|
 | `PORT` | 3000 | Server port (Railway sets this) |
-| `FIRECRAWL_MONTHLY_BUDGET` | 15000 | Monthly Firecrawl credit cap |
+| `FIRECRAWL_MONTHLY_BUDGET` | 200000 | Optional soft cap on monthly Firecrawl credits (set lower to throttle below plan quota) |
 | `FIRECRAWL_SKIP_HOUSES` | (empty) | Comma-separated house slugs to bypass Firecrawl |
 | `FIRECRAWL_MIN_GAP_MS` | 300 | Minimum gap between Firecrawl API calls |
 | `ALLOWED_ORIGINS` | bridgematch.co.uk domains | CORS allowed origins |
