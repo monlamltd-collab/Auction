@@ -1,23 +1,22 @@
 // routes/analyse.js — Analyse catalogue route (extracted from server.js)
 import { Router } from 'express';
-import { JSDOM } from 'jsdom';
 import { supabase } from '../lib/supabase.js';
 import { validateUserFromReq, safeCompare, getClientIP } from '../lib/auth.js';
 import { validateUrl } from '../lib/security.js';
 import { log, sseWrite } from '../lib/logging.js';
-import { resolveEffectiveTier, getCacheTTL, RATE_LIMIT_PER_DAY, FREE_SCAN_LIMIT, stripAIFields, HEADERS, MAX_LOTS_PER_SCRAPE } from '../lib/config.js';
+import { resolveEffectiveTier, getCacheTTL, RATE_LIMIT_PER_DAY, FREE_SCAN_LIMIT, stripAIFields, HEADERS } from '../lib/config.js';
 import { getAuctionDateForUrl } from '../lib/calendar.js';
 import { detectAuctionHouse, getHouseDisplayName, HOUSE_DISPLAY_NAMES, rewriteUrl } from '../lib/houses.js';
 import { normaliseUrl } from '../lib/utils.js';
 import {
-  scrapeRenderedPage, scrapeAllPages, scrapeAllsopApi, extractAllsopLotsFromJson,
-  detectTotalPages, buildPageUrl, extractLotsWithAI, extractLotsFromPdf, isPdfUrl, fetchPage,
+  scrapeRenderedPage, scrapeAllsopApi, extractAllsopLotsFromJson,
+  extractLotsWithAI, extractLotsFromPdf, isPdfUrl,
   enrichLotsFromLotPages, normaliseLotStatuses,
   getLastScrapeEngine, getLastAITier,
-  fetchLotPage, cacheLotDetail, withTier,
+  cacheLotDetail, withTier,
 } from '../lib/scraper.js';
-import { extractLotDetail } from '../lib/extractors/details/runner.js';
-import { extractWithJSDOM, DOM_EXTRACTORS, getLastExtractorUsed, setLastExtractorUsed } from '../lib/extractors/index.js';
+import { getLastExtractorUsed } from '../lib/scraper/state.js';
+import { extractCatalogueListing, extractLotDetailFirecrawl } from '../lib/pipeline/firecrawl-extract.js';
 import { enrichLots } from '../lib/enrichment.js';
 import { enrichLotsWithFundability } from '../lib/fundability.js';
 import { qualityGate, analyseLot, upsertToLotsTable, logActivityEvent, dbRowToFrontendLot, LOTS_SELECT } from '../lib/analysis.js';
@@ -28,31 +27,13 @@ const router = Router();
 // ── Config constants ──
 const RATE_LIMIT = RATE_LIMIT_PER_DAY;
 
-// ═══════════════════════════════════════════════════════════════
-// BROKEN EXTRACTOR TRACKING (auto-populated by audit, persisted to Supabase)
-// ═══════════════════════════════════════════════════════════════
+// BROKEN_EXTRACTORS retired 2026-05-08 with the DOM-extractor system.
+// Per-house "this extractor is broken, skip it" tracking made sense when
+// each house had its own JSDOM extractor; with Firecrawl JSON extract as
+// the unified path, regressions surface via pipeline_alerts and are
+// addressed at the schema/prompt level, not per-house.
 const BROKEN_EXTRACTORS = new Set();
-
-// Load broken extractors from Supabase on startup
-async function loadBrokenExtractors() {
-  try {
-    const { data, error } = await supabase
-      .from('house_skills')
-      .select('slug')
-      .eq('status', 'broken');
-    if (error) { console.warn('BROKEN: Failed to load broken extractors:', error.message); return; }
-    if (data) {
-      for (const row of data) {
-        BROKEN_EXTRACTORS.add(row.slug);
-      }
-      if (BROKEN_EXTRACTORS.size > 0) {
-        console.log(`BROKEN: Loaded ${BROKEN_EXTRACTORS.size} broken extractors from Supabase: ${[...BROKEN_EXTRACTORS].join(', ')}`);
-      }
-    }
-  } catch (err) {
-    console.warn('BROKEN: Failed to load broken extractors:', err.message);
-  }
-}
+async function loadBrokenExtractors() { /* no-op retained for import compatibility */ }
 
 // ═══════════════════════════════════════════════════════════════
 // API: ANALYSE CATALOGUE
@@ -212,247 +193,38 @@ router.post('/api/analyse', async (req, res) => {
         sseWrite(res, 'phase', { step: 'extracting' });
         rawLots = extractAllsopLotsFromJson(pages);
       }
-    } else if (rewritten.preferPuppeteer) {
-      // JS-rendered sites: use Firecrawl+JSDOM (primary) or Puppeteer (fallback)
-      console.log(`Scraping JS-rendered site for ${house} (Firecrawl primary, Puppeteer fallback)...`);
-
+    } else {
+      // ── Firecrawl JSON extract — handles pagination natively ──
+      // forceExtract=true: /analyse is user-initiated, bypass changeTracking
+      // short-circuit so the response always reflects the live catalogue.
+      sseWrite(res, 'phase', { step: 'extracting' });
       try {
-        // Paginated sites: build page URLs, scrape each with scrapeRenderedPage + extractWithJSDOM
-        if (rewritten.paginateAs === 'savills_pages') {
-          console.log(`Loading paginated Savills catalogue...`);
-          const firstResult = await scrapeRenderedPage(scrapeUrl, house);
-          // Detect total pages from first page HTML
-          const dom = new JSDOM(firstResult.html, { url: scrapeUrl });
-          const totalPages = (() => {
-            const pageLinks = dom.window.document.querySelectorAll('a[href*="/page-"]');
-            let max = 1;
-            for (const a of pageLinks) {
-              const m = a.textContent.trim().match(/^(\d+)$/);
-              if (m) max = Math.max(max, parseInt(m[1]));
-            }
-            return max;
-          })();
-          dom.window.close();
-          console.log(`Savills: detected ${totalPages} pages`);
-          sseWrite(res, 'scrape', { pages: totalPages, lots: 0 });
+        const result = await extractCatalogueListing(scrapeUrl, house, {
+          paginateAs: rewritten.paginateAs,
+          maxPages: 25,
+          forceExtract: true,
+        });
+        rawLots = result.lots || [];
+        sseWrite(res, 'scrape', { pages: 1, lots: rawLots.length });
+        console.log(`Firecrawl extract for ${house}: ${rawLots.length} lots`);
 
-          const firstPageLots = extractWithJSDOM(firstResult.html, house, scrapeUrl, firstResult.images);
-          if (firstPageLots && firstPageLots.length > 0) rawLots.push(...firstPageLots);
-          sseWrite(res, 'scrape', { pages: totalPages, lots: rawLots.length });
-          console.log(`Page 1: ${firstPageLots ? firstPageLots.length : 0} lots`);
-
-          const maxPages = Math.min(totalPages, 50);
-          for (let p = 2; p <= maxPages; p++) {
-            try {
-              const pageResult = await scrapeRenderedPage(`${scrapeUrl}/page-${p}`, house);
-              const pageLots = extractWithJSDOM(pageResult.html, house, `${scrapeUrl}/page-${p}`, pageResult.images);
-              if (pageLots && pageLots.length > 0) rawLots.push(...pageLots);
-              console.log(`Page ${p}: ${pageLots ? pageLots.length : 0} lots`);
-            } catch (e) {
-              console.log(`Page ${p} failed: ${e.message}`);
-            }
-          }
-          console.log(`Savills total: ${rawLots.length} lots from ${maxPages} pages via DOM extraction`);
-
-        } else if (rewritten.paginateAs === 'sdl_pages') {
-          console.log(`Loading paginated SDL catalogue...`);
-          const firstResult = await scrapeRenderedPage(scrapeUrl, house);
-          const sdlTotalPages = detectTotalPages(firstResult.html, scrapeUrl, house);
-          console.log(`SDL: detected ${sdlTotalPages} pages`);
-
-          const sdlFirstLots = extractWithJSDOM(firstResult.html, house, scrapeUrl, firstResult.images);
-          if (sdlFirstLots && sdlFirstLots.length > 0) rawLots.push(...sdlFirstLots);
-          console.log(`SDL Page 1: ${sdlFirstLots ? sdlFirstLots.length : 0} lots`);
-
-          const sdlMaxPages = Math.min(sdlTotalPages, 40);
-          for (let p = 2; p <= sdlMaxPages; p++) {
-            const sep = scrapeUrl.includes('?') ? '&' : '?';
-            const pageUrl = `${scrapeUrl}${sep}page=${p}`;
-            try {
-              const pageResult = await scrapeRenderedPage(pageUrl, house);
-              const pageLots = extractWithJSDOM(pageResult.html, house, pageUrl, pageResult.images);
-              if (pageLots && pageLots.length > 0) {
-                rawLots.push(...pageLots);
-                console.log(`SDL Page ${p}: ${pageLots.length} lots`);
-              } else {
-                console.log(`SDL Page ${p}: 0 lots — stopping pagination`);
-                break;
-              }
-            } catch (e) {
-              console.log(`SDL Page ${p} failed: ${e.message}`);
-              break;
-            }
-          }
-          console.log(`SDL total: ${rawLots.length} lots via DOM extraction`);
-
-        } else if (rewritten.paginateAs === 'pugh_pages') {
-          // Pugh: server-rendered Laravel — plain HTTP + JSDOM (no Firecrawl needed)
-          console.log(`Loading paginated Pugh catalogue (plain HTTP)...`);
-          const pughHtml1 = await fetchPage(scrapeUrl);
-          const pughPage1Lots = extractWithJSDOM(pughHtml1, house, scrapeUrl);
-          if (pughPage1Lots && pughPage1Lots.length > 0) rawLots.push(...pughPage1Lots);
-          console.log(`Pugh Page 1: ${pughPage1Lots ? pughPage1Lots.length : 0} lots`);
-
-          // Detect total pages from first page HTML
-          const pughTotalPages = detectTotalPages(pughHtml1, scrapeUrl, house);
-          const pughMaxPages = Math.min(pughTotalPages, 65);
-          console.log(`Pugh: detected ${pughTotalPages} pages, loading up to ${pughMaxPages}`);
-
-          for (let p = 2; p <= pughMaxPages; p++) {
-            const pageUrl = buildPageUrl(scrapeUrl, p, house);
-            try {
-              const pageHtml = await fetchPage(pageUrl);
-              const pageLots = extractWithJSDOM(pageHtml, house, pageUrl);
-              if (pageLots && pageLots.length > 0) {
-                rawLots.push(...pageLots);
-                if (p % 10 === 0) console.log(`Pugh Page ${p}: ${pageLots.length} lots (total so far: ${rawLots.length})`);
-              } else {
-                console.log(`Pugh Page ${p}: 0 lots — stopping pagination`);
-                break;
-              }
-              await new Promise(r => setTimeout(r, 200));
-            } catch (e) {
-              console.log(`Pugh Page ${p} failed: ${e.message}`);
-              break;
-            }
-          }
-          console.log(`Pugh total: ${rawLots.length} lots via DOM extraction`);
-
-        } else {
-          // ── Generic extraction with auto-pagination ──
-          console.log(`Loading ${scrapeUrl} for ${house}`);
-          const analyseOpts = {};
-          if (rewritten.waitFor) analyseOpts.waitFor = rewritten.waitFor;
-          if (rewritten.actions) analyseOpts.actions = rewritten.actions;
-          const firstResult = await scrapeRenderedPage(scrapeUrl, house, analyseOpts);
-
-          const domLots = extractWithJSDOM(firstResult.html, house, scrapeUrl, firstResult.images);
-          if (domLots && domLots.length >= 3) {
-            rawLots.push(...domLots);
-            console.log(`${house} Page 1: ${domLots.length} lots via DOM extraction`);
-
-            // Auto-detect pagination from HTML
-            const detectedPages = detectTotalPages(firstResult.html, scrapeUrl, house);
-            if (detectedPages > 1) {
-              const maxPages = Math.min(detectedPages, 25);
-              console.log(`${house}: detected ${detectedPages} pages, loading up to ${maxPages}`);
-
-              for (let p = 2; p <= maxPages; p++) {
-                if (rawLots.length >= MAX_LOTS_PER_SCRAPE) { console.log(`${house}: lot cap reached at ${rawLots.length}`); break; }
-                const pageUrl = buildPageUrl(scrapeUrl, p, house);
-                try {
-                  const pageResult = await scrapeRenderedPage(pageUrl, house);
-                  const pageLots = extractWithJSDOM(pageResult.html, house, pageUrl, pageResult.images);
-                  if (pageLots && pageLots.length > 0) {
-                    rawLots.push(...pageLots);
-                    console.log(`${house} Page ${p}: ${pageLots.length} lots`);
-                  } else {
-                    console.log(`${house} Page ${p}: 0 lots — stopping pagination`);
-                    break;
-                  }
-                } catch (e) {
-                  console.log(`${house} Page ${p} failed: ${e.message}`);
-                  break;
-                }
-              }
-            }
-            if (rawLots.length > MAX_LOTS_PER_SCRAPE) {
-              console.log(`${house}: capping ${rawLots.length} lots to ${MAX_LOTS_PER_SCRAPE}`);
-              rawLots = rawLots.slice(0, MAX_LOTS_PER_SCRAPE);
-            }
-            setLastExtractorUsed(DOM_EXTRACTORS[house] ? 'dom-house' : 'dom-generic');
-            console.log(`${house} total: ${rawLots.length} lots via DOM extraction (no Claude needed)`);
-          } else {
-            // Fall back to Claude extraction
-            if (domLots && domLots.length > 0) {
-              console.log(`DOM extractor found only ${domLots.length} lots for ${house} (below threshold of 3), falling back to Claude`);
-            }
-            console.log(`Got ${firstResult.html.length} chars, sending to Claude...`);
-            const renderedPages = [{ page: 1, html: firstResult.html, markdown: firstResult.markdown }];
-            sseWrite(res, 'phase', { step: 'extracting' });
-            rawLots = await extractLotsWithAI(renderedPages, house, onExtract, scrapeUrl);
-            console.log(`Claude extracted ${rawLots.length} lots from rendered content`);
-
-            // ── DOM→Gemini merge: harvest URLs + images from DOM, merge into Gemini lots ──
-            if (rawLots.length > 0 && firstResult.html) {
-              const domHarvest = extractWithJSDOM(firstResult.html, house, scrapeUrl, firstResult.images);
-              if (domHarvest && domHarvest.length > 0) {
-                const domByLot = {};
-                for (const d of domHarvest) { if (d.lot) domByLot[d.lot] = d; }
-                let urlsMerged = 0, imgsMerged = 0;
-                for (const lot of rawLots) {
-                  const dom = domByLot[lot.lot];
-                  if (!dom) continue;
-                  if (!lot.url && dom.url) { lot.url = dom.url; urlsMerged++; }
-                  if (!lot.imageUrl && dom.imageUrl) { lot.imageUrl = dom.imageUrl; imgsMerged++; }
-                }
-                if (urlsMerged === 0 && imgsMerged === 0 && domHarvest.length >= rawLots.length * 0.5) {
-                  for (let i = 0; i < rawLots.length && i < domHarvest.length; i++) {
-                    if (!rawLots[i].url && domHarvest[i].url) { rawLots[i].url = domHarvest[i].url; urlsMerged++; }
-                    if (!rawLots[i].imageUrl && domHarvest[i].imageUrl) { rawLots[i].imageUrl = domHarvest[i].imageUrl; imgsMerged++; }
-                  }
-                }
-                if (urlsMerged > 0 || imgsMerged > 0) {
-                  console.log(`DOM→Gemini merge for ${house}: ${urlsMerged} URLs, ${imgsMerged} images`);
-                }
-              }
-            }
+        // Gemini fallback if Firecrawl JSON returned nothing useful.
+        if (rawLots.length === 0) {
+          console.log(`Firecrawl extract returned 0 lots for ${house}; falling back to Gemini`);
+          const renderOpts = {};
+          if (rewritten.waitFor) renderOpts.waitFor = rewritten.waitFor;
+          if (rewritten.actions) renderOpts.actions = rewritten.actions;
+          const rendered = await scrapeRenderedPage(scrapeUrl, house, renderOpts);
+          if (rendered && rendered.html) {
+            const renderedPages = [{ page: 1, html: rendered.html, markdown: rendered.markdown }];
+            rawLots = await extractLotsWithAI(renderedPages, house, onExtract, scrapeUrl) || [];
+            console.log(`Gemini fallback for ${house}: ${rawLots.length} lots`);
           }
         }
       } catch (err) {
-        log.error('JS-rendered scraping failed', { house, error: err.message });
+        log.error('Catalogue extraction failed', { house, error: err.message });
         sseWrite(res, 'error', { message: 'Scraping engine unavailable — please try again in a moment.' });
         return res.end();
-      }
-    } else {
-      // Standard static HTML scraping
-      pages = await scrapeAllPages(scrapeUrl, house);
-      sseWrite(res, 'scrape', { pages: pages ? pages.length : 0 });
-      if (pages && pages.length > 0) {
-        sseWrite(res, 'phase', { step: 'extracting' });
-        rawLots = await extractLotsWithAI(pages, house, onExtract, scrapeUrl);
-      }
-      // Rendered page fallback if static scraping found nothing
-      const SKIP_PUPPETEER = ['philliparnold','knightfrank'];
-      if (rawLots.length === 0 && !SKIP_PUPPETEER.includes(house)) {
-        console.log(`No lots from static HTML, trying rendered scraping for ${house}...`);
-        try {
-          const rendered = await scrapeRenderedPage(url, house);
-          if (rendered.html) {
-            const renderedLots = extractWithJSDOM(rendered.html, house, url, rendered.images);
-            if (renderedLots && renderedLots.length > 0) {
-              rawLots = renderedLots;
-              console.log(`Rendered scraping got ${rawLots.length} lots via DOM extraction`);
-            } else {
-              const renderedPages = [{ page: 1, html: rendered.html, markdown: rendered.markdown }];
-              sseWrite(res, 'phase', { step: 'extracting' });
-              rawLots = await extractLotsWithAI(renderedPages, house, onExtract, scrapeUrl);
-              console.log(`Claude extracted ${rawLots.length} lots from rendered content`);
-              // DOM→Gemini merge
-              if (rawLots.length > 0) {
-                const domH = extractWithJSDOM(rendered.html, house, url, rendered.images);
-                if (domH && domH.length > 0) {
-                  const byLot = {}; for (const d of domH) { if (d.lot) byLot[d.lot] = d; }
-                  let um = 0, im = 0;
-                  for (const lot of rawLots) {
-                    const d = byLot[lot.lot]; if (!d) continue;
-                    if (!lot.url && d.url) { lot.url = d.url; um++; }
-                    if (!lot.imageUrl && d.imageUrl) { lot.imageUrl = d.imageUrl; im++; }
-                  }
-                  if (um === 0 && im === 0 && domH.length >= rawLots.length * 0.5) {
-                    for (let i = 0; i < rawLots.length && i < domH.length; i++) {
-                      if (!rawLots[i].url && domH[i].url) { rawLots[i].url = domH[i].url; um++; }
-                      if (!rawLots[i].imageUrl && domH[i].imageUrl) { rawLots[i].imageUrl = domH[i].imageUrl; im++; }
-                    }
-                  }
-                  if (um > 0 || im > 0) console.log(`DOM→Gemini merge (fallback): ${um} URLs, ${im} images`);
-                }
-              }
-            }
-          }
-        } catch (err) {
-          console.log(`Rendered scraping fallback failed for ${house}: ${err.message}`);
-        }
       }
     }
 
@@ -639,33 +411,30 @@ router.post('/api/lot', async (req, res) => {
     const house = detectAuctionHouse(url);
     if (!house || house === 'unknown') return res.status(400).json({ error: 'Could not detect auction house from URL' });
 
-    // Fetch the lot page (cache → http → Firecrawl)
-    const result = await fetchLotPage(url, { house });
-    if (!result || !result.html) {
+    // Firecrawl JSON detail extract — single call, fetches + extracts.
+    const detail = await extractLotDetailFirecrawl(url, house);
+    if (!detail) {
       return res.status(502).json({ error: 'Failed to fetch lot page' });
     }
-
-    // Run the detail extractor
-    const detail = extractLotDetail(result.html, house, result.url || url);
 
     // Build a lot object — fall back to URL-only if extractor returned nothing
     const lot = {
       house,
-      url: result.url || url,
-      lot: null,
-      address: detail?.address || '',
-      postcode: detail?.postcode || null,
-      price: detail?.price || null,
-      priceText: detail?.priceText || null,
-      bullets: detail?.bullets || [],
-      images: detail?.images || [],
-      imageUrl: detail?.imageUrl || (detail?.images?.[0] || null),
-      tenure: detail?.tenure || null,
-      leaseLength: detail?.leaseLength || null,
-      propType: detail?.propType || null,
-      beds: detail?.beds ?? null,
-      vacant: detail?.vacant ?? null,
-      viewingDates: detail?.viewingDates || [],
+      url,
+      lot: detail.lot ?? null,
+      address: detail.address || '',
+      postcode: detail.postcode || null,
+      price: detail.price || null,
+      priceText: detail.priceText || null,
+      bullets: detail.bullets || [],
+      images: detail.images || [],
+      imageUrl: detail.imageUrl || (detail.images?.[0] || null),
+      tenure: detail.tenure || null,
+      leaseLength: detail.leaseLength || null,
+      propType: detail.propType || null,
+      beds: detail.beds ?? null,
+      vacant: detail.vacant ?? null,
+      viewingDates: detail.viewingDates || [],
     };
 
     // Score it
@@ -678,17 +447,18 @@ router.post('/api/lot', async (req, res) => {
       log.warn('on-demand /api/lot enrichLots failed (non-fatal)', { error: e.message });
     }
 
-    // Persist extracted_data to lot_details cache so the structured payload
-    // is reusable next time (avoids re-extraction even on cache hit).
+    // Persist extracted_data to lot_details cache. The HTML field is no
+    // longer captured (Firecrawl JSON extract returns structured data only),
+    // so cacheLotDetail is called with an empty html string.
     try {
-      await cacheLotDetail(lot.url, house, result.html, detail || {}, result.source);
+      await cacheLotDetail(lot.url, house, '', detail || {}, 'firecrawl-json');
     } catch { /* non-fatal */ }
 
     return res.json({
       lot,
       house,
       displayName: getHouseDisplayName(house, url),
-      source: result.source,
+      source: 'firecrawl-json',
     });
   } catch (err) {
     log.error('/api/lot error', { error: err.message });

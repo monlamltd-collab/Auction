@@ -15,7 +15,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { readFileSync } from 'fs';
-import { DOM_EXTRACTORS, initExtractors, getLastExtractorUsed, extractWithJSDOM } from './lib/extractors/index.js';
+import { getLastExtractorUsed } from './lib/scraper/state.js';
 import { callAI, initAI } from './lib/ai-provider.js';
 import { ResourceBudget } from './lib/resource-budget.js';
 import {
@@ -23,7 +23,7 @@ import {
   FIRECRAWL_API_KEY, FIRECRAWL_SKIP, scrapeWithFirecrawl, scrapeRenderedPage,
   scrapeAllPages, scrapeAllsopApi, extractAllsopLotsFromJson, enrichAllsopLots,
   detectTotalPages, buildPageUrl, fetchPage, extractLotsWithAI,
-  backfillImages, backfillImagesWithFirecrawl, backfillImagesWithPuppeteer,
+  backfillImages, backfillImagesWithFirecrawl,
   backfillImagesFromLotPages, fetchLotPage, normaliseLotStatuses, puppeteer,
   isFcCreditExhausted, getFcExhaustedAt, setFcCreditExhausted, setFcExhaustedAt,
   isFcTemporarilyDown, getFcDownAt, setFcTemporarilyDown, setFcDownAt, setFcConsecutive5xx,
@@ -84,8 +84,10 @@ app.use((req, res, next) => {
   next();
 });
 
-import { BROKEN_EXTRACTORS, loadBrokenExtractors } from './routes/analyse.js';
-loadBrokenExtractors().then(() => initExtractors({ brokenExtractors: BROKEN_EXTRACTORS }));
+// BROKEN_EXTRACTORS + initExtractors retired 2026-05-08 with the
+// DOM-extractor system. Catalogue extraction is now Firecrawl JSON
+// extract → Gemini fallback; per-house "broken extractor" tracking
+// no longer applies.
 
 // ── Security middleware (from lib/security.js) ──
 app.use(securityHeaders);
@@ -194,6 +196,8 @@ import { initWatcher, watchAuctionCalendar } from './lib/pipeline/auction-watche
 import { syncCalendar } from './lib/pipeline/calendar-sync.js';
 import { pickNextHouseForDrift } from './lib/pipeline/drift-scheduler.js';
 import { initRentals, drainStaleRentals } from './lib/rentals/index.js';
+import { initHpi } from './lib/land-registry-hpi.js';
+import { initCompanies } from './lib/land-registry-companies.js';
 import { sweepPostAuctionStatuses } from './lib/pipeline/post-auction-sweep.js';
 import { sweepMultiImages } from './lib/pipeline/multi-image-sweep.js';
 
@@ -204,13 +208,14 @@ initAnalysis({
   FIRECRAWL_API_KEY, FIRECRAWL_SKIP, scrapeWithFirecrawl, scrapeRenderedPage,
   scrapeAllPages, scrapeAllsopApi, extractAllsopLotsFromJson, enrichAllsopLots,
   detectTotalPages, buildPageUrl, fetchPage, extractLotsWithAI,
-  backfillImages, backfillImagesWithFirecrawl, backfillImagesWithPuppeteer,
+  backfillImages, backfillImagesWithFirecrawl,
   backfillImagesFromLotPages, fetchLotPage, normaliseLotStatuses, puppeteer,
   isFcCreditExhausted, getFcExhaustedAt, setFcCreditExhausted, setFcExhaustedAt,
   isFcTemporarilyDown, getFcDownAt, setFcTemporarilyDown, setFcDownAt, setFcConsecutive5xx,
   getLastScrapeEngine, getLastAITier,
-  // Extractors
-  DOM_EXTRACTORS, extractWithJSDOM, getLastExtractorUsed,
+  // Extractor provenance — DOM extractors retired 2026-05-08; getter
+  // remains for stamping lots.extracted_with ('firecrawl-json' | 'gemini').
+  getLastExtractorUsed,
   // Enrichment
   extractPostcode, enrichLots, enrichLotsFromLotPages,
   // Houses
@@ -227,7 +232,6 @@ initAnalysis({
 initManager({
   supabase, callAI,
   houseRoots: HOUSE_ROOTS,
-  domExtractors: DOM_EXTRACTORS,
   healBrokenHouse,
   getCircuitBreakers,
 });
@@ -245,6 +249,12 @@ initWatcher({
 // admin /api/admin/rentals/drain endpoint or future cron.
 initRentals({ supabase });
 
+// Wire HMLR bulk-loaded query modules (HPI, CCOD/OCOD).
+// Data refreshed monthly via scripts/refresh-hmlr-hpi.mjs and
+// scripts/refresh-hmlr-companies.mjs.
+initHpi({ supabase });
+initCompanies({ supabase });
+
 // ═══════════════════════════════════════════════════════════════
 // THREE-TIER SCHEDULING
 // ═══════════════════════════════════════════════════════════════
@@ -257,7 +267,7 @@ initRentals({ supabase });
 // Boot   — Runs free enrichment after 60s. Triggers full pass only if last
 //          DB scrape was >25h ago, or if FORCE_BOOT_SCRAPE=true is set.
 
-const _scheduleState = { lastFullPass: 0, lastFreeEnrich: 0, lastStatusDrift: 0, lastRentalDrain: 0, lastRetryDrain: 0, lastPostAuctionSweep: 0, lastBudgetLog: 0, lastMultiImageSweep: 0 };
+const _scheduleState = { lastFullPass: 0, lastFreeEnrich: 0, lastStatusDrift: 0, lastRentalDrain: 0, lastRetryDrain: 0, lastPostAuctionSweep: 0, lastBudgetLog: 0, lastMultiImageSweep: 0, lastHmlrRefresh: 0 };
 
 function getUkHourMinute() {
   const ukNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/London' }));
@@ -436,6 +446,37 @@ function scheduleTick() {
     sweepPostAuctionStatuses()
       .then(r => console.log(`SCHEDULE post-auction sweep: eligible=${r.eligible} fetched=${r.fetched} updated=${r.statusUpdated} unchanged=${r.noChange} dead=${r.urlDead} failed=${r.fetchFailed}`))
       .catch(e => console.error('SCHEDULE post-auction sweep failed:', e.message));
+  }
+
+  // Tier 8: HMLR bulk-dataset refresh — once a month on the 7th at 02:00 UK.
+  // HPI publishes around the 17th and CCOD/OCOD on the 1st, so the 7th of
+  // the *following* month is comfortably past both publication dates.
+  // Sequential to avoid a memory spike (CCOD streams 4.4M rows; postcodes-
+  // only mode keeps the upserted set tiny). Each loader is idempotent —
+  // re-running the same month is a no-op via PK conflict.
+  const todayDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/London' })).getDate();
+  if (todayDate === 7 && hour === 2 && minute < 5 && now - _scheduleState.lastHmlrRefresh > 24 * 60 * 60 * 1000) {
+    _scheduleState.lastHmlrRefresh = now;
+    console.log('SCHEDULE: 7th 02:00 UK — running HMLR refresh (HPI + CCOD + OCOD)');
+    (async () => {
+      const { spawn } = await import('node:child_process');
+      const runLoader = (args) => new Promise((resolve) => {
+        const child = spawn(process.execPath, args, { stdio: 'inherit', env: process.env });
+        child.on('exit', code => resolve(code));
+      });
+      try {
+        const hpiCode = await runLoader(['scripts/refresh-hmlr-hpi.mjs']);
+        console.log(`SCHEDULE HMLR HPI exit=${hpiCode}`);
+        const ocodCode = await runLoader(['scripts/refresh-hmlr-companies.mjs', '--dataset=ocod', '--postcodes-only']);
+        console.log(`SCHEDULE HMLR OCOD exit=${ocodCode}`);
+        const ccodCode = await runLoader(['scripts/refresh-hmlr-companies.mjs', '--dataset=ccod', '--postcodes-only']);
+        console.log(`SCHEDULE HMLR CCOD exit=${ccodCode}`);
+        const ppdCode = await runLoader(['scripts/refresh-hmlr-ppd.mjs', '--postcodes-only']);
+        console.log(`SCHEDULE HMLR PPD exit=${ppdCode}`);
+      } catch (e) {
+        console.error('SCHEDULE HMLR refresh failed:', e.message);
+      }
+    })();
   }
 
   // Tier 7: Multi-image gallery sweep daily at 06:00 UK. Active lots with

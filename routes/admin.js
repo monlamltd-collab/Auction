@@ -3,17 +3,15 @@ import { Router } from 'express';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { readFileSync } from 'fs';
-import { JSDOM } from 'jsdom';
 import { supabase } from '../lib/supabase.js';
 import { rateLimit, getClientIP, validateUserFromReq, requireAdmin } from '../lib/auth.js';
 import { validateUrl } from '../lib/security.js';
 import { log } from '../lib/logging.js';
 import { MAX_PUPPETEER_PAGES, MAX_LOTS_PER_SCRAPE, MAX_AUCTIONS_PER_HOUSE } from '../lib/config.js';
 import { HOUSE_ROOTS, PUPPETEER_IMAGE_HOUSES, detectAuctionHouse, HOUSE_DISPLAY_NAMES } from '../lib/houses.js';
-import { DOM_EXTRACTORS, extractWithJSDOM } from '../lib/extractors/index.js';
 import {
   scrapeRenderedPage, backfillImages, backfillImagesFromLotPages,
-  backfillImagesWithFirecrawl, backfillImagesWithPuppeteer,
+  backfillImagesWithFirecrawl,
   getFirecrawlStatus, getFcCreditsUsed, isFcCreditExhausted, isFcTemporarilyDown,
   FIRECRAWL_API_KEY, FIRECRAWL_SKIP, puppeteer, normaliseLotStatuses,
   scrapeWithFirecrawl,
@@ -36,7 +34,6 @@ import { getDiscoveryQueue, approveCandidate, getDiscoveryBudget } from '../lib/
 import { getEnrichmentReport } from '../lib/harness/enrichment-engine.js';
 import { runManagerCycle, getManagerReport, setManagerConfig, getManagerConfig } from '../lib/harness/manager.js';
 import { watchAuctionCalendar, watchOne } from '../lib/pipeline/auction-watcher.js';
-import { BROKEN_EXTRACTORS } from './analyse.js';
 import { invalidateAllLotsCache } from './search.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -145,14 +142,10 @@ router.post('/api/admin/backfill-images', rateLimit(60000, 20), requireAdmin, as
       // Step 3: Rendered backfill — try both engines for best coverage
       const stillNoImages = lots.filter(l => !l.imageUrl).length;
       if (stillNoImages > 0 && PUPPETEER_IMAGE_HOUSES.has(entry.house)) {
-        // Pass 1: Firecrawl
+        // Firecrawl pass — the Puppeteer fallback was retired 2026-05-08
+        // alongside the DOM-extractor system it depended on.
         if (FIRECRAWL_API_KEY && !isFcCreditExhausted()) {
           gained += await backfillImagesWithFirecrawl(entry.url, lots, entry.house);
-        }
-        // Pass 2: Puppeteer for remaining
-        const afterFc = lots.filter(l => !l.imageUrl).length;
-        if (afterFc > 0 && puppeteer) {
-          gained += await backfillImagesWithPuppeteer(entry.url, lots, entry.house);
         }
       }
 
@@ -335,127 +328,10 @@ router.post('/api/admin/rescrape', requireAdmin, async (req, res) => {
   }
 });
 
-// Admin-only: GET broken extractors list
-router.get('/api/admin/broken-extractors', requireAdmin, async (req, res) => {
-  res.json({
-    broken: [...BROKEN_EXTRACTORS],
-    count: BROKEN_EXTRACTORS.size,
-  });
-});
-
-// Admin-only: POST enable/disable broken extractors
-router.post('/api/admin/broken-extractors', requireAdmin, async (req, res) => {
-
-  const { house, action, reason } = req.body || {};
-  if (!house || !action) {
-    return res.status(400).json({ error: 'house and action (disable|enable) are required' });
-  }
-
-  if (action === 'disable') {
-    BROKEN_EXTRACTORS.add(house);
-    console.log(`BROKEN: Disabled extractor for ${house}${reason ? ': ' + reason : ''}`);
-
-    // Persist to Supabase house_skills
-    try {
-      await supabase.from('house_skills')
-        .update({ status: 'broken', notes: reason || 'Auto-disabled by audit' })
-        .eq('slug', house);
-    } catch (err) { console.warn('BROKEN: Failed to persist disable:', err.message); }
-
-    // Pipeline alert
-    try {
-      await supabase.from('pipeline_alerts').insert({
-        event_type: 'extractor_broken',
-        severity: 'error',
-        house,
-        message: `Extractor disabled for ${HOUSE_DISPLAY_NAMES[house] || house}: ${reason || 'manual disable'}`,
-      });
-    } catch (err) { console.warn('BROKEN: Failed to send alert:', err.message); }
-
-    res.json({ message: `Extractor for ${house} disabled`, broken: [...BROKEN_EXTRACTORS] });
-
-  } else if (action === 'enable') {
-    BROKEN_EXTRACTORS.delete(house);
-    console.log(`BROKEN: Re-enabled extractor for ${house}`);
-
-    // Persist to Supabase house_skills
-    try {
-      await supabase.from('house_skills')
-        .update({ status: 'healthy', notes: 'Re-enabled after fix' })
-        .eq('slug', house);
-    } catch (err) { console.warn('BROKEN: Failed to persist enable:', err.message); }
-
-    // Pipeline alert
-    try {
-      await supabase.from('pipeline_alerts').insert({
-        event_type: 'extractor_fixed',
-        severity: 'info',
-        house,
-        message: `Extractor re-enabled for ${HOUSE_DISPLAY_NAMES[house] || house}`,
-      });
-    } catch (err) { console.warn('BROKEN: Failed to send alert:', err.message); }
-
-    res.json({ message: `Extractor for ${house} re-enabled`, broken: [...BROKEN_EXTRACTORS] });
-
-  } else {
-    res.status(400).json({ error: 'action must be "disable" or "enable"' });
-  }
-});
-
-// Admin-only: test DOM extractor on a URL (diagnostics)
-router.post('/api/admin/test-extractor', rateLimit(60000, 5), requireAdmin, async (req, res) => {
-
-  const { url } = req.body || {};
-  if (!url) return res.status(400).json({ error: 'url is required' });
-
-  // SSRF guard — same rationale as /firecrawl-probe.
-  const urlCheck = await validateUrl(url);
-  if (!urlCheck.ok) return res.status(400).json({ error: urlCheck.error });
-
-  const house = req.body.house || detectAuctionHouse(url);
-
-  try {
-    // Use Firecrawl+JSDOM (primary) or Puppeteer (fallback) to render the page
-    const result = await scrapeRenderedPage(url, house);
-    const html = result.html;
-    const dom = new JSDOM(html, { url });
-    const { document } = dom.window;
-
-    // Check which CSS selectors match on the rendered page
-    const test = sel => document.querySelectorAll(sel).length;
-    const selectorMatches = {
-      '.property-card': test('.property-card'), '.lot-card': test('.lot-card'),
-      '.lot': test('.lot'), '.lot-panel': test('.lot-panel'),
-      '.property-list-card': test('.property-list-card'), '.search-result': test('.search-result'),
-      'article': test('article'), '.current-lots-single': test('.current-lots-single'),
-      '.lot-item': test('.lot-item'), '[class*="property"]': test('[class*="property"]'),
-      '[class*="lot"]': test('[class*="lot"]'), 'img[src]': test('img[src]'),
-      'img[data-src]': test('img[data-src]'), '.swiper-slide img': test('.swiper-slide img'),
-      '[data-mainpic]': test('[data-mainpic]'),
-    };
-
-    const pageTitle = document.title || '';
-    dom.window.close();
-
-    // Run the actual DOM extractor via JSDOM (pass Firecrawl images if available)
-    const lots = extractWithJSDOM(html, house, url, result?.images);
-    const hasImages = lots ? lots.filter(l => l.imageUrl).length : 0;
-    const hasUrls = lots ? lots.filter(l => l.url && l.url !== '').length : 0;
-
-    res.json({
-      house, url, pageTitle,
-      hasExtractor: !!DOM_EXTRACTORS[house],
-      lotCount: lots ? lots.length : 0,
-      lotsWithImages: hasImages,
-      lotsWithUrls: hasUrls,
-      sampleLots: lots ? lots.slice(0, 3) : [],
-      selectorMatches,
-      scrapedWith: FIRECRAWL_API_KEY && !isFcCreditExhausted() && !FIRECRAWL_SKIP.has(house) ? 'firecrawl' : (puppeteer ? 'puppeteer' : 'http'),
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message, house });
-  }
-});
+// /api/admin/broken-extractors and /api/admin/test-extractor were retired
+// 2026-05-08. Both were per-house DOM-extractor diagnostics. With Firecrawl
+// JSON extract as the unified path, regressions surface via the
+// pipeline_alerts table and are addressed at the schema/prompt level.
 
 // Admin-only: analyse all catalogue-ready auctions
 router.post('/api/analyse-all', requireAdmin, async (req, res) => {
@@ -647,8 +523,10 @@ router.get('/api/admin/ai-costs', requireAdmin, async (req, res) => {
 // ── Consolidated system health endpoint ──
 router.get('/api/admin/system-health', requireAdmin, async (req, res) => {
   try {
-    // 1. Broken extractors
-    const brokenExtractors = [...BROKEN_EXTRACTORS];
+    // 1. Broken extractors — concept retired 2026-05-08 with the
+    // DOM-extractor system. Field kept in the system-health response
+    // shape for admin-panel backward compatibility.
+    const brokenExtractors = [];
 
     // 2. AI costs
     const aiSummary = getAICostSummary();
