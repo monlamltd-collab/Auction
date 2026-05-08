@@ -989,17 +989,30 @@ async function buildAllLotsResponse({ isSignedIn, includePast }) {
 
     if (catErr) { log.error('all-lots: cached_analyses query failed', { error: catErr.message }); return { body: emptyBody, etag: null }; }
 
-    // Resilience fallback: if cached_analyses got wiped (admin clear-cache,
-    // deploy issue, etc) we'd otherwise serve a blank site to all users
-    // until the next 03:00 UK auto-analyse repopulates it. Instead, fall
-    // back to the lots table directly — serve every lot scraped in the last
-    // 14 days, and synthesize active-catalogue rows from their catalogue_url
-    // values so the rest of the pipeline (sources array, dedup, scoring) is
-    // unchanged. Auto-analyse will repopulate cached_analyses naturally.
+    // Resilience fallback: when cached_analyses is unhealthy (wiped, mostly
+    // expired, or many houses failed today's scrape and didn't refresh their
+    // entries) we'd otherwise serve a thin slice of the catalogue to users.
+    // Instead, fall back to the lots table directly — serve every lot scraped
+    // in the last 14 days, and synthesize active-catalogue rows from their
+    // catalogue_url values so the rest of the pipeline (sources array, dedup,
+    // scoring) is unchanged. Auto-analyse will repopulate cached_analyses
+    // naturally.
+    //
+    // Threshold raised 2026-05-06 from === 0 to < 50: with 167 known houses,
+    // a healthy state has ~150 active rows. 12 active means most catalogues
+    // expired without being refreshed (the failure mode we hit on 2026-05-06
+    // when Bristol search returned 2 lots out of ~78 available BS-postcode
+    // lots in the lots table). 50 is a generous floor — well below normal
+    // healthy state, well above pathological "almost everything expired".
+    const ACTIVE_CATALOGUES_FLOOR = 50;
     let usedFallback = false;
     let fallbackLotRows = null;
-    if (!activeCatalogues || activeCatalogues.length === 0) {
-      log.warn('all-lots: cached_analyses empty — using lots-table fallback (last 14d)', { isSignedIn, includePast });
+    if (!activeCatalogues || activeCatalogues.length < ACTIVE_CATALOGUES_FLOOR) {
+      log.warn('all-lots: cached_analyses unhealthy — using lots-table fallback (last 14d)', {
+        isSignedIn, includePast,
+        activeCount: activeCatalogues?.length || 0,
+        floor: ACTIVE_CATALOGUES_FLOOR,
+      });
       const fbCutoff = new Date(Date.now() - 14 * 86400000).toISOString();
       const { data: fbRows, error: fbErr } = await supabase
         .from('lots').select(LOTS_SELECT)
