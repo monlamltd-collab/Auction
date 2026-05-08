@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-05-07T07:37:54.226Z",
+  "timestamp": "2026-05-08T06:28:32.107Z",
   "results": [
     {
       "house": "savills",
@@ -997,7 +997,7 @@
       "house": "walkersingleton",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": null,
+      "httpStatus": 202,
       "imgCoverage": null,
       "issues": []
     },
@@ -1037,7 +1037,7 @@
       "house": "mccartneys",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": []
     },
@@ -1069,13 +1069,18 @@
       "house": "fisherGerman",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": 403,
+      "httpStatus": 404,
       "imgCoverage": null,
       "issues": [
         {
+          "type": "URL_DEAD",
+          "severity": "BROKEN",
+          "detail": "HTTP 404 — page not found"
+        },
+        {
           "type": "BLOCKED",
           "severity": "BROKEN",
-          "detail": "Bot detection (Cloudflare) — 403"
+          "detail": "Bot detection (Cloudflare) — 404"
         }
       ]
     },
@@ -1083,7 +1088,7 @@
       "house": "woolleyandwallis",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": null,
+      "httpStatus": 202,
       "imgCoverage": null,
       "issues": []
     },
@@ -1099,7 +1104,7 @@
       "house": "hairandson",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": []
     },
@@ -1107,15 +1112,21 @@
       "house": "phillipssmithanddunn",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": null,
+      "httpStatus": 404,
       "imgCoverage": null,
-      "issues": []
+      "issues": [
+        {
+          "type": "URL_DEAD",
+          "severity": "BROKEN",
+          "detail": "HTTP 404 — page not found"
+        }
+      ]
     },
     {
       "house": "webbers",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": []
     },
@@ -1123,7 +1134,7 @@
       "house": "ahlondon",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": []
     },
@@ -1131,7 +1142,7 @@
       "house": "starpropertyonline",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": []
     },
@@ -1139,15 +1150,21 @@
       "house": "brggibsondublin",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": null,
+      "httpStatus": 404,
       "imgCoverage": null,
-      "issues": []
+      "issues": [
+        {
+          "type": "URL_DEAD",
+          "severity": "BROKEN",
+          "detail": "HTTP 404 — page not found"
+        }
+      ]
     },
     {
       "house": "propertysolvers",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": []
     },
@@ -1155,7 +1172,7 @@
       "house": "pugh",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": []
     },
@@ -1163,7 +1180,7 @@
       "house": "markjenkinson",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": []
     },
@@ -1171,7 +1188,7 @@
       "house": "regionalauctioneers",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": []
     },
@@ -1179,15 +1196,21 @@
       "house": "clarkegammon",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": null,
+      "httpStatus": 404,
       "imgCoverage": null,
-      "issues": []
+      "issues": [
+        {
+          "type": "URL_DEAD",
+          "severity": "BROKEN",
+          "detail": "HTTP 404 — page not found"
+        }
+      ]
     },
     {
       "house": "nesbits",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": []
     },
@@ -1195,7 +1218,7 @@
       "house": "pearsons",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": null,
+      "httpStatus": 200,
       "imgCoverage": null,
       "issues": []
     },
@@ -1203,9 +1226,15 @@
       "house": "foxgrant",
       "extractorLots": null,
       "universalLots": null,
-      "httpStatus": null,
+      "httpStatus": 404,
       "imgCoverage": null,
-      "issues": []
+      "issues": [
+        {
+          "type": "URL_DEAD",
+          "severity": "BROKEN",
+          "detail": "HTTP 404 — page not found"
+        }
+      ]
     },
     {
       "house": "bradleysdevon",
