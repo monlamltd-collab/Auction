@@ -52,6 +52,16 @@ check('"Property 12"', looksLikeRealAddress('Property 12'), false);
 check('"View property"', looksLikeRealAddress('View property'), false);
 check('"Bidding Now Open"', looksLikeRealAddress('Bidding Now Open'), false);
 
+console.log('\nlooksLikeRealAddress: widget / modal titles (should reject)');
+check('"Add to calendar"', looksLikeRealAddress('Add to calendar'), false);
+check('"Add to favourites"', looksLikeRealAddress('Add to favourites'), false);
+check('"Add to shortlist"', looksLikeRealAddress('Add to shortlist'), false);
+check('"Save property"', looksLikeRealAddress('Save property'), false);
+check('"Share this property"', looksLikeRealAddress('Share this property'), false);
+check('"Register to bid"', looksLikeRealAddress('Register to bid'), false);
+check('"Looking to bid in our next Auction"', looksLikeRealAddress('Looking to bid in our next Auction'), false);
+check('"Next auction date"', looksLikeRealAddress('Next auction date'), false);
+
 console.log('\nlooksLikeRealAddress: malformed / missing input (should reject)');
 check('null', looksLikeRealAddress(null), false);
 check('undefined', looksLikeRealAddress(undefined), false);

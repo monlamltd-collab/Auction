@@ -39,13 +39,8 @@ const EXPECTED = {
       { lot: 2, addressContains: 'Tower Block', priceMin: 40000 },
     ]
   },
-  bondwolfe: {
-    minLots: 2,
-    samples: [
-      { lot: 5, addressContains: 'Broad Street', priceMin: 100000 },
-      { lot: 6, addressContains: 'Park Lane', hasSold: true },
-    ]
-  },
+  // bondwolfe DOM extractor retired 2026-05-08 — Firecrawl JSON extract handles
+  // this house via FORCE_EXTRACT_HOUSES. No DOM-side test entry needed.
   cleetompkinson: {
     minLots: 4,
     samples: [
