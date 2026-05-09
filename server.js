@@ -35,7 +35,7 @@ import {
 const budget = new ResourceBudget();
 if (puppeteer) budget.setPuppeteer(puppeteer);
 initScraper({ budget });
-import { extractPostcode, enrichLots, getCircuitBreakers } from './lib/enrichment.js';
+import { extractPostcode, enrichLots, getCircuitBreakers, initEnrichment } from './lib/enrichment.js';
 import { log, requestLoggerMiddleware } from './lib/logging.js';
 import { validateEnv, ALLOWED_ORIGINS } from './lib/config.js';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY, AUTH_ENABLED } from './lib/supabase.js';
@@ -248,6 +248,14 @@ initWatcher({
 // Plain HTTP, no Firecrawl credit, monthly cadence. Drained via the
 // admin /api/admin/rentals/drain endpoint or future cron.
 initRentals({ supabase });
+
+// Wire enrichment dependencies — without this, the supabase reference in
+// lib/enrichment.js stays null and every LR cache lookup, queryLandRegistry
+// call, and HMLR enrichment pass silently skips. Symptom in the wild: every
+// lot's land_registry status was 'circuit_open' because queryLandRegistry
+// returned api_error → lrBreaker tripped → all subsequent lots short-
+// circuited as circuit_open without ever hitting the DB.
+initEnrichment({ supabase });
 
 // Wire HMLR bulk-loaded query modules (HPI, CCOD/OCOD).
 // Data refreshed monthly via scripts/refresh-hmlr-hpi.mjs and
