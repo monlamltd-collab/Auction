@@ -260,6 +260,7 @@ tr:hover td { background: rgba(255,255,255,.02); }
     </div>
     <div class="topbar-right">
       <span class="last-refresh" id="last-refresh" title="Timestamp of the last data refresh. Dashboard auto-refreshes every 5 minutes"></span>
+      <button class="topbar-btn" onclick="openContentBrain()" title="Open the ContentBrain control panel in a new tab — re-uses your admin login">ContentBrain ↗</button>
       <button class="topbar-btn" onclick="refreshAll()" title="Manually refresh all dashboard data from the server">Refresh</button>
       <button class="topbar-btn" onclick="logout()" title="Sign out and return to the login screen">Sign Out</button>
     </div>
@@ -883,6 +884,23 @@ function logout() {
   SECRET = '';
   document.getElementById('auth-gate').style.display = 'flex';
   document.getElementById('dashboard').style.display = 'none';
+}
+
+// Open ContentBrain (the social/blog/lot-of-day pipeline at brain.auctionbrain.co.uk)
+// in a new tab, pre-authenticated via the same admin secret. ContentBrain's
+// requireAuth accepts ?token= and immediately swaps it for an auth cookie
+// then 302-redirects to the same URL with the token stripped — so the secret
+// only sits in the address bar for the duration of one redirect.
+//
+// IMPORTANT: this works because ContentBrain's REVIEW_UI_PASSWORD env var on
+// Railway is kept in sync with this app's ADMIN_SECRET. If either rotates,
+// the OTHER MUST be rotated to match or this link silently lands on the
+// ContentBrain login form instead of the panel.
+function openContentBrain() {
+  const secret = sessionStorage.getItem('ab_admin_secret');
+  if (!secret) { alert('Sign in first.'); return; }
+  const url = `https://brain.auctionbrain.co.uk/levers?token=${encodeURIComponent(secret)}`;
+  window.open(url, '_blank', 'noopener,noreferrer');
 }
 
 // Check saved secret. Tab-scoped sessionStorage now — re-enter on new tab.
