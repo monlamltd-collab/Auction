@@ -1927,3 +1927,215 @@ footer .logo-f span{color:var(--green)}
   text-transform:uppercase;
   color:var(--muted-2)
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Lot detail share-target page (routes/lots.js)
+   Standalone landing for /lot/:id deep links — does not load the SPA.
+   ═══════════════════════════════════════════════════════════════ */
+
+.lot-detail-page {
+  background: var(--bg, #f5f7fa);
+  min-height: 100vh;
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  color: var(--text, #1a2a3a);
+}
+
+.lot-detail-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  background: linear-gradient(135deg, #1a3a5c, #2a5a8c);
+  color: #fff;
+}
+.lot-detail-nav .logo {
+  font-family: 'Sora', 'DM Sans', sans-serif;
+  font-weight: 700;
+  font-size: 24px;
+  color: #fff;
+  text-decoration: none;
+  letter-spacing: -0.01em;
+}
+.lot-detail-nav .logo span { color: #8bc34a; }
+.lot-detail-nav .nav-back {
+  color: #fff;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  opacity: 0.85;
+}
+.lot-detail-nav .nav-back:hover { opacity: 1; }
+
+.lot-detail-main {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 32px 16px 64px;
+}
+
+.lot-detail-card {
+  background: #fff;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 4px 24px rgba(15, 23, 42, 0.08);
+}
+
+.lot-hero {
+  width: 100%;
+  height: 420px;
+  object-fit: cover;
+  display: block;
+  background: #eef2f7;
+}
+.lot-hero-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7c8d;
+  font-size: 16px;
+}
+
+.lot-detail-body { padding: 28px 28px 32px; }
+
+.lot-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+.lot-house-badge {
+  padding: 4px 10px;
+  background: #1a3a5c;
+  color: #fff;
+  border-radius: 999px;
+}
+.lot-prop-type {
+  padding: 4px 10px;
+  background: #eef2f7;
+  color: #1a2a3a;
+  border-radius: 999px;
+}
+.lot-status {
+  padding: 4px 10px;
+  background: #fef0ee;
+  color: #c4392a;
+  border-radius: 999px;
+}
+
+.lot-detail-address {
+  font-family: 'Source Serif 4', Georgia, serif;
+  font-size: clamp(24px, 3.2vw, 32px);
+  font-weight: 600;
+  line-height: 1.25;
+  margin: 0 0 12px;
+  color: #1a2a3a;
+}
+
+.lot-detail-price-row {
+  display: flex;
+  align-items: baseline;
+  gap: 24px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+.lot-detail-price {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: clamp(28px, 4vw, 36px);
+  font-weight: 700;
+  color: #0f8a5f;
+}
+.lot-detail-score {
+  font-size: 14px;
+  color: #6b7c8d;
+}
+.lot-detail-score strong {
+  color: #1a2a3a;
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.lot-section { margin-top: 24px; }
+.lot-section h2 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+  color: #6b7c8d;
+  margin: 0 0 8px;
+}
+
+.lot-tags {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.lot-tags .tag {
+  font-size: 13px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-weight: 500;
+}
+.tag-opp { background: #e8f5ee; color: #0b7a52; }
+.tag-risk { background: #fef0ee; color: #c4392a; }
+
+.lot-bullets {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 14px;
+  color: #1a2a3a;
+  line-height: 1.6;
+}
+.lot-bullets li { margin-bottom: 4px; }
+
+.lot-detail-ctas {
+  display: flex;
+  gap: 12px;
+  margin-top: 32px;
+  flex-wrap: wrap;
+}
+.lot-detail-ctas .cta-primary,
+.lot-detail-ctas .cta-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 12px 22px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all .2s;
+}
+.lot-detail-ctas .cta-primary {
+  background: linear-gradient(135deg, #0f8a5f, #0b7a52);
+  color: #fff;
+}
+.lot-detail-ctas .cta-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(15, 138, 95, 0.25); }
+.lot-detail-ctas .cta-secondary {
+  background: #fff;
+  color: #1a2a3a;
+  border: 1px solid #e4dfd6;
+}
+.lot-detail-ctas .cta-secondary:hover { border-color: #1a3a5c; }
+
+.lot-detail-disclaimer {
+  font-size: 12px;
+  color: #8a847a;
+  margin-top: 20px;
+  font-style: italic;
+}
+
+@media (max-width: 600px) {
+  .lot-detail-main { padding: 16px 12px 48px; }
+  .lot-detail-body { padding: 20px 18px 24px; }
+  .lot-hero { height: 240px; }
+  .lot-detail-ctas { flex-direction: column; }
+  .lot-detail-ctas .cta-primary,
+  .lot-detail-ctas .cta-secondary { width: 100%; }
+}
