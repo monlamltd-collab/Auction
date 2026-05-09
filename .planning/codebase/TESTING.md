@@ -1,5 +1,7 @@
 # Testing Patterns
 
+> **⚠️ STALE — DO NOT TRUST.** Last accurate ~2026-04. The DOM extractor test suite (`tests/test-extractors.js`, `tests/snapshots/`) was retired 2026-05-08, along with `scripts/audit.mjs` and `scripts/audit-fix.mjs`. Current test layout is described in `.claude/skills/auction-conventions/SKILL.md` (Testing section) and the test files themselves under `tests/`. This file is retained only as a historical reference.
+
 ## Overview
 
 Testing in this project is lightweight and pragmatic. There is no mainstream test framework (no Jest, Mocha, or Vitest). Tests are custom Node.js scripts that use manual assertions and `process.exit(1)` for failure signaling.

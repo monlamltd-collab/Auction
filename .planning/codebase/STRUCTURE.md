@@ -1,5 +1,7 @@
 # Directory Structure
 
+> **⚠️ STALE — DO NOT TRUST.** Last accurate ~2026-04. Superseded by the 2026-05-08 refactor that retired `lib/extractors/`, `tests/snapshots/`, `scripts/audit*.mjs`, and decomposed `server.js` into `routes/`, `lib/`, `lib/scraper/`, `lib/pipeline/`, and `lib/harness/`. For the current project layout see `CLAUDE.md`, `docs/ARCHITECTURE.md`, and `.claude/skills/auction-conventions/SKILL.md`. This file is retained only as a historical reference.
+
 ## Root Layout
 
 ```

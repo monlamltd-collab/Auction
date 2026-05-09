@@ -1,5 +1,7 @@
 # Technology Stack
 
+> **⚠️ STALE — DO NOT TRUST.** Last accurate ~2026-04. References the deleted `api/` directory, the monolithic `server.js`, deleted `scripts/audit.mjs` / `audit-fix.mjs`, and the deleted DOM extractor test suite. For the current stack snapshot see `CLAUDE.md` and `.claude/skills/auction-conventions/SKILL.md`. This file is retained only as a historical reference.
+
 ## Language and Runtime
 
 - **JavaScript (ES Modules)** — `"type": "module"` in `package.json`

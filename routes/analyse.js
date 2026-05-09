@@ -27,14 +27,6 @@ const router = Router();
 // ── Config constants ──
 const RATE_LIMIT = RATE_LIMIT_PER_DAY;
 
-// BROKEN_EXTRACTORS retired 2026-05-08 with the DOM-extractor system.
-// Per-house "this extractor is broken, skip it" tracking made sense when
-// each house had its own JSDOM extractor; with Firecrawl JSON extract as
-// the unified path, regressions surface via pipeline_alerts and are
-// addressed at the schema/prompt level, not per-house.
-const BROKEN_EXTRACTORS = new Set();
-async function loadBrokenExtractors() { /* no-op retained for import compatibility */ }
-
 // ═══════════════════════════════════════════════════════════════
 // API: ANALYSE CATALOGUE
 // ═══════════════════════════════════════════════════════════════
@@ -467,5 +459,4 @@ router.post('/api/lot', async (req, res) => {
   }); // end withTier
 });
 
-export { BROKEN_EXTRACTORS, loadBrokenExtractors };
 export default router;

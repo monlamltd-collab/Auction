@@ -84,11 +84,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// BROKEN_EXTRACTORS + initExtractors retired 2026-05-08 with the
-// DOM-extractor system. Catalogue extraction is now Firecrawl JSON
-// extract → Gemini fallback; per-house "broken extractor" tracking
-// no longer applies.
-
 // ── Security middleware (from lib/security.js) ──
 app.use(securityHeaders);
 app.use(csrfCheck);
