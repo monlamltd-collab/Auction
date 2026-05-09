@@ -4363,14 +4363,13 @@ function buildExpV2Logistics(lot) {
 }
 
 function expandCard(lot) {
-  // Trust the live Supabase session over stale lot flags. anonGated/blurred
-  // is stamped server-side at fetch time, but a signed-in user can carry over
-  // anon-flagged lot objects from a pre-auth fetch or the IndexedDB cache.
-  // The header chip uses currentSession (line 1257); the click gate must agree.
-  if (!currentSession) {
-    if (lot.anonGated) { $('signupModal').classList.add('show'); return; }
-    if (lot.blurred) { $('signupModal').classList.add('show'); return; }
-  }
+  // Anonymous users can OPEN any lot card — address, price, image, house,
+  // status, auction date, bullets are all visible. Sensitive AI fields
+  // (score, opps, risks, yield, deal type) are stripped server-side for
+  // anon (routes/search.js:1449) and surface as inline "Sign in for AI"
+  // nudges. Saving a lot, saving a search, running AI analysis, paying —
+  // those still trigger requireSignup(). That's where friction is welcome,
+  // because that's where commitment is. (Was: full sign-in wall on click.)
   if (window.umami) umami.track('lot_expand', {
     lot_number: lot.lot || '', house: lot._house || '', guide_price: lot.price || 0
   });
