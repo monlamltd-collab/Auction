@@ -275,7 +275,7 @@ initCompanies({ supabase });
 // Boot   — Runs free enrichment after 60s. Triggers full pass only if last
 //          DB scrape was >25h ago, or if FORCE_BOOT_SCRAPE=true is set.
 
-const _scheduleState = { lastFullPass: 0, lastFreeEnrich: 0, lastStatusDrift: 0, lastRentalDrain: 0, lastRetryDrain: 0, lastPostAuctionSweep: 0, lastBudgetLog: 0, lastMultiImageSweep: 0, lastHmlrRefresh: 0 };
+const _scheduleState = { lastFullPass: 0, lastFreeEnrich: 0, lastStatusDrift: 0, lastRentalDrain: 0, lastRetryDrain: 0, lastPostAuctionSweep: 0, lastBudgetLog: 0, lastMultiImageSweep: 0, lastHmlrRefresh: 0, lastHomepageWatch: 0 };
 
 function getUkHourMinute() {
   const ukNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/London' }));
@@ -498,6 +498,40 @@ function scheduleTick() {
     sweepMultiImages()
       .then(r => console.log(`SCHEDULE multi-image sweep: eligible=${r.eligible} fetched=${r.fetched} galleries=${r.galleryAdded} partial=${r.galleryPartial} noimgs=${r.noImagesFound} dead=${r.urlDead} failed=${r.fetchFailed} +${r.totalImagesAdded}imgs`))
       .catch(e => console.error('SCHEDULE multi-image sweep failed:', e.message));
+  }
+
+  // Tier 12: Daily homepage watch at 03:30 UK. For every house in
+  // HOUSE_ROOTS, ask Firecrawl whether the homepage changed since
+  // yesterday and what catalogue URL it currently links to. Drift on
+  // the same domain triggers healBrokenHouse() automatically; new-domain
+  // drift / parked / no-longer-auction fires alerts for human review.
+  // ~150 Firecrawl credits/day = ~4,500/month, well inside budget.
+  // Kill switch: HOMEPAGE_WATCH_ENABLED=false.
+  // Scheduled at 03:30 to give the 03:00 full pass a clear runway and
+  // pick up any URL changes the full pass just discovered.
+  if (hour === 3 && minute >= 30 && minute < 35 && now - _scheduleState.lastHomepageWatch > 60 * 60 * 1000) {
+    _scheduleState.lastHomepageWatch = now;
+    console.log('SCHEDULE: 03:30 UK — running homepage watch');
+    Promise.all([
+      import('./lib/pipeline/homepage-watch.js'),
+      import('./lib/telegram.js'),
+    ])
+      .then(async ([{ runHomepageWatchCycle }, telegram]) => {
+        const sendTelegram = telegram.sendNotification;
+        const result = await runHomepageWatchCycle(supabase, {
+          fireAlert: harnessFireAlert,
+          healBrokenHouse,
+          sendTelegram,
+          log,
+        });
+        if (result.skipped) {
+          console.log(`SCHEDULE homepage watch: skipped (${result.reason})`);
+        } else {
+          const s = result.summary;
+          console.log(`SCHEDULE homepage watch: total=${s.total} unchanged=${s.unchanged} drift=${s.drift} healed=${s.healed} alerts=${s.alerts} errors=${s.errors}`);
+        }
+      })
+      .catch(e => console.error('SCHEDULE homepage watch failed:', e.message));
   }
 }
 
