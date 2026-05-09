@@ -104,6 +104,12 @@ initHouseHealth(supabase).catch(e => console.warn('Harness: health init failed:'
 initDiscovery(supabase, callAI);
 initGenerator(callAI);
 
+// Wire the budget alert hook through to the harness alert router. Indirect
+// via setAlertHook to avoid a circular import (resource-budget → alert-router
+// → resource-budget). MUST be set before the first scrape — bootDecision()
+// runs after a 60s delay, so this ordering is safe.
+budget.setAlertHook((payload) => harnessFireAlert(payload));
+
 // Inject server-level dependencies into lib/houses.js (rewriteUrl needs these)
 initHouses({
   firecrawlApiKey: FIRECRAWL_API_KEY,
@@ -465,21 +471,49 @@ function scheduleTick() {
     console.log('SCHEDULE: 7th 02:00 UK — running HMLR refresh (HPI + CCOD + OCOD)');
     (async () => {
       const { spawn } = await import('node:child_process');
-      const runLoader = (args) => new Promise((resolve) => {
+      const runLoader = (dataset, args) => new Promise((resolve) => {
         const child = spawn(process.execPath, args, { stdio: 'inherit', env: process.env });
-        child.on('exit', code => resolve(code));
+        child.on('exit', code => {
+          console.log(`SCHEDULE HMLR ${dataset} exit=${code}`);
+          if (code !== 0) {
+            harnessFireAlert({
+              type: 'hmlr_refresh_failed',
+              severity: 'warning',
+              house: null,
+              message: `HMLR ${dataset} loader exited with code ${code}`,
+              meta: { dataset, exitCode: code, args },
+            });
+          }
+          resolve(code);
+        });
+        child.on('error', err => {
+          console.error(`SCHEDULE HMLR ${dataset} spawn error:`, err.message);
+          harnessFireAlert({
+            type: 'hmlr_refresh_failed',
+            severity: 'warning',
+            house: null,
+            message: `HMLR ${dataset} loader failed to spawn: ${err.message}`,
+            meta: { dataset, args, error: err.message },
+          });
+          resolve(-1);
+        });
       });
       try {
-        const hpiCode = await runLoader(['scripts/refresh-hmlr-hpi.mjs']);
-        console.log(`SCHEDULE HMLR HPI exit=${hpiCode}`);
-        const ocodCode = await runLoader(['scripts/refresh-hmlr-companies.mjs', '--dataset=ocod', '--postcodes-only']);
-        console.log(`SCHEDULE HMLR OCOD exit=${ocodCode}`);
-        const ccodCode = await runLoader(['scripts/refresh-hmlr-companies.mjs', '--dataset=ccod', '--postcodes-only']);
-        console.log(`SCHEDULE HMLR CCOD exit=${ccodCode}`);
-        const ppdCode = await runLoader(['scripts/refresh-hmlr-ppd.mjs', '--postcodes-only']);
-        console.log(`SCHEDULE HMLR PPD exit=${ppdCode}`);
+        // One bad dataset shouldn't kill the rest — runLoader resolves either
+        // way and the alert above gets fired per-dataset.
+        await runLoader('HPI',  ['scripts/refresh-hmlr-hpi.mjs']);
+        await runLoader('OCOD', ['scripts/refresh-hmlr-companies.mjs', '--dataset=ocod', '--postcodes-only']);
+        await runLoader('CCOD', ['scripts/refresh-hmlr-companies.mjs', '--dataset=ccod', '--postcodes-only']);
+        await runLoader('PPD',  ['scripts/refresh-hmlr-ppd.mjs', '--postcodes-only']);
       } catch (e) {
         console.error('SCHEDULE HMLR refresh failed:', e.message);
+        harnessFireAlert({
+          type: 'hmlr_refresh_failed',
+          severity: 'error',
+          house: null,
+          message: `HMLR refresh chain crashed: ${e.message}`,
+          meta: { error: e.message },
+        });
       }
     })();
   }
