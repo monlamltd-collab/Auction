@@ -3840,7 +3840,13 @@ function getCardImageBadges(lot) {
   }
   if (lot.anonGated) {
     // Anonymous user — show teaser badge instead of score
-    html += '<div class="card-badge badge-score mid" style="cursor:pointer;font-size:.65rem" onclick="event.stopPropagation();$(\'signupModal\').classList.add(\'show\')">Sign up for AI scores</div>';
+    // Passive label — tapping the badge bubbles up to the card so the
+    // user opens the lot (per "click to view = free" policy). The
+    // expanded view renders inline upgrade nudges where the user can
+    // explicitly choose to sign in. Was: cursor:pointer + onclick that
+    // stopPropagation'd to the signup modal — surfaced as a hidden
+    // sign-in wall on mobile because tap targets overlap with the card.
+    html += '<div class="card-badge badge-score mid" style="font-size:.65rem">Sign up for AI scores</div>';
   } else {
     const rawScore = lot.score ?? 0;
     const clampedScore = Math.max(0, Math.min(10, rawScore));
