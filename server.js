@@ -42,6 +42,7 @@ import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY, AUTH_ENABLED } from './lib/s
 import { securityHeaders, csrfCheck } from './lib/security.js';
 import { getClientIP, setOnNewUser } from './lib/auth.js';
 import { initHouses, HOUSE_ROOTS, rewriteUrl } from './lib/houses.js';
+import { applyUmamiInjection } from './lib/utils.js';
 import { getCalendarAuctions } from './lib/calendar.js';
 
 // ── Harness modules (adaptive resilience framework) ──
@@ -158,8 +159,9 @@ const _indexHtmlCache = (() => {
     // the landing copy. Single source of truth = HOUSE_ROOTS in lib/houses.js.
     const houseCount = Object.keys(HOUSE_ROOTS).length;
     html = html.replaceAll('__HOUSE_COUNT__', String(houseCount));
-    if (process.env.UMAMI_WEBSITE_ID) {
-      html = html.replace('data-website-id=""', `data-website-id="${process.env.UMAMI_WEBSITE_ID}"`);
+    html = applyUmamiInjection(html, process.env.UMAMI_WEBSITE_ID);
+    if (!process.env.UMAMI_WEBSITE_ID) {
+      log.warn('UMAMI_WEBSITE_ID unset — analytics script stripped from served HTML');
     }
     log.info('index.html cached at startup', { bytes: html.length });
     return html;

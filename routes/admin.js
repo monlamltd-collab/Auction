@@ -26,7 +26,7 @@ import {
 } from '../lib/analysis.js';
 import { getAICostSummary } from '../lib/ai-provider.js';
 import { enrichLots, getCircuitBreakers } from '../lib/enrichment.js';
-import { normaliseUrl } from '../lib/utils.js';
+import { normaliseUrl, applyUmamiInjection } from '../lib/utils.js';
 import { getAuctionCalendar, getCalendarAuctions } from '../lib/calendar.js';
 import { validateBatch } from '../lib/harness/data-contract.js';
 import { getAllHealth } from '../lib/harness/house-health.js';
@@ -435,17 +435,28 @@ router.get('/terms', (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
+// SEO: robots.txt + sitemap.xml (root-level, conventional locations)
+// ═══════════════════════════════════════════════════════════════
+router.get('/robots.txt', (req, res) => {
+  res.type('text/plain');
+  res.sendFile(join(__dirname, '..', 'public', 'robots.txt'));
+});
+router.get('/sitemap.xml', (req, res) => {
+  res.type('application/xml');
+  res.sendFile(join(__dirname, '..', 'public', 'sitemap.xml'));
+});
+
+// ═══════════════════════════════════════════════════════════════
 // BRIDGEMATCH LITE
 // ═══════════════════════════════════════════════════════════════
 router.get('/check', (req, res) => {
-  if (process.env.UMAMI_WEBSITE_ID) {
-    try {
-      let html = readFileSync(join(__dirname, '..', 'bridgematch-lite.html'), 'utf-8');
-      html = html.replace('data-website-id=""', `data-website-id="${process.env.UMAMI_WEBSITE_ID}"`);
-      return res.type('html').send(html);
-    } catch (e) { /* fall through to sendFile */ }
+  try {
+    let html = readFileSync(join(__dirname, '..', 'bridgematch-lite.html'), 'utf-8');
+    html = applyUmamiInjection(html, process.env.UMAMI_WEBSITE_ID);
+    return res.type('html').send(html);
+  } catch (e) {
+    res.sendFile(join(__dirname, '..', 'bridgematch-lite.html'));
   }
-  res.sendFile(join(__dirname, '..', 'bridgematch-lite.html'));
 });
 
 router.get('/api/admin/daily-stats', requireAdmin, async (req, res) => {

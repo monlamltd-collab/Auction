@@ -4962,6 +4962,7 @@ function submitEmailCapture(e) {
     form.style.display = 'none';
     successEl.style.display = 'block';
     document.querySelector('.ec-note').style.display = 'none';
+    if (typeof umami !== 'undefined') umami.track('lead_submit', { source: 'landing-page' });
   })
   .catch(err => {
     errEl.textContent = err.message || 'Something went wrong. Please try again.';
