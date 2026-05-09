@@ -280,7 +280,7 @@ initCompanies({ supabase });
 // Boot   — Runs free enrichment after 60s. Triggers full pass only if last
 //          DB scrape was >25h ago, or if FORCE_BOOT_SCRAPE=true is set.
 
-const _scheduleState = { lastFullPass: 0, lastFreeEnrich: 0, lastStatusDrift: 0, lastRentalDrain: 0, lastRetryDrain: 0, lastPostAuctionSweep: 0, lastBudgetLog: 0, lastMultiImageSweep: 0, lastHmlrRefresh: 0 };
+const _scheduleState = { lastFullPass: 0, lastFreeEnrich: 0, lastStatusDrift: 0, lastRentalDrain: 0, lastRetryDrain: 0, lastPostAuctionSweep: 0, lastBudgetLog: 0, lastMultiImageSweep: 0, lastHmlrRefresh: 0, lastAlertSweep: 0, lastCoverageDigest: 0, lastSitemapRegen: 0 };
 
 function getUkHourMinute() {
   const ukNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/London' }));
@@ -531,6 +531,50 @@ function scheduleTick() {
     sweepMultiImages()
       .then(r => console.log(`SCHEDULE multi-image sweep: eligible=${r.eligible} fetched=${r.fetched} galleries=${r.galleryAdded} partial=${r.galleryPartial} noimgs=${r.noImagesFound} dead=${r.urlDead} failed=${r.fetchFailed} +${r.totalImagesAdded}imgs`))
       .catch(e => console.error('SCHEDULE multi-image sweep failed:', e.message));
+  }
+
+  // Tier 9: Alert sweeper, daily 02:30 UK. Resolves pipeline_alerts older
+  // than 30 days where the per-type "now healthy" predicate confirms the
+  // underlying problem is gone (lib/pipeline/alert-sweeper.js).
+  if (hour === 2 && minute >= 30 && minute < 35 && now - _scheduleState.lastAlertSweep > 60 * 60 * 1000) {
+    _scheduleState.lastAlertSweep = now;
+    console.log('SCHEDULE: 02:30 UK — running alert sweeper');
+    import('./lib/pipeline/alert-sweeper.js')
+      .then(({ sweepStaleAlerts }) => sweepStaleAlerts(supabase))
+      .then(r => console.log(`SCHEDULE alert sweep: scanned=${r.scanned} resolved=${r.resolved.length} skipped(no-predicate)=${r.skippedNoPredicate} skipped(unhealthy)=${r.skippedNotHealthy}`))
+      .catch(e => console.error('SCHEDULE alert sweep failed:', e.message));
+  }
+
+  // Tier 10: Coverage digest, daily 09:00 UK. Aggregates enrichment_manifest
+  // distribution across last-7-day lots and posts the summary to Telegram.
+  // Day-over-day deltas come from coverage_snapshots (graceful degrade if
+  // the table doesn't exist yet — see migrations/2026-05-09-coverage-snapshots.sql).
+  if (hour === 9 && minute < 5 && now - _scheduleState.lastCoverageDigest > 60 * 60 * 1000) {
+    _scheduleState.lastCoverageDigest = now;
+    console.log('SCHEDULE: 09:00 UK — running coverage digest');
+    Promise.all([
+      import('./lib/pipeline/coverage-digest.js'),
+      import('./lib/telegram.js'),
+    ])
+      .then(async ([{ buildCoverageDigest, formatDigestForTelegram }, telegram]) => {
+        const digest = await buildCoverageDigest(supabase);
+        console.log(`SCHEDULE coverage digest: total=${digest.totalLots} epc=${digest.coverage?.epc_pct}% image=${digest.coverage?.image_pct}%`);
+        const sender = telegram.sendNotification || telegram.default?.sendNotification;
+        if (sender) await sender(formatDigestForTelegram(digest));
+      })
+      .catch(e => console.error('SCHEDULE coverage digest failed:', e.message));
+  }
+
+  // Tier 11: Sitemap regeneration, daily 04:30 UK. Rewrites public/sitemap.xml
+  // with the four static URLs plus one entry per upcoming/recent lot — keeps
+  // search engines pointed at the freshest deep links from Phase 4 (/lot/:id).
+  if (hour === 4 && minute >= 30 && minute < 35 && now - _scheduleState.lastSitemapRegen > 60 * 60 * 1000) {
+    _scheduleState.lastSitemapRegen = now;
+    console.log('SCHEDULE: 04:30 UK — regenerating sitemap.xml');
+    import('./scripts/regenerate-sitemap.mjs')
+      .then(({ regenerateSitemap }) => regenerateSitemap({ dry: false }))
+      .then(r => console.log(`SCHEDULE sitemap: wrote=${r.wrote} urls=${r.urlCount} bytes=${r.bytes}`))
+      .catch(e => console.error('SCHEDULE sitemap regen failed:', e.message));
   }
 }
 
