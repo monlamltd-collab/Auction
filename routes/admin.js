@@ -418,9 +418,33 @@ router.get('/admin', (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
+// PUBLIC: live house count
+// Sister sites (e.g. auctionbrain.co.uk) and the welcome page hit this
+// instead of hardcoding "173" / "150" / "180" everywhere. Cheap (no DB
+// hit — HOUSE_ROOTS is in-process). Cached at the CDN edge for an hour.
+// ═══════════════════════════════════════════════════════════════
+router.get('/api/house-count', (req, res) => {
+  res.set('Cache-Control', 'public, max-age=3600, s-maxage=3600');
+  res.json({ houses: Object.keys(HOUSE_ROOTS).length });
+});
+
+// ═══════════════════════════════════════════════════════════════
 // CATCH-ALL
 // ═══════════════════════════════════════════════════════════════
+// welcome.html with __HOUSE_COUNT__ injected — cached at startup so we
+// only read+template once. Mirrors the index.html cache in server.js.
+const _welcomeHtmlCache = (() => {
+  try {
+    let html = readFileSync(join(__dirname, '..', 'welcome.html'), 'utf-8');
+    const houseCount = Object.keys(HOUSE_ROOTS).length;
+    html = html.replaceAll('__HOUSE_COUNT__', String(houseCount));
+    return html;
+  } catch {
+    return null;
+  }
+})();
 router.get('/welcome', (req, res) => {
+  if (_welcomeHtmlCache) return res.type('html').send(_welcomeHtmlCache);
   res.sendFile(join(__dirname, '..', 'welcome.html'));
 });
 
