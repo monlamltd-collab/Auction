@@ -66,3 +66,15 @@ scripts/backfill-lots.cjs
 .planning/SHELVED-FEATURES-FRAMEWORK.md
 .planning/phases/08-field-extraction-validation/
 docs/superpowers/
+
+# Generated audit outputs (scripts/audit-docs.mjs, scripts/audit-houses.mjs)
+docs/_audit-*.md
+house-audit-*.csv
+
+# Firecrawl response cache and script scratch
+.firecrawl/
+scripts/.tmp/
+
+# Local-only assets dropped at the repo root
+AuctionBrain pages.zip
+AuctionBrain pages/
