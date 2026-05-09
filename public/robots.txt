@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /api/
+Disallow: /welcome
+
+Sitemap: https://auctions.bridgematch.co.uk/sitemap.xml

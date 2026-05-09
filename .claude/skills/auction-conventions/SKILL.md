@@ -1,7 +1,7 @@
 ---
 name: auction-conventions
-description: Use this skill when writing or modifying code in the Auction (Bridgematch AuctionBrain) project. Enforces project conventions for architecture, naming, file structure, API patterns, DOM extractors, styling, database queries, the enrichment manifest, the self-healing harness, and testing. Activates when the user adds features, fixes bugs, writes extractors, modifies the frontend, or touches server/pipeline code.
-version: 2.0.0
+description: Use this skill when writing or modifying code in the Auction (Bridgematch AuctionBrain) project. Enforces project conventions for architecture, naming, file structure, API patterns, lot extraction (Firecrawl-first), styling, database queries, the enrichment manifest, the self-healing harness, and testing. Activates when the user adds features, fixes bugs, modifies the frontend, or touches server/pipeline code.
+version: 3.0.0
 ---
 
 # Auction Project Conventions
@@ -32,9 +32,8 @@ The codebase was historically a monolithic `server.js` but has been **decomposed
 │   ├── fundability.js            # Maps lots → BridgeMatch /api/filter; type-aware LTV + GDV proxy
 │   ├── enrichment.js             # External lookups (EPC, flood, LR, geocode) + manifest population
 │   ├── enrichment-manifest.js    # Per-lot observability: recordScraped/recordExtract/recordFundability etc.
-│   ├── scraper.js                # Firecrawl → Puppeteer → HTTP three-tier fallback
-│   ├── houses.js                 # HOUSE_ROOTS catalogue URL registry
-│   ├── extractors/               # Per-house DOM extractors (one file per house, + index.js)
+│   ├── scraper.js                # Façade re-exporting lib/scraper/* — keep imports stable
+│   ├── houses.js                 # HOUSE_ROOTS catalogue URL registry + HOUSE_OVERRIDES (markdown recognisers)
 │   ├── config.js                 # CACHE_DAYS, MAX_PAGES, TIMEOUT, rate-limit gaps
 │   ├── ai-provider.js            # Gemini Flash-Lite + Pro model selection + rate limiter
 │   ├── resource-budget.js        # Firecrawl credit + Gemini RPD budget tracking
@@ -43,63 +42,102 @@ The codebase was historically a monolithic `server.js` but has been **decomposed
 │   ├── logging.js                # Structured `log` object
 │   ├── security.js               # validateUrl(), safeCompare(), CORS origin check
 │   ├── supabase.js               # Supabase client factory
+│   ├── telegram.js               # Telegram Bot API helper (alerts, heal reports)
+│   ├── os-places.js              # OS Places API client (UPRN + canonical address)
+│   ├── postcodes-io.js           # postcodes.io geocoder (free)
+│   ├── land-registry-hpi.js      # HMLR HPI loader + lookup
+│   ├── land-registry-companies.js # HMLR CCOD/OCOD overseas-owner lookup
 │   ├── utils.js                  # Shared helpers
+│   ├── scraper/                  # Three-tier scrape stack (Firecrawl → Puppeteer → HTTP)
+│   │   ├── firecrawl.js          # Firecrawl REST client (rawHtml + markdown + JSON extract)
+│   │   ├── puppeteer.js          # Headless Chrome fallback
+│   │   ├── http.js               # Plain HTTP last-resort
+│   │   ├── rendering.js          # scrapeRenderedPage() three-tier orchestration
+│   │   ├── pagination.js         # Per-house pagination strategies
+│   │   ├── allsop.js             # Allsop JSON-API consumer (zero credits, structured API)
+│   │   ├── lot-detail.js         # Per-lot detail-page fetch + cache (lot_details table, 30d TTL)
+│   │   ├── lot-schema.js         # Firecrawl JSON-extract schema + prompt (CRITICAL prompt instructions)
+│   │   ├── extraction.js         # extractLotsWithAI(), extractLotsFromPdf() — Gemini fallback wrappers
+│   │   ├── image-backfill.js     # Multi-image cascade
+│   │   ├── validation.js         # Lot field validators
+│   │   └── state.js              # initState() + last-scrape provenance (called via initScraper())
 │   ├── pipeline/                 # ═══ The staged scrape → extract → enrich → score → persist pipeline ═══
 │   │   ├── index.js              # Pipeline entry + stage composition
-│   │   ├── scrape-stage.js       # Firecrawl/Puppeteer scrape, stamps _scrapedAt/_scrapeMethod
+│   │   ├── scrape-stage.js       # Three-tier scrape, stamps _scrapedAt/_scrapeMethod
+│   │   ├── scraper.js            # Pipeline-side scrape helpers (delegates to lib/scraper/)
 │   │   ├── probe.js              # Content-hash change detection before full scrape
 │   │   ├── scrape-diff.js        # Compare current vs cached scrape for regressions
-│   │   ├── extractor.js          # Runs DOM extractors + Gemini fallback, stamps _extractStrategy/_extractFieldCoverage
+│   │   ├── firecrawl-extract.js  # PRIMARY catalogue extractor — Firecrawl JSON extract + per-house markdown recogniser
+│   │   ├── extractor.js          # AI-only fallback (Gemini Pro/Flash) when Firecrawl JSON returns 0 lots
 │   │   ├── enrichment.js         # Parallel enrichment dispatch (delegates to lib/enrichment.js)
-│   │   ├── enrichment-wave.js    # Wave-based parallel lookup executor
+│   │   ├── enrichment-wave.js    # Wave-based parallel lookup executor (free-tier vs paid waves)
 │   │   ├── enrich-stage.js       # Pipeline stage wrapper around enrichment
 │   │   ├── cache-enrich-stage.js # Cache warming for enrichment
 │   │   ├── scoring.js            # analyseLot() — the ONE production scoring function (0-10, capped)
 │   │   ├── scorer.js             # Lightweight scoring helpers
 │   │   ├── persist-stage.js      # Writes lots + enrichment_manifest to Supabase
-│   │   ├── persist-lots.js       # Lot upsert helpers
-│   │   ├── lot-mappers.js        # LOTS_SELECT column list + row → lot shape mappers
-│   │   ├── house-skills.js       # Per-house capability tracking (has_dom_extractor, requires_puppeteer)
+│   │   ├── persist-lots.js       # Lot upsert helpers (hero-bleed guard, slug lowercase)
+│   │   ├── lot-mappers.js        # LOTS_SELECT column list + dbRowToFrontendLot
+│   │   ├── house-skills.js       # Per-house capability tracking (image_coverage, circuit_state)
 │   │   ├── healing.js            # Self-healing: find new catalogue URLs when house returns 0 lots
 │   │   ├── discovery.js          # Discover candidate new auction houses
 │   │   ├── auction-watcher.js    # Watches for new auction dates
 │   │   ├── calendar-sync.js      # Syncs auction_calendar from upstream sources
+│   │   ├── drift-scheduler.js    # auditStatusDrift() — daytime hourly status sampling
+│   │   ├── post-auction-sweep.js # sweepPostAuctionStatuses() — D+1..D+30 status reconciliation
+│   │   ├── multi-image-sweep.js  # sweepMultiImages() — per-lot image gallery backfill
+│   │   ├── retry-queue.js        # drainHygieneRetries() — enrichment retry drain
 │   │   ├── harness-bridge.js     # Bridges pipeline events → harness alerts
-│   │   ├── quality-gate.js       # Pipeline-side quality checks
+│   │   ├── quality-gate.js       # Pipeline-side quality checks (lot count, field coverage)
+│   │   ├── quality-regression.js # Detect quality drops vs last successful run
 │   │   ├── activity-log.js       # Records pipeline activity
 │   │   ├── analytics.js          # Pipeline-level analytics
 │   │   ├── purge.js              # Stale data cleanup
 │   │   └── types.js              # Shared type shapes (JSDoc)
 │   └── harness/                  # ═══ Self-healing + quality assurance ═══
-│       ├── manager.js            # Harness orchestrator
+│       ├── manager.js            # AI-driven harness orchestrator (cycle budgets, corrective actions)
 │       ├── alert-router.js       # fireAlert({ type, severity, ... }) — single-arg destructured
 │       ├── house-health.js       # Circuit breakers (circuit_state, circuit_opened_at, consecutive_failures)
 │       ├── quality-gate.js       # Pass/fail: min 3 lots, ≥60% core field coverage
 │       ├── regression-detector.js # 0-lot regressions vs last successful scrape
-│       ├── extractor-generator.js # AI-generated DOM extractors from HTML
+│       ├── extractor-generator.js # Legacy — AI-generated DOM extractors (kept for diagnostic use only)
 │       ├── house-discovery.js    # Web-search-based new house discovery
 │       ├── data-contract.js      # Lot schema validation + quality scoring
 │       ├── enrichment-engine.js  # Harness-side enrichment orchestration
 │       └── sub-agents.js         # Periodic audits + calendar staleness checks (queries `house` column, NOT `house_slug`)
-├── public/                       # Static assets
-├── tests/
-│   ├── test-extractors.js        # DOM extractor tests (JSDOM)
-│   ├── test-scoring.js           # Imports from lib/pipeline/scoring.js (NOT lib/scoring.js — that was deleted)
-│   ├── test-fundability.js       # 107 tests — type-aware LTV, GDV proxy, loan term defaults
-│   └── snapshots/                # HTML fixtures per house slug
-├── scripts/
-│   ├── audit.mjs                 # Extractor health monitor (per-house)
-│   ├── audit-fix.mjs             # Auto-fix broken extractors + email report
-│   └── audit/                    # Fingerprints & last-audit state
+├── public/                       # Static assets (favicon, og-image, app.js, styles.css, supabase.min.js)
+├── tests/                        # Hand-rolled Node assertions (no test framework). `npm test` = node tests/index.js style.
+│   ├── test-scoring.js           # Imports analyseLot from lib/pipeline/scoring.js
+│   ├── test-fundability.js       # ~107 tests — type-aware LTV, GDV proxy, loan term defaults
+│   ├── test-enrichment.js        # Enrichment + manifest recorder coverage
+│   ├── test-manifest.js          # initManifest + record* helper unit tests
+│   ├── test-gating.js            # Manifest gating: canScoreYield, canScoreBelowMarket
+│   ├── test-auth-cache.js        # validateUserFromReq cache + stale fallback
+│   ├── test-frontend-shell.js    # Static HTML head/SEO/shell assertions
+│   ├── test-harness.js           # alert-router, house-health, regression-detector
+│   ├── test-image-coverage.js    # Hero-bleed guard + image cascade
+│   ├── test-os-places.js         # OS Places client error paths
+│   └── (others — search/filter, status drift, slug normalisation, etc.)
+├── scripts/                      # CLI tooling. NO audit.mjs / audit-fix.mjs / DOM-snapshot scripts (retired 2026-05-08).
+│   ├── refresh-hmlr-{hpi,companies,ppd}.mjs # Monthly HMLR dataset loaders (auto-spawned by server.js)
+│   ├── discover-houses{,-search}.mjs        # Manual: Gemini-driven new-house discovery
+│   ├── test-firecrawl-extract.mjs           # Manual: probe Firecrawl JSON extract on a single URL
+│   ├── test-new-houses.mjs                  # Manual: validate new house against its catalogue
+│   ├── coverage-report.mjs                  # Manual: enrichment coverage stats by house
+│   ├── visual-audit.mjs                     # Auto-fix loop for visual heuristics
+│   ├── pre-launch-qa.mjs                    # Pre-deploy data quality smoke checks
+│   └── probe-{backfill,orphaned-houses}.mjs # Manual diagnostics
 ├── migrations/                   # Supabase SQL migrations — apply via MCP apply_migration
 ├── schema.sql                    # Current Supabase schema reference
-└── Dockerfile                    # Railway deployment (node:20-slim + Chromium)
+└── Dockerfile                    # Railway deployment (node:20-slim + optional Chromium)
 ```
 
 **Key rules:**
-- `server.js` is thin (Express wiring only). Backend logic lives in `routes/*.js`, `lib/*.js`, and `lib/pipeline/*.js`.
+- `server.js` is thin-ish (Express wiring + the cron driver `scheduleTick()`). Backend logic lives in `routes/*.js`, `lib/*.js`, `lib/scraper/*.js`, and `lib/pipeline/*.js`.
 - Pipeline stages are **composable and independently testable** — do not collapse them back into `lib/analysis.js`.
-- The frontend remains a single `index.html` file with embedded CSS and JS.
+- The frontend remains `index.html` (with `public/app.js` + `public/styles.css`) plus `bridgematch-lite.html` and `admin.html`.
+- **Lot extraction is unified** — every house goes through `lib/pipeline/firecrawl-extract.js` (Firecrawl JSON extract). Gemini fallback (`lib/pipeline/extractor.js`) only fires when Firecrawl JSON returns 0 lots. Allsop is the only structured-API exception (`lib/scraper/allsop.js`).
+- `lib/extractors/` was **deleted 2026-05-08** along with `tests/test-extractors.js`, `tests/test-detail-extractors.js`, `tests/snapshots/`, and `scripts/audit*.mjs`. Do not reintroduce. The `USE_FIRECRAWL_EXTRACT`, `FORCE_EXTRACT_HOUSES`, and `BROKEN_EXTRACTORS` flags / sets are also gone.
 - `lib/scoring.js` was deleted (orphan). Never reintroduce — use `lib/pipeline/scoring.js::analyseLot`.
 - `lib/pipeline/experiment.js` was deleted (vestigial A/B that never activated). Do not reintroduce.
 - `api/` directory was deleted (Vercel orphan). Do not reintroduce.
@@ -162,8 +200,8 @@ log.error('message', { key: 'value', err: error.message })
 
 Harness alerts go through `alert-router.js::fireAlert()` with a **single destructured object**:
 ```javascript
-fireAlert({ type: 'extractor_regression', severity: 'high', house: 'savills', details: {...} })
-// NOT: fireAlert('extractor_regression', 'high', ...) — that signature is dead
+fireAlert({ type: 'recall_diagnostic', severity: 'warning', house: 'savills', message: '...', meta: {...} })
+// NOT: fireAlert('recall_diagnostic', 'warning', ...) — that positional signature is dead
 ```
 
 ### Comments
@@ -199,46 +237,32 @@ app.post('/api/endpoint', async (req, res) => {
 - Rate limiting via `rate_limits` table + `increment_rate_limit` RPC
 - Timing-safe token comparison via `safeCompare()`
 
-## DOM Extractor Conventions
+## Lot Extraction (Firecrawl-First)
 
-Extractors live in `lib/extractors/` — **one file per house**, plus `index.js` aggregating them. Each exports an IIFE body that runs in the Puppeteer page context (or via JSDOM for Firecrawl-scraped HTML).
+**Single unified path**, no per-house DOM extractors. The previous DOM extractor system was retired 2026-05-08. New houses do NOT need any per-house JS code beyond a `HOUSE_ROOTS` entry.
 
-### Structure
-```javascript
-// lib/extractors/savills.js
-export const savills = `
-  (() => {
-    const lots = [];
-    const cards = document.querySelectorAll('CSS selector');
-    for (const card of cards) {
-      const address = card.querySelector('...')?.textContent.trim() || '';
-      const priceText = card.querySelector('...')?.textContent || '';
-      const price = parseInt(priceText.replace(/[£,]/g, '')) || null;
-      const url = card.querySelector('a[href]')?.getAttribute('href') || '';
-      const imageUrl = card.querySelector('img[src]')?.getAttribute('src') || '';
-      if (address) {
-        lots.push({ lot: lots.length + 1, address, price, url, imageUrl, bullets: [] });
-      }
-    }
-    return lots;
-  })()
-`;
-```
+### Pipeline
+1. **`lib/pipeline/firecrawl-extract.js::extractCatalogueListing()`** — primary path. Calls Firecrawl's structured `jsonOptions` extract against the catalogue URL with the schema in `lib/scraper/lot-schema.js`. Handles single-page and paginated catalogues. `changeTracking` short-circuits unchanged pages at ~1 credit.
+2. **Per-house markdown recogniser** (optional) — `HOUSE_OVERRIDES[slug]` in `lib/houses.js` may point at a function that reads the same Firecrawl markdown response to recover lots the JSON extractor missed (currently used by Pattinson + John Pye). This is *recognition*, not new extraction — Firecrawl-at-the-heart by definition.
+3. **AI fallback** — `lib/pipeline/extractor.js` runs Gemini Flash-Lite (known houses) or Pro (unknown / PDF) only when the Firecrawl JSON path returns 0 lots. Stamps `_extractStrategy` and `_extractFieldCoverage` provenance.
+4. **Allsop JSON-API exception** — `lib/scraper/allsop.js` consumes Allsop's private JSON endpoint directly (zero credits, ~50ms/page). It's a structured-API consumer, not a layout scraper.
 
 ### Returned lot fields
 - `lot` (Number) — lot number (required; `0` is valid)
 - `address` (String) — full address (required)
-- `price` (Number|null) — guide price as integer (strip `£` and commas)
+- `price` (Number|null) — guide price as integer
+- `priceText` (String) — original price string for display
 - `url` (String) — detail page link
 - `bullets` (String[]) — features, tenure, condition notes
-- `imageUrl` (String|undefined) — property image URL (backfill handles misses)
+- `imageUrl` (String|undefined) — property image URL (multi-image-sweep handles misses)
+- `propType`, `beds`, `tenure`, `condition`, `vacant`, `titleSplit`, `dealType` — best-effort enrichment fields
 
 ### Rules
-- Return `null` or skip lots that fail to parse — don't throw
-- Detect SOLD/STC/Withdrawn via regex and push to bullets
-- Deduplicate by lot number using a `Set`
-- Walk up DOM tree (5+ levels) if needed to find the containing card
-- Test new extractors by saving a snapshot in `tests/snapshots/{slug}.html` and adding an `EXPECTED[slug]` entry in `tests/test-extractors.js`
+- Never throw out of an extractor; return an empty list and let the harness alert
+- Status detection (SOLD/STC/Withdrawn) is in `lib/pipeline/firecrawl-extract.js` and `lib/scraper/validation.js`
+- Hero-bleed guard at upsert (`lib/pipeline/persist-lots.js::HERO_BLEED_THRESHOLD = 3`) auto-strips a single image URL shared across ≥3 distinct addresses
+- Slug-case dedup at upsert: `house = (house || '').toLowerCase()` — avoid mixed-case duplicates
+- For non-EIG / non-AH-UK / non-Bamboo houses, add a `RECALL_SENTINELS[slug]` regex in `lib/analysis.js` so the harness can measure recall against Firecrawl markdown
 
 ## Enrichment Manifest (Observability Layer)
 
@@ -375,11 +399,15 @@ Yield is scored **once** — either by `scoring.js` or `enrichment.js`, never bo
 
 ## Testing
 
-- Framework: Custom vanilla assertions with JSDOM (no test library)
+- Framework: hand-rolled Node assertions (no Jest / Mocha / Vitest). `process.exit(1)` on failure.
 - Run: `npm test`
-- Extractor tests: `tests/test-extractors.js` — snapshot files in `tests/snapshots/{slug}.html`, expected data in `EXPECTED[slug] = { minLots, samples: [{ lot, addressContains, priceMin }] }`
 - Scoring tests: `tests/test-scoring.js` imports `analyseLot` from `lib/pipeline/scoring.js`
-- Fundability tests: `tests/test-fundability.js` — 107 tests covering type-aware LTV, works inference, GDV proxy, loan term defaults, zero-price shape
+- Fundability tests: `tests/test-fundability.js` — ~107 tests covering type-aware LTV, works inference, GDV proxy, loan term defaults, zero-price shape
+- Enrichment + manifest tests: `tests/test-enrichment.js`, `tests/test-manifest.js`, `tests/test-gating.js`
+- Auth cache: `tests/test-auth-cache.js` (30s cache + 5min stale fallback)
+- Frontend shell: `tests/test-frontend-shell.js` (HTML head, SEO tags, env-shim presence)
+- Harness: `tests/test-harness.js` (alert-router dedup, house-health circuit, regression-detector)
+- For new lot-extraction work, validate end-to-end via `node scripts/test-firecrawl-extract.mjs <url>` rather than DOM snapshots (those scripts and `tests/snapshots/` were retired 2026-05-08)
 
 ## Gemini Model Selection (`lib/ai-provider.js`)
 
@@ -434,12 +462,12 @@ From `CLAUDE.md` and project review:
 
 ## Adding a New Auction House
 
-See `references/new-house-playbook.md` for the full checklist. Summary:
-1. Add `HOUSE_ROOTS[slug]` entry in `lib/houses.js`
-2. Create `lib/extractors/{slug}.js` exporting the DOM extractor IIFE
-3. Register in `lib/extractors/index.js`
-4. Add HTML snapshot to `tests/snapshots/{slug}.html`
-5. Add `EXPECTED[slug]` entry in `tests/test-extractors.js`
-6. Run `npm test` to verify extractor returns expected lots
-7. If house needs Puppeteer, add slug to relevant skip/require lists
-8. Commit: `feat: add {slug} auction house extractor (N lots)`
+See `references/new-house-playbook.md` for the full checklist. Summary (Firecrawl-first; no per-house JS for the common case):
+
+1. **Register the house** — add `HOUSE_ROOTS[slug]` (catalogue URL) and `HOUSE_DISPLAY_NAMES[slug]` in `lib/houses.js`. Add a `detectAuctionHouse()` clause for the domain.
+2. **Recall sentinel (recommended)** — add a `RECALL_SENTINELS[slug]` regex in `lib/analysis.js` so the harness can measure how many lots Firecrawl markdown sees vs how many made it into JSON. EIG / AH UK / Bamboo platforms are auto-detected by `detectPlatformSentinel()` — no entry needed.
+3. **Test the extraction** — run `node scripts/test-firecrawl-extract.mjs <catalogue-url>` and confirm lot count + key fields look right. If Firecrawl JSON misses lots, inspect the markdown — usually a per-house `HOUSE_OVERRIDES` markdown recogniser is the fix (see Pattinson, John Pye for examples), not a new DOM extractor.
+4. **Optional: pagination / Puppeteer hint** — if the catalogue uses an unusual pagination pattern or strictly needs a JS-rendered page, set the relevant flag on the `rewriteUrl(slug, url)` return in `lib/houses.js`.
+5. **Mirror in `admin.html`** if the slug needs a friendly name in the admin UI.
+6. **Run `npm test`** — must stay green.
+7. **Commit:** `feat: add {slug} auction house (N lots)`

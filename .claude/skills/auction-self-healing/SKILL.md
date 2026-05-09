@@ -24,13 +24,13 @@ When invoked via screenshot:
 
 1. **Read the screenshot literally.** Identify each visible lot card and record: house slug (badge in card top-left), lot number, address text, price, badges (bedrooms, EPC, tenure, "Guide TBA", "Needs modernisation", etc.), and whether the image is a real photo or a house logo / generic placeholder.
 2. **Cluster symptoms by house slug.** If three lots from the same slug all show the house logo as the image, the bug is in that slug's extractor / image strategy — not a per-lot data issue.
-3. **Map symptoms to causes**:
-   - House logo / brand colour as image → DOM extractor's image selector is missing the real image attribute (often `data-bg`, `data-src`, or `srcset` on a non-default container). Cross-check against `lib/extractors/helpers.js` `extractCardImage()` — bespoke logic that doesn't use this helper is suspicious.
-   - Address = single town name → DOM extractor is reading a heading element that on this page only contains the locality. Look for sibling elements with the full street/postcode (often a `<p>` or `<span>` after the `<h3>`).
-   - "other" property type or wrong bed count → URL-regex extraction (`(house|flat|...)/`, `(\d+)-bedroom`) is failing because the listing page uses different URL slugs than the property detail pages. Read the type/beds from card body badges instead.
-   - "Guide TBA" on every lot → price selector (`.nativecurrencyvalue` or similar) returns empty; price is genuinely TBA OR the selector points at the wrong element.
-4. **Fetch the live catalogue page** (Firecrawl via admin endpoint, or ask user to paste a fresh HTML snapshot if Firecrawl is blocked). Save to `tests/snapshots/{slug}.html` and confirm the new selectors against the actual DOM before writing code.
-5. From here, follow the main `DIAGNOSE → CLASSIFY → FIX → VERIFY → REPORT → LEARN` loop. Extractor rewrites still require explicit "push" confirmation (rule 6).
+3. **Map symptoms to causes** (Firecrawl-first since 2026-05-08 — fixes are at the schema / prompt level, not per-house DOM):
+   - House logo / brand colour as image → Firecrawl JSON extract grabbed a hero/banner image instead of a per-card image. Inspect the Firecrawl markdown response: are real per-lot images present in the markdown? If yes, the `lot-schema.js` image extraction prompt needs sharpening. If no, the page is image-lazy and needs a Firecrawl `executeJavascript` scroll action via `HOUSE_SCRAPE_OVERRIDES` in `lib/scraper.js`. The hero-bleed guard at upsert (`lib/pipeline/persist-lots.js::HERO_BLEED_THRESHOLD = 3`) auto-strips a single image URL shared across ≥3 distinct addresses — that's the safety net.
+   - Address = single town name → Firecrawl JSON returned the section heading instead of the lot address. Usually a per-house `HOUSE_OVERRIDES` markdown recogniser fixes it (see Pattinson, John Pye in `lib/houses.js`) — read the full lot block out of markdown rather than relying on JSON extract alone.
+   - "other" property type or wrong bed count → enrichment classifier in `lib/scraper/extraction.js` couldn't infer from the bullets. Confirm the bullets array is populated (markdown recogniser may need to capture more text).
+   - "Guide TBA" on every lot → price genuinely missing OR Firecrawl JSON dropped the `priceText`. Cross-check against the markdown response.
+4. **Fetch the live catalogue** via `POST /api/admin/rescrape { slug }` or `node scripts/test-firecrawl-extract.mjs <url>` — confirm the diagnosis end-to-end before changing code. There are no DOM snapshots any more; rely on live re-scrape.
+5. From here, follow the main `DIAGNOSE → CLASSIFY → FIX → VERIFY → REPORT → LEARN` loop. Schema/prompt changes still require explicit "push" confirmation (rule 6).
 
 ## The Loop
 
@@ -76,14 +76,14 @@ Assign exactly one primary cause. Confidence ≥ 0.75 is required to auto-fix; b
 |---|---|---|
 | `merger` | Banner/footer phrases like "now part of", "acquired by", "visit our new website", "auctions now run by" | Resolve via merger flow (§3a). **NEVER invent a new URL on the parent's domain without first calling `detectAuctionHouse(newUrl)` and checking it does not collide with an existing slug.** |
 | `url_rotation` | Domain unchanged but path moved (e.g. `/auctions` → `/properties`) | Update HOUSE_ROOTS + AUCTION_DISCOVERY entry, push, rescrape |
-| `extractor_regression` | URL fine, page renders, but selectors return 0 lots | Update DOM extractor (§3b — REQUIRES CONFIRMATION) |
+| `firecrawl_extract_regression` | URL fine, page renders, Firecrawl markdown shows lots, but JSON extract returns 0 / few | Tighten the Firecrawl `jsonOptions` schema/prompt in `lib/scraper/lot-schema.js`, OR add a per-house `HOUSE_OVERRIDES` markdown recogniser in `lib/houses.js` (see Pattinson, John Pye). DOM extractors are gone — there's nothing per-house to "fix" at the DOM level. (§3b — REQUIRES CONFIRMATION for schema changes.) |
 | `captcha_block` | reCAPTCHA / StackProtect / Cloudflare on a page whose content **isn't already scraped under another slug** | Add Firecrawl `preActions` override in `HOUSE_SCRAPE_OVERRIDES` (lib/scraper.js). **Skip entirely if the same lots flow through a sibling slug — that's a merger, not a captcha problem.** |
 | `image_coverage_low` | `house_skills.image_coverage < 0.7` | Run `/api/admin/backfill-images` |
 | `two_tier_mistarget` | All lots share an identical `imageUrl`, addresses are single town/branch words (no commas, ≤2 words), 0 bullets across the board, and lot count matches a suspiciously round branch count (10–20). The scraper is reading an *events listing* (one card per branch/auction event) instead of a *lot listing*. | Fix `rewriteUrl()` in `lib/houses.js` for that house — drill from events page to event-detail page that actually contains `/property/` href links. **Never short-circuit on a CSS class alone (e.g. `FeaturedGrid`) — events pages reuse the same components.** Always require a property-link signal before treating a page as lot-bearing. |
 | `genuine_zero` | Auction calendar empty / between cycles. Confirm by fetching the catalogue page directly (curl/Firecrawl) and looking for a literal "no results" / "no upcoming" / "Sorry, there were no results" text marker — selectors returning 0 *plus* a "no results" banner = genuine zero, not regression. | No action; mark alert resolved with note "no current catalogue (text marker confirmed)". John Pye 2026-04-25 — 77 alerts resolved this way after confirming "no upcoming auctions" banner. |
 | `auth_wall` | HTTP 401 / 403 on every request, including from a clean browser session. Site requires login (e.g. agent portal). Firecrawl + Puppeteer both blocked. | Add `blocked: true` short-circuit in `rewriteUrl()` (lib/houses.js) so the slug is skipped before any scrape attempt. Resolve open alerts with note "auth wall — blocked permanently until credentials supplied". Halls 2026-04-25 — 401 on all paths, blocked + 1 alert resolved. |
-| `theme_distinct` | House uses a CMS theme that *looks* like an aliased platform (Homeflow, Bamboo, etc.) but actually has different selectors (e.g. Ctesius theme on Homeflow assets uses `.propertyTeaser`, not `.property-results-list`). Symptom: aliased extractor returns 0 lots even though the page renders fine and has property cards. | Promote from alias to standalone `lib/extractors/houses/{slug}.js`. Remove the alias entry from `platforms/{platform}.js`. Remove the slug from any platform-specific branches in `lib/houses.js` (e.g. Homeflow SPA branch). Add snapshot + EXPECTED entry. Clee Tompkinson 2026-04-25 — was aliased to `stags`/Homeflow but uses Ctesius `.propertyTeaser`; 5 lots extracted after extractor split. |
-| `hero_image_bleed` | A single `image_url` is shared across ≥3 distinct addresses for one house (often the company logo, homepage hero, or a "no image" stock). Frontend shows the same photo on every card for that house. Detection SQL: `SELECT lower(house), count(*), count(DISTINCT image_url), count(DISTINCT address) FROM lots WHERE image_url IS NOT NULL GROUP BY lower(house) HAVING count(*) > 3 AND count(DISTINCT image_url) = 1 AND count(DISTINCT address) > 3;` | The defensive guard in `lib/pipeline/persist-lots.js` (`HERO_BLEED_THRESHOLD = 3`) auto-strips bleed URLs at upsert. For *existing* poisoned rows, run `UPDATE lots SET image_url = NULL WHERE house = $1 AND image_url IN (<bleed-urls>)` — backfill picks them up next pass. If the bleed *recurs* on the same house after rescrape, the extractor itself is grabbing a hero — fix it to read per-card images via `extractCardImage()`. Lextons / philliparnold / driversnorris / walkersingleton 2026-04-25 all hit this. |
+| `theme_distinct` | House previously aliased to a platform extractor (Homeflow, Bamboo, etc.) but the live page uses a different layout. Symptom: Firecrawl JSON returns 0 / few lots even though the page renders and has property cards. **Pre-2026-05-08 fix was a standalone DOM extractor; that path no longer exists.** | Add a per-house `HOUSE_OVERRIDES` markdown recogniser in `lib/houses.js` so Firecrawl markdown is parsed with house-specific patterns. If even markdown is thin, fall back to a Firecrawl `executeJavascript` scroll action in `HOUSE_SCRAPE_OVERRIDES` (lib/scraper.js) to get the SPA to hydrate. Historical Clee Tompkinson incident (2026-04-25) was resolved by a standalone DOM extractor at the time; the same fix today is a markdown recogniser. |
+| `hero_image_bleed` | A single `image_url` is shared across ≥3 distinct addresses for one house (often the company logo, homepage hero, or a "no image" stock). Frontend shows the same photo on every card for that house. Detection SQL: `SELECT lower(house), count(*), count(DISTINCT image_url), count(DISTINCT address) FROM lots WHERE image_url IS NOT NULL GROUP BY lower(house) HAVING count(*) > 3 AND count(DISTINCT image_url) = 1 AND count(DISTINCT address) > 3;` | The defensive guard in `lib/pipeline/persist-lots.js` (`HERO_BLEED_THRESHOLD = 3`) auto-strips bleed URLs at upsert. For *existing* poisoned rows, run `UPDATE lots SET image_url = NULL WHERE house = $1 AND image_url IN (<bleed-urls>)` — multi-image-sweep picks them up next pass. If the bleed *recurs* after rescrape, sharpen the per-card image extraction in the Firecrawl `jsonOptions` schema (`lib/scraper/lot-schema.js`) so the prompt explicitly rejects logos/banners. Lextons / philliparnold / driversnorris / walkersingleton 2026-04-25 all hit this. |
 | `slug_case_dup` | Same house has rows under both `lextons` and `Lextons` (or any case variant). Detection: `SELECT lower(house), count(DISTINCT house) FROM lots GROUP BY lower(house) HAVING count(DISTINCT house) > 1;`. Caused by two code paths writing the slug differently — usually one path used `auction_calendar.house` (display name) and another used `auction_calendar.house_slug` (canonical). | Lowercase guard now lives in `persist-lots.js` (`house = (house || '').toLowerCase()` at function entry). Existing duplicate rows: `UPDATE lots SET house = lower(house) WHERE house != lower(house)` — but check unique constraints first because `(house, url)` may collide. If collisions exist, prefer the row with the most enriched fields. |
 | `retired_slug_resurrected` | Slug was removed from `HOUSE_ROOTS` in `lib/houses.js` (e.g. domain parked / merged) but the slug still appears in `lots`, `auction_calendar`, or `cached_analyses`. Either an old calendar row never got cleaned up, or `detectAuctionHouse()` is still routing the dead domain to the retired slug. | Three-step cleanup: (1) `DELETE FROM lots WHERE house ILIKE $slug` + same for `auction_calendar` + `cached_analyses` + resolve open alerts. (2) Add `if (house === '$slug') return { ..., blocked: true }` guard in `rewriteUrl()` so any straggler URL short-circuits. (3) Optional: also remove the `detectAuctionHouse` line that routes the dead domain. Lextons 2026-04-25 — 62 stale rows (split 31/31 case), 1 calendar row, 1 hero-bleed image, all purged + blocked. |
 | `mixed_content_http_images` | All lots for one house show "No photo available" placeholder on the live frontend, but `SELECT image_url FROM lots WHERE house = '$slug'` returns populated values starting with `http://`. The frontend is HTTPS-only, so browsers block as mixed content; `routes/search.js` `isValidImageUrl()` also strips `http://` URLs server-side. **Detection SQL:** `SELECT house, COUNT(*) FILTER (WHERE image_url LIKE 'http://%') AS http_imgs FROM lots GROUP BY house HAVING COUNT(*) FILTER (WHERE image_url LIKE 'http://%') > 0;` | Two fixes: (1) Add `if (src.startsWith('http://')) src = src.replace('http://', 'https://')` in the per-house extractor's image selector — verify the source actually serves HTTPS first via `curl -sI https://host/path`. (2) Bulk-update existing rows: `UPDATE lots SET image_url = REPLACE(image_url, 'http://', 'https://') WHERE house = '$slug' AND image_url LIKE 'http://%'`. Futureauctions 2026-04-30 — 143 rows fixed; extractor already had the rewrite from a prior change but legacy rows pre-dated it. |
@@ -106,25 +106,26 @@ When `_hasMergerSignal()` fires in `lib/pipeline/healing.js`, the harness alread
 
 This flow is **auto-commit + auto-push** because it cannot duplicate or destroy real lot data.
 
-### 3b. Extractor / scraper rewrite
+### 3b. Firecrawl schema / markdown-recogniser rewrite
 
-For `extractor_regression` and any change to `DOM_EXTRACTORS` or scraping logic:
-1. Save a fresh `tests/snapshots/{slug}.html` from the live page.
-2. Update the extractor IIFE.
-3. Update `EXPECTED[slug]` in `tests/test-extractors.js` if needed.
-4. Run `npm test` — must be green.
-5. **Auto-commit policy** (per user directive):
+For `firecrawl_extract_regression`, `theme_distinct`, or any change to `lib/scraper/lot-schema.js`, `lib/pipeline/firecrawl-extract.js`, or `HOUSE_OVERRIDES` in `lib/houses.js`:
+1. Confirm the symptom against a live re-scrape (`POST /api/admin/rescrape { slug }` or `node scripts/test-firecrawl-extract.mjs <url>`). DOM snapshots no longer exist — rely on live verification.
+2. Decide the layer:
+   - JSON extract isn't returning a field → tweak the schema / prompt in `lib/scraper/lot-schema.js`.
+   - Markdown has the lots but JSON misses them → add or sharpen a per-house `HOUSE_OVERRIDES[slug].markdownRecogniser(markdown)` in `lib/houses.js` (Pattinson, John Pye are reference implementations).
+   - Page is JS-heavy and even markdown is thin → add a Firecrawl `executeJavascript` / scroll action in `HOUSE_SCRAPE_OVERRIDES` (`lib/scraper.js`).
+3. Run `npm test` — must be green.
+4. **Auto-commit policy** (per user directive):
    - **Auto-commit + push allowed when ALL of these hold** (the "unambiguous fix" gate):
      - Confidence ≥ 0.85 in CLASSIFY.
-     - The change is purely additive or a like-for-like selector swap (e.g. routes through `extractCardImage()` instead of bespoke logic, reads sibling element instead of only h3, replaces URL-regex with badge-text reading).
-     - `npm test` is green AND the snapshot test for this slug exists or was added in the same change.
-     - No change to scoring logic, pricing math, slug routing, or shared helpers used by other houses.
+     - Change is additive or scoped to a single slug (e.g. new `HOUSE_OVERRIDES` entry, refining one regex in a recogniser, adding a single field to the JSON schema).
+     - `npm test` is green.
+     - No change to scoring logic, pricing math, slug routing, or shared schema fields used by other houses.
      - Lot count from VERIFY is within 80% of last-known-good (or > 0 if no prior baseline).
    - **Confirmation required when ANY of these hold** ("ambiguous"):
      - Confidence < 0.85.
-     - Change touches shared code (`lib/extractors/helpers.js`, `lib/scraper.js`, `lib/houses.js` slug routing, `lib/pipeline/healing.js`).
-     - Snapshot test missing AND cannot be created (live page un-fetchable).
-     - VERIFY rescrape failed or produced < 80% expected.
+     - Change touches shared code (`lib/scraper/lot-schema.js` core fields, `lib/scraper.js` shared overrides, `lib/houses.js` slug routing, `lib/pipeline/healing.js`).
+     - Live re-scrape fails or produces < 80% expected.
    - When in doubt, send the proposal via Telegram and wait. The user explicitly said: auto-commit is welcome where the advantages are unambiguous; when not, ask.
 
 ### 3c. Routine maintenance (auto-commit low-risk)
@@ -198,8 +199,7 @@ This is non-negotiable. The skill must compound — each incident makes the next
 9. **Always close the loop on `pipeline_alerts.resolved`** when a fix verifies. Stale alerts pollute the next session's DIAGNOSE.
 10. **When in doubt, Telegram + stop.** Better to wake the user than to corrupt lot data or duplicate slugs.
 11. **Never short-circuit a two-tier discovery on CSS-class presence alone.** Events listing pages on multi-branch auctioneers (Symonds, John Pye, Stags, LSH, Carter Jonas, Halls, GTH) reuse the same card components as lot pages, so `FeaturedGrid` / `PropertyCard` / similar selectors will be present on the wrong page too. Require an actual `/property/` (or per-house equivalent) href as the lot-bearing signal before treating a page as a catalogue. The Symonds 13-placeholder-card incident (2026-04-25) was caused by exactly this short-circuit.
-12. **Test runner must mirror the production extractor harness exactly.** `lib/extractors/runner.js` builds extractors with `IMG_HELPERS` prepended and the extractor code trimmed before the `return`. The `.trim()` is load-bearing: a leading newline in the IIFE template literal triggers JS automatic semicolon insertion after `return`, silently returning `undefined` and masking real failures. `tests/test-extractors.js` must use the same `.trim()` + `IMG_HELPERS` injection — not the raw untrimmed form. Discovered 2026-04-25 while fixing Clee Tompkinson; the trim fix exposed pre-existing 0-lot results from stale synthetic snapshots (sdl/savills/bondwolfe), which we treat as soft `SNAPSHOT-FAIL` rather than hard failures.
-13. **Always run a sanity sweep across sibling houses when fixing a two-tier mistarget.** A bug in one branch's discovery often hides in others — same code path, different slug. The sanity-sweep snippet in `/fix_lot` (clusters by slug, flags identical-image + town-only-address + zero-bullets) catches the four-symptom signature in one query.
+12. **Always run a sanity sweep across sibling houses when fixing a two-tier mistarget.** A bug in one branch's discovery often hides in others — same code path, different slug. The sanity-sweep snippet in `/fix_lot` (clusters by slug, flags identical-image + town-only-address + zero-bullets) catches the four-symptom signature in one query.
 15. **Run the data-integrity sweep on every screenshot-driven session, before assuming the issue is per-house.** A bug that hits one house often hits 3–4 others under the same code path. The standard sweep — three queries that finish in milliseconds:
     ```sql
     -- Hero-image bleed (one image shared across many addresses)
@@ -248,11 +248,14 @@ All require header `x-admin-secret: $ADMIN_SECRET`.
 
 ## Quick reference: key files
 
-- `lib/houses.js` — HOUSE_ROOTS, HOUSE_DISPLAY_NAMES, AUCTION_DISCOVERY, `detectAuctionHouse()`
-- `lib/scraper.js` — HOUSE_SCRAPE_OVERRIDES, `scrapeRenderedPage()`, three-tier fallback
+- `lib/houses.js` — HOUSE_ROOTS, HOUSE_DISPLAY_NAMES, HOUSE_OVERRIDES (markdown recognisers), `detectAuctionHouse()`, `rewriteUrl()`
+- `lib/scraper.js` — façade re-exporting `lib/scraper/*`; HOUSE_SCRAPE_OVERRIDES live here
+- `lib/scraper/lot-schema.js` — Firecrawl JSON-extract schema + prompt (CRITICAL: edit prompt instructions here)
+- `lib/scraper/rendering.js` — `scrapeRenderedPage()` three-tier orchestration
+- `lib/pipeline/firecrawl-extract.js` — primary catalogue extractor (Firecrawl JSON + markdown recogniser glue)
+- `lib/pipeline/extractor.js` — Gemini fallback (only fires when Firecrawl JSON returns 0 lots)
 - `lib/pipeline/healing.js` — MERGER_PHRASES, `_detectMerger()`, `_commitMerger()`, `healBrokenHouse()`
-- `lib/extractors/platforms/{slug}.js` — per-house DOM extractors
-- `lib/extractors/helpers.js` — IMG_HELPERS (auto-injected; use `extractCardImage()` not bespoke logic)
-- `tests/test-extractors.js` + `tests/snapshots/{slug}.html` — extractor regression tests
+- `lib/pipeline/persist-lots.js` — hero-bleed guard, slug lowercase normalisation
 - `admin.html` — friendly-name map + slug detection (mirror any slug change here)
-- `scripts/audit.mjs` / `scripts/audit-fix.mjs` — health monitor + auto-fix CLI
+- `scripts/test-firecrawl-extract.mjs` — manual probe for Firecrawl JSON extract on a single URL
+- `scripts/visual-audit.mjs` — automated visual heuristic loop (run before any heal session)

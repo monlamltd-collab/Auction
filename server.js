@@ -42,6 +42,7 @@ import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY, AUTH_ENABLED } from './lib/s
 import { securityHeaders, csrfCheck } from './lib/security.js';
 import { getClientIP, setOnNewUser } from './lib/auth.js';
 import { initHouses, HOUSE_ROOTS, rewriteUrl } from './lib/houses.js';
+import { applyUmamiInjection } from './lib/utils.js';
 import { getCalendarAuctions } from './lib/calendar.js';
 
 // ── Harness modules (adaptive resilience framework) ──
@@ -84,11 +85,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// BROKEN_EXTRACTORS + initExtractors retired 2026-05-08 with the
-// DOM-extractor system. Catalogue extraction is now Firecrawl JSON
-// extract → Gemini fallback; per-house "broken extractor" tracking
-// no longer applies.
-
 // ── Security middleware (from lib/security.js) ──
 app.use(securityHeaders);
 app.use(csrfCheck);
@@ -107,6 +103,12 @@ initAlerts(supabase);
 initHouseHealth(supabase).catch(e => console.warn('Harness: health init failed:', e.message));
 initDiscovery(supabase, callAI);
 initGenerator(callAI);
+
+// Wire the budget alert hook through to the harness alert router. Indirect
+// via setAlertHook to avoid a circular import (resource-budget → alert-router
+// → resource-budget). MUST be set before the first scrape — bootDecision()
+// runs after a 60s delay, so this ordering is safe.
+budget.setAlertHook((payload) => harnessFireAlert(payload));
 
 // Inject server-level dependencies into lib/houses.js (rewriteUrl needs these)
 initHouses({
@@ -128,6 +130,7 @@ import stripeRouter from './routes/stripe.js';
 import leadsRouter from './routes/leads.js';
 import calendarRouter from './routes/calendar.js';
 import analyseRouter from './routes/analyse.js';
+import lotsRouter from './routes/lots.js';
 import searchRouter, { invalidateAllLotsCache, warmAllLotsCache } from './routes/search.js';
 import adminRouter from './routes/admin.js';
 import userDataRouter from './routes/user_data.js';
@@ -142,6 +145,7 @@ app.use('/api/stripe', stripeRouter);
 app.use(leadsRouter);
 app.use(calendarRouter);
 app.use(analyseRouter);
+app.use(lotsRouter);
 app.use(searchRouter);
 app.use(adminRouter);
 app.use(userDataRouter);
@@ -163,8 +167,9 @@ const _indexHtmlCache = (() => {
     // the landing copy. Single source of truth = HOUSE_ROOTS in lib/houses.js.
     const houseCount = Object.keys(HOUSE_ROOTS).length;
     html = html.replaceAll('__HOUSE_COUNT__', String(houseCount));
-    if (process.env.UMAMI_WEBSITE_ID) {
-      html = html.replace('data-website-id=""', `data-website-id="${process.env.UMAMI_WEBSITE_ID}"`);
+    html = applyUmamiInjection(html, process.env.UMAMI_WEBSITE_ID);
+    if (!process.env.UMAMI_WEBSITE_ID) {
+      log.warn('UMAMI_WEBSITE_ID unset — analytics script stripped from served HTML');
     }
     log.info('index.html cached at startup', { bytes: html.length });
     return html;
@@ -275,7 +280,15 @@ initCompanies({ supabase });
 // Boot   — Runs free enrichment after 60s. Triggers full pass only if last
 //          DB scrape was >25h ago, or if FORCE_BOOT_SCRAPE=true is set.
 
-const _scheduleState = { lastFullPass: 0, lastFreeEnrich: 0, lastStatusDrift: 0, lastRentalDrain: 0, lastRetryDrain: 0, lastPostAuctionSweep: 0, lastBudgetLog: 0, lastMultiImageSweep: 0, lastHmlrRefresh: 0, lastHomepageWatch: 0 };
+const _scheduleState = {
+  lastFullPass: 0, lastFreeEnrich: 0, lastStatusDrift: 0,
+  lastRentalDrain: 0, lastRetryDrain: 0, lastPostAuctionSweep: 0,
+  lastBudgetLog: 0, lastMultiImageSweep: 0, lastHmlrRefresh: 0,
+  // Phase 5 tiers (alert-sweep / coverage-digest / sitemap-regen):
+  lastAlertSweep: 0, lastCoverageDigest: 0, lastSitemapRegen: 0,
+  // Tier 12 (homepage-watch):
+  lastHomepageWatch: 0,
+};
 
 function getUkHourMinute() {
   const ukNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/London' }));
@@ -468,21 +481,49 @@ function scheduleTick() {
     console.log('SCHEDULE: 7th 02:00 UK — running HMLR refresh (HPI + CCOD + OCOD)');
     (async () => {
       const { spawn } = await import('node:child_process');
-      const runLoader = (args) => new Promise((resolve) => {
+      const runLoader = (dataset, args) => new Promise((resolve) => {
         const child = spawn(process.execPath, args, { stdio: 'inherit', env: process.env });
-        child.on('exit', code => resolve(code));
+        child.on('exit', code => {
+          console.log(`SCHEDULE HMLR ${dataset} exit=${code}`);
+          if (code !== 0) {
+            harnessFireAlert({
+              type: 'hmlr_refresh_failed',
+              severity: 'warning',
+              house: null,
+              message: `HMLR ${dataset} loader exited with code ${code}`,
+              meta: { dataset, exitCode: code, args },
+            });
+          }
+          resolve(code);
+        });
+        child.on('error', err => {
+          console.error(`SCHEDULE HMLR ${dataset} spawn error:`, err.message);
+          harnessFireAlert({
+            type: 'hmlr_refresh_failed',
+            severity: 'warning',
+            house: null,
+            message: `HMLR ${dataset} loader failed to spawn: ${err.message}`,
+            meta: { dataset, args, error: err.message },
+          });
+          resolve(-1);
+        });
       });
       try {
-        const hpiCode = await runLoader(['scripts/refresh-hmlr-hpi.mjs']);
-        console.log(`SCHEDULE HMLR HPI exit=${hpiCode}`);
-        const ocodCode = await runLoader(['scripts/refresh-hmlr-companies.mjs', '--dataset=ocod', '--postcodes-only']);
-        console.log(`SCHEDULE HMLR OCOD exit=${ocodCode}`);
-        const ccodCode = await runLoader(['scripts/refresh-hmlr-companies.mjs', '--dataset=ccod', '--postcodes-only']);
-        console.log(`SCHEDULE HMLR CCOD exit=${ccodCode}`);
-        const ppdCode = await runLoader(['scripts/refresh-hmlr-ppd.mjs', '--postcodes-only']);
-        console.log(`SCHEDULE HMLR PPD exit=${ppdCode}`);
+        // One bad dataset shouldn't kill the rest — runLoader resolves either
+        // way and the alert above gets fired per-dataset.
+        await runLoader('HPI',  ['scripts/refresh-hmlr-hpi.mjs']);
+        await runLoader('OCOD', ['scripts/refresh-hmlr-companies.mjs', '--dataset=ocod', '--postcodes-only']);
+        await runLoader('CCOD', ['scripts/refresh-hmlr-companies.mjs', '--dataset=ccod', '--postcodes-only']);
+        await runLoader('PPD',  ['scripts/refresh-hmlr-ppd.mjs', '--postcodes-only']);
       } catch (e) {
         console.error('SCHEDULE HMLR refresh failed:', e.message);
+        harnessFireAlert({
+          type: 'hmlr_refresh_failed',
+          severity: 'error',
+          house: null,
+          message: `HMLR refresh chain crashed: ${e.message}`,
+          meta: { error: e.message },
+        });
       }
     })();
   }
@@ -498,6 +539,50 @@ function scheduleTick() {
     sweepMultiImages()
       .then(r => console.log(`SCHEDULE multi-image sweep: eligible=${r.eligible} fetched=${r.fetched} galleries=${r.galleryAdded} partial=${r.galleryPartial} noimgs=${r.noImagesFound} dead=${r.urlDead} failed=${r.fetchFailed} +${r.totalImagesAdded}imgs`))
       .catch(e => console.error('SCHEDULE multi-image sweep failed:', e.message));
+  }
+
+  // Tier 9: Alert sweeper, daily 02:30 UK. Resolves pipeline_alerts older
+  // than 30 days where the per-type "now healthy" predicate confirms the
+  // underlying problem is gone (lib/pipeline/alert-sweeper.js).
+  if (hour === 2 && minute >= 30 && minute < 35 && now - _scheduleState.lastAlertSweep > 60 * 60 * 1000) {
+    _scheduleState.lastAlertSweep = now;
+    console.log('SCHEDULE: 02:30 UK — running alert sweeper');
+    import('./lib/pipeline/alert-sweeper.js')
+      .then(({ sweepStaleAlerts }) => sweepStaleAlerts(supabase))
+      .then(r => console.log(`SCHEDULE alert sweep: scanned=${r.scanned} resolved=${r.resolved.length} skipped(no-predicate)=${r.skippedNoPredicate} skipped(unhealthy)=${r.skippedNotHealthy}`))
+      .catch(e => console.error('SCHEDULE alert sweep failed:', e.message));
+  }
+
+  // Tier 10: Coverage digest, daily 09:00 UK. Aggregates enrichment_manifest
+  // distribution across last-7-day lots and posts the summary to Telegram.
+  // Day-over-day deltas come from coverage_snapshots (graceful degrade if
+  // the table doesn't exist yet — see migrations/2026-05-09-coverage-snapshots.sql).
+  if (hour === 9 && minute < 5 && now - _scheduleState.lastCoverageDigest > 60 * 60 * 1000) {
+    _scheduleState.lastCoverageDigest = now;
+    console.log('SCHEDULE: 09:00 UK — running coverage digest');
+    Promise.all([
+      import('./lib/pipeline/coverage-digest.js'),
+      import('./lib/telegram.js'),
+    ])
+      .then(async ([{ buildCoverageDigest, formatDigestForTelegram }, telegram]) => {
+        const digest = await buildCoverageDigest(supabase);
+        console.log(`SCHEDULE coverage digest: total=${digest.totalLots} epc=${digest.coverage?.epc_pct}% image=${digest.coverage?.image_pct}%`);
+        const sender = telegram.sendNotification || telegram.default?.sendNotification;
+        if (sender) await sender(formatDigestForTelegram(digest));
+      })
+      .catch(e => console.error('SCHEDULE coverage digest failed:', e.message));
+  }
+
+  // Tier 11: Sitemap regeneration, daily 04:30 UK. Rewrites public/sitemap.xml
+  // with the four static URLs plus one entry per upcoming/recent lot — keeps
+  // search engines pointed at the freshest deep links from Phase 4 (/lot/:id).
+  if (hour === 4 && minute >= 30 && minute < 35 && now - _scheduleState.lastSitemapRegen > 60 * 60 * 1000) {
+    _scheduleState.lastSitemapRegen = now;
+    console.log('SCHEDULE: 04:30 UK — regenerating sitemap.xml');
+    import('./scripts/regenerate-sitemap.mjs')
+      .then(({ regenerateSitemap }) => regenerateSitemap({ dry: false }))
+      .then(r => console.log(`SCHEDULE sitemap: wrote=${r.wrote} urls=${r.urlCount} bytes=${r.bytes}`))
+      .catch(e => console.error('SCHEDULE sitemap regen failed:', e.message));
   }
 
   // Tier 12: Daily homepage watch at 03:30 UK. For every house in

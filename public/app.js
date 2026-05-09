@@ -343,6 +343,10 @@ function applyFilters(f) {
   if (f.condition && $('fCondition')) $('fCondition').value = f.condition;
   if (f.excludePOA && $('fExcludePOA')) $('fExcludePOA').value = f.excludePOA;
   if (f.query && $('smartQuery')) $('smartQuery').value = f.query;
+  if (typeof umami !== 'undefined') {
+    const keys = Object.keys(f).filter(k => f[k] != null && f[k] !== '');
+    umami.track('filter_applied', { keys: keys.join(',').slice(0, 80), n: keys.length });
+  }
   updatePriceBtn();
   updateMoreDot();
   renderLots();
@@ -1250,6 +1254,7 @@ function onSignIn(session) {
   // triggers signOut + showSessionExpiredModal — the OAuth-loop bug
   // reported on 2026-05-03.
   window.__lastSignInAt = Date.now();
+  if (typeof umami !== 'undefined') umami.track('signup', { provider: session.user?.app_metadata?.provider || 'email' });
   currentSession = session;
   currentUser = session.user;
   const email = currentUser.email || '';
@@ -1657,6 +1662,10 @@ function showPaywall(reason) {
       })
     }).catch(function(){});
   } catch {}
+  if (typeof umami !== 'undefined') umami.track('paywall_hit', {
+    reason: typeof reason === 'string' ? reason.slice(0, 60) : '',
+    tier: window._userTier || 'anon',
+  });
 
   // When not signed in, show sign-up modal
   if (!window._userTier) {
@@ -1709,6 +1718,9 @@ async function openBillingPortal() {
   const params = new URLSearchParams(window.location.search);
   const paymentStatus = params.get('payment');
   if (paymentStatus === 'success' || paymentStatus === 'cancelled') {
+    if (typeof umami !== 'undefined') {
+      umami.track(paymentStatus === 'success' ? 'payment_success' : 'payment_cancelled');
+    }
     window.history.replaceState({}, '', window.location.pathname);
     setTimeout(() => {
       const toast = document.createElement('div');
@@ -4962,6 +4974,7 @@ function submitEmailCapture(e) {
     form.style.display = 'none';
     successEl.style.display = 'block';
     document.querySelector('.ec-note').style.display = 'none';
+    if (typeof umami !== 'undefined') umami.track('lead_submit', { source: 'landing-page' });
   })
   .catch(err => {
     errEl.textContent = err.message || 'Something went wrong. Please try again.';
