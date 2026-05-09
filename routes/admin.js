@@ -312,7 +312,11 @@ router.post('/api/admin/rescrape', requireAdmin, async (req, res) => {
 
     for (const url of urls) {
       try {
-        await autoAnalyseOne(url);
+        // forceFresh bypasses Firecrawl changeTracking — without it, an admin
+        // rescrape can be silently short-circuited as "unchanged" even when
+        // we have 0 lots persisted (the symptom we hit on markjenkinson +
+        // humberts + acuitus on 2026-05-09 after URL fixes).
+        await autoAnalyseOne(url, { forceFresh: true });
       } catch (err) {
         log.error('Rescrape autoAnalyseOne error', { house, url, error: err.message });
       }
