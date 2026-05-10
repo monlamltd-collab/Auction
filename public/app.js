@@ -2622,8 +2622,17 @@ function renderLots(){
   // picked one. Otherwise the literal address-includes fallback only matches
   // ~15% of relevant lots — e.g. typing 'Bristol' missed 318 of 375 BS-postcode
   // lots whose addresses don't contain the literal word 'Bristol'.
+  //
+  // EXCEPTION: when the typed town is a major UK city we have a postcode-area
+  // mapping for (Bristol → BS, Manchester → M, etc.), prefer the broader
+  // postcode-area match over a strict default radius. 10mi from Bristol's
+  // city centre excludes Weston-Super-Mare (BS23, ~18mi) and other legit
+  // metro lots that share the BS postcode region. User can still pick an
+  // explicit radius from the dropdown — that wins. (Reported 2026-05-10:
+  // typing Bristol returned 2 unsold Bristol lots when the DB had 3.)
   const _explicitRadius=+($('fRadius')?.value||0);
-  const _defaultRadius=(_searchCentre && (fpc || ftown)) ? (fpc ? 5 : 10) : 0;
+  const _townHasPostcode=!!(ftownLower && window.AB_townMatch?.TOWN_POSTCODE_PREFIXES?.[ftownLower]);
+  const _defaultRadius=(_searchCentre && (fpc || ftown) && !_townHasPostcode) ? (fpc ? 5 : 10) : 0;
   const fradius=_explicitRadius || _defaultRadius;
   const _today=new Date().toISOString().slice(0,10);
   const _radiusSearch=!!((fpc||ftown)&&_searchCentre&&fradius);
@@ -2732,7 +2741,15 @@ function renderLots(){
     // Text search (skip for SMART_RESULTS)
     if(fs&&!SMART_RESULTS){
       const addr=(l.address||'').toLowerCase(),bull=(l.bullets||[]).join(' ').toLowerCase(),opp=(l.opps||[]).join(' ').toLowerCase(),rsk=(l.risks||[]).join(' ').toLowerCase(),dt=(l.dealType||'').toLowerCase(),pt=(l.propType||'').toLowerCase(),hs=(l._house||'').toLowerCase(),tn=(l.tenure||'').toLowerCase();
-      if(!addr.includes(fs)&&!bull.includes(fs)&&!opp.includes(fs)&&!rsk.includes(fs)&&!dt.includes(fs)&&!pt.includes(fs)&&!hs.includes(fs)&&!tn.includes(fs)) return false;
+      const subMatch=addr.includes(fs)||bull.includes(fs)||opp.includes(fs)||rsk.includes(fs)||dt.includes(fs)||pt.includes(fs)||hs.includes(fs)||tn.includes(fs);
+      // Town-postcode bridge: typing "Bristol" / "Manchester" / etc. in the
+      // top search bar should also catch lots in the matching postcode area
+      // (BS, M, …), not only lots whose address literally contains the word.
+      // townMatchesLot returns false for queries that aren't recognised
+      // towns, so generic queries like "freehold block" still fall through.
+      const townMatch=window.AB_townMatch&&typeof window.AB_townMatch.townMatchesLot==='function'
+        ? window.AB_townMatch.townMatchesLot(l, fs) : false;
+      if(!subMatch && !townMatch) return false;
     }
     // House filter
     if(selectedHouses.length&&!selectedHouses.includes(l._house)) return false;

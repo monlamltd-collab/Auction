@@ -149,6 +149,29 @@ console.log('\nanon view-count nudges (Milestone 1)');
     'honours an explicit dismiss flag (no re-nag after close)');
 }
 
+console.log('\nsearch-filter Bristol bug — smartQuery + town-radius wiring');
+{
+  // Reported 2026-05-10: typing "Bristol" returned 2 unsold lots when 3
+  // existed. Two paths needed fixing in renderLots:
+  //   (a) the smartQuery (top bar) substring filter must also consult the
+  //       town→postcode-area predicate so "Bristol" matches BS-prefix lots
+  //       whose address doesn't literally say "Bristol".
+  //   (b) the fTown geocoded-radius default (10mi) must NOT apply when the
+  //       typed town is in TOWN_POSTCODE_PREFIXES — otherwise Weston-Super-
+  //       Mare (BS23, ~18mi from Bristol centre) gets excluded despite
+  //       sharing the BS postcode region. Explicit user-picked radius
+  //       still wins.
+  const appJs = readFileSync(join(here, '..', 'public', 'app.js'), 'utf8');
+  assert(/_townHasPostcode/.test(appJs),
+    'renderLots tracks _townHasPostcode for radius suppression');
+  assert(/TOWN_POSTCODE_PREFIXES\?\.\[ftownLower\]/.test(appJs),
+    'lookup uses ftownLower against TOWN_POSTCODE_PREFIXES');
+  assert(/!_townHasPostcode/.test(appJs),
+    'default radius is gated on !_townHasPostcode');
+  assert(/townMatchesLot\(l,\s*fs\)/.test(appJs),
+    'smartQuery substring filter falls back to townMatchesLot(l, fs)');
+}
+
 console.log('\nweekly digest signup form (Milestone 6)');
 {
   const form = doc.getElementById('digestForm');
