@@ -3409,6 +3409,29 @@ function card(l){
       : '') +
   '</div>';
 
+  // Value-estimate one-liner — sits below the stats row when present.
+  // Computed server-side by lib/pipeline/value-estimator.js (rule-based,
+  // zero AI cost). Always shown as a band with confidence chip; never as
+  // a single number — the band IS the honesty signal.
+  let estLineHtml = '';
+  if (l.valueEstimate && typeof l.valueEstimate === 'object'
+      && Number.isFinite(Number(l.valueEstimate.estimate))
+      && Number.isFinite(Number(l.valueEstimate.low))
+      && Number.isFinite(Number(l.valueEstimate.high))) {
+    const ve = l.valueEstimate;
+    const conf = String(ve.confidence || 'low').toLowerCase();
+    const fmt = function(n) {
+      const v = Number(n);
+      if (v >= 1_000_000) return (v / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'm';
+      if (v >= 1_000) return Math.round(v / 1000) + 'k';
+      return String(Math.round(v));
+    };
+    estLineHtml = '<div class="card-est-value">' +
+      '<span class="ce-band">Est. £' + esc(fmt(ve.estimate)) + '</span>' +
+      '<span class="ce-conf-' + esc(conf) + '">· ' + esc(conf) + ' confidence</span>' +
+    '</div>';
+  }
+
   // Footer CTAs
   const viewHref = l.url ? safeHref(l.url) : '#';
   const bmHref = (l.fundability && l.fundability.bridgematchUrl)
@@ -3444,6 +3467,7 @@ function card(l){
     addressRowHtml +
     statsHtml +
     '<div class="lcv2-body">' +
+      estLineHtml +
       (tags.length ? '<div class="lcv2-tags">' + tags.join('') + '</div>' : '') +
       metaLine +
       quoteHtml +
@@ -5456,6 +5480,203 @@ function enforceUnsoldGating() {
 // Init
 loadCalendar();
 loadAllLots();
+renderCuratorWidget();
+
+// ═══════════════════════════════════════════════════════════════
+// CURATOR WIDGET — "Today's top deals" homepage section
+// ═══════════════════════════════════════════════════════════════
+// Self-contained: fetches /api/curator/today and renders into #curatorWidget.
+// Marked for future extraction once public/app.js is split.
+// All user-supplied strings rendered via textContent / setAttribute — no
+// innerHTML for dynamic data, no XSS surface.
+async function renderCuratorWidget() {
+  const container = document.getElementById('curatorWidget');
+  if (!container) return;
+  let data;
+  try {
+    const r = await fetch('/api/curator/today');
+    if (!r.ok) return;
+    data = await r.json();
+  } catch (e) {
+    return;
+  }
+  if (!data || !Array.isArray(data.picks) || data.picks.length === 0) return;
+
+  // Build header
+  const headEl = document.createElement('div');
+  headEl.className = 'curator-head';
+  const headH2 = document.createElement('h2');
+  headH2.textContent = "Today's top deals";
+  headEl.appendChild(headH2);
+  const meta = document.createElement('div');
+  meta.className = 'curator-meta';
+  meta.textContent = `${data.picks.length} hand-picked, scored 7+/10`;
+  if (data.isStale) {
+    const tag = document.createElement('span');
+    tag.className = 'curator-stale-tag';
+    tag.textContent = "Yesterday's";
+    meta.appendChild(tag);
+  }
+  headEl.appendChild(meta);
+
+  // Build grid
+  const grid = document.createElement('div');
+  grid.className = 'curator-grid';
+  for (const p of data.picks) {
+    grid.appendChild(_buildCuratorCard(p));
+  }
+
+  // Build email signup
+  const signup = _buildCuratorSignup();
+
+  // Mount
+  while (container.firstChild) container.removeChild(container.firstChild);
+  container.appendChild(headEl);
+  container.appendChild(grid);
+  container.appendChild(signup);
+  container.style.display = 'block';
+}
+
+function _buildCuratorCard(pick) {
+  const lot = pick.lot || {};
+  const card = document.createElement('a');
+  card.className = 'curator-card';
+  card.setAttribute('href', lot.url || '#');
+  card.setAttribute('aria-label', `${pick.headline || lot.address || 'Auction lot'} — open analysis`);
+
+  // Image area with rank + score
+  const imgWrap = document.createElement('div');
+  imgWrap.className = 'curator-card-img';
+  if (lot.imageUrl) {
+    const img = document.createElement('img');
+    img.setAttribute('src', lot.imageUrl);
+    img.setAttribute('alt', '');
+    img.setAttribute('loading', 'lazy');
+    img.setAttribute('decoding', 'async');
+    imgWrap.appendChild(img);
+  }
+  const rank = document.createElement('span');
+  rank.className = 'curator-rank';
+  rank.textContent = `#${pick.rank}`;
+  imgWrap.appendChild(rank);
+  if (lot.score != null) {
+    const score = document.createElement('span');
+    score.className = 'curator-score';
+    score.textContent = `${Number(lot.score).toFixed(1)}`;
+    imgWrap.appendChild(score);
+  }
+  card.appendChild(imgWrap);
+
+  // Body
+  const body = document.createElement('div');
+  body.className = 'curator-card-body';
+
+  const headline = document.createElement('div');
+  headline.className = 'curator-card-headline';
+  headline.textContent = pick.headline || lot.address || 'Auction lot';
+  body.appendChild(headline);
+
+  const price = document.createElement('div');
+  price.className = 'curator-card-price';
+  const priceText = lot.price ? `£${Number(lot.price).toLocaleString('en-GB')}` : (lot.priceText || 'Guide TBA');
+  price.appendChild(document.createTextNode(priceText));
+  if (lot.houseDisplay || lot.house) {
+    const house = document.createElement('span');
+    house.className = 'curator-card-house';
+    house.textContent = ` · ${lot.houseDisplay || lot.house}`;
+    price.appendChild(house);
+  }
+  body.appendChild(price);
+
+  const hook = document.createElement('p');
+  hook.className = 'curator-card-hook';
+  hook.textContent = pick.hook || '';
+  body.appendChild(hook);
+
+  const cta = document.createElement('span');
+  cta.className = 'curator-card-cta';
+  cta.textContent = 'Read full analysis →';
+  body.appendChild(cta);
+
+  card.appendChild(body);
+  return card;
+}
+
+function _buildCuratorSignup() {
+  const wrap = document.createElement('div');
+  wrap.className = 'curator-signup';
+
+  const copy = document.createElement('div');
+  copy.className = 'curator-signup-copy';
+  const strong = document.createElement('strong');
+  strong.textContent = 'Want this in your inbox at noon?';
+  const span = document.createElement('span');
+  span.textContent = 'One short email a day with the day’s top 8 lots. Free, unsubscribe anytime.';
+  copy.appendChild(strong);
+  copy.appendChild(span);
+  wrap.appendChild(copy);
+
+  const form = document.createElement('form');
+  form.setAttribute('novalidate', 'true');
+
+  const input = document.createElement('input');
+  input.setAttribute('type', 'email');
+  input.setAttribute('placeholder', 'you@example.com');
+  input.setAttribute('aria-label', 'Email address');
+  input.setAttribute('required', 'true');
+  form.appendChild(input);
+
+  const btn = document.createElement('button');
+  btn.setAttribute('type', 'submit');
+  btn.textContent = 'Get daily picks';
+  form.appendChild(btn);
+
+  const msg = document.createElement('div');
+  msg.className = 'curator-signup-msg';
+  msg.setAttribute('role', 'status');
+  msg.setAttribute('aria-live', 'polite');
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = input.value.trim();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+      msg.className = 'curator-signup-msg err';
+      msg.textContent = 'Please enter a valid email.';
+      return;
+    }
+    btn.disabled = true;
+    msg.className = 'curator-signup-msg';
+    msg.textContent = '';
+    try {
+      const r = await fetch('/api/digest/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, cadence: 'daily', source: 'curator_homepage' }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (r.ok && data.ok) {
+        msg.className = 'curator-signup-msg';
+        msg.textContent = data.message || 'Subscribed.';
+        input.value = '';
+        if (typeof umami !== 'undefined' && umami.track) {
+          try { umami.track('curator_signup', { source: 'homepage' }); } catch (e) {}
+        }
+      } else {
+        msg.className = 'curator-signup-msg err';
+        msg.textContent = data.error || 'Subscription failed. Try again.';
+      }
+    } catch (err) {
+      msg.className = 'curator-signup-msg err';
+      msg.textContent = 'Network error. Try again.';
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  wrap.appendChild(form);
+  wrap.appendChild(msg);
+  return wrap;
+}
 let _searchDebounce;
 function debouncedSearch(){
   clearTimeout(_searchDebounce);

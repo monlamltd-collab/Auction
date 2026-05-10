@@ -30,13 +30,24 @@ router.post('/api/digest/subscribe', rateLimit(60000, 6), async (req, res) => {
     return res.status(400).json({ error: 'Valid email required' });
   }
 
+  // cadence=daily opts the subscriber into the curator daily digest;
+  // anything else (or absent) keeps the original Monday weekly behaviour.
+  const cadence = (req.body && typeof req.body.cadence === 'string') ? req.body.cadence.toLowerCase() : 'weekly';
+  const isDaily = cadence === 'daily';
+  const sourceTag = (req.body && typeof req.body.source === 'string') ? req.body.source.slice(0, 32) : (isDaily ? 'curator_widget' : 'digest');
+
+  const optColumn = isDaily ? 'daily_digest_optin' : 'digest_optin';
+  const successMessage = isDaily
+    ? "Thanks — you'll get tomorrow's top 8 lots in your inbox at noon."
+    : 'Thanks — first digest will be on its way Monday.';
+
   try {
     // Existence check first — Supabase doesn't support upsert with partial
     // updates on the columns we want to leave alone (e.g. created_at,
     // source for an existing row). One round-trip extra; tiny table.
     const { data: existing, error: selErr } = await supabase
       .from('email_signups')
-      .select('id, digest_optin, unsubscribe_token')
+      .select(`id, digest_optin, daily_digest_optin, unsubscribe_token`)
       .eq('email', email)
       .maybeSingle();
 
@@ -46,29 +57,31 @@ router.post('/api/digest/subscribe', rateLimit(60000, 6), async (req, res) => {
     }
 
     if (existing) {
-      if (!existing.digest_optin) {
+      if (!existing[optColumn]) {
         const { error: updErr } = await supabase
           .from('email_signups')
-          .update({ digest_optin: true })
+          .update({ [optColumn]: true })
           .eq('id', existing.id);
         if (updErr) {
-          log.warn('digest.subscribe update failed', { email, err: updErr.message });
+          log.warn('digest.subscribe update failed', { email, cadence, err: updErr.message });
           return res.status(500).json({ error: 'Subscription temporarily unavailable' });
         }
       }
     } else {
+      const insertRow = { email, source: sourceTag };
+      insertRow[optColumn] = true;
       const { error: insErr } = await supabase
         .from('email_signups')
-        .insert({ email, source: 'digest', digest_optin: true });
+        .insert(insertRow);
       if (insErr && insErr.code !== '23505') {
         // 23505 = unique-violation; race with another request — treat as success
-        log.warn('digest.subscribe insert failed', { email, err: insErr.message });
+        log.warn('digest.subscribe insert failed', { email, cadence, err: insErr.message });
         return res.status(500).json({ error: 'Subscription temporarily unavailable' });
       }
     }
 
-    log.info('digest.subscribe ok', { email });
-    return res.json({ ok: true, message: 'Thanks — first digest will be on its way Monday.' });
+    log.info('digest.subscribe ok', { email, cadence });
+    return res.json({ ok: true, message: successMessage, cadence });
   } catch (err) {
     log.error('digest.subscribe threw', { email, err: err.message });
     return res.status(500).json({ error: 'Subscription temporarily unavailable' });
@@ -81,10 +94,15 @@ router.get('/api/digest/unsubscribe', rateLimit(60000, 30), async (req, res) => 
     return res.status(400).type('html').send(unsubResponseHtml({ ok: false, msg: 'Invalid unsubscribe link.' }));
   }
 
+  // cadence=daily | weekly | all (default). Lets the daily-digest email's
+  // unsubscribe link flip ONLY the daily opt-in (so a subscriber on both
+  // daily + weekly can drop one without losing the other).
+  const cadence = (req.query && typeof req.query.cadence === 'string') ? req.query.cadence.toLowerCase() : 'all';
+
   try {
     const { data: row, error: selErr } = await supabase
       .from('email_signups')
-      .select('id, email, digest_optin')
+      .select('id, email, digest_optin, daily_digest_optin')
       .eq('unsubscribe_token', token)
       .maybeSingle();
 
@@ -98,10 +116,20 @@ router.get('/api/digest/unsubscribe', rateLimit(60000, 30), async (req, res) => 
       return res.type('html').send(unsubResponseHtml({ ok: true, msg: "You're unsubscribed." }));
     }
 
-    if (row.digest_optin) {
+    const update = {};
+    if (cadence === 'daily') {
+      if (row.daily_digest_optin) update.daily_digest_optin = false;
+    } else if (cadence === 'weekly') {
+      if (row.digest_optin) update.digest_optin = false;
+    } else {
+      if (row.digest_optin) update.digest_optin = false;
+      if (row.daily_digest_optin) update.daily_digest_optin = false;
+    }
+
+    if (Object.keys(update).length > 0) {
       const { error: updErr } = await supabase
         .from('email_signups')
-        .update({ digest_optin: false })
+        .update(update)
         .eq('id', row.id);
       if (updErr) {
         log.warn('digest.unsubscribe update failed', { err: updErr.message });
@@ -109,8 +137,13 @@ router.get('/api/digest/unsubscribe', rateLimit(60000, 30), async (req, res) => 
       }
     }
 
-    log.info('digest.unsubscribe ok', { email: row.email });
-    return res.type('html').send(unsubResponseHtml({ ok: true, msg: "You're unsubscribed. Sorry to see you go." }));
+    log.info('digest.unsubscribe ok', { email: row.email, cadence });
+    const msg = cadence === 'daily'
+      ? "You're unsubscribed from the daily digest."
+      : cadence === 'weekly'
+        ? "You're unsubscribed from the weekly digest."
+        : "You're unsubscribed. Sorry to see you go.";
+    return res.type('html').send(unsubResponseHtml({ ok: true, msg }));
   } catch (err) {
     log.error('digest.unsubscribe threw', { err: err.message });
     return res.status(500).type('html').send(unsubResponseHtml({ ok: false, msg: 'Try again in a moment.' }));

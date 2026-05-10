@@ -27,6 +27,48 @@ export function escSvg(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
 }
 
+// ── Value-estimator section ─────────────────────────────────────────
+// Renders the "Estimated value" block on /lot/:id pages. Returns '' when
+// no estimate exists so the rest of the page renders cleanly.
+// All user-supplied strings escaped via escHtml — no XSS surface.
+export function renderValueEstimateSection(valueEstimate) {
+  if (!valueEstimate || typeof valueEstimate !== 'object') return '';
+  const est = Number(valueEstimate.estimate);
+  const lo = Number(valueEstimate.low);
+  const hi = Number(valueEstimate.high);
+  if (!Number.isFinite(est) || !Number.isFinite(lo) || !Number.isFinite(hi)) return '';
+
+  const conf = String(valueEstimate.confidence || 'low').toLowerCase();
+  const confLabel = conf === 'high' ? 'High confidence' : conf === 'medium' ? 'Medium confidence' : 'Low confidence';
+  const breakdown = valueEstimate.breakdown || {};
+  const formula = breakdown.formula_text || '';
+
+  const compRows = Array.isArray(breakdown.comp_count) ? '' : ''; // placeholder for future comp listing
+
+  return [
+    `<section class="lot-section lot-est-value">`,
+    `  <h2>Estimated value</h2>`,
+    `  <div class="lev-headline">`,
+    `    <span class="lev-band">£${formatGBP(lo)} – £${formatGBP(hi)}</span>`,
+    `    <span class="lev-mid">≈ £${formatGBP(est)}</span>`,
+    `    <span class="lev-conf lev-conf-${escHtml(conf)}">${escHtml(confLabel)}</span>`,
+    `  </div>`,
+    formula
+      ? `  <details class="lev-working"><summary>How we worked this out</summary><p>${escHtml(formula)}</p>${compRows}</details>`
+      : '',
+    `  <p class="lev-disclaimer">Indication only — based on Land Registry sales and EPC data, not a formal valuation.</p>`,
+    `</section>`,
+  ].join('\n');
+}
+
+function formatGBP(n) {
+  if (!Number.isFinite(Number(n))) return '0';
+  const v = Number(n);
+  if (v >= 1_000_000) return (v / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'm';
+  if (v >= 1_000)     return Math.round(v / 1000) + 'k';
+  return String(Math.round(v));
+}
+
 export function renderOgSvg({ priceLabel, scoreLabel, shortAddress, displayName, propType }) {
   // 1200x630 OG card. Designed to match the Auction Brain brand (navy nav,
   // green accent). Pure SVG so sharp can rasterise without external assets.
@@ -63,6 +105,7 @@ export function renderLotHtml({
   title, description, canonical, ogImage, jsonLd,
   shortAddress, priceLabel, scoreLabel, propTypeLabel, displayName,
   address, opps, risks, bullets, heroImg, lotUrl, status,
+  valueEstimate,
 }) {
   const oppsHtml = opps.length
     ? `<ul class="lot-tags">${opps.map(o => `<li class="tag tag-opp">${escHtml(o)}</li>`).join('')}</ul>`
@@ -73,6 +116,7 @@ export function renderLotHtml({
   const bulletsHtml = bullets.length
     ? `<ul class="lot-bullets">${bullets.map(b => `<li>${escHtml(b)}</li>`).join('')}</ul>`
     : '';
+  const valueEstimateHtml = renderValueEstimateSection(valueEstimate);
   const heroHtml = heroImg
     ? `<img class="lot-hero" src="${escHtml(heroImg)}" alt="${escHtml(shortAddress)}" loading="eager" decoding="async">`
     : '<div class="lot-hero lot-hero-placeholder">No image available</div>';
@@ -133,6 +177,7 @@ export function renderLotHtml({
       ${oppsHtml ? `<section class="lot-section"><h2>Opportunities</h2>${oppsHtml}</section>` : ''}
       ${risksHtml ? `<section class="lot-section"><h2>Risks</h2>${risksHtml}</section>` : ''}
       ${bulletsHtml ? `<section class="lot-section"><h2>Lot details</h2>${bulletsHtml}</section>` : ''}
+      ${valueEstimateHtml}
       <div class="lot-detail-ctas">
         <a class="cta-primary" href="/check">Check finance options</a>
         ${auctionLink}

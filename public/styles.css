@@ -2697,3 +2697,78 @@ footer p a {
 @media (max-width: 480px) {
   .exp-v2 .exp-v2-hero { height: 180px; }
 }
+
+/* ───────────────────────────────────────────────────────────────
+   CURATOR WIDGET — homepage "Today's top deals" section, populated
+   client-side by app.js::renderCuratorWidget() from /api/curator/today.
+   Lives between the user bar and the filter panel; collapses gracefully
+   when no approved picks exist for today.
+   ─────────────────────────────────────────────────────────────── */
+.curator-section { margin: 16px 0 20px; }
+.curator-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0 0 12px; flex-wrap: wrap; }
+.curator-head h2 { font-family: var(--font-display); font-size: 1.4rem; font-weight: 600; color: var(--ink); letter-spacing: -.01em; }
+.curator-head .curator-meta { font-size: .78rem; color: var(--text3); display: inline-flex; align-items: center; gap: 8px; }
+.curator-head .curator-stale-tag { font-size: .68rem; padding: 2px 8px; background: var(--amber-light); color: var(--amber); border-radius: 10px; font-weight: 600; }
+.curator-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+@media (max-width: 980px) { .curator-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 540px) { .curator-grid { grid-template-columns: 1fr; } }
+
+.curator-card { background: var(--paper); border: 1px solid var(--border-strong); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; transition: transform .15s, box-shadow .15s; cursor: pointer; }
+.curator-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(26,26,24,.06); border-color: var(--red); }
+.curator-card-img { aspect-ratio: 1.4/1; background: var(--cream2); position: relative; overflow: hidden; }
+.curator-card-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.curator-card-img .curator-rank { position: absolute; top: 8px; left: 8px; font-family: var(--font-mono); font-size: .7rem; font-weight: 600; color: #fff; background: rgba(26,26,24,.72); padding: 3px 8px; border-radius: 4px; letter-spacing: .02em; }
+.curator-card-img .curator-score { position: absolute; bottom: 8px; right: 8px; font-family: var(--font-mono); font-size: .72rem; font-weight: 700; color: #fff; background: var(--red); padding: 3px 8px; border-radius: 4px; }
+.curator-card-body { padding: 12px 14px 14px; display: flex; flex-direction: column; flex: 1; }
+.curator-card-headline { font-family: var(--font-display); font-size: .98rem; font-weight: 600; color: var(--ink); line-height: 1.3; margin: 0 0 6px; }
+.curator-card-price { font-family: var(--font-mono); font-size: .78rem; color: var(--text2); margin: 0 0 8px; }
+.curator-card-house { color: var(--text3); }
+.curator-card-hook { font-size: .8rem; color: var(--text2); line-height: 1.5; flex: 1; margin: 0 0 12px; }
+.curator-card-cta { font-family: var(--font-main); font-size: .78rem; font-weight: 600; color: var(--red); align-self: flex-start; }
+.curator-card:hover .curator-card-cta { text-decoration: underline; }
+
+.curator-signup { margin-top: 18px; padding: 14px 18px; background: var(--paper); border: 1px solid var(--border-strong); border-radius: var(--radius); display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.curator-signup .curator-signup-copy { flex: 1; min-width: 220px; }
+.curator-signup .curator-signup-copy strong { display: block; font-family: var(--font-display); font-size: 1rem; color: var(--ink); margin-bottom: 2px; }
+.curator-signup .curator-signup-copy span { font-size: .82rem; color: var(--text2); }
+.curator-signup form { display: flex; gap: 8px; flex: 1; min-width: 280px; }
+.curator-signup input[type="email"] { flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: var(--font-main); font-size: .85rem; background: var(--white); color: var(--ink); }
+.curator-signup input[type="email"]:focus { outline: none; border-color: var(--red); }
+.curator-signup button { padding: 10px 18px; border: none; border-radius: var(--radius-sm); background: var(--red); color: #fff; font-family: var(--font-main); font-size: .82rem; font-weight: 600; cursor: pointer; transition: background .15s; }
+.curator-signup button:hover { background: var(--red-hover); }
+.curator-signup button:disabled { opacity: .5; cursor: wait; }
+.curator-signup-msg { font-size: .8rem; color: var(--signal-green); padding: 4px 0; flex-basis: 100%; min-height: 1.2em; }
+.curator-signup-msg.err { color: var(--red); }
+
+@media (max-width: 540px) {
+  .curator-head h2 { font-size: 1.15rem; }
+  .curator-card-img { aspect-ratio: 1.6/1; }
+}
+
+/* ───────────────────────────────────────────────────────────────
+   VALUE ESTIMATOR — "Estimated value" section on /lot/:id pages
+   (rendered server-side by routes/lots-render.js::renderValueEstimateSection)
+   plus the one-liner under the price on homepage cards.
+   ─────────────────────────────────────────────────────────────── */
+.lot-est-value { background: var(--paper); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); padding: 16px 18px; }
+.lot-est-value h2 { font-family: var(--font-display); font-size: 1.05rem; font-weight: 600; margin: 0 0 12px; color: var(--ink); }
+.lev-headline { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.lev-band { font-family: var(--font-mono); font-size: 1.25rem; font-weight: 600; color: var(--ink); }
+.lev-mid { font-family: var(--font-main); font-size: .85rem; color: var(--text2); }
+.lev-conf { font-size: .7rem; font-weight: 600; padding: 3px 9px; border-radius: 12px; letter-spacing: .02em; }
+.lev-conf-high { background: rgba(46,125,50,.10); color: var(--signal-green); border: 1px solid rgba(46,125,50,.20); }
+.lev-conf-medium { background: var(--amber-light); color: var(--amber); border: 1px solid rgba(196,122,21,.20); }
+.lev-conf-low { background: var(--cream2); color: var(--text3); border: 1px solid var(--border-strong); }
+.lev-working { font-size: .82rem; color: var(--text2); margin: 0 0 10px; }
+.lev-working summary { cursor: pointer; color: var(--red); font-weight: 600; padding: 4px 0; }
+.lev-working summary:hover { text-decoration: underline; }
+.lev-working p { margin: 8px 0 0; line-height: 1.55; color: var(--text2); }
+.lev-disclaimer { font-size: .72rem; color: var(--text3); margin: 0; line-height: 1.45; }
+
+/* Card variant — single-line "Est. £172k · medium" beneath the price.
+   Designed to slot under .lcv2-price (existing list-card price line). */
+.card-est-value { font-size: .72rem; color: var(--text3); margin-top: 2px; display: inline-flex; gap: 6px; align-items: center; font-family: var(--font-mono); }
+.card-est-value .ce-band { color: var(--text2); font-weight: 600; }
+.card-est-value .ce-conf-high { color: var(--signal-green); }
+.card-est-value .ce-conf-medium { color: var(--amber); }
+.card-est-value .ce-conf-low { color: var(--text3); }
