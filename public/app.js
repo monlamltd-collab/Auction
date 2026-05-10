@@ -4216,6 +4216,35 @@ function getPlaceholderHtml(type) {
   return '<div class="card-image-placeholder">' + getPropertyTypeIcon(type || 'house') + '<span class="ph-label">No photo available</span></div>';
 }
 
+// Two-stage image error handler — gives the underlying URL a chance to render
+// before the card flips to a placeholder. If the failed src is a wsrv.nl-wrapped
+// URL, retry once with the direct underlying URL extracted from the `url` query
+// param. On the second failure (or for non-wsrv URLs), mark the URL broken and
+// either replace the <img> with a placeholder ('placeholder' mode, single image)
+// or hide it ('hide' mode, carousel item).
+function handleImgError(img, mode) {
+  if (document.hidden) { img.dataset.needsReload = '1'; return; }
+  if (!img.dataset.directRetried && /wsrv\.nl\/\?url=/.test(img.src)) {
+    img.dataset.directRetried = '1';
+    img.dataset.originalSrc = img.src; // remember the wsrv URL so we mark the right key on second failure
+    try {
+      var u = new URL(img.src);
+      var direct = u.searchParams.get('url');
+      if (direct) { img.src = direct; return; }
+    } catch (e) { /* fall through to placeholder */ }
+  }
+  // Mark the wsrv-wrapped URL (the one that goes through the render gate via optimImg)
+  // when we retried, so re-renders short-circuit to the placeholder. For non-wsrv
+  // first failures, just mark the failed src.
+  _brokenImageUrls.add(img.dataset.originalSrc || img.src);
+  if (mode === 'hide') {
+    img.style.display = 'none';
+    img.dataset.broken = '1';
+  } else {
+    img.outerHTML = getPlaceholderHtml(img.dataset.proptype);
+  }
+}
+
 function getCardImageBadges(lot) {
   let html = '';
   if (lot._house) {
@@ -4371,7 +4400,7 @@ function getCardImageHtml(lot) {
     var imgsHtml = '';
     var dotsHtml = '<div class="carousel-dots">';
     for (var ci = 0; ci < imgs.length; ci++) {
-      imgsHtml += '<img src="' + esc(optimImg(imgs[ci], 400)) + '" alt="' + esc((lot.address || 'Auction property') + ' ' + (ci+1)) + '" loading="' + loadAttr + '" decoding="async"' + (ci === 0 ? ' class="carousel-active"' : '') + ' onerror="if(document.hidden){this.dataset.needsReload=1}else{_brokenImageUrls.add(this.src);this.style.display=\'none\';this.dataset.broken=\'1\'}">';
+      imgsHtml += '<img src="' + esc(optimImg(imgs[ci], 400)) + '" alt="' + esc((lot.address || 'Auction property') + ' ' + (ci+1)) + '" loading="' + loadAttr + '" decoding="async"' + (ci === 0 ? ' class="carousel-active"' : '') + ' onerror="handleImgError(this,\'hide\')">';
       dotsHtml += '<span class="carousel-dot' + (ci === 0 ? ' dot-active' : '') + '"></span>';
     }
     dotsHtml += '</div>';
@@ -4388,7 +4417,7 @@ function getCardImageHtml(lot) {
     '<div class="card-image-shimmer"></div>' +
     '<img class="card-image" src="' + esc(optimImg(lot.imageUrl, 400)) + '" alt="' + esc((lot.address || 'Auction property') + ' — ' + (lot._house || 'auction lot')) + '" loading="' + loadAttr + '" decoding="async" width="400" height="300" ' +
     'onload="this.previousElementSibling.style.display=\'none\';if(this.naturalWidth<120||this.naturalHeight<90){this.outerHTML=getPlaceholderHtml(this.dataset.proptype)}" ' +
-    'onerror="if(document.hidden){this.dataset.needsReload=1}else{_brokenImageUrls.add(this.src);this.outerHTML=getPlaceholderHtml(this.dataset.proptype)}"' +
+    'onerror="handleImgError(this)"' +
     ' data-proptype="' + esc(lot.propType || 'house') + '">' +
     overlay +
     getCardImageBadges(lot) +
