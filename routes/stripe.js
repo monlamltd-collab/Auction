@@ -21,11 +21,13 @@ router.get('/diag', (req, res) => {
   }
   if (!STRIPE_ENABLED) return res.status(503).json({ error: 'payments_hibernated' });
   const key = process.env.STRIPE_SECRET_KEY || '';
-  const priceId = process.env.STRIPE_MONTHLY_PRICE_ID || '';
+  const monthlyId = process.env.STRIPE_MONTHLY_PRICE_ID || '';
+  const dayPassId = process.env.STRIPE_DAY_PASS_PRICE_ID || '';
   res.json({
     hasStripe: !!stripe,
     keyPrefix: key ? key.slice(0, 8) + '...' : 'MISSING',
-    priceId: priceId ? priceId.slice(0, 10) + '...' : 'MISSING',
+    monthlyPriceId: monthlyId ? monthlyId.slice(0, 10) + '...' : 'MISSING',
+    dayPassPriceId: dayPassId ? dayPassId.slice(0, 10) + '...' : 'MISSING',
     hasWebhookSecret: !!process.env.STRIPE_WEBHOOK_SECRET,
   });
 });
@@ -40,15 +42,21 @@ router.post('/checkout', rateLimit(60000, 5), async (req, res) => {
 
   const { product } = req.body || {};
   log.info('Stripe checkout', { product, userId: user.id, email: user.email, tier: user.tier });
-  if (product !== 'monthly') {
-    return res.status(400).json({ error: 'Invalid product. Use "monthly".' });
+  if (product !== 'monthly' && product !== 'day_pass') {
+    return res.status(400).json({ error: 'Invalid product. Use "monthly" or "day_pass".' });
   }
-  if (user.stripe_subscription_id) {
+  if (product === 'monthly' && user.stripe_subscription_id) {
     return res.status(400).json({ error: 'You already have an active subscription. Use the billing portal to manage it.' });
   }
+  if (product === 'day_pass' && user.tier === 'premium') {
+    return res.status(400).json({ error: 'You already have premium access. No need to buy a day pass.' });
+  }
 
-  const priceId = process.env.STRIPE_MONTHLY_PRICE_ID;
-  if (!priceId) return res.status(503).json({ error: 'Price not configured — STRIPE_MONTHLY_PRICE_ID missing in Railway' });
+  const priceId = product === 'monthly'
+    ? process.env.STRIPE_MONTHLY_PRICE_ID
+    : process.env.STRIPE_DAY_PASS_PRICE_ID;
+  const priceVar = product === 'monthly' ? 'STRIPE_MONTHLY_PRICE_ID' : 'STRIPE_DAY_PASS_PRICE_ID';
+  if (!priceId) return res.status(503).json({ error: `Price not configured — ${priceVar} missing in Railway` });
 
   try {
     // Lazy-create Stripe customer
@@ -133,7 +141,7 @@ router.post('/webhook', async (req, res) => {
         });
 
         if (product === 'day_pass') {
-          // Legacy day_pass — no longer sold, but handle existing sessions gracefully
+          // 24-hour premium burst — tier_expires_at gates the downgrade
           await supabase.from('users').update({
             tier: 'premium',
             tier_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),

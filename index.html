@@ -115,22 +115,50 @@
     </div>
   </div>
 
-  <!-- ═══════ LIMIT MODAL (daily AI search cap) ═══════ -->
+  <!-- ═══════ PAYWALL / UPGRADE MODAL (3-tier comparison) ═══════ -->
   <div class="modal-bg" id="paywallModal">
-    <div class="modal" style="max-width:420px">
-      <div class="modal-icon">🔍</div>
-      <h2>Daily AI limit reached</h2>
-      <p id="paywallReason">You've used your AI searches for today. Your allowance resets at midnight.</p>
-      <div style="background:var(--bg-primary, #f5f7fa);border-radius:10px;padding:14px;margin:16px 0;text-align:left;font-size:.82rem;color:var(--text2)">
-        <div style="font-weight:600;margin-bottom:6px">While you wait, you can still:</div>
-        <div style="display:flex;flex-direction:column;gap:3px">
-          <span>✓ Browse all lots with full data and images</span>
-          <span>✓ Use all filters and sorting</span>
-          <span>✓ Run BridgeMatch finance checks</span>
-          <span>✓ View scores and opportunities</span>
+    <div class="modal pw-modal" role="dialog" aria-modal="true" aria-labelledby="paywallTitle">
+      <button class="pw-close" onclick="$('paywallModal').classList.remove('show')" aria-label="Close">×</button>
+      <h2 id="paywallTitle">Unlock unlimited AI</h2>
+      <p id="paywallReason" class="pw-reason">You've used your AI searches for today. Pick a plan to keep going.</p>
+      <div class="pw-tiers">
+        <div class="pw-tier pw-tier-current">
+          <div class="pw-tier-label">Current</div>
+          <h3>Free</h3>
+          <div class="pw-price"><span class="pw-amt">£0</span><span class="pw-price-sub">forever</span></div>
+          <ul class="pw-features">
+            <li>Browse all lots</li>
+            <li>Filters &amp; sorting</li>
+            <li>5 AI scans/day</li>
+            <li>Save up to 5 favourites</li>
+          </ul>
+          <button class="pw-btn pw-btn-ghost" onclick="$('paywallModal').classList.remove('show')">Stay on Free</button>
+        </div>
+        <div class="pw-tier">
+          <h3>Day Pass</h3>
+          <div class="pw-price"><span class="pw-amt">£1.99</span><span class="pw-price-sub">24-hour access</span></div>
+          <ul class="pw-features">
+            <li>Everything in Free</li>
+            <li>Unlimited AI scans</li>
+            <li>Comparables &amp; yield</li>
+            <li>Deal stacking calculator</li>
+          </ul>
+          <button class="pw-btn pw-btn-secondary" onclick="startCheckout('day_pass')">Buy Day Pass</button>
+        </div>
+        <div class="pw-tier pw-tier-featured">
+          <div class="pw-badge">Best value</div>
+          <h3>Pro</h3>
+          <div class="pw-price"><span class="pw-amt">£9.99</span><span class="pw-price-sub">per month</span></div>
+          <ul class="pw-features">
+            <li>Everything in Day Pass</li>
+            <li>Email alerts on saved searches</li>
+            <li>Unlimited favourites</li>
+            <li>Cancel anytime</li>
+          </ul>
+          <button class="pw-btn pw-btn-primary" onclick="startCheckout('monthly')">Subscribe</button>
         </div>
       </div>
-      <button onclick="$('paywallModal').classList.remove('show')" class="btn-main" style="width:100%;padding:12px">Got it</button>
+      <p class="pw-fine-print">Secure payment via Stripe · No long-term commitment</p>
     </div>
   </div>
 

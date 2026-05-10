@@ -89,5 +89,39 @@ console.log('\nfrontend shell: HTML budget');
     `index.html stays under 1500 lines (was ~6120 before split, now ${lineCount})`);
 }
 
+console.log('\npaywall modal: 3-tier upgrade comparison');
+{
+  // Lock the contract for Milestone 3 — the upgrade modal must offer Free,
+  // Day Pass, and Pro side-by-side with the right CTAs. If a refactor strips
+  // a tier or breaks the startCheckout wiring, this guard fires.
+  const modal = doc.getElementById('paywallModal');
+  assert(!!modal, 'paywallModal exists');
+  if (modal) {
+    assert(!!doc.getElementById('paywallTitle'),
+      'paywallTitle remains so showPaywall() can target it');
+    assert(!!doc.getElementById('paywallReason'),
+      'paywallReason remains so showPaywall() can set context');
+
+    const tiers = modal.querySelectorAll('.pw-tier');
+    assert(tiers.length === 3, `exactly 3 tiers (got ${tiers.length})`);
+
+    const headings = [...modal.querySelectorAll('.pw-tier h3')].map(h => h.textContent.trim());
+    assert(headings.includes('Free'), 'Free tier heading present');
+    assert(headings.includes('Day Pass'), 'Day Pass tier heading present');
+    assert(headings.includes('Pro'), 'Pro tier heading present');
+
+    const buttons = [...modal.querySelectorAll('.pw-btn')].map(b => b.getAttribute('onclick') || '');
+    assert(buttons.some(b => b.includes("startCheckout('day_pass')")),
+      "Day Pass button calls startCheckout('day_pass')");
+    assert(buttons.some(b => b.includes("startCheckout('monthly')")),
+      "Pro button calls startCheckout('monthly')");
+
+    assert(modal.querySelector('.pw-tier-featured'),
+      'Pro tier flagged as featured (visual hierarchy)');
+    assert(modal.querySelector('.pw-tier-current'),
+      'Free tier flagged as current (visual hierarchy)');
+  }
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
