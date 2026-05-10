@@ -371,4 +371,8 @@ console.log(`\n─────────────────────�
 console.log(`Curator tests: ${passed} passed, ${failed} failed`);
 console.log(`──────────────────────────────────────────`);
 
-if (failed > 0) process.exit(1);
+// Explicit exit — defence-in-depth for any leaked timer/interval in
+// transitively imported modules (lib/ai-provider.js registers a daily
+// budget-reset timer; .unref()'d there too, but a process.exit avoids
+// CI hangs if any future transitive dep forgets the same pattern).
+process.exit(failed > 0 ? 1 : 0);

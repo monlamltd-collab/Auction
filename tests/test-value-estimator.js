@@ -424,4 +424,5 @@ await test('Internal: EPC realisation multiplier is 0.7', () => {
 console.log(`\n──────────────────────────────────────────`);
 console.log(`Value-estimator tests: ${passed} passed, ${failed} failed`);
 console.log(`──────────────────────────────────────────`);
-if (failed > 0) process.exit(1);
+// Explicit exit — defensive against any leaked timer in a future transitive dep.
+process.exit(failed > 0 ? 1 : 0);
