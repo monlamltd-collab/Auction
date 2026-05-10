@@ -4286,14 +4286,35 @@ function getCardImageBadges(lot) {
   return html;
 }
 
+// Image URL validation. The allowlist (extension + CDN regex) lives in the
+// shared module public/img-validator.js (loaded by index.html) so server and
+// client cannot drift. We keep the client-side JUNK pre-filter here — that's
+// a rendering concern (skip logos, floorplans, EPC charts, .svg, maps), not
+// a URL validity concern, and the server pipeline already strips most of
+// these earlier via routes/search.js's junkImg regex.
 function isValidImageUrl(url) {
   if (!url || typeof url !== 'string') return false;
-  if (!/^https:\/\//i.test(url)) return false;
   // Reject floor plans, logos, icons, maps, and other non-property images
   if (/floor[\s_-]?plan|floorplan|site[\s_-]?plan|epc[\s_-]?chart|logo|icon|\.svg|placeholder|map[\s_-]?view/i.test(url)) return false;
+  // Defer to shared validator (set by public/img-validator.js). Module is
+  // type="module" so it's deferred — by the time any caller runs, the
+  // window global is populated. Defensive: if for any reason it isn't yet,
+  // fall back to the previous client-only allowlist so the page doesn't go
+  // blank.
+  if (window.imgValidator && typeof window.imgValidator.isValidImageUrl === 'function') {
+    return window.imgValidator.isValidImageUrl(url);
+  }
+  if (!/^https:\/\//i.test(url)) return false;
   if (/\.(jpe?g|png|webp)(\?.*)?$/i.test(url)) return true;
   if (/cloudinary\.com|imgix\.net|cdn\.sanity\.io|amazonaws\.com|cloudfront\.net|googleusercontent\.com|wp-content\/uploads|supabase\.co\/storage|i\.imgur\.com|eigpropertyauctions\.co\.uk|auction|property|lot|catalogue|catalog/i.test(url)) return true;
   return false;
+}
+
+function unwrapProxyImageUrl(url) {
+  if (window.imgValidator && typeof window.imgValidator.unwrapProxyImageUrl === 'function') {
+    return window.imgValidator.unwrapProxyImageUrl(url);
+  }
+  return url;
 }
 
 function getStatusOverlay(lot) {
