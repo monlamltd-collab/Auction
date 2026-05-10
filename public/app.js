@@ -1844,6 +1844,31 @@ async function openBillingPortal() {
   }
 }
 
+// Pricing-page CTA dispatch — /pricing CTAs link back to /?cta=<action>.
+// We pick that up at boot and either open the signup modal (anon) or the
+// Stripe checkout (signed in). Drops the query param so a refresh doesn't
+// retrigger.
+(function checkCtaIntent() {
+  const params = new URLSearchParams(window.location.search);
+  const cta = params.get('cta');
+  if (!cta) return;
+  if (!['signup', 'day_pass', 'monthly'].includes(cta)) return;
+  window.history.replaceState({}, '', window.location.pathname);
+  // Run after auth bootstrap so we can check currentSession.
+  setTimeout(() => {
+    if (cta === 'signup') {
+      if (typeof $ === 'function' && $('signupModal')) $('signupModal').classList.add('show');
+      return;
+    }
+    // day_pass or monthly — needs an account
+    if (!window._userTier) {
+      if (typeof $ === 'function' && $('signupModal')) $('signupModal').classList.add('show');
+      return;
+    }
+    if (typeof startCheckout === 'function') startCheckout(cta);
+  }, 700);
+})();
+
 // Payment success toast
 (function checkPaymentSuccess() {
   const params = new URLSearchParams(window.location.search);
