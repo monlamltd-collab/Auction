@@ -100,7 +100,6 @@ The codebase was historically a monolithic `server.js` but has been **decomposed
 │       ├── house-health.js       # Circuit breakers (circuit_state, circuit_opened_at, consecutive_failures)
 │       ├── quality-gate.js       # Pass/fail: min 3 lots, ≥60% core field coverage
 │       ├── regression-detector.js # 0-lot regressions vs last successful scrape
-│       ├── extractor-generator.js # Legacy — AI-generated DOM extractors (kept for diagnostic use only)
 │       ├── house-discovery.js    # Web-search-based new house discovery
 │       ├── data-contract.js      # Lot schema validation + quality scoring
 │       ├── enrichment-engine.js  # Harness-side enrichment orchestration
