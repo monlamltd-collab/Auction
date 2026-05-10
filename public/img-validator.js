@@ -21,12 +21,19 @@
 // ── Image URL validation ──
 export const IMG_EXTENSIONS = /\.(jpe?g|png|webp)(\?.*)?$/i;
 export const IMG_CDN_DOMAINS = /cloudinary\.com|imgix\.net|cdn\.sanity\.io|images\.unsplash\.com|ik\.imagekit\.io|res\.cloudinary\.com|s3\.amazonaws\.com|amazonaws\.com\/.*\.(jpe?g|png|webp)|cdn\.shopify\.com|akamaized\.net|cloudfront\.net|twimg\.com|fbcdn\.net|googleusercontent\.com|wp-content\/uploads|supabase\.co\/storage|i\.imgur\.com|eigpropertyauctions\.co\.uk|auction|property|lot|catalogue|catalog/i;
+// Path-segment hints for sites whose image URLs lack a file extension and
+// don't match any CDN/keyword above. Mirrors lib/pipeline/firecrawl-extract.js
+// so server (extraction) and client (render) accept the same set — without it,
+// CMS resize endpoints like maggsandallen.co.uk/resize/<id>/0/<width> and
+// hollismorgan.co.uk/resize/... pass extraction but get rejected at render.
+export const IMG_PATH_HINTS = /\/(image|images|media|uploads|cdn|gallery|photo|resize)/i;
 
 export function isValidImageUrl(url) {
   if (!url || typeof url !== 'string') return false;
   if (!/^https:\/\//i.test(url)) return false;
   if (IMG_EXTENSIONS.test(url)) return true;
   if (IMG_CDN_DOMAINS.test(url)) return true;
+  if (IMG_PATH_HINTS.test(url)) return true;
   return false;
 }
 
@@ -65,5 +72,5 @@ export function unwrapProxyImageUrl(url) {
 // via a plain <script src="..."> tag before app.js. ESM consumers (Node)
 // ignore this branch.
 if (typeof window !== 'undefined') {
-  window.imgValidator = { IMG_EXTENSIONS, IMG_CDN_DOMAINS, isValidImageUrl, unwrapProxyImageUrl };
+  window.imgValidator = { IMG_EXTENSIONS, IMG_CDN_DOMAINS, IMG_PATH_HINTS, isValidImageUrl, unwrapProxyImageUrl };
 }
