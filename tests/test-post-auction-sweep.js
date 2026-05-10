@@ -124,5 +124,19 @@ console.log('\nTest 6: source wiring — url_dead → unsold heuristic in place'
     'transition counter labels the heuristic separately from genuine source updates');
 }
 
+console.log('\nTest 7: wall-clock budget replaces tight row-count cap');
+{
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'lib', 'pipeline', 'post-auction-sweep.js'), 'utf8');
+  assert(/SWEEP_WALL_CLOCK_MS\s*=\s*30 \* 60_000/.test(src),
+    'wall-clock budget set to 30 minutes (the actual safety guard)');
+  assert(/SWEEP_BATCH_LIMIT\s*=\s*1500/.test(src),
+    'batch limit raised to 1500 — typical daily pool fits, no 4-day backlog');
+  assert(/wallClockBailed/.test(src),
+    'stats track wallClockBailed so dashboards can spot when the budget runs out');
+  assert(/wall-clock budget reached/.test(src),
+    'log entry when the loop bails early so the cause is debuggable');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);
