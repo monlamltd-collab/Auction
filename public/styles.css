@@ -2139,3 +2139,56 @@ footer .logo-f span{color:var(--green)}
   .lot-detail-ctas .cta-primary,
   .lot-detail-ctas .cta-secondary { width: 100%; }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Mobile filter collapse — at ≤640px, filters and chips hide by
+   default behind a "Filters" pill in the search row. Stops the
+   500px-tall panel from eating the entire viewport above the fold.
+   ═══════════════════════════════════════════════════════════════ */
+.mobile-filters-toggle { display: none; }
+
+@media (max-width: 640px) {
+  .mobile-filters-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--border, #e4dfd6);
+    background: var(--white, #fff);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: .82rem;
+    font-weight: 500;
+    color: var(--text, #1a2a3a);
+    cursor: pointer;
+    flex-shrink: 0;
+    min-height: 40px;
+    white-space: nowrap;
+  }
+  .mobile-filters-toggle .mf-active-count {
+    background: var(--accent, #c0392b);
+    color: #fff;
+    font-size: .68rem;
+    padding: 1px 6px;
+    border-radius: 999px;
+    min-width: 18px;
+    text-align: center;
+    font-weight: 600;
+  }
+  .search-panel.mobile-expanded .mobile-filters-toggle {
+    background: var(--text, #1a2a3a);
+    color: #fff;
+    border-color: var(--text, #1a2a3a);
+  }
+  /* Collapsed state — only the search row is visible */
+  .search-panel .sp-filter-row,
+  .search-panel .sp-toggle-row,
+  .search-panel .sp-per-page,
+  .search-panel .view-toggle,
+  .search-panel .sp-page-info {
+    display: none;
+  }
+  /* Expanded state — show everything except the per-page/view-toggle/
+     page-info meta widgets which stay hidden on mobile (low-value chrome) */
+  .search-panel.mobile-expanded .sp-filter-row { display: flex; }
+  .search-panel.mobile-expanded .sp-toggle-row { display: flex; }
+}

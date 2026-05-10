@@ -96,6 +96,44 @@ function updateMoreDot() {
   $('mfDot').style.display = active ? '' : 'none';
 }
 
+// ── Mobile filter toggle ──
+// At ≤640px the filter rows are hidden by default (CSS: .search-panel
+// not having .mobile-expanded). Tapping the "Filters" pill toggles the
+// class. Active filter count surfaces inside the pill so users see at a
+// glance whether they have any filters applied.
+function getActiveFilterCount() {
+  var n = 0;
+  if ($('fMinPrice')?.value || $('fMaxPrice')?.value) n++;
+  if ($('fBeds')?.value) n++;
+  if ($('fType')?.value) n++;
+  if ($('fLocation')?.value) n++;
+  if ($('fTown')?.value) n++;
+  if ($('fPostcode')?.value) n++;
+  if ($('fRadius')?.value) n++;
+  if ($('fSoldTop') && $('fSoldTop').value && $('fSoldTop').value !== 'all') n++;
+  if ($('fDeal')?.value) n++;
+  if ($('fTenure')?.value) n++;
+  if ($('fCondition')?.value) n++;
+  if ($('fExcludePOA')?.value) n++;
+  if (typeof getSelectedHouses === 'function' && getSelectedHouses().length > 0) n++;
+  return n;
+}
+function refreshMobileFilterCount() {
+  var el = $('mfActiveCount');
+  if (!el) return;
+  var n = getActiveFilterCount();
+  if (n > 0) { el.textContent = n; el.style.display = ''; }
+  else { el.style.display = 'none'; }
+}
+function toggleMobileFilters() {
+  var panel = $('filterBar');
+  if (!panel) return;
+  var expanded = panel.classList.toggle('mobile-expanded');
+  var btn = $('mobileFiltersToggle');
+  if (btn) btn.setAttribute('aria-expanded', String(expanded));
+  refreshMobileFilterCount();
+}
+
 // ── FAVOURITES ──
 // Likes live in `user_lot_actions` (server) when the user is signed in;
 // localStorage `bm_favourites` is the fallback for anon users. The legacy key
@@ -349,6 +387,7 @@ function applyFilters(f) {
   }
   updatePriceBtn();
   updateMoreDot();
+  refreshMobileFilterCount();
   renderLots();
 }
 
@@ -604,6 +643,12 @@ async function _clearCachedLots(){
 
 function _renderLotsToUI(d) {
   if(!d.anonGated&&$('fCondition')) $('fCondition').style.display='';
+  // Hide tier-gated chrome for anon users — Favourites / Analysed / Save
+  // search / CSV / JSON / etc. all need an account. Showing them to anon
+  // visitors is just clutter that pushes the first lot below the fold.
+  document.querySelectorAll('[data-anon-hide]').forEach(el => {
+    el.style.display = d.anonGated ? 'none' : '';
+  });
   const lsEl = document.querySelector('.ls-val[data-target="2000"]');
   if(lsEl) lsEl.dataset.target = ALL_LOTS.length;
   if(d.houseCount) document.querySelectorAll('.house-count-dynamic').forEach(el=>{el.textContent=d.houseCount});
@@ -3006,15 +3051,21 @@ function card(l){
   }
 
   // Stat block
+  // Yield cell — for anon users we omit it entirely (the `—` placeholder
+  // looks like a layout glitch on mobile). For signed-in users without
+  // a yield estimate, the dash is correct: they have access to the data,
+  // we just couldn't compute it for this lot.
+  const yieldCellHtml = l.anonGated
+    ? ''
+    : (yieldText
+        ? '<div class="cell yield"><span class="eyebrow">GROSS YIELD</span><span class="num tabular">' + yieldText + '<span class="pct-glyph">%</span></span></div>'
+        : '<div class="cell yield"><span class="eyebrow">GROSS YIELD</span><span class="num tabular" style="color:var(--muted-2)">—</span></div>');
   const statsHtml = '<div class="lcv2-stats">' +
     '<div class="cell guide">' +
       '<span class="eyebrow">GUIDE</span>' +
       '<span class="num tabular">' + esc(guideText) + '</span>' +
     '</div>' +
-    (yieldText
-      ? '<div class="cell yield"><span class="eyebrow">GROSS YIELD</span><span class="num tabular">' + yieldText + '<span class="pct-glyph">%</span></span></div>'
-      : '<div class="cell yield"><span class="eyebrow">GROSS YIELD</span><span class="num tabular" style="color:var(--muted-2)">—</span></div>'
-    ) +
+    yieldCellHtml +
     (scoreNum != null
       ? '<div class="cell score"><div class="lcv2-score-badge ' + scoreKind + '"><span class="lbl">SCORE</span><span class="num">' + scoreNum + '</span></div></div>'
       : '') +
