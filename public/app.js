@@ -3291,7 +3291,12 @@ function card(l){
   // easy to trace.
 
   const idx = l._idx;
-  const houseLabel = l._house || (l.house || '').toString();
+  // Use the friendly display name when we have one — falls back to the raw
+  // slug for unknown houses. Raw slugs like "futureauctions" upper-cased to
+  // "FUTUREAUCTIONS" lose word boundaries; the display map fixes that.
+  const houseLabel = (typeof getHouseDisplay === 'function')
+    ? getHouseDisplay(l._house || l.house || '')
+    : (l._house || (l.house || '').toString());
   const lotNum = l.lot != null ? String(l.lot).padStart(2, '0') : '—';
   const dateShort = formatAuctionDateShort(l._auctionDate);
   const status = statusForStrip(l);
@@ -3410,7 +3415,7 @@ function card(l){
     ? safeHref(l.fundability.bridgematchUrl)
     : '/check?lot=' + esc(idx);
   const footerHtml = '<div class="lcv2-foot">' +
-    '<a class="view" href="' + viewHref + '" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">View lot <span class="arr">→</span></a>' +
+    '<a class="view" href="' + viewHref + '" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">View lot <span class="arr">↗</span></a>' +
     '<a class="bm card-bm-btn" href="' + bmHref + '" onclick="event.stopPropagation()">BridgeMatch it £ <span class="arr">→</span></a>' +
   '</div>';
 
@@ -4414,8 +4419,63 @@ function getSignalChips(lot) {
 // the .exp-v2 grid. Premium-feature gating + deal-stack widget + lender
 // summary all flow through unchanged — only the chrome around them is new.
 
+// Friendly display names for auction-house slugs that have no natural word
+// boundary (futureauctions, hollismorgan, …). Server-side lib/houses.js has
+// a richer lookup but isn't reachable from the frontend; mirror the most
+// common entries here so the strip header reads "FUTURE AUCTIONS" rather
+// than "FUTUREAUCTIONS".
+const _HOUSE_DISPLAY = {
+  hollismorgan: 'Hollis Morgan',
+  maggsandallen: 'Maggs & Allen',
+  mchughandco: 'McHugh & Co',
+  futureauctions: 'Future Property Auctions',
+  bondwolfe: 'Bond Wolfe',
+  auctionhouselondon: 'Auction House London',
+  auctionhouseeastanglia: 'Auction House East Anglia',
+  auctionhousescotland: 'Auction House Scotland',
+  auctionhousenorthwest: 'Auction House North West',
+  auctionhousesouthwest: 'Auction House South West',
+  auctionhousewestyorkshire: 'Auction House West Yorkshire',
+  auctionhousecumbria: 'Auction House Cumbria',
+  auctionhousenortheast: 'Auction House North East',
+  auctionhousecoventry: 'Auction House Coventry',
+  auctionhouseteesvalley: 'Auction House Tees Valley',
+  auctionhousebirmingham: 'Auction House Birmingham',
+  auctionhousenorthamptonshire: 'Auction House Northamptonshire',
+  auctionhousebedsandbucks: 'Auction House Beds & Bucks',
+  auctionhousekent: 'Auction House Kent',
+  auctionhousemanchester: 'Auction House Manchester',
+  auctionhousenational: 'Auction House National',
+  tcpa: 'Town & Country Property Auctions',
+  scargillmann: 'Scargill Mann',
+  edwardmellor: 'Edward Mellor',
+  paulfosh: 'Paul Fosh',
+  brutonknowles: 'Bruton Knowles',
+  cleetompkinson: 'Cleeton Tompkinson',
+  markjenkinson: 'Mark Jenkinson',
+  harmanhealy: 'Harman Healy',
+  barnettross: 'Barnett Ross',
+  clarkesimpson: 'Clarke & Simpson',
+  knightfrank: 'Knight Frank',
+  johnfrancis: 'John Francis',
+  pattinson: 'Pattinson',
+  loveitts: 'Loveitts',
+  cottons: 'Cottons',
+  landwood: 'Landwood',
+  seelauctions: 'SEEL Auctions',
+  austingray: 'Austin Gray',
+  purplebricksgoto: 'Purplebricks GoTo',
+  futuregroup: 'Future Group',
+};
+function getHouseDisplay(slug) {
+  if (!slug) return '';
+  const lower = String(slug).toLowerCase();
+  return _HOUSE_DISPLAY[lower] || String(slug);
+}
+
 function buildExpV2Header(lot, dealStackHtmlRef) {
-  const houseLabel = (lot._house || lot.house || '').toString().toUpperCase();
+  const slug = lot._house || lot.house || '';
+  const houseLabel = getHouseDisplay(slug).toUpperCase();
   const lotNum = lot.lot != null ? String(lot.lot).padStart(2, '0') : '—';
   const status = (typeof statusForStrip === 'function') ? statusForStrip(lot) : { dot: 'green', label: 'LIVE' };
 
@@ -4473,7 +4533,21 @@ function buildExpV2Header(lot, dealStackHtmlRef) {
     ? '<a class="exp-v2-bid" href="' + bidHref + '" target="_blank" rel="noopener noreferrer" onclick="if(window.umami)umami.track(\'lot_outbound_click\',{lot:' + (lot.lot || 0) + ',house:\'' + esc((lot._house || '').replace(/\'/g, '')) + '\'})"><span class="exp-v2-bid-label">View on ' + esc(houseLabel || 'auction site') + '</span><span class="exp-v2-bid-arr" aria-hidden="true">↗</span></a>'
     : '<span class="exp-v2-bid disabled">No external link</span>';
 
+  // Hero image at the top of the expanded panel — review 2026-05-10
+  // L3 flagged this missing entirely (the panel was text-only, while
+  // the list card right above it carried the photo). Use the first item
+  // from lot.images if present (multi-image-sweep / Phase 4), else the
+  // single lot.imageUrl. Goes through optimImg() so wsrv.nl resizes for
+  // the larger 220px hero. Falls back to nothing if no image at all.
+  const heroSrc = (Array.isArray(lot.images) && lot.images.length && lot.images[0])
+    ? lot.images[0]
+    : (lot.imageUrl || '');
+  const heroImg = heroSrc && (typeof isValidImageUrl !== 'function' || isValidImageUrl(heroSrc))
+    ? '<img class="exp-v2-hero" src="' + esc(typeof optimImg === 'function' ? optimImg(heroSrc, 800) : heroSrc) + '" alt="' + esc(parsed.addr || 'Lot photo') + '" loading="eager" decoding="async">'
+    : '';
+
   return '<div class="exp-v2-header">' +
+    heroImg +
     '<div class="strip">' +
       '<span>' + esc(houseLabel || 'AUCTION HOUSE') + ' · LOT ' + lotNum + (dateLong ? ' · ' + dateLong : '') + '</span>' +
       '<span style="display:inline-flex;align-items:center;gap:6px"><span class="dot ' + status.dot + '"></span>' + status.label + ' LOT</span>' +
@@ -4571,7 +4645,7 @@ function buildExpV2DD(lot) {
 
   return '<section class="sec">' +
     '<div class="head">' +
-      '<span class="sec-head"><span class="sec-num-badge">1</span><span class="eyebrow ink">Due diligence checks</span></span>' +
+      '<span class="sec-head"><span class="sec-num-badge">__SEC_NUM__</span><span class="eyebrow ink">Due diligence checks</span></span>' +
       '<span style="font-family:var(--font-mono);font-size:11px;color:' + summaryColor + '">' + cleared + ' of ' + total + ' cleared</span>' +
     '</div>' +
     '<ul class="dd-list">' + liHtml + '</ul>' +
@@ -4592,7 +4666,7 @@ function buildExpV2Scores(lot) {
 
   return '<section class="sec">' +
     '<div class="head">' +
-      '<span class="sec-head"><span class="sec-num-badge">2</span><span class="eyebrow ink">Why this lot scores</span></span>' +
+      '<span class="sec-head"><span class="sec-num-badge">__SEC_NUM__</span><span class="eyebrow ink">Why this lot scores</span></span>' +
       '<a href="/scoring" class="eyebrow" style="color:var(--red);text-decoration:none">Scoring methodology →</a>' +
     '</div>' +
     '<div class="body">' +
@@ -4605,7 +4679,7 @@ function buildExpV2Scores(lot) {
 function buildExpV2Comparables(lot, premium) {
   if (!premium) {
     return '<section class="sec">' +
-      '<div class="head"><span class="sec-head"><span class="sec-num-badge">3</span><span class="eyebrow ink">Comparables on this street</span></span></div>' +
+      '<div class="head"><span class="sec-head"><span class="sec-num-badge">__SEC_NUM__</span><span class="eyebrow ink">Comparables on this street</span></span></div>' +
       '<div class="body" style="text-align:center;padding:24px">' +
         '<div style="font-family:var(--font-display);font-size:17px;color:var(--ink);margin-bottom:8px">Sign in free to see street-level comparables</div>' +
         '<div style="font-family:var(--font-main);font-size:13px;color:var(--muted);margin-bottom:14px">Median sold price, sales count, and how this guide compares.</div>' +
@@ -4621,7 +4695,7 @@ function buildExpV2Comparables(lot, premium) {
 
   if (!sa || !sales) {
     return '<section class="sec">' +
-      '<div class="head"><span class="sec-head"><span class="sec-num-badge">3</span><span class="eyebrow ink">Comparables on this street</span></span></div>' +
+      '<div class="head"><span class="sec-head"><span class="sec-num-badge">__SEC_NUM__</span><span class="eyebrow ink">Comparables on this street</span></span></div>' +
       '<div class="body" style="font-family:var(--font-display);font-size:15px;color:var(--ink-2)">No comparable sales found for this street in the last 12 months.</div>' +
     '</section>';
   }
@@ -4652,7 +4726,7 @@ function buildExpV2Comparables(lot, premium) {
     : 'Guide ' + fmtFull(guide || 0) + ' vs local median ' + fmtFull(sa) + '.';
 
   return '<section class="sec">' +
-    '<div class="head"><span class="sec-head"><span class="sec-num-badge">3</span><span class="eyebrow ink">Comparables on this street</span></span></div>' +
+    '<div class="head"><span class="sec-head"><span class="sec-num-badge">__SEC_NUM__</span><span class="eyebrow ink">Comparables on this street</span></span></div>' +
     '<div class="body">' +
       '<div class="cmp-top">' +
         '<div>' +
@@ -5013,13 +5087,32 @@ function expandCard(lot) {
     (lot.price ? '<div id="finance-summary-' + lot._idx + '" style="margin-top:10px"></div>' : '')
   );
 
-  panel.innerHTML =
+  // Number visible left-column sections sequentially. Previously the
+  // builders emitted hard-coded "1" / "2" / "3" — fine when all three
+  // rendered, but buildExpV2Scores returns '' when a lot has no opps
+  // and no risks, leaving 1 → 3 with a missing badge in between.
+  // Each builder now emits __SEC_NUM__ and we substitute as we walk
+  // the surviving non-empty fragments.
+  const _leftSectionsRaw = [
+    buildExpV2DD(lot),
+    buildExpV2Scores(lot),
+    buildExpV2Comparables(lot, premiumNow),
+  ];
+  let _secCounter = 0;
+  const _leftSections = _leftSectionsRaw
+    .filter(Boolean)
+    .map(function (html) {
+      return html.indexOf('__SEC_NUM__') >= 0
+        ? html.replace(/__SEC_NUM__/, function () { return String(++_secCounter); })
+        : html;
+    })
+    .join('');
+
+  panel.innerHTML = (
     '<button class="exp-close-btn" onclick="closeExpandedPanel()" aria-label="Close panel" title="Close">&times;</button>' +
     buildExpV2Header(lot) +
     '<div class="exp-v2-left">' +
-      buildExpV2DD(lot) +
-      buildExpV2Scores(lot) +
-      buildExpV2Comparables(lot, premiumNow) +
+      _leftSections +
     '</div>' +
     '<div class="exp-v2-right">' +
       dealStackPanelHtml +
@@ -5046,7 +5139,8 @@ function expandCard(lot) {
           'At auction, the fall of the hammer creates a binding contract. Do your due diligence before bidding, not after.' +
         '</div>' +
       '</div>' +
-    '</details>';
+    '</details>'
+  );
 
   // Insert after the card and cache
   cardEl.after(panel);

@@ -149,6 +149,77 @@ console.log('\nanon view-count nudges (Milestone 1)');
     'honours an explicit dismiss flag (no re-nag after close)');
 }
 
+console.log('\nMobile launch fixes (review 2026-05-10) — BLOCKs');
+{
+  const appJs = readFileSync(join(here, '..', 'public', 'app.js'), 'utf8');
+  const css = readFileSync(join(here, '..', 'public', 'styles.css'), 'utf8');
+
+  // B1 — Sign-in CTA overflow at 375. Hide PRICING/BLOG nav links at <420px.
+  assert(/@media\s*\(max-width:\s*419px\)\s*\{[^}]*\.nav-link-blog[^}]*display:\s*none/.test(css.replace(/\n/g, ' ')),
+    'B1: .nav-link-blog hidden at <420px so Sign-in CTA fits in iPhone SE viewport');
+
+  // B2 — paywall modal scroll-within
+  assert(/\.modal\.pw-modal[\s\S]{0,300}max-height:\s*calc\(100dvh/.test(css),
+    'B2: .pw-modal has dvh-aware max-height so the title isn\'t pushed off-screen on mobile');
+  assert(/\.modal\.pw-modal[\s\S]{0,300}overflow-y:\s*auto/.test(css),
+    'B2: .pw-modal scrolls within itself when content exceeds viewport height');
+
+  // L3 — hero image in expanded panel
+  assert(/\.exp-v2-hero\s*\{/.test(css),
+    'L3: .exp-v2-hero CSS class exists');
+  assert(/img class="exp-v2-hero"/.test(appJs),
+    'L3: buildExpV2Header emits an <img class="exp-v2-hero"> element');
+  assert(/Array\.isArray\(lot\.images\)[\s\S]{0,80}lot\.imageUrl/.test(appJs),
+    'L3: hero source falls back from lot.images[0] → lot.imageUrl');
+
+  // L4 — dynamic section numbering
+  assert(/__SEC_NUM__/.test(appJs),
+    'L4: section builders emit __SEC_NUM__ placeholder instead of literal 1/2/3');
+  assert(/_secCounter\s*=\s*0/.test(appJs),
+    'L4: assembler tracks running counter');
+  assert(/replace\(\/__SEC_NUM__/.test(appJs),
+    'L4: assembler substitutes the placeholder with the running count, surviving any hidden section');
+  // Make sure the old literal numbers are gone from the badge slots
+  assert(!/sec-num-badge">1</.test(appJs),
+    'L4: no literal "1" left in sec-num-badge slot');
+  assert(!/sec-num-badge">2</.test(appJs),
+    'L4: no literal "2" left in sec-num-badge slot');
+  assert(!/sec-num-badge">3</.test(appJs),
+    'L4: no literal "3" left in sec-num-badge slot');
+}
+
+console.log('\nMobile launch fixes (review 2026-05-10) — FLAGs');
+{
+  const appJs = readFileSync(join(here, '..', 'public', 'app.js'), 'utf8');
+  const css = readFileSync(join(here, '..', 'public', 'styles.css'), 'utf8');
+
+  // L5 — postcode block
+  assert(/\.lcv2-addr \.pc\s*\{[^}]*display:\s*block/.test(css),
+    'L5: .lcv2-addr .pc forced to its own line (no collision with wrapped address)');
+
+  // L6 — house display lookup wired into both list card and expanded header
+  assert(/_HOUSE_DISPLAY\s*=\s*\{/.test(appJs),
+    'L6: _HOUSE_DISPLAY map declared');
+  assert(/getHouseDisplay\(/.test(appJs),
+    'L6: getHouseDisplay() helper exposed and called');
+  assert(/futureauctions:\s*'Future Property Auctions'/.test(appJs),
+    'L6: known offender futureauctions has a friendly display name');
+  assert(/hollismorgan:\s*'Hollis Morgan'/.test(appJs),
+    'L6: hollismorgan has a friendly display name');
+
+  // L7 — View lot ↗
+  assert(/View lot <span class="arr">↗<\/span>/.test(appJs),
+    'L7: list-card "View lot" footer link uses ↗ (external) instead of →');
+
+  // F4 — input min-height
+  assert(/min-height:\s*44px/.test(css),
+    'F4: input/select chrome reaches WCAG 44px minimum on mobile');
+
+  // F2 — footer link padding (tap target)
+  assert(/footer p a\s*\{[^}]*padding:\s*8px/.test(css),
+    'F2: footer text links carry a hit-area padding so they\'re tappable on mobile');
+}
+
 console.log('\nUI polish: Unsold-lots is Pro-gated, section heads use numbered badges');
 {
   // Reported 2026-05-10: "Unsold lots" pill should be a Pro tool — confusing
@@ -174,12 +245,12 @@ console.log('\nUI polish: Unsold-lots is Pro-gated, section heads use numbered b
   // Section-head garbling — §1/§2/§3 replaced
   assert(!/§\d+ ·/.test(appJs),
     'no remaining "§N · " section-sign-prefix patterns in app.js');
-  assert(/sec-num-badge[\s\S]{0,40}>1</.test(appJs),
-    'sec-num-badge renders numeric "1" for the first section');
-  assert(/sec-num-badge[\s\S]{0,40}>2</.test(appJs),
-    'sec-num-badge renders numeric "2" for the second section');
-  assert(/sec-num-badge[\s\S]{0,40}>3</.test(appJs),
-    'sec-num-badge renders numeric "3" for the third section');
+  // Section numbering moved from literal 1/2/3 to a __SEC_NUM__ placeholder
+  // pattern (review 2026-05-10 L4) so hidden sections don't leave gaps.
+  // The badges now render via the assembler's running counter — see the
+  // dedicated L4 assertions further below.
+  assert(/sec-num-badge">__SEC_NUM__</.test(appJs),
+    'sec-num-badge slot uses __SEC_NUM__ placeholder for dynamic numbering');
 
   // Bid + Save polish
   assert(/exp-v2-bid-arr[^<]*↗/.test(appJs),
