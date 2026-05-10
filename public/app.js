@@ -4331,6 +4331,7 @@ function isValidImageUrl(url) {
   if (!/^https:\/\//i.test(url)) return false;
   if (/\.(jpe?g|png|webp)(\?.*)?$/i.test(url)) return true;
   if (/cloudinary\.com|imgix\.net|cdn\.sanity\.io|amazonaws\.com|cloudfront\.net|googleusercontent\.com|wp-content\/uploads|supabase\.co\/storage|i\.imgur\.com|eigpropertyauctions\.co\.uk|auction|property|lot|catalogue|catalog/i.test(url)) return true;
+  if (/\/(image|images|media|uploads|cdn|gallery|photo|resize)/i.test(url)) return true;
   return false;
 }
 
