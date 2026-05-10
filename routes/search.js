@@ -1295,13 +1295,23 @@ async function buildAllLotsResponse({ isSignedIn, includePast }) {
     const junkLotRemoved = beforeJunkLot - cleanLots.length;
     if (junkLotRemoved > 0) console.log(`Lot sanitiser: removed ${junkLotRemoved} junk lots (non-property entries)`);
 
-    // Sanitise image URLs — strip junk images (logos, council branding, ad trackers, placeholders)
-    const junkImg = /logo|icon|\.svg|favicon|banner|flannels|kirklees|\brdw\b|council\.gov|\.gov\.uk\/|googleads|doubleclick|spacer|pixel|1x1|placeholder|no-image|noimage|spinner|badge|modal\.png|_NYC\.|_LCC\.|_BMDC\.|Unit[ie]*d?_?Utilit|Cardwells|themes\/.*assets\/images\/|download_\(\d+\)\./i;
+    // Sanitise image URLs — strip junk images (logos, council branding, ad trackers, placeholders).
+    // `\.ico` catches favicon files even when the URL says `fav.ico` rather than `favicon`
+    // (e.g. cdnx.livechatinc.com/website/media/img/fav.ico — auctionhousenorthwales had one of these).
+    const junkImg = /logo|icon|\.svg|\.ico(\?|$|#)|favicon|livechatinc\.com|banner|flannels|kirklees|\brdw\b|council\.gov|\.gov\.uk\/|googleads|doubleclick|spacer|pixel|1x1|placeholder|no-image|noimage|spinner|badge|modal\.png|_NYC\.|_LCC\.|_BMDC\.|Unit[ie]*d?_?Utilit|Cardwells|themes\/.*assets\/images\/|download_\(\d+\)\./i;
     let imgStripped = 0;
+    let imgUnclosed = 0;
     for (const lot of cleanLots) {
+      // Strip stray trailing `)` from markdown-link extraction bleed (e.g. buttersjohnbee JWT URLs
+      // where `[image](https://…token)` lost the leading bracket but kept the closing paren).
+      if (lot.imageUrl && typeof lot.imageUrl === 'string' && /\)+$/.test(lot.imageUrl) && !/\(/.test(lot.imageUrl)) {
+        lot.imageUrl = lot.imageUrl.replace(/\)+$/, '');
+        imgUnclosed++;
+      }
       if (lot.imageUrl && junkImg.test(lot.imageUrl)) { lot.imageUrl = undefined; imgStripped++; }
     }
     if (imgStripped > 0) console.log(`Image sanitiser: stripped ${imgStripped} junk images`);
+    if (imgUnclosed > 0) console.log(`Image sanitiser: trimmed ${imgUnclosed} stray trailing ')'`);
 
     // Validate image URLs — must be https + known extension or CDN domain
     let imgInvalid = 0;

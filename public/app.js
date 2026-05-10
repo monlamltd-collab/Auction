@@ -4318,8 +4318,10 @@ function getCardImageBadges(lot) {
 // these earlier via routes/search.js's junkImg regex.
 function isValidImageUrl(url) {
   if (!url || typeof url !== 'string') return false;
-  // Reject floor plans, logos, icons, maps, and other non-property images
-  if (/floor[\s_-]?plan|floorplan|site[\s_-]?plan|epc[\s_-]?chart|logo|icon|\.svg|placeholder|map[\s_-]?view/i.test(url)) return false;
+  // Reject floor plans, logos, icons, maps, and other non-property images.
+  // `\.ico(\?|$|#)` catches favicon files where the URL doesn't say "favicon"
+  // literally — e.g. cdnx.livechatinc.com/website/media/img/fav.ico.
+  if (/floor[\s_-]?plan|floorplan|site[\s_-]?plan|epc[\s_-]?chart|logo|icon|\.svg|\.ico(\?|$|#)|placeholder|map[\s_-]?view/i.test(url)) return false;
   // Defer to shared validator (set by public/img-validator.js). Module is
   // type="module" so it's deferred — by the time any caller runs, the
   // window global is populated. Defensive: if for any reason it isn't yet,
