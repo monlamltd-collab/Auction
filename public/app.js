@@ -1844,6 +1844,112 @@ async function openBillingPortal() {
   }
 }
 
+// ═══════════════════════════════
+// Anonymous-browsing nudges (Milestone 1)
+// ═══════════════════════════════
+// Counts unique lot views in localStorage. At 10 unique views we drop a
+// dismissible toast; at 25 we open the signup modal once. Both nudges
+// fire at most once per device — clearing localStorage resets them, but
+// that's a low-effort act of self-harm we don't try to defeat.
+//
+// Skipped for signed-in users (they've already converted) and for users
+// who actively opted out via the "Don't show again" close button — we
+// honour that even before the count threshold via ab_anon_nudge_dismissed.
+const ANON_NUDGE_TOAST_AT = 10;
+const ANON_NUDGE_MODAL_AT = 25;
+
+function _anonNudgeStorage() {
+  try { return window.localStorage; } catch { return null; }
+}
+
+function trackAnonViewNudge(lot) {
+  if (window._userTier) return; // signed in
+  const ls = _anonNudgeStorage();
+  if (!ls) return;
+  if (ls.getItem('ab_anon_nudge_dismissed') === '1') return;
+
+  // Dedup per-lot per-device so the same card opened thrice still counts as 1.
+  const key = (lot && lot._house ? lot._house : '') + ':' + (lot && lot.lot ? lot.lot : '') +
+              ':' + (lot && lot.address ? String(lot.address).slice(0, 40) : '');
+  let seen = {};
+  try { seen = JSON.parse(ls.getItem('ab_anon_seen_lots') || '{}'); } catch {}
+  if (seen[key]) return;
+  seen[key] = 1;
+  // Cap the seen-set so it doesn't grow forever — we only need to know
+  // if a lot has already been counted, and 100 entries is more than enough.
+  const keys = Object.keys(seen);
+  if (keys.length > 120) {
+    const drop = keys.slice(0, keys.length - 100);
+    drop.forEach(k => delete seen[k]);
+  }
+  ls.setItem('ab_anon_seen_lots', JSON.stringify(seen));
+
+  const n = (parseInt(ls.getItem('ab_anon_view_count') || '0', 10) || 0) + 1;
+  ls.setItem('ab_anon_view_count', String(n));
+
+  if (n === ANON_NUDGE_TOAST_AT && ls.getItem('ab_anon_nudge_10') !== '1') {
+    ls.setItem('ab_anon_nudge_10', '1');
+    showAnonViewToast();
+  }
+  if (n === ANON_NUDGE_MODAL_AT && ls.getItem('ab_anon_nudge_25') !== '1') {
+    ls.setItem('ab_anon_nudge_25', '1');
+    setTimeout(showAnonViewSoftModal, 500);
+  }
+}
+
+function showAnonViewToast() {
+  if (document.getElementById('anonViewToast')) return;
+
+  const wrap = document.createElement('div');
+  wrap.id = 'anonViewToast';
+  wrap.className = 'anon-toast';
+  wrap.setAttribute('role', 'status');
+
+  const msg = document.createElement('span');
+  msg.className = 'anon-toast-msg';
+  msg.textContent = 'Enjoying Auction Brain? ';
+  const cta = document.createElement('a');
+  cta.href = '#';
+  cta.className = 'anon-toast-cta';
+  cta.textContent = 'Sign up free';
+  cta.addEventListener('click', function(e) {
+    e.preventDefault();
+    if (typeof $ === 'function' && $('signupModal')) $('signupModal').classList.add('show');
+    wrap.remove();
+  });
+  msg.appendChild(cta);
+  msg.appendChild(document.createTextNode(' to save lots.'));
+
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'anon-toast-close';
+  close.setAttribute('aria-label', 'Dismiss');
+  close.textContent = '×';
+  close.addEventListener('click', function() {
+    const ls = _anonNudgeStorage();
+    if (ls) ls.setItem('ab_anon_nudge_dismissed', '1');
+    wrap.remove();
+  });
+
+  wrap.appendChild(msg);
+  wrap.appendChild(close);
+  document.body.appendChild(wrap);
+
+  if (typeof umami !== 'undefined') umami.track('anon_nudge_toast');
+
+  setTimeout(function() {
+    if (wrap.parentNode) wrap.classList.add('anon-toast-out');
+    setTimeout(function() { if (wrap.parentNode) wrap.remove(); }, 400);
+  }, 8000);
+}
+
+function showAnonViewSoftModal() {
+  if (window._userTier) return;
+  if (typeof $ !== 'function' || !$('signupModal')) return;
+  $('signupModal').classList.add('show');
+  if (typeof umami !== 'undefined') umami.track('anon_nudge_modal');
+}
+
 // Pricing-page CTA dispatch — /pricing CTAs link back to /?cta=<action>.
 // We pick that up at boot and either open the signup modal (anon) or the
 // Stripe checkout (signed in). Drops the query param so a refresh doesn't
@@ -4553,6 +4659,10 @@ function expandCard(lot) {
   if (window.umami) umami.track('lot_expand', {
     lot_number: lot.lot || '', house: lot._house || '', guide_price: lot.price || 0
   });
+  // Anonymous-browsing nudge — counts unique lot views and shows a soft
+  // signup prompt at 10 (toast) and 25 (modal). Skipped for signed-in
+  // users so we don't badger people who have already converted.
+  try { if (typeof trackAnonViewNudge === 'function') trackAnonViewNudge(lot); } catch {}
   // Server-side activity event for the admin Intel dashboard. De-dupe per
   // session so a user toggling a lot open/closed doesn't inflate the count.
   try {

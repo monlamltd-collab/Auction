@@ -2332,3 +2332,52 @@ footer .logo-f span{color:var(--green)}
   .pricing-tiers { grid-template-columns: 1fr; gap: 14px; }
   .pr-tier { padding: 22px 18px 18px; }
 }
+
+/* ── Anonymous-browsing nudge toast (Milestone 1) ── */
+.anon-toast {
+  position: fixed;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--navy, #1a2332);
+  color: #fff;
+  padding: 12px 14px 12px 18px;
+  border-radius: 12px;
+  font-size: .88rem;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.25);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100vw - 32px);
+  animation: anon-toast-in .3s ease-out;
+  font-family: var(--font-main);
+}
+.anon-toast-msg { line-height: 1.4; }
+.anon-toast-cta {
+  color: var(--accent, #c0392b);
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.anon-toast-cta:hover { color: #fff; }
+.anon-toast-close {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 1.3rem;
+  line-height: 1;
+  padding: 2px 8px;
+  cursor: pointer;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+.anon-toast-close:hover { color: #fff; background: rgba(255, 255, 255, 0.1); }
+.anon-toast-out { opacity: 0; transform: translate(-50%, 8px); transition: all .35s ease-in; }
+@keyframes anon-toast-in {
+  from { opacity: 0; transform: translate(-50%, 12px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+@media (max-width: 560px) {
+  .anon-toast { bottom: 14px; padding: 11px 12px 11px 16px; font-size: .82rem; }
+}

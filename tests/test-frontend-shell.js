@@ -123,5 +123,31 @@ console.log('\npaywall modal: 3-tier upgrade comparison');
   }
 }
 
+console.log('\nanon view-count nudges (Milestone 1)');
+{
+  // The nudge fires at exact view counts. If a refactor renames the
+  // localStorage keys, drops the wiring inside expandCard, or changes
+  // the thresholds, marketing loses the conversion path. Lock the shape.
+  const appJs = readFileSync(join(here, '..', 'public', 'app.js'), 'utf8');
+  assert(/function trackAnonViewNudge\b/.test(appJs),
+    'trackAnonViewNudge() declared in app.js');
+  assert(/function showAnonViewToast\b/.test(appJs),
+    'showAnonViewToast() declared in app.js');
+  assert(/function showAnonViewSoftModal\b/.test(appJs),
+    'showAnonViewSoftModal() declared in app.js');
+  assert(/ANON_NUDGE_TOAST_AT\s*=\s*10/.test(appJs),
+    'toast threshold = 10 unique lot views');
+  assert(/ANON_NUDGE_MODAL_AT\s*=\s*25/.test(appJs),
+    'soft-modal threshold = 25 unique lot views');
+  assert(/expandCard\([\s\S]{0,200}trackAnonViewNudge/.test(appJs) ||
+    /trackAnonViewNudge[\s\S]{0,5000}function expandCard/.test(appJs) ||
+    /function expandCard[\s\S]{0,2000}trackAnonViewNudge/.test(appJs),
+    'expandCard() invokes trackAnonViewNudge()');
+  assert(/ab_anon_view_count/.test(appJs),
+    'persists count under ab_anon_view_count');
+  assert(/ab_anon_nudge_dismissed/.test(appJs),
+    'honours an explicit dismiss flag (no re-nag after close)');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
