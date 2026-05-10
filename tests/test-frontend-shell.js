@@ -149,6 +149,47 @@ console.log('\nanon view-count nudges (Milestone 1)');
     'honours an explicit dismiss flag (no re-nag after close)');
 }
 
+console.log('\nUI polish: Unsold-lots is Pro-gated, section heads use numbered badges');
+{
+  // Reported 2026-05-10: "Unsold lots" pill should be a Pro tool — confusing
+  // for free users. The §1 / §2 / §3 section headers were rendering as
+  // garbled glyphs on iOS Safari (font missing the section-sign). Bid +
+  // Save buttons read as a single string "I want to bid → ♥" — needed
+  // visual separation.
+  const unsoldBtn = doc.getElementById('unsoldToggle');
+  assert(!!unsoldBtn, 'unsoldToggle still exists in markup');
+  assert(unsoldBtn && unsoldBtn.hasAttribute('data-pro-only'),
+    'Unsold pill carries data-pro-only — hidden by default');
+  assert(unsoldBtn && /pro-tool/.test(unsoldBtn.className),
+    'Unsold pill flagged as pro-tool for styling');
+  assert(unsoldBtn && unsoldBtn.querySelector('.pro-badge'),
+    'Unsold pill displays a "PRO" badge so its tier requirement is obvious');
+
+  const appJs = readFileSync(join(here, '..', 'public', 'app.js'), 'utf8');
+  assert(/document\.body\.classList\.toggle\('is-pro'/.test(appJs),
+    'is-pro body class wired from tier change');
+  assert(/document\.body\.classList\.remove\('is-pro'\)/.test(appJs),
+    'is-pro removed on sign-out');
+
+  // Section-head garbling — §1/§2/§3 replaced
+  assert(!/§\d+ ·/.test(appJs),
+    'no remaining "§N · " section-sign-prefix patterns in app.js');
+  assert(/sec-num-badge[\s\S]{0,40}>1</.test(appJs),
+    'sec-num-badge renders numeric "1" for the first section');
+  assert(/sec-num-badge[\s\S]{0,40}>2</.test(appJs),
+    'sec-num-badge renders numeric "2" for the second section');
+  assert(/sec-num-badge[\s\S]{0,40}>3</.test(appJs),
+    'sec-num-badge renders numeric "3" for the third section');
+
+  // Bid + Save polish
+  assert(/exp-v2-bid-arr[^<]*↗/.test(appJs),
+    'bid button uses external-link arrow ↗ (not generic →)');
+  assert(/View on \' \+ esc\(houseLabel/.test(appJs),
+    'bid button text is "View on {auction-house}" — clearer than "I want to bid"');
+  assert(/exp-v2-fav-label/.test(appJs),
+    'save button has a visible label not just the heart glyph');
+}
+
 console.log('\nOAuth return-URL preservation (mobile sign-in regression)');
 {
   // Reported 2026-05-10: signing in with Google from a lot card on mobile

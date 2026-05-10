@@ -2457,3 +2457,152 @@ footer .logo-f span{color:var(--green)}
   .digest-form-row { flex-direction: column; gap: 8px; }
   .digest-form-btn { width: 100%; padding: 11px 16px; }
 }
+
+/* ── Pro-tool gating — items with [data-pro-only] only render for premium users ── */
+[data-pro-only] { display: none !important; }
+body.is-pro [data-pro-only] { display: inline-flex !important; }
+.unsold-toggle .pro-badge {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  background: var(--ink, #1a1a18);
+  color: var(--paper, #fff);
+  padding: 2px 6px;
+  border-radius: 3px;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+/* ── Numbered section heading badges — replace the "§1 · Title" pattern that
+   rendered as garbled glyphs on iOS Safari and on fonts missing the
+   section-sign character. The badge pattern is robust to font availability. ── */
+.sec-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.sec-num-badge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: var(--ink, #1a1a18);
+  color: var(--paper, #fff);
+  font-family: var(--font-mono, monospace);
+  font-weight: 700;
+  font-size: 11px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.exp-v2 .sec.bold .head .sec-num-badge {
+  background: var(--paper, #fff);
+  color: var(--ink, #1a1a18);
+}
+
+/* ── Expanded-card "View on auction site ↗" + "Save" button polish.
+   Previously these were unstyled and rendered as a default underlined
+   link "I want to bid →" immediately followed by a bare "♥" button —
+   read as a single garbled string. Now: clear pill bid button on the
+   left, distinct outlined Save button on the right, sensible gap. ── */
+.exp-v2 .exp-v2-header .right .ctas {
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.exp-v2-bid {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--red, #c0392b);
+  color: var(--paper, #fff);
+  padding: 11px 18px;
+  border-radius: 6px;
+  font-family: var(--font-main);
+  font-weight: 600;
+  font-size: 14px;
+  text-decoration: none;
+  line-height: 1;
+  transition: filter .15s, transform .1s;
+  white-space: nowrap;
+}
+.exp-v2-bid:hover { filter: brightness(.94); }
+.exp-v2-bid:active { transform: translateY(1px); }
+.exp-v2-bid.disabled {
+  background: transparent;
+  color: var(--muted, #6b7c8d);
+  border: 1px dashed var(--border-strong, #ccc);
+}
+.exp-v2-bid-arr {
+  font-family: var(--font-mono, monospace);
+  font-size: 13px;
+  opacity: 0.95;
+}
+.exp-v2-bid-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 240px;
+}
+.exp-v2-fav {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--paper, #fff);
+  color: var(--ink, #1a1a18);
+  border: 1px solid var(--ink, #1a1a18);
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-family: var(--font-main);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+  line-height: 1;
+}
+.exp-v2-fav:hover { background: var(--bg, #f5f1ea); }
+.exp-v2-fav.fav-active {
+  background: var(--red, #c0392b);
+  color: var(--paper, #fff);
+  border-color: var(--red, #c0392b);
+}
+.exp-v2-fav-icon { font-size: 15px; line-height: 1; }
+.exp-v2-fav-label { font-size: 13px; }
+
+/* ── Mobile right-edge clipping fixes. The lot-card body has a few flex
+   rows that didn't allow children to shrink below their content width
+   (default behaviour) — that overflowed to the right on narrow viewports
+   and clipped trailing characters. Force min-width:0 on the wrappers and
+   word-break on long strings. ── */
+@media (max-width: 560px) {
+  .lot-card-v2 { min-width: 0; }
+  .lot-card-v2 .lcv2-strip { min-width: 0; }
+  .lot-card-v2 .lcv2-strip-l,
+  .lot-card-v2 .lcv2-strip-r { min-width: 0; }
+  .lot-card-v2 .lcv2-meta { min-width: 0; word-break: break-word; }
+  .lot-card-v2 .lcv2-quote { word-break: break-word; overflow-wrap: anywhere; }
+  .lot-card-v2 .lcv2-foot { min-width: 0; }
+  .lot-card-v2 .lcv2-foot a {
+    padding: 11px 12px;
+    font-size: 12px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .exp-v2 .exp-v2-header .right .ctas { width: 100%; }
+  .exp-v2-bid { flex: 1 1 auto; justify-content: center; }
+  .exp-v2-bid-label { max-width: none; }
+  .exp-v2-fav { flex-shrink: 0; }
+  /* The Pro/Favourites/Analysed pill row was overflowing on narrow phones —
+     allow horizontal scroll instead of clipping trailing text. */
+  .sp-toggle-row {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .sp-toggle-row::-webkit-scrollbar { display: none; }
+}

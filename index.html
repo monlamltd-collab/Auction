@@ -393,7 +393,7 @@
     </div>
     <!-- Quick toggles + saved searches row -->
     <div class="sp-toggle-row" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 18px;border-bottom:1px solid var(--border)">
-      <button class="unsold-toggle" id="unsoldToggle" onclick="toggleUnsoldView()">Unsold lots <span class="ut-count" id="unsoldCount">0</span></button>
+      <button class="unsold-toggle pro-tool" id="unsoldToggle" data-pro-only onclick="toggleUnsoldView()" title="Pro tool — surface lots whose auction passed without a sale (motivated-seller pipeline)"><span class="pro-badge">PRO</span>Unsold lots <span class="ut-count" id="unsoldCount">0</span></button>
       <button class="unsold-toggle" id="favToggle" data-anon-hide onclick="toggleFavView()" style="border-color:var(--accent-danger)">♥ Favourites</button>
       <button class="unsold-toggle" id="analysedToggle" data-anon-hide onclick="toggleAnalysedView()" style="border-color:var(--accent)">✓ Analysed</button>
       <div data-anon-hide style="width:1px;height:20px;background:var(--border);margin:0 4px;flex-shrink:0"></div>

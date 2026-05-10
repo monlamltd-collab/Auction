@@ -1503,6 +1503,8 @@ function onSignOut() {
   $('acctTier').textContent = 'Free';
   $('acctTier').classList.remove('pro');
   if ($('acctManage')) $('acctManage').style.display = 'none';
+  // Pro-only chrome (Unsold-lots toggle, etc.) hides itself on tier loss.
+  try { document.body.classList.remove('is-pro'); } catch {}
   // Wipe signed-in lot cache so anon reload isn't served a signed-in payload
   // (with score/dealType) that the server would now strip.
   _clearCachedLots();
@@ -2077,6 +2079,10 @@ async function updateProStatus() {
     window._scanLimit = data.scanLimit;
     window._aiSearchesUsed = data.aiSearchesUsed || 0;
     window._aiSearchLimit = data.aiSearchLimit;
+    // Toggle the body.is-pro class — CSS uses it to reveal Pro-only chrome
+    // (data-pro-only items like the Unsold-lots toggle stay hidden until
+    // a premium tier is confirmed). isPremium() handles trial too.
+    try { document.body.classList.toggle('is-pro', data.tier === 'premium'); } catch {}
     // Cross-tab tier sync: broadcast tier change to other tabs
     try {
       localStorage.setItem('bridgematch_tier', window._userTier);
@@ -2100,6 +2106,7 @@ window.addEventListener('storage', function(e) {
     window._userTier = e.newValue;
     // UI-only refresh — no /api/stripe/status call to avoid infinite loop
     refreshTierUI();
+    try { document.body.classList.toggle('is-pro', e.newValue === 'premium'); } catch {}
   }
 });
 
@@ -4435,11 +4442,11 @@ function buildExpV2Header(lot, dealStackHtmlRef) {
   }
 
   const favActive = (typeof isFavourite === 'function') && isFavourite(lot);
-  const favBtn = '<button class="exp-v2-fav' + (favActive ? ' fav-active' : '') + '" onclick="toggleFav(' + lot._idx + ',event)" title="' + (favActive ? 'Saved' : 'Save lot') + '" aria-label="' + (favActive ? 'Remove from favourites' : 'Add to favourites') + '">' + (favActive ? '♥' : '♡') + '</button>';
+  const favBtn = '<button class="exp-v2-fav' + (favActive ? ' fav-active' : '') + '" onclick="toggleFav(' + lot._idx + ',event)" aria-pressed="' + (favActive ? 'true' : 'false') + '" aria-label="' + (favActive ? 'Remove from saved' : 'Save lot') + '"><span class="exp-v2-fav-icon" aria-hidden="true">' + (favActive ? '♥' : '♡') + '</span><span class="exp-v2-fav-label">' + (favActive ? 'Saved' : 'Save') + '</span></button>';
 
   const bidHref = lot.url ? safeHref(lot.url) : '#';
   const bidBtn = lot.url
-    ? '<a class="exp-v2-bid" href="' + bidHref + '" target="_blank" rel="noopener noreferrer" onclick="if(window.umami)umami.track(\'lot_outbound_click\',{lot:' + (lot.lot || 0) + ',house:\'' + esc((lot._house || '').replace(/\'/g, '')) + '\'})">I want to bid <span class="arr">→</span></a>'
+    ? '<a class="exp-v2-bid" href="' + bidHref + '" target="_blank" rel="noopener noreferrer" onclick="if(window.umami)umami.track(\'lot_outbound_click\',{lot:' + (lot.lot || 0) + ',house:\'' + esc((lot._house || '').replace(/\'/g, '')) + '\'})"><span class="exp-v2-bid-label">View on ' + esc(houseLabel || 'auction site') + '</span><span class="exp-v2-bid-arr" aria-hidden="true">↗</span></a>'
     : '<span class="exp-v2-bid disabled">No external link</span>';
 
   return '<div class="exp-v2-header">' +
@@ -4540,7 +4547,7 @@ function buildExpV2DD(lot) {
 
   return '<section class="sec">' +
     '<div class="head">' +
-      '<span class="eyebrow ink">§1 · Due diligence checks</span>' +
+      '<span class="sec-head"><span class="sec-num-badge">1</span><span class="eyebrow ink">Due diligence checks</span></span>' +
       '<span style="font-family:var(--font-mono);font-size:11px;color:' + summaryColor + '">' + cleared + ' of ' + total + ' cleared</span>' +
     '</div>' +
     '<ul class="dd-list">' + liHtml + '</ul>' +
@@ -4561,7 +4568,7 @@ function buildExpV2Scores(lot) {
 
   return '<section class="sec">' +
     '<div class="head">' +
-      '<span class="eyebrow ink">§2 · Why this lot scores</span>' +
+      '<span class="sec-head"><span class="sec-num-badge">2</span><span class="eyebrow ink">Why this lot scores</span></span>' +
       '<a href="/scoring" class="eyebrow" style="color:var(--red);text-decoration:none">Scoring methodology →</a>' +
     '</div>' +
     '<div class="body">' +
@@ -4574,7 +4581,7 @@ function buildExpV2Scores(lot) {
 function buildExpV2Comparables(lot, premium) {
   if (!premium) {
     return '<section class="sec">' +
-      '<div class="head"><span class="eyebrow ink">§3 · Comparables on this street</span></div>' +
+      '<div class="head"><span class="sec-head"><span class="sec-num-badge">3</span><span class="eyebrow ink">Comparables on this street</span></span></div>' +
       '<div class="body" style="text-align:center;padding:24px">' +
         '<div style="font-family:var(--font-display);font-size:17px;color:var(--ink);margin-bottom:8px">Sign in free to see street-level comparables</div>' +
         '<div style="font-family:var(--font-main);font-size:13px;color:var(--muted);margin-bottom:14px">Median sold price, sales count, and how this guide compares.</div>' +
@@ -4590,7 +4597,7 @@ function buildExpV2Comparables(lot, premium) {
 
   if (!sa || !sales) {
     return '<section class="sec">' +
-      '<div class="head"><span class="eyebrow ink">§3 · Comparables on this street</span></div>' +
+      '<div class="head"><span class="sec-head"><span class="sec-num-badge">3</span><span class="eyebrow ink">Comparables on this street</span></span></div>' +
       '<div class="body" style="font-family:var(--font-display);font-size:15px;color:var(--ink-2)">No comparable sales found for this street in the last 12 months.</div>' +
     '</section>';
   }
@@ -4621,7 +4628,7 @@ function buildExpV2Comparables(lot, premium) {
     : 'Guide ' + fmtFull(guide || 0) + ' vs local median ' + fmtFull(sa) + '.';
 
   return '<section class="sec">' +
-    '<div class="head"><span class="eyebrow ink">§3 · Comparables on this street</span></div>' +
+    '<div class="head"><span class="sec-head"><span class="sec-num-badge">3</span><span class="eyebrow ink">Comparables on this street</span></span></div>' +
     '<div class="body">' +
       '<div class="cmp-top">' +
         '<div>' +
