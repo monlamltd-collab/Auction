@@ -296,6 +296,8 @@ const _scheduleState = {
   lastSavedSearchAlerts: 0,
   // Tier 14 (weekly digest — Mondays only):
   lastWeeklyDigest: 0,
+  // Tier 15 (phantom-lot sweep — daily):
+  lastPhantomSweep: 0,
 };
 
 function getUkHourMinute() {
@@ -684,6 +686,35 @@ function scheduleTick() {
         }
       })
       .catch(e => console.error('SCHEDULE weekly digest failed:', e.message));
+  }
+
+  // Tier 15: Phantom-lot sweeper, daily 02:45 UK. Walks active lots
+  // (last_seen_at within 30d, status != extraction_failure) and re-runs
+  // the looksLikeRealAddress() predicate. Failures get flipped to
+  // status='extraction_failure' so they drop out of the user feed
+  // without being hard-deleted (history preserved). Catches old rows
+  // that survived from before placeholder phrases were added to the
+  // extractor deny-list.
+  // Kill switch: PHANTOM_SWEEP_ENABLED=false.
+  if (hour === 2 && minute >= 45 && minute < 50 && now - _scheduleState.lastPhantomSweep > 23 * 60 * 60 * 1000) {
+    _scheduleState.lastPhantomSweep = now;
+    console.log('SCHEDULE: 02:45 UK — running phantom-lot sweep');
+    import('./lib/pipeline/phantom-lot-sweep.js')
+      .then(async ({ runPhantomLotSweep }) => {
+        const result = await runPhantomLotSweep(supabase, {
+          log,
+          alertHook: (payload) => harnessFireAlert(payload),
+        });
+        if (result.skipped) {
+          console.log(`SCHEDULE phantom-sweep: skipped (${result.reason || 'unknown'})`);
+        } else if (result.error) {
+          console.error('SCHEDULE phantom-sweep: query error', result.error);
+        } else {
+          const s = result.summary;
+          console.log(`SCHEDULE phantom-sweep: scanned=${s.scanned} flagged=${s.flagged}`);
+        }
+      })
+      .catch(e => console.error('SCHEDULE phantom-sweep failed:', e.message));
   }
 }
 
