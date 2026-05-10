@@ -149,6 +149,28 @@ console.log('\nanon view-count nudges (Milestone 1)');
     'honours an explicit dismiss flag (no re-nag after close)');
 }
 
+console.log('\nOAuth return-URL preservation (mobile sign-in regression)');
+{
+  // Reported 2026-05-10: signing in with Google from a lot card on mobile
+  // dropped the user back at the home page with default filters — the lot
+  // they were viewing was lost. Cause: redirectTo: window.location.origin
+  // strips the search string, and Supabase's callback overwrites the hash
+  // with auth tokens. Fix saves window.location.search to sessionStorage
+  // before redirect and restores it on return (only when hash carries auth
+  // tokens, so it doesn't fire on plain refreshes).
+  const appJs = readFileSync(join(here, '..', 'public', 'app.js'), 'utf8');
+  assert(/_saveReturnUrlForOAuth\s*\(/.test(appJs),
+    'handleGoogleSignIn calls _saveReturnUrlForOAuth before redirect');
+  assert(/sessionStorage\.setItem\('ab_post_auth_search'/.test(appJs),
+    'pre-redirect search-string saved under ab_post_auth_search');
+  assert(/restoreSearchAfterOAuth/.test(appJs),
+    'restoreSearchAfterOAuth IIFE present at module init');
+  assert(/access_token=|refresh_token=/.test(appJs),
+    'restoration gated on hash carrying auth tokens (not a plain refresh)');
+  assert(/async function handleSendMagicLink[\s\S]{0,2000}_saveReturnUrlForOAuth\s*\([\s\S]{0,1500}signInWithOtp/.test(appJs),
+    'magic-link path also preserves return URL before signInWithOtp');
+}
+
 console.log('\nsearch-filter Bristol bug — smartQuery + town-radius wiring');
 {
   // Reported 2026-05-10: typing "Bristol" returned 2 unsold lots when 3

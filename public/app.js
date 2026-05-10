@@ -1536,6 +1536,7 @@ async function handleSendMagicLink() {
     auction_alerts: !!$('consentAlerts').checked,
     partner_marketing: !!$('consentPartner').checked
   }));
+  _saveReturnUrlForOAuth();
 
   try {
     const { error } = await supabaseClient.auth.signInWithOtp({
@@ -1556,6 +1557,17 @@ async function handleSendMagicLink() {
   }
 }
 
+// Save the pre-OAuth URL state so we can restore filters + the open-lot
+// context after Supabase's callback (which appends #access_token=… to the
+// redirectTo and strips any path/query we don't pass through). Lot id is
+// already kept in sessionStorage('ab_open_lot') by _setOpenLotKey() — what
+// gets lost without this is the search string (Bristol filter, etc.).
+function _saveReturnUrlForOAuth() {
+  try {
+    sessionStorage.setItem('ab_post_auth_search', window.location.search || '');
+  } catch {}
+}
+
 async function handleGoogleSignIn() {
   if (!supabaseClient) return;
   // Store consent choices before redirect
@@ -1563,6 +1575,7 @@ async function handleGoogleSignIn() {
     auction_alerts: !!$('consentAlerts').checked,
     partner_marketing: !!$('consentPartner').checked
   }));
+  _saveReturnUrlForOAuth();
   const { error } = await supabaseClient.auth.signInWithOAuth({
     provider: 'google',
     options: { redirectTo: window.location.origin }
@@ -5191,6 +5204,33 @@ function syncFiltersToURL(){
   const url=qs?window.location.pathname+'?'+qs:window.location.pathname;
   if(url!==window.location.pathname+window.location.search) history.replaceState(null,'',url);
 }
+
+// Restore the URL we were on before the OAuth round-trip. Supabase's callback
+// appends #access_token=… to the bare-origin redirectTo, so any filters that
+// were in the query string are gone by the time the page loads. We saved the
+// search-string in handleGoogleSignIn / handleSendMagicLink — pull it back
+// before restoreFiltersFromURL() reads window.location.search. Only fires
+// when the URL hash carries auth tokens (i.e. we just bounced through OAuth)
+// so a fresh tab without an OAuth round-trip doesn't accidentally inherit a
+// stale search from a prior session.
+(function restoreSearchAfterOAuth(){
+  try {
+    const saved = sessionStorage.getItem('ab_post_auth_search');
+    if (!saved) return;
+    const justAuthed = (window.location.hash || '').includes('access_token=')
+      || (window.location.hash || '').includes('refresh_token=');
+    if (!justAuthed) {
+      sessionStorage.removeItem('ab_post_auth_search');
+      return;
+    }
+    if (saved && saved !== window.location.search) {
+      const restored = window.location.pathname + saved + window.location.hash;
+      history.replaceState(null, '', restored);
+    }
+    sessionStorage.removeItem('ab_post_auth_search');
+  } catch {}
+})();
+
 restoreFiltersFromURL();
 
 // Read showPast and status URL params on page load
