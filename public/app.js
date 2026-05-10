@@ -360,12 +360,74 @@ function renderSavedSearchChips() {
   if (!bar) return;
   if (_savedSearches.length === 0) { bar.style.display = 'none'; return; }
   bar.style.display = '';
-  bar.innerHTML = _savedSearches.map(s =>
-    '<button class="ss-chip" onclick="applySavedSearch(\'' + s.id + '\')" title="Load: ' + esc(s.name) + '">' +
-    esc(s.name) +
-    '<span class="ss-del" onclick="event.stopPropagation();deleteSavedSearch(\'' + s.id + '\')" title="Delete">✕</span>' +
-    '</button>'
-  ).join('');
+  // DOM-API render (createElement + textContent) — keeps user-controlled
+  // search names safe by construction. Each chip has the existing label +
+  // delete (✕) controls plus a new bell toggle for Pro email alerts.
+  bar.replaceChildren();
+  for (const s of _savedSearches) {
+    const alertOn = !!s.notify_email;
+    const bellTitle = alertOn ? 'Email alerts ON — tap to disable' : 'Email alerts OFF — tap to enable (Pro)';
+
+    const btn = document.createElement('button');
+    btn.className = 'ss-chip';
+    btn.title = 'Load: ' + s.name;
+    btn.addEventListener('click', () => applySavedSearch(s.id));
+    btn.appendChild(document.createTextNode(s.name));
+
+    const bell = document.createElement('span');
+    bell.className = 'ss-bell' + (alertOn ? ' ss-bell-on' : '');
+    bell.title = bellTitle;
+    bell.setAttribute('aria-label', bellTitle);
+    bell.textContent = alertOn ? '🔔' : '🔕';
+    bell.addEventListener('click', (e) => { e.stopPropagation(); toggleSavedSearchAlert(s.id); });
+    btn.appendChild(bell);
+
+    const del = document.createElement('span');
+    del.className = 'ss-del';
+    del.title = 'Delete';
+    del.textContent = '✕';
+    del.addEventListener('click', (e) => { e.stopPropagation(); deleteSavedSearch(s.id); });
+    btn.appendChild(del);
+
+    bar.appendChild(btn);
+  }
+}
+
+// Toggle email alerts on a saved search. Pro-only — server returns 403
+// for free users with upgrade_required:true and we surface the paywall
+// modal instead of silently failing.
+async function toggleSavedSearchAlert(id) {
+  const s = (_savedSearches || []).find(x => x.id === id);
+  if (!s) return;
+  const next = !s.notify_email;
+  // Optimistic UI flip
+  s.notify_email = next;
+  renderSavedSearchChips();
+  try {
+    const r = await fetch('/api/searches/' + encodeURIComponent(id), {
+      method: 'PATCH',
+      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ notify_email: next })
+    });
+    if (r.status === 403) {
+      // Free user — roll back, show upsell
+      s.notify_email = !next;
+      renderSavedSearchChips();
+      if (typeof showPaywall === 'function') {
+        showPaywall('Email alerts on saved searches are a Pro feature. Get notified the moment a new lot matches your filters.');
+      } else {
+        $('signupModal').classList.add('show');
+      }
+      return;
+    }
+    if (!r.ok) throw new Error('Patch failed: ' + r.status);
+    showToast && showToast(next ? 'Email alerts on for "' + s.name + '"' : 'Email alerts off');
+  } catch (err) {
+    // Roll back optimistic flip on failure
+    s.notify_email = !next;
+    renderSavedSearchChips();
+    showToast && showToast('Could not update alert', 'err');
+  }
 }
 
 function getCurrentFilters() {

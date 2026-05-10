@@ -2242,3 +2242,26 @@ footer .logo-f span{color:var(--green)}
     font-size: .78rem;
   }
 }
+
+/* Saved-search bell toggle — Pro feature */
+.ss-bell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-left: 4px;
+  border-radius: 999px;
+  font-size: .85rem;
+  color: var(--text2, #6b7c8d);
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity .15s, background .15s, transform .1s;
+}
+.ss-bell:hover { opacity: 1; background: rgba(0,0,0,.05); }
+.ss-bell-on {
+  opacity: 1;
+  background: var(--accent, #c0392b);
+  color: #fff;
+}
+.ss-bell-on:hover { background: #a83020; }

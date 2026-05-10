@@ -214,6 +214,39 @@ router.delete('/api/searches/:id', async (req, res) => {
   }
 });
 
+// PATCH /api/searches/:id — toggle email alerts on/off for a saved
+// search. Pro-tier-gated server-side: free users get 403 even if their
+// client somehow surfaces the toggle. Single mutation surface — only
+// notify_email is editable here.
+router.patch('/api/searches/:id', async (req, res) => {
+  const user = await validateUserFromReq(req);
+  if (!user) return res.status(401).json({ error: 'Authentication required' });
+  if (user.tier !== 'premium') {
+    return res.status(403).json({ error: 'Email alerts are a Pro feature', upgrade_required: true });
+  }
+
+  const { notify_email } = req.body || {};
+  if (typeof notify_email !== 'boolean') {
+    return res.status(400).json({ error: 'notify_email (boolean) required' });
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('saved_searches')
+      .update({ notify_email })
+      .eq('id', req.params.id)
+      .eq('user_id', user.id)
+      .select('id, notify_email')
+      .single();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: 'Saved search not found' });
+    res.json({ search: data });
+  } catch (err) {
+    log.error('Patch saved search error', { error: err.message, userId: user.id, searchId: req.params.id });
+    res.status(500).json({ error: 'Failed to update saved search' });
+  }
+});
+
 // ═══════════════════════════════════════════════════════════════
 // UNSOLD LOT ALERTS
 // ═══════════════════════════════════════════════════════════════

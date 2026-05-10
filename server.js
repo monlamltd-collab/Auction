@@ -288,6 +288,8 @@ const _scheduleState = {
   lastAlertSweep: 0, lastCoverageDigest: 0, lastSitemapRegen: 0,
   // Tier 12 (homepage-watch):
   lastHomepageWatch: 0,
+  // Tier 13 (saved-search alerts — Pro feature):
+  lastSavedSearchAlerts: 0,
 };
 
 function getUkHourMinute() {
@@ -617,6 +619,36 @@ function scheduleTick() {
         }
       })
       .catch(e => console.error('SCHEDULE homepage watch failed:', e.message));
+  }
+
+  // Tier 13: Saved-search email alerts, daily 08:00 UK. For every Pro
+  // user with notify_email=true on a saved search, query lots seen since
+  // last_notified_at that match the saved filter set, send a digest
+  // email, and advance last_notified_at on success. Skips quiet days
+  // (no matches → no email → no timestamp move).
+  // Kill switch: SAVED_SEARCH_ALERTS_ENABLED=false.
+  if (hour === 8 && minute < 5 && now - _scheduleState.lastSavedSearchAlerts > 60 * 60 * 1000) {
+    _scheduleState.lastSavedSearchAlerts = now;
+    console.log('SCHEDULE: 08:00 UK — running saved-search email alerts');
+    Promise.all([
+      import('./lib/pipeline/saved-search-alerts.js'),
+      import('./lib/email.js'),
+    ])
+      .then(async ([{ runSavedSearchAlertsCycle }, email]) => {
+        const result = await runSavedSearchAlertsCycle(supabase, {
+          sendEmail: email.sendTransactionalEmail,
+          log,
+        });
+        if (result.skipped) {
+          console.log(`SCHEDULE saved-search alerts: skipped (${result.reason || 'unknown'})`);
+        } else if (result.error) {
+          console.error('SCHEDULE saved-search alerts: query error', result.error);
+        } else {
+          const s = result.summary;
+          console.log(`SCHEDULE saved-search alerts: total=${s.total} eligible=${s.eligible} sent=${s.sent} skipped=${s.skipped} errors=${s.errors}`);
+        }
+      })
+      .catch(e => console.error('SCHEDULE saved-search alerts failed:', e.message));
   }
 }
 
