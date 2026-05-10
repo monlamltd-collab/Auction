@@ -235,7 +235,23 @@ let _preUnsoldSort = '';
 let _preUnsoldStatus = '';
 let _preUnsoldShowPast = false;
 
+// Pro-tool gate. The Unsold-lots view targets a niche post-auction
+// motivated-seller play that's meaningless without finance + valuation
+// context — meaningless for free users, premium-only by product design.
+// Returns true if the action is allowed to proceed.
+function _gateUnsoldView() {
+  const tier = window._userTier || 'anon';
+  if (tier === 'premium') return true;
+  // Anon → push to signup. Signed-in free → push to upgrade modal.
+  // Either way the unsold state should not toggle.
+  if (typeof showPaywall === 'function') {
+    showPaywall('Unsold lots is a Pro tool — it surfaces lots whose auction passed without a sale.');
+  }
+  return false;
+}
+
 function toggleUnsoldView() {
+  if (!_gateUnsoldView()) return;
   _unsoldViewActive = !_unsoldViewActive;
   if (_favViewActive) { _favViewActive = false; $('favToggle').classList.remove('active'); }
   const btn = $('unsoldToggle');
@@ -1505,6 +1521,9 @@ function onSignOut() {
   if ($('acctManage')) $('acctManage').style.display = 'none';
   // Pro-only chrome (Unsold-lots toggle, etc.) hides itself on tier loss.
   try { document.body.classList.remove('is-pro'); } catch {}
+  // Wipe any active unsold-view state so the now-anonymous session doesn't
+  // see a stuck filter pill it can't disable.
+  if (typeof enforceUnsoldGating === 'function') enforceUnsoldGating();
   // Wipe signed-in lot cache so anon reload isn't served a signed-in payload
   // (with score/dealType) that the server would now strip.
   _clearCachedLots();
@@ -2083,6 +2102,10 @@ async function updateProStatus() {
     // (data-pro-only items like the Unsold-lots toggle stay hidden until
     // a premium tier is confirmed). isPremium() handles trial too.
     try { document.body.classList.toggle('is-pro', data.tier === 'premium'); } catch {}
+    // Gate the unsold filter on the resolved tier. Activates a deferred
+    // ?status=unsold URL param for Pro users; clears any stale state for
+    // free users so they don't see a stuck filter they can't disable.
+    if (typeof enforceUnsoldGating === 'function') enforceUnsoldGating();
     // Cross-tab tier sync: broadcast tier change to other tabs
     try {
       localStorage.setItem('bridgematch_tier', window._userTier);
@@ -2107,6 +2130,7 @@ window.addEventListener('storage', function(e) {
     // UI-only refresh — no /api/stripe/status call to avoid infinite loop
     refreshTierUI();
     try { document.body.classList.toggle('is-pro', e.newValue === 'premium'); } catch {}
+    if (typeof enforceUnsoldGating === 'function') enforceUnsoldGating();
   }
 });
 
@@ -5240,22 +5264,50 @@ function syncFiltersToURL(){
 
 restoreFiltersFromURL();
 
-// Read showPast and status URL params on page load
+// Read showPast and status URL params on page load. ?status=unsold
+// activates the unsold view for Pro users (the alert email links land
+// here). For non-Pro the param is read but the toggle stays off — the
+// gating in toggleUnsoldView() also blocks any attempt to flip it on,
+// and the post-auth pass below force-clears stale state defensively.
 (function(){
   const p=new URLSearchParams(window.location.search);
   if(p.get('showPast')==='true'&&$('fShowPast')) $('fShowPast').checked=true;
-  // Support ?status=unsold from alert emails
   const statusParam=p.get('status');
   if(statusParam&&$('fSoldTop')){
-    $('fSoldTop').value=statusParam;
     if(statusParam==='unsold'){
-      if($('fShowPast')) $('fShowPast').checked=true;
-      $('fSort').value='days_unsold';
-      _unsoldViewActive=true;
-      $('unsoldToggle')?.classList.add('active');
+      // Defer the activation until the tier resolves — only Pro users
+      // get the unsold filter applied. window._userTier may not be set
+      // yet at IIFE time, so we route through onSignIn's enforce step.
+      window.__pendingUnsoldFromUrl = true;
+    } else {
+      $('fSoldTop').value=statusParam;
     }
   }
 })();
+
+// Run after every tier change to keep the unsold view honest. If the URL
+// said ?status=unsold and the user turned out to be Pro, activate it
+// here (now that the toggle's gate would pass). If they're not Pro and
+// somehow the state got set (legacy localStorage, manual fiddle), wipe
+// it and re-render so they don't see a sticky filter they can't disable.
+function enforceUnsoldGating() {
+  const isPro = window._userTier === 'premium';
+  if (isPro && window.__pendingUnsoldFromUrl) {
+    window.__pendingUnsoldFromUrl = false;
+    if ($('fSoldTop')) $('fSoldTop').value = 'unsold';
+    if ($('fShowPast')) $('fShowPast').checked = true;
+    if ($('fSort')) $('fSort').value = 'days_unsold';
+    _unsoldViewActive = true;
+    $('unsoldToggle')?.classList.add('active');
+    if (typeof renderLots === 'function') renderLots();
+  } else if (!isPro && _unsoldViewActive) {
+    _unsoldViewActive = false;
+    $('unsoldToggle')?.classList.remove('active');
+    if ($('fSoldTop')) $('fSoldTop').value = 'all';
+    if (typeof hideUnsoldAlertBar === 'function') hideUnsoldAlertBar();
+    if (typeof renderLots === 'function') renderLots();
+  }
+}
 
 // Init
 loadCalendar();

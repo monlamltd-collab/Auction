@@ -188,6 +188,24 @@ console.log('\nUI polish: Unsold-lots is Pro-gated, section heads use numbered b
     'bid button text is "View on {auction-house}" — clearer than "I want to bid"');
   assert(/exp-v2-fav-label/.test(appJs),
     'save button has a visible label not just the heart glyph');
+
+  // Unsold view — gate also runs at the function boundary, not just the
+  // CSS visibility layer. Otherwise ?status=unsold from an alert email
+  // would silently apply the filter to a free user with no way to escape.
+  assert(/function _gateUnsoldView/.test(appJs),
+    '_gateUnsoldView function exists');
+  assert(/function toggleUnsoldView[\s\S]{0,200}_gateUnsoldView\(\)/.test(appJs),
+    'toggleUnsoldView early-returns when the gate fails');
+  assert(/function enforceUnsoldGating/.test(appJs),
+    'enforceUnsoldGating function exists');
+  assert(/__pendingUnsoldFromUrl/.test(appJs),
+    '?status=unsold URL hint stored as pending — only activated when tier is Pro');
+  assert(/enforceUnsoldGating\(\)/.test(appJs),
+    'enforceUnsoldGating invoked from tier-change paths');
+  // Make sure the URL IIFE no longer eagerly sets _unsoldViewActive=true
+  // before the tier resolves (would cause a flicker for free users).
+  assert(!/_unsoldViewActive=true;\s*\n\s*\$\('unsoldToggle'\)\?\.classList\.add\('active'\)/.test(appJs),
+    'URL IIFE no longer eagerly activates the unsold view pre-tier-resolve');
 }
 
 console.log('\nOAuth return-URL preservation (mobile sign-in regression)');
