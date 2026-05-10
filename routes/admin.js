@@ -417,6 +417,12 @@ router.get('/admin', (req, res) => {
   res.sendFile(join(__dirname, '..', 'admin.html'));
 });
 
+// Curator review console — auth gate is in the page itself (uses x-admin-secret
+// for the API calls; the HTML has no sensitive content of its own).
+router.get('/admin/curator', (req, res) => {
+  res.sendFile(join(__dirname, '..', 'admin-curator.html'));
+});
+
 // ═══════════════════════════════════════════════════════════════
 // PUBLIC: live house count
 // Sister sites (e.g. auctionbrain.co.uk) and the welcome page hit this

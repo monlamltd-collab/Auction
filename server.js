@@ -134,6 +134,7 @@ import digestRouter from './routes/digest.js';
 import searchRouter, { invalidateAllLotsCache, warmAllLotsCache } from './routes/search.js';
 import adminRouter from './routes/admin.js';
 import userDataRouter from './routes/user_data.js';
+import curatorRouter from './routes/curator.js';
 import { sendWelcomeEmail } from './lib/email.js';
 
 // Wire up the new-user callback so validateUserFromReq can trigger welcome emails
@@ -148,6 +149,7 @@ app.use(analyseRouter);
 app.use(lotsRouter);
 app.use(pricingRouter);
 app.use(digestRouter);
+app.use(curatorRouter);
 app.use(searchRouter);
 app.use(adminRouter);
 app.use(userDataRouter);
@@ -296,6 +298,10 @@ const _scheduleState = {
   lastWeeklyDigest: 0,
   // Tier 15 (phantom-lot sweep — daily):
   lastPhantomSweep: 0,
+  // Tier 16 (curator cycle — daily, generates 8 picks for admin review):
+  lastCuratorCycle: 0,
+  // Tier 17 (daily curator digest — daily, sends approved picks to subscribers):
+  lastDailyDigest: 0,
 };
 
 function getUkHourMinute() {
@@ -713,6 +719,60 @@ function scheduleTick() {
         }
       })
       .catch(e => console.error('SCHEDULE phantom-sweep failed:', e.message));
+  }
+
+  // Tier 16: Curator cycle, daily 05:30 UK. Selects up to 8 high-quality
+  // lots from today's data, generates investor-grade prose via Gemini Pro,
+  // and persists each as status='pending' for admin review. Runs after
+  // the 03:00 full pass + 05:00 post-auction sweep so the candidate pool
+  // is fresh. ~£0.10/run in Gemini Pro tokens.
+  // Kill switch: CURATOR_ENABLED=false.
+  if (hour === 5 && minute >= 30 && minute < 35 && now - _scheduleState.lastCuratorCycle > 23 * 60 * 60 * 1000) {
+    _scheduleState.lastCuratorCycle = now;
+    console.log('SCHEDULE: 05:30 UK — running curator cycle');
+    import('./lib/pipeline/curator-cycle.js')
+      .then(({ runCuratorCycle }) => runCuratorCycle(supabase))
+      .then(result => {
+        if (result.skipped) {
+          console.log(`SCHEDULE curator-cycle: skipped (${result.reason || 'unknown'})`);
+        } else if (result.error) {
+          console.error('SCHEDULE curator-cycle: error', result.error);
+        } else {
+          const s = result.summary;
+          console.log(`SCHEDULE curator-cycle: candidates=${s.candidates} selected=${s.selected} generated=${s.generated} inserted=${s.inserted}${s.reason ? ` reason=${s.reason}` : ''}`);
+        }
+      })
+      .catch(e => console.error('SCHEDULE curator-cycle failed:', e.message));
+  }
+
+  // Tier 17: Daily curator digest, 12:00 UK. Sends today's APPROVED picks
+  // to every email_signups row with daily_digest_optin=true. Scheduled at
+  // noon (rather than 09:00 alongside the weekly) so the operator has the
+  // morning to review the 05:30 picks at /admin/curator. The cycle skips
+  // sends if fewer than 3 picks are approved (better silent than thin).
+  // Kill switch: DAILY_DIGEST_ENABLED=false.
+  if (hour === 12 && minute < 5 && now - _scheduleState.lastDailyDigest > 6 * 60 * 60 * 1000) {
+    _scheduleState.lastDailyDigest = now;
+    console.log('SCHEDULE: 12:00 UK — running daily curator digest');
+    Promise.all([
+      import('./lib/pipeline/daily-digest.js'),
+      import('./lib/email.js'),
+    ])
+      .then(async ([{ runDailyDigestCycle }, email]) => {
+        const result = await runDailyDigestCycle(supabase, {
+          sendEmail: email.sendTransactionalEmail,
+          log,
+        });
+        if (result.skipped) {
+          console.log(`SCHEDULE daily-digest: skipped (${result.reason || 'unknown'})`);
+        } else if (result.error) {
+          console.error('SCHEDULE daily-digest: error', result.error);
+        } else {
+          const s = result.summary;
+          console.log(`SCHEDULE daily-digest: total=${s.total} sent=${s.sent} skipped=${s.skipped} errors=${s.errors}${s.reason ? ` reason=${s.reason}` : ''}`);
+        }
+      })
+      .catch(e => console.error('SCHEDULE daily-digest failed:', e.message));
   }
 }
 

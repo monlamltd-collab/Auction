@@ -80,6 +80,10 @@ router.get('/lot/:id', async (req, res) => {
 
   // RealEstateListing JSON-LD — gives search engines structured data on the
   // listing. address/offer are required for the type to render rich results.
+  // priceSpecification (added with the value estimator) gives Google a
+  // value range it can render in rich snippets when the estimator has run.
+  const ve = lot.valueEstimate && Number.isFinite(Number(lot.valueEstimate.low)) && Number.isFinite(Number(lot.valueEstimate.high))
+    ? lot.valueEstimate : null;
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'RealEstateListing',
@@ -91,6 +95,13 @@ router.get('/lot/:id', async (req, res) => {
     ...(lot.price ? {
       offers: { '@type': 'Offer', price: lot.price, priceCurrency: 'GBP', availability: 'https://schema.org/InStock' }
     } : {}),
+    ...(ve ? {
+      priceSpecification: {
+        '@type': 'PriceSpecification', priceCurrency: 'GBP',
+        minPrice: Number(ve.low), maxPrice: Number(ve.high),
+        description: `Estimated value range, ${ve.confidence} confidence`,
+      },
+    } : {}),
   };
 
   res.set('Cache-Control', 'public, max-age=300, s-maxage=900');
@@ -99,6 +110,7 @@ router.get('/lot/:id', async (req, res) => {
     shortAddress, priceLabel, scoreLabel, propTypeLabel, displayName,
     address: lot.address, opps, risks, bullets, heroImg,
     lotUrl: lot.url, status: lot.status,
+    valueEstimate: ve,
   }));
 });
 
