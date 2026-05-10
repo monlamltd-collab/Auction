@@ -14,7 +14,7 @@ The codebase was historically a monolithic `server.js` but has been **decomposed
 
 ```
 /Auction/
-├── server.js                     # Express wiring, middleware, route mounting (~312 lines — keep thin)
+├── server.js                     # Express wiring, middleware, route mounting — keep thin
 ├── index.html                    # Single-page vanilla JS frontend (scraper/analyser UI)
 ├── bridgematch-lite.html         # Investor-facing bridging deal analyser (calls /api/filter)
 ├── admin.html                    # Admin dashboard
@@ -27,13 +27,13 @@ The codebase was historically a monolithic `server.js` but has been **decomposed
 │   ├── search.js                 # Search endpoints
 │   └── stripe.js                 # Stripe webhooks (must invalidateUserCache on tier changes)
 ├── lib/
-│   ├── analysis.js               # Orchestration glue — wires autoAnalyseAll() via lib/pipeline/
+│   ├── analysis.js               # Orchestration glue — wires autoAnalyseAll() via lib/pipeline/. Holds HOUSE_OVERRIDES (per-house markdown recognisers + paging hints) and RECALL_SENTINELS map.
 │   ├── auth.js                   # validateUserFromReq() with 30s user cache + stale fallback
 │   ├── fundability.js            # Maps lots → BridgeMatch /api/filter; type-aware LTV + GDV proxy
 │   ├── enrichment.js             # External lookups (EPC, flood, LR, geocode) + manifest population
 │   ├── enrichment-manifest.js    # Per-lot observability: recordScraped/recordExtract/recordFundability etc.
 │   ├── scraper.js                # Façade re-exporting lib/scraper/* — keep imports stable
-│   ├── houses.js                 # HOUSE_ROOTS catalogue URL registry + HOUSE_OVERRIDES (markdown recognisers)
+│   ├── houses.js                 # HOUSE_ROOTS catalogue URL registry + HOUSE_DISPLAY_NAMES + URL rewriting
 │   ├── config.js                 # CACHE_DAYS, MAX_PAGES, TIMEOUT, rate-limit gaps
 │   ├── ai-provider.js            # Gemini Flash-Lite + Pro model selection + rate limiter
 │   ├── resource-budget.js        # Firecrawl credit + Gemini RPD budget tracking
@@ -100,7 +100,6 @@ The codebase was historically a monolithic `server.js` but has been **decomposed
 │       ├── house-health.js       # Circuit breakers (circuit_state, circuit_opened_at, consecutive_failures)
 │       ├── quality-gate.js       # Pass/fail: min 3 lots, ≥60% core field coverage
 │       ├── regression-detector.js # 0-lot regressions vs last successful scrape
-│       ├── extractor-generator.js # Legacy — AI-generated DOM extractors (kept for diagnostic use only)
 │       ├── house-discovery.js    # Web-search-based new house discovery
 │       ├── data-contract.js      # Lot schema validation + quality scoring
 │       ├── enrichment-engine.js  # Harness-side enrichment orchestration
@@ -165,7 +164,7 @@ The codebase was historically a monolithic `server.js` but has been **decomposed
 | Pipeline stages | verb-noun, exported from stage file | `scrapeStage()`, `extractStage()`, `persistStage()` |
 | Manifest recorders | `record{Event}()` | `recordScraped()`, `recordExtract()`, `recordFundability()`, `recordEpc()` |
 | House enrichment | `enrich{House}Lots()` | `enrichAllsopLots()`, `enrichSavillsLots()` |
-| Constants | ALL_CAPS | `DOM_EXTRACTORS`, `HOUSE_ROOTS`, `MAX_PAGES`, `CACHE_TIERS`, `LOTS_SELECT` |
+| Constants | ALL_CAPS | `HOUSE_ROOTS`, `MAX_PAGES`, `CACHE_TIERS`, `LOTS_SELECT`, `RECALL_SENTINELS` |
 | Model strings | ALL_CAPS | `MODEL_PRO`, `MODEL_FLASH`, `TYPICAL_ARRANGEMENT_FEE_PCT` |
 | House slugs | lowercase, no spaces | `savills`, `allsop`, `sdl`, `network`, `bondwolfe` |
 | Lot fields | camelCase | `lot`, `address`, `price`, `priceText`, `propType`, `titleSplit`, `dealType` |
@@ -243,7 +242,7 @@ app.post('/api/endpoint', async (req, res) => {
 
 ### Pipeline
 1. **`lib/pipeline/firecrawl-extract.js::extractCatalogueListing()`** — primary path. Calls Firecrawl's structured `jsonOptions` extract against the catalogue URL with the schema in `lib/scraper/lot-schema.js`. Handles single-page and paginated catalogues. `changeTracking` short-circuits unchanged pages at ~1 credit.
-2. **Per-house markdown recogniser** (optional) — `HOUSE_OVERRIDES[slug]` in `lib/houses.js` may point at a function that reads the same Firecrawl markdown response to recover lots the JSON extractor missed (currently used by Pattinson + John Pye). This is *recognition*, not new extraction — Firecrawl-at-the-heart by definition.
+2. **Per-house markdown recogniser** (optional) — `HOUSE_OVERRIDES[slug]` in `lib/analysis.js` may point at a function that reads the same Firecrawl markdown response to recover lots the JSON extractor missed. Currently used by **Pattinson, John Pye, McHugh & Co, and Mark Jenkinson**. This is *recognition*, not new extraction — Firecrawl-at-the-heart by definition. The recogniser key is **`recogniseFromMarkdown`** (not `markdownRecogniser`); other supported override keys: `maxPages`, `paginateAs`, `changeTracking`, `recallSentinelPattern`, `validatePage1`. The pattern is a useful fix for any larger house where the JSON extractor under-counts a dense catalogue.
 3. **AI fallback** — `lib/pipeline/extractor.js` runs Gemini Flash-Lite (known houses) or Pro (unknown / PDF) only when the Firecrawl JSON path returns 0 lots. Stamps `_extractStrategy` and `_extractFieldCoverage` provenance.
 4. **Allsop JSON-API exception** — `lib/scraper/allsop.js` consumes Allsop's private JSON endpoint directly (zero credits, ~50ms/page). It's a structured-API consumer, not a layout scraper.
 
@@ -316,15 +315,22 @@ SQL files live in `migrations/`. Apply via the Supabase MCP `apply_migration` to
 
 ## Frontend Styling
 
-### Design system (CSS variables)
+### Design system (CSS variables — actual current values in `public/styles.css`)
 ```css
---bg-primary: #f5f7fa;   --bg-secondary: #ffffff;  --bg-card: #eef2f7;
---accent: #2e7d32;        --accent-hover: #1b5e20;  --accent-match: #4a9e2f;
---accent-warn: #e67e22;   --accent-danger: #c0392b; --accent-info: #2e86c1;
---text: #1a2a3a;          --text-muted: #6b7c8d;
+/* Backgrounds — warm cream */
+--bg: #F5F1EA;            --white: #ffffff;        --cream: #F5F1EA;        --cream2: #E8E4DC;
+/* Text */
+--text: #1A1A18;          --text2: #6B6B65;        --text3: #8a847a;        --text4: #b0a99e;
+/* Brand red — historic var names retained ("--green" is now red) */
+--green: #C0392B;         --green2: #A93226;       --green-light: #fdf0ee;  --green-pale: #fef6f5;
+--accent: #C0392B;        --accent-hover: #A93226; --accent-match: #C0392B;
+--red: #C0392B;           --red-light: #fdf0ee;    --red-hover: #A93226;
+/* Near-black "navy" */
+--navy: #1A1A18;          --navy-light: #2a2a28;   --navy-accent: #1A1A18;
+/* Status accents */
+--accent-warn: #e67e22;   --accent-danger: #8B0000; --accent-info: #2e86c1;
 ```
-- Navy header gradient: `linear-gradient(135deg, #1a3a5c, #2a5a8c)`
-- Brand: "Bridge" white, "Match" `#8bc34a`
+**Naming caveat:** `--green` is the brand red (`#C0392B`). The token name pre-dates the rebrand to AuctionBrain warm-red/cream. Don't fix the name in passing; too many references depend on it.
 
 ### Typography
 - Body: `'Outfit'`
@@ -412,9 +418,11 @@ Yield is scored **once** — either by `scoring.js` or `enrichment.js`, never bo
 ## Gemini Model Selection (`lib/ai-provider.js`)
 
 ```javascript
-MODEL_FLASH = 'gemini-2.5-flash-lite'   // Known houses (fast tier)
-MODEL_PRO   = 'gemini-2.5-pro'          // Unknown houses & PDF extraction
+MODELS.fast    = 'gemini-2.5-flash-lite'   // Known houses (fast tier)
+MODELS.capable = 'gemini-2.5-pro'          // Unknown houses & PDF extraction
 ```
+
+Single-provider stack — no OpenRouter cascade in this repo (the sister Mortgage-Style repo runs Gemini → Kimi → Claude Haiku via OpenRouter for resilience; auction tool deliberately stays simpler).
 
 - Known houses → Flash-Lite + extraction hints
 - Unknown houses → Pro (higher capability)
@@ -436,7 +444,7 @@ MODEL_PRO   = 'gemini-2.5-pro'          // Unknown houses & PDF extraction
 
 - **Commit format:** `type: subject` (lowercase, imperative)
 - **Types:** `fix:`, `feat:`, `chore:`, `refactor:`
-- **Branch:** Single `main` branch, direct commits
+- **Branching:** Mixed practice. Trivial fixes (typos, comment changes, single-line patches) can land direct on `main`. Anything that touches more than one file or has user-visible behaviour change uses a `fix/short-description` or `feat/short-description` branch and merges via PR. Recent history (`Merge PR #8`, `Merge branch 'claude/naughty-wing-cf4ff2'`) reflects this.
 - **Example:** `fix: increase SDL page cap to 40 + clean up test scripts`
 
 ## Deployment
@@ -466,7 +474,7 @@ See `references/new-house-playbook.md` for the full checklist. Summary (Firecraw
 
 1. **Register the house** — add `HOUSE_ROOTS[slug]` (catalogue URL) and `HOUSE_DISPLAY_NAMES[slug]` in `lib/houses.js`. Add a `detectAuctionHouse()` clause for the domain.
 2. **Recall sentinel (recommended)** — add a `RECALL_SENTINELS[slug]` regex in `lib/analysis.js` so the harness can measure how many lots Firecrawl markdown sees vs how many made it into JSON. EIG / AH UK / Bamboo platforms are auto-detected by `detectPlatformSentinel()` — no entry needed.
-3. **Test the extraction** — run `node scripts/test-firecrawl-extract.mjs <catalogue-url>` and confirm lot count + key fields look right. If Firecrawl JSON misses lots, inspect the markdown — usually a per-house `HOUSE_OVERRIDES` markdown recogniser is the fix (see Pattinson, John Pye for examples), not a new DOM extractor.
+3. **Test the extraction** — run `node scripts/test-firecrawl-extract.mjs <catalogue-url>` and confirm lot count + key fields look right. If Firecrawl JSON misses lots, inspect the markdown — usually a per-house `HOUSE_OVERRIDES` markdown recogniser in `lib/analysis.js` is the fix (see Pattinson, John Pye, McHugh & Co, Mark Jenkinson for examples), not a new DOM extractor.
 4. **Optional: pagination / Puppeteer hint** — if the catalogue uses an unusual pagination pattern or strictly needs a JS-rendered page, set the relevant flag on the `rewriteUrl(slug, url)` return in `lib/houses.js`.
 5. **Mirror in `admin.html`** if the slug needs a friendly name in the admin UI.
 6. **Run `npm test`** — must stay green.

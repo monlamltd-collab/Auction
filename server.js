@@ -49,7 +49,6 @@ import { getCalendarAuctions } from './lib/calendar.js';
 import { initAlerts, fireAlert as harnessFireAlert, resolveAlert as harnessResolveAlert } from './lib/harness/alert-router.js';
 import { initHouseHealth, updateHealth as harnessUpdateHealth } from './lib/harness/house-health.js';
 import { initDiscovery } from './lib/harness/house-discovery.js';
-import { initGenerator } from './lib/harness/extractor-generator.js';
 import { initManager, runManagerCycle, getManagerDirectives } from './lib/harness/manager.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -102,7 +101,6 @@ initAI(genAI, supabase);
 initAlerts(supabase);
 initHouseHealth(supabase).catch(e => console.warn('Harness: health init failed:', e.message));
 initDiscovery(supabase, callAI);
-initGenerator(callAI);
 
 // Wire the budget alert hook through to the harness alert router. Indirect
 // via setAlertHook to avoid a circular import (resource-budget → alert-router
