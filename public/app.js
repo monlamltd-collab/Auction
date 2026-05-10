@@ -158,22 +158,47 @@ function isFavourite(lot) {
 function getFavKey(lot) {
   return (lot._house || '') + ':' + (lot.lot || '') + ':' + (lot.address || '');
 }
+// Apply visual state to whichever fav-btn variant is in the DOM. The new
+// pill button (.lcv2-save) shows '\u2665 Saved' / '\u2661 Save' with text;
+// the legacy expanded-card button (.exp-v2-fav, .fav-btn) shows just the
+// icon.
+function _setFavBtnState(btn, isLiked) {
+  if (!btn) return;
+  btn.classList.toggle('fav-active', isLiked);
+  btn.classList.toggle('is-saved', isLiked);
+  if (btn.classList.contains('lcv2-save')) {
+    btn.textContent = isLiked ? '\u2665 Saved' : '\u2661 Save';
+    btn.setAttribute('aria-label', isLiked ? 'Saved \u2014 tap to remove' : 'Save this lot');
+  } else {
+    btn.textContent = isLiked ? '\u2665' : '\u2661';
+  }
+}
+
+// Top-of-card Save pill click handler. Anon visitors get a clear
+// sign-in nudge here instead of fishing for the heart icon inside the
+// expanded card.
+function handleSaveLotClick(idx) {
+  if (!currentSession) { requireSignup(); return; }
+  return toggleFav(idx, { stopPropagation: () => {} });
+}
+
 async function toggleFav(idx, event) {
   event.stopPropagation();
   if (!window._userTier) { $('signupModal').classList.add('show'); return; }
   var lot = LOTS[idx];
   if (!lot) return;
   var card = document.getElementById('lot-' + idx);
-  var btn = card ? card.querySelector('.fav-btn') : null;
+  // Match either the collapsed-card pill or the expanded-card heart icon.
+  var btn = card ? card.querySelector('.lcv2-save, .fav-btn, .exp-v2-fav') : null;
 
-  // Signed-in path → hit the server
+  // Signed-in path \u2192 hit the server
   if (currentSession && lot._house && lot.url) {
     const actKey = (lot._house || '') + '|' + (lot.url || '');
     window._userActions = window._userActions || {};
     const wasLiked = !!(window._userActions[actKey] && window._userActions[actKey].liked);
     const nowLiked = !wasLiked;
     // Optimistic UI
-    if (btn) { btn.classList.toggle('fav-active', nowLiked); btn.textContent = nowLiked ? '\u2665' : '\u2661'; }
+    _setFavBtnState(btn, nowLiked);
     window._userActions[actKey] = Object.assign({}, window._userActions[actKey] || {}, { liked: nowLiked });
     try {
       const r = await fetch('/api/me/likes', {
@@ -184,22 +209,21 @@ async function toggleFav(idx, event) {
     } catch {
       // Roll back on failure
       window._userActions[actKey] = Object.assign({}, window._userActions[actKey] || {}, { liked: wasLiked });
-      if (btn) { btn.classList.toggle('fav-active', wasLiked); btn.textContent = wasLiked ? '\u2665' : '\u2661'; }
+      _setFavBtnState(btn, wasLiked);
       showToast && showToast('Could not update like', 'err');
     }
     return;
   }
 
-  // Anon path → localStorage
+  // Anon path \u2192 localStorage (toggleFav is mostly invoked through
+  // handleSaveLotClick which intercepts anon to show the signup modal,
+  // but this fallback keeps existing direct callers working).
   var key = getFavKey(lot);
   var favs = getFavourites();
   var i = favs.indexOf(key);
   if (i === -1) { favs.push(key); } else { favs.splice(i, 1); }
   saveFavourites(favs);
-  if (card && btn) {
-    btn.classList.toggle('fav-active', i === -1);
-    btn.textContent = i === -1 ? '\u2665' : '\u2661';
-  }
+  if (card && btn) _setFavBtnState(btn, i === -1);
 }
 
 // ═══════════════════════════════
@@ -3034,15 +3058,27 @@ function card(l){
   // Hero -- image vs stripe
   let heroHtml;
   let addressRowHtml;
+  // Save pill — always visible top-right of every card hero. Anon →
+  // handleSaveLotClick intercepts and pops the signup modal; signed-in →
+  // toggleFav optimistically toggles. Was previously only available
+  // inside the expanded card as a tiny heart icon — invisible on mobile.
+  const isFav = (typeof isFavourite === 'function') && isFavourite(l);
+  const saveBtnHtml = '<button type="button" class="lcv2-save fav-btn' +
+    (isFav ? ' fav-active is-saved' : '') +
+    '" onclick="event.stopPropagation();handleSaveLotClick(' + idx + ')" aria-label="' +
+    (isFav ? 'Saved — tap to remove' : 'Save this lot') + '">' +
+    (isFav ? '♥ Saved' : '♡ Save') +
+    '</button>';
   if (l.imageUrl && typeof isValidImageUrl === 'function' && isValidImageUrl(l.imageUrl)) {
     const imgSrc = (typeof optimImg === 'function') ? optimImg(l.imageUrl, 600) : l.imageUrl;
-    heroHtml = '<div class="lcv2-hero-img" style="background-image:url(\'' + esc(imgSrc) + '\')"></div>';
+    heroHtml = '<div class="lcv2-hero-img" style="background-image:url(\'' + esc(imgSrc) + '\')">' + saveBtnHtml + '</div>';
     addressRowHtml = '<div class="lcv2-addr">' +
       '<h3>' + esc(addr) + '</h3>' +
       (pc ? '<span class="pc">' + esc(pc) + '</span>' : '') +
     '</div>';
   } else {
     heroHtml = '<div class="lcv2-hero-stripe">' +
+      saveBtnHtml +
       '<span class="noimg-label">▢ NO CATALOGUE IMAGE · ADDRESS ONLY</span>' +
       '<h3 class="addr">' + esc(addr) + '</h3>' +
       (pc ? '<span class="pc">' + esc(pc) + '</span>' : '') +

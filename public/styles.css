@@ -2192,3 +2192,53 @@ footer .logo-f span{color:var(--green)}
   .search-panel.mobile-expanded .sp-filter-row { display: flex; }
   .search-panel.mobile-expanded .sp-toggle-row { display: flex; }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Save pill on lot cards — always visible, top-right of hero. Anon
+   visitors tap → signup modal. Signed-in tap → favourite toggle.
+   Replaces the previously hidden heart icon that lived inside the
+   expanded view only.
+   ═══════════════════════════════════════════════════════════════ */
+.lcv2-hero-img,
+.lcv2-hero-stripe { position: relative; }
+
+.lcv2-save {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.96);
+  color: #1a1714;
+  border: none;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: .82rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+  transition: background .15s, transform .1s, color .15s, box-shadow .15s;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+.lcv2-save:hover {
+  background: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.22);
+}
+.lcv2-save.is-saved {
+  background: #c0392b;
+  color: #fff;
+}
+.lcv2-save.is-saved:hover { background: #a83020; }
+
+@media (max-width: 480px) {
+  .lcv2-save {
+    top: 8px;
+    right: 8px;
+    padding: 5px 11px;
+    font-size: .78rem;
+  }
+}
