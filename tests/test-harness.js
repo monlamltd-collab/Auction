@@ -10,7 +10,6 @@ import { initAlerts, fireAlert, resolveAlert, getUnresolved, getDedupStats, getU
 import { updateHealth, getHealth, getAllHealth, isCircuitOpen, getBaseline } from '../lib/harness/house-health.js';
 import { enrichBatch, getEnrichmentReport } from '../lib/harness/enrichment-engine.js';
 import { initDiscovery, getDiscoveryBudget } from '../lib/harness/house-discovery.js';
-import { initGenerator, generateExtractor, getGeneratorLog, getTemplateExtractor } from '../lib/harness/extractor-generator.js';
 import { initManager, runManagerCycle, getManagerReport, setManagerConfig, getManagerConfig } from '../lib/harness/manager.js';
 
 let passed = 0;
@@ -414,24 +413,6 @@ assert(budget.budget > 0, `Discovery budget exists: ${budget.budget}`);
 assert(budget.remaining >= 0, `Budget remaining: ${budget.remaining}`);
 
 // ═══════════════════════════════════════════════════════════════
-// 8. EXTRACTOR GENERATOR
-// ═══════════════════════════════════════════════════════════════
-section('extractor-generator');
-
-initGenerator(null, null); // no supabase/AI in tests
-
-// Platform templates
-const eigTemplate = getTemplateExtractor('eig');
-assert(eigTemplate && eigTemplate.includes('querySelectorAll'), 'EIG template exists and uses querySelectorAll');
-
-const sdlTemplate = getTemplateExtractor('sdl');
-assert(sdlTemplate && sdlTemplate.includes('property-card'), 'SDL template exists');
-
-// Generator log starts empty
-const log = getGeneratorLog();
-assert(Array.isArray(log), 'Generator log is an array');
-
-// ═══════════════════════════════════════════════════════════════
 // 9. MANAGER
 // ═══════════════════════════════════════════════════════════════
 section('manager');
@@ -441,7 +422,6 @@ initManager({
   supabase: null,
   callAI: null,
   houseRoots: { test: 'https://example.com' },
-  domExtractors: {},
   healBrokenHouse: null,
 });
 
