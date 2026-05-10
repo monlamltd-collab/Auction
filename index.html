@@ -554,8 +554,18 @@
   <footer>
     <div class="logo-f" style="font-family:var(--font-main)">Auction <span>Brain</span></div>
     <div style="font-size:.72rem;color:var(--text4);margin-bottom:8px">powered by <span style="font-family:var(--font-main);font-weight:600;color:var(--text3)">Bridge<span style="color:var(--green)">match</span></span></div>
+    <!-- Email-only weekly digest signup (Milestone 6) -->
+    <form id="digestForm" class="digest-form" onsubmit="return handleDigestSubscribe(event)" novalidate>
+      <label for="digestEmail" class="digest-form-label">Just want a weekly digest?</label>
+      <div class="digest-form-row">
+        <input id="digestEmail" name="email" type="email" placeholder="you@example.com" required aria-label="Email address for weekly digest">
+        <button type="submit" class="digest-form-btn">Subscribe</button>
+      </div>
+      <div id="digestFormStatus" class="digest-form-status" aria-live="polite"></div>
+      <div class="digest-form-fine">One email a week. Unsubscribe anytime.</div>
+    </form>
     <p>UK Property Auction Directory & Deal Analyser · Data from public auction house websites · Not financial advice</p>
-    <p style="margin-top:8px;"><a href="/privacy" style="color:inherit;text-decoration:none;margin:0 8px;">Privacy Policy</a><a href="/terms" style="color:inherit;text-decoration:none;margin:0 8px;">Terms of Service</a><a href="mailto:hello@bridgematch.co.uk" style="color:inherit;text-decoration:none;margin:0 8px;">Contact</a></p>
+    <p style="margin-top:8px;"><a href="/pricing" style="color:inherit;text-decoration:none;margin:0 8px;">Pricing</a><a href="/privacy" style="color:inherit;text-decoration:none;margin:0 8px;">Privacy Policy</a><a href="/terms" style="color:inherit;text-decoration:none;margin:0 8px;">Terms of Service</a><a href="mailto:hello@bridgematch.co.uk" style="color:inherit;text-decoration:none;margin:0 8px;">Contact</a></p>
   </footer>
 </main>
 

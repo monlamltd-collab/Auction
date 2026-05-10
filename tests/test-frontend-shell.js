@@ -149,5 +149,27 @@ console.log('\nanon view-count nudges (Milestone 1)');
     'honours an explicit dismiss flag (no re-nag after close)');
 }
 
+console.log('\nweekly digest signup form (Milestone 6)');
+{
+  const form = doc.getElementById('digestForm');
+  assert(!!form, 'digestForm exists in footer');
+  if (form) {
+    assert(form.getAttribute('onsubmit') === 'return handleDigestSubscribe(event)',
+      'form submit wired to handleDigestSubscribe');
+    const input = form.querySelector('input[type="email"]');
+    assert(!!input && input.id === 'digestEmail', 'email input present (#digestEmail)');
+    assert(!!input && input.required, 'email input is required');
+    const btn = form.querySelector('button[type="submit"]');
+    assert(!!btn, 'submit button present');
+    assert(!!doc.getElementById('digestFormStatus'),
+      'status target #digestFormStatus exists for aria-live updates');
+  }
+  const appJs = readFileSync(join(here, '..', 'public', 'app.js'), 'utf8');
+  assert(/async function handleDigestSubscribe\b/.test(appJs),
+    'handleDigestSubscribe declared in app.js');
+  assert(/\/api\/digest\/subscribe/.test(appJs),
+    "POSTs to /api/digest/subscribe");
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

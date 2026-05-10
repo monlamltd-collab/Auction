@@ -1950,6 +1950,49 @@ function showAnonViewSoftModal() {
   if (typeof umami !== 'undefined') umami.track('anon_nudge_modal');
 }
 
+// ═══════════════════════════════
+// Weekly digest subscribe (Milestone 6)
+// ═══════════════════════════════
+async function handleDigestSubscribe(ev) {
+  if (ev && ev.preventDefault) ev.preventDefault();
+  const input = document.getElementById('digestEmail');
+  const status = document.getElementById('digestFormStatus');
+  const btn = document.querySelector('.digest-form-btn');
+  if (!input || !status) return false;
+  const email = (input.value || '').trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+    status.textContent = 'Please enter a valid email address.';
+    status.className = 'digest-form-status digest-form-status-error';
+    return false;
+  }
+  status.textContent = 'Subscribing…';
+  status.className = 'digest-form-status';
+  if (btn) btn.disabled = true;
+  try {
+    const r = await fetch('/api/digest/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (r.ok && data.ok) {
+      status.textContent = data.message || 'Thanks — first digest will be on its way Monday.';
+      status.className = 'digest-form-status digest-form-status-ok';
+      input.value = '';
+      if (typeof umami !== 'undefined') umami.track('digest_subscribe');
+    } else {
+      status.textContent = data.error || 'Subscription temporarily unavailable.';
+      status.className = 'digest-form-status digest-form-status-error';
+    }
+  } catch (err) {
+    status.textContent = 'Network issue — try again.';
+    status.className = 'digest-form-status digest-form-status-error';
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+  return false;
+}
+
 // Pricing-page CTA dispatch — /pricing CTAs link back to /?cta=<action>.
 // We pick that up at boot and either open the signup modal (anon) or the
 // Stripe checkout (signed in). Drops the query param so a refresh doesn't
