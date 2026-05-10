@@ -1,6 +1,6 @@
 # New Auction House Playbook
 
-How to add a new auction house to Bridgematch. Post-2026-05-08 the pipeline is **Firecrawl-first** — most new houses need only a `HOUSE_ROOTS` entry and a recall sentinel, with zero per-house JS.
+How to add a new auction house to Bridgematch. Post-2026-05-08 the pipeline is **Firecrawl-first** — most new houses need only a `HOUSE_ROOTS` entry and a recall sentinel, with zero per-house JS. Larger houses with dense catalogues may also benefit from a per-house markdown recogniser in `HOUSE_OVERRIDES` (Step 4a) — see Pattinson, John Pye, McHugh & Co, and Mark Jenkinson for working examples.
 
 ---
 
@@ -76,24 +76,31 @@ If lots are missing or fields are thin, decide between **Step 4a** (markdown rec
 
 ## Step 4a — Per-house markdown recogniser (most common fix)
 
-When Firecrawl JSON misses lots that ARE present in the markdown response, add a recogniser to `HOUSE_OVERRIDES` in `lib/houses.js`:
+When Firecrawl JSON misses lots that ARE present in the markdown response, add an entry to `HOUSE_OVERRIDES` in **`lib/analysis.js`** (function-local constant inside `autoAnalyseAll`, around line 540):
 
 ```js
 HOUSE_OVERRIDES.mynewhouse = {
-  markdownRecogniser(markdown) {
-    const lots = [];
-    // walk the markdown, regex-match lot blocks, push { lot, address, price, url, ... }
-    // see HOUSE_OVERRIDES.pattinson and HOUSE_OVERRIDES.johnpye for working examples
-    return lots;
-  },
+  // Required for the recogniser path:
+  recogniseFromMarkdown: recogniseMyNewHouseLotsFromMarkdown,  // imported function
+  recallSentinelPattern: /\/lot\/(\d+)/g,                       // capture group 1 = lot id
+
+  // Optional knobs:
+  maxPages: 25,                       // cap pagination
+  paginateAs: 'query_page',           // pagination strategy hint
+  changeTracking: false,              // disable Firecrawl changeTracking if it breaks the house
+  validatePage1: (result) => true,    // gate: reject degraded first-page renders
 };
 ```
 
-The recogniser runs *after* JSON extract; its output is merged with whatever JSON returned (deduped by `(lot, address)` pair). It supplements, it doesn't replace.
+**Key name is `recogniseFromMarkdown`** — not `markdownRecogniser`. The recogniser function takes the Firecrawl markdown response and returns `[{ lot, address, price, url, imageUrl, bullets, status, ... }]`. Output is merged with whatever Firecrawl JSON returned (deduped by `(lot, address)` pair). It supplements, doesn't replace.
 
-**Reference implementations:**
-- `HOUSE_OVERRIDES.pattinson` — markdown blocks with bold address + bracketed lot number
-- `HOUSE_OVERRIDES.johnpye` — markdown table layout with per-row links
+**Reference implementations** (all in `lib/analysis.js`):
+- `pattinson` — markdown blocks with bold address + bracketed lot number; needs `changeTracking: false` because Pattinson silently drops connections when changeTracking is on (verified 2026-05-04)
+- `johnpye` — markdown table layout with per-row links
+- `mchughandco` — EIG-platform site on a custom domain; markdown is ~500 KB with 200+ lots inline, too dense for JSON extractor in one shot; recogniser parses `### Lot N` / `#### {address}` blocks following each `/lot/details/{N}` link
+- `markjenkinson` — three concurrent auctions on `/auction/{token}` URLs (seeded into `auction_calendar`); JSON extractor under-counted (15/73 observed) and mis-classified surviving lots as sold; recogniser parses the markdown deterministically
+
+The pattern is a **useful fix for any larger house where the JSON extractor under-counts a dense catalogue** — if Step 3 shows lots missing despite Firecrawl rendering them in markdown, write a recogniser before reaching for any other lever.
 
 ---
 
