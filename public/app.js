@@ -235,7 +235,23 @@ let _preUnsoldSort = '';
 let _preUnsoldStatus = '';
 let _preUnsoldShowPast = false;
 
+// Pro-tool gate. The Unsold-lots view targets a niche post-auction
+// motivated-seller play that's meaningless without finance + valuation
+// context — meaningless for free users, premium-only by product design.
+// Returns true if the action is allowed to proceed.
+function _gateUnsoldView() {
+  const tier = window._userTier || 'anon';
+  if (tier === 'premium') return true;
+  // Anon → push to signup. Signed-in free → push to upgrade modal.
+  // Either way the unsold state should not toggle.
+  if (typeof showPaywall === 'function') {
+    showPaywall('Unsold lots is a Pro tool — it surfaces lots whose auction passed without a sale.');
+  }
+  return false;
+}
+
 function toggleUnsoldView() {
+  if (!_gateUnsoldView()) return;
   _unsoldViewActive = !_unsoldViewActive;
   if (_favViewActive) { _favViewActive = false; $('favToggle').classList.remove('active'); }
   const btn = $('unsoldToggle');
@@ -1503,6 +1519,11 @@ function onSignOut() {
   $('acctTier').textContent = 'Free';
   $('acctTier').classList.remove('pro');
   if ($('acctManage')) $('acctManage').style.display = 'none';
+  // Pro-only chrome (Unsold-lots toggle, etc.) hides itself on tier loss.
+  try { document.body.classList.remove('is-pro'); } catch {}
+  // Wipe any active unsold-view state so the now-anonymous session doesn't
+  // see a stuck filter pill it can't disable.
+  if (typeof enforceUnsoldGating === 'function') enforceUnsoldGating();
   // Wipe signed-in lot cache so anon reload isn't served a signed-in payload
   // (with score/dealType) that the server would now strip.
   _clearCachedLots();
@@ -1536,6 +1557,7 @@ async function handleSendMagicLink() {
     auction_alerts: !!$('consentAlerts').checked,
     partner_marketing: !!$('consentPartner').checked
   }));
+  _saveReturnUrlForOAuth();
 
   try {
     const { error } = await supabaseClient.auth.signInWithOtp({
@@ -1556,6 +1578,17 @@ async function handleSendMagicLink() {
   }
 }
 
+// Save the pre-OAuth URL state so we can restore filters + the open-lot
+// context after Supabase's callback (which appends #access_token=… to the
+// redirectTo and strips any path/query we don't pass through). Lot id is
+// already kept in sessionStorage('ab_open_lot') by _setOpenLotKey() — what
+// gets lost without this is the search string (Bristol filter, etc.).
+function _saveReturnUrlForOAuth() {
+  try {
+    sessionStorage.setItem('ab_post_auth_search', window.location.search || '');
+  } catch {}
+}
+
 async function handleGoogleSignIn() {
   if (!supabaseClient) return;
   // Store consent choices before redirect
@@ -1563,6 +1596,7 @@ async function handleGoogleSignIn() {
     auction_alerts: !!$('consentAlerts').checked,
     partner_marketing: !!$('consentPartner').checked
   }));
+  _saveReturnUrlForOAuth();
   const { error } = await supabaseClient.auth.signInWithOAuth({
     provider: 'google',
     options: { redirectTo: window.location.origin }
@@ -1844,6 +1878,180 @@ async function openBillingPortal() {
   }
 }
 
+// ═══════════════════════════════
+// Anonymous-browsing nudges (Milestone 1)
+// ═══════════════════════════════
+// Counts unique lot views in localStorage. At 10 unique views we drop a
+// dismissible toast; at 25 we open the signup modal once. Both nudges
+// fire at most once per device — clearing localStorage resets them, but
+// that's a low-effort act of self-harm we don't try to defeat.
+//
+// Skipped for signed-in users (they've already converted) and for users
+// who actively opted out via the "Don't show again" close button — we
+// honour that even before the count threshold via ab_anon_nudge_dismissed.
+const ANON_NUDGE_TOAST_AT = 10;
+const ANON_NUDGE_MODAL_AT = 25;
+
+function _anonNudgeStorage() {
+  try { return window.localStorage; } catch { return null; }
+}
+
+function trackAnonViewNudge(lot) {
+  if (window._userTier) return; // signed in
+  const ls = _anonNudgeStorage();
+  if (!ls) return;
+  if (ls.getItem('ab_anon_nudge_dismissed') === '1') return;
+
+  // Dedup per-lot per-device so the same card opened thrice still counts as 1.
+  const key = (lot && lot._house ? lot._house : '') + ':' + (lot && lot.lot ? lot.lot : '') +
+              ':' + (lot && lot.address ? String(lot.address).slice(0, 40) : '');
+  let seen = {};
+  try { seen = JSON.parse(ls.getItem('ab_anon_seen_lots') || '{}'); } catch {}
+  if (seen[key]) return;
+  seen[key] = 1;
+  // Cap the seen-set so it doesn't grow forever — we only need to know
+  // if a lot has already been counted, and 100 entries is more than enough.
+  const keys = Object.keys(seen);
+  if (keys.length > 120) {
+    const drop = keys.slice(0, keys.length - 100);
+    drop.forEach(k => delete seen[k]);
+  }
+  ls.setItem('ab_anon_seen_lots', JSON.stringify(seen));
+
+  const n = (parseInt(ls.getItem('ab_anon_view_count') || '0', 10) || 0) + 1;
+  ls.setItem('ab_anon_view_count', String(n));
+
+  if (n === ANON_NUDGE_TOAST_AT && ls.getItem('ab_anon_nudge_10') !== '1') {
+    ls.setItem('ab_anon_nudge_10', '1');
+    showAnonViewToast();
+  }
+  if (n === ANON_NUDGE_MODAL_AT && ls.getItem('ab_anon_nudge_25') !== '1') {
+    ls.setItem('ab_anon_nudge_25', '1');
+    setTimeout(showAnonViewSoftModal, 500);
+  }
+}
+
+function showAnonViewToast() {
+  if (document.getElementById('anonViewToast')) return;
+
+  const wrap = document.createElement('div');
+  wrap.id = 'anonViewToast';
+  wrap.className = 'anon-toast';
+  wrap.setAttribute('role', 'status');
+
+  const msg = document.createElement('span');
+  msg.className = 'anon-toast-msg';
+  msg.textContent = 'Enjoying Auction Brain? ';
+  const cta = document.createElement('a');
+  cta.href = '#';
+  cta.className = 'anon-toast-cta';
+  cta.textContent = 'Sign up free';
+  cta.addEventListener('click', function(e) {
+    e.preventDefault();
+    if (typeof $ === 'function' && $('signupModal')) $('signupModal').classList.add('show');
+    wrap.remove();
+  });
+  msg.appendChild(cta);
+  msg.appendChild(document.createTextNode(' to save lots.'));
+
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'anon-toast-close';
+  close.setAttribute('aria-label', 'Dismiss');
+  close.textContent = '×';
+  close.addEventListener('click', function() {
+    const ls = _anonNudgeStorage();
+    if (ls) ls.setItem('ab_anon_nudge_dismissed', '1');
+    wrap.remove();
+  });
+
+  wrap.appendChild(msg);
+  wrap.appendChild(close);
+  document.body.appendChild(wrap);
+
+  if (typeof umami !== 'undefined') umami.track('anon_nudge_toast');
+
+  setTimeout(function() {
+    if (wrap.parentNode) wrap.classList.add('anon-toast-out');
+    setTimeout(function() { if (wrap.parentNode) wrap.remove(); }, 400);
+  }, 8000);
+}
+
+function showAnonViewSoftModal() {
+  if (window._userTier) return;
+  if (typeof $ !== 'function' || !$('signupModal')) return;
+  $('signupModal').classList.add('show');
+  if (typeof umami !== 'undefined') umami.track('anon_nudge_modal');
+}
+
+// ═══════════════════════════════
+// Weekly digest subscribe (Milestone 6)
+// ═══════════════════════════════
+async function handleDigestSubscribe(ev) {
+  if (ev && ev.preventDefault) ev.preventDefault();
+  const input = document.getElementById('digestEmail');
+  const status = document.getElementById('digestFormStatus');
+  const btn = document.querySelector('.digest-form-btn');
+  if (!input || !status) return false;
+  const email = (input.value || '').trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+    status.textContent = 'Please enter a valid email address.';
+    status.className = 'digest-form-status digest-form-status-error';
+    return false;
+  }
+  status.textContent = 'Subscribing…';
+  status.className = 'digest-form-status';
+  if (btn) btn.disabled = true;
+  try {
+    const r = await fetch('/api/digest/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (r.ok && data.ok) {
+      status.textContent = data.message || 'Thanks — first digest will be on its way Monday.';
+      status.className = 'digest-form-status digest-form-status-ok';
+      input.value = '';
+      if (typeof umami !== 'undefined') umami.track('digest_subscribe');
+    } else {
+      status.textContent = data.error || 'Subscription temporarily unavailable.';
+      status.className = 'digest-form-status digest-form-status-error';
+    }
+  } catch (err) {
+    status.textContent = 'Network issue — try again.';
+    status.className = 'digest-form-status digest-form-status-error';
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+  return false;
+}
+
+// Pricing-page CTA dispatch — /pricing CTAs link back to /?cta=<action>.
+// We pick that up at boot and either open the signup modal (anon) or the
+// Stripe checkout (signed in). Drops the query param so a refresh doesn't
+// retrigger.
+(function checkCtaIntent() {
+  const params = new URLSearchParams(window.location.search);
+  const cta = params.get('cta');
+  if (!cta) return;
+  if (!['signup', 'day_pass', 'monthly'].includes(cta)) return;
+  window.history.replaceState({}, '', window.location.pathname);
+  // Run after auth bootstrap so we can check currentSession.
+  setTimeout(() => {
+    if (cta === 'signup') {
+      if (typeof $ === 'function' && $('signupModal')) $('signupModal').classList.add('show');
+      return;
+    }
+    // day_pass or monthly — needs an account
+    if (!window._userTier) {
+      if (typeof $ === 'function' && $('signupModal')) $('signupModal').classList.add('show');
+      return;
+    }
+    if (typeof startCheckout === 'function') startCheckout(cta);
+  }, 700);
+})();
+
 // Payment success toast
 (function checkPaymentSuccess() {
   const params = new URLSearchParams(window.location.search);
@@ -1890,6 +2098,14 @@ async function updateProStatus() {
     window._scanLimit = data.scanLimit;
     window._aiSearchesUsed = data.aiSearchesUsed || 0;
     window._aiSearchLimit = data.aiSearchLimit;
+    // Toggle the body.is-pro class — CSS uses it to reveal Pro-only chrome
+    // (data-pro-only items like the Unsold-lots toggle stay hidden until
+    // a premium tier is confirmed). isPremium() handles trial too.
+    try { document.body.classList.toggle('is-pro', data.tier === 'premium'); } catch {}
+    // Gate the unsold filter on the resolved tier. Activates a deferred
+    // ?status=unsold URL param for Pro users; clears any stale state for
+    // free users so they don't see a stuck filter they can't disable.
+    if (typeof enforceUnsoldGating === 'function') enforceUnsoldGating();
     // Cross-tab tier sync: broadcast tier change to other tabs
     try {
       localStorage.setItem('bridgematch_tier', window._userTier);
@@ -1913,6 +2129,8 @@ window.addEventListener('storage', function(e) {
     window._userTier = e.newValue;
     // UI-only refresh — no /api/stripe/status call to avoid infinite loop
     refreshTierUI();
+    try { document.body.classList.toggle('is-pro', e.newValue === 'premium'); } catch {}
+    if (typeof enforceUnsoldGating === 'function') enforceUnsoldGating();
   }
 });
 
@@ -2448,8 +2666,17 @@ function renderLots(){
   // picked one. Otherwise the literal address-includes fallback only matches
   // ~15% of relevant lots — e.g. typing 'Bristol' missed 318 of 375 BS-postcode
   // lots whose addresses don't contain the literal word 'Bristol'.
+  //
+  // EXCEPTION: when the typed town is a major UK city we have a postcode-area
+  // mapping for (Bristol → BS, Manchester → M, etc.), prefer the broader
+  // postcode-area match over a strict default radius. 10mi from Bristol's
+  // city centre excludes Weston-Super-Mare (BS23, ~18mi) and other legit
+  // metro lots that share the BS postcode region. User can still pick an
+  // explicit radius from the dropdown — that wins. (Reported 2026-05-10:
+  // typing Bristol returned 2 unsold Bristol lots when the DB had 3.)
   const _explicitRadius=+($('fRadius')?.value||0);
-  const _defaultRadius=(_searchCentre && (fpc || ftown)) ? (fpc ? 5 : 10) : 0;
+  const _townHasPostcode=!!(ftownLower && window.AB_townMatch?.TOWN_POSTCODE_PREFIXES?.[ftownLower]);
+  const _defaultRadius=(_searchCentre && (fpc || ftown) && !_townHasPostcode) ? (fpc ? 5 : 10) : 0;
   const fradius=_explicitRadius || _defaultRadius;
   const _today=new Date().toISOString().slice(0,10);
   const _radiusSearch=!!((fpc||ftown)&&_searchCentre&&fradius);
@@ -2558,7 +2785,15 @@ function renderLots(){
     // Text search (skip for SMART_RESULTS)
     if(fs&&!SMART_RESULTS){
       const addr=(l.address||'').toLowerCase(),bull=(l.bullets||[]).join(' ').toLowerCase(),opp=(l.opps||[]).join(' ').toLowerCase(),rsk=(l.risks||[]).join(' ').toLowerCase(),dt=(l.dealType||'').toLowerCase(),pt=(l.propType||'').toLowerCase(),hs=(l._house||'').toLowerCase(),tn=(l.tenure||'').toLowerCase();
-      if(!addr.includes(fs)&&!bull.includes(fs)&&!opp.includes(fs)&&!rsk.includes(fs)&&!dt.includes(fs)&&!pt.includes(fs)&&!hs.includes(fs)&&!tn.includes(fs)) return false;
+      const subMatch=addr.includes(fs)||bull.includes(fs)||opp.includes(fs)||rsk.includes(fs)||dt.includes(fs)||pt.includes(fs)||hs.includes(fs)||tn.includes(fs);
+      // Town-postcode bridge: typing "Bristol" / "Manchester" / etc. in the
+      // top search bar should also catch lots in the matching postcode area
+      // (BS, M, …), not only lots whose address literally contains the word.
+      // townMatchesLot returns false for queries that aren't recognised
+      // towns, so generic queries like "freehold block" still fall through.
+      const townMatch=window.AB_townMatch&&typeof window.AB_townMatch.townMatchesLot==='function'
+        ? window.AB_townMatch.townMatchesLot(l, fs) : false;
+      if(!subMatch && !townMatch) return false;
     }
     // House filter
     if(selectedHouses.length&&!selectedHouses.includes(l._house)) return false;
@@ -3056,7 +3291,12 @@ function card(l){
   // easy to trace.
 
   const idx = l._idx;
-  const houseLabel = l._house || (l.house || '').toString();
+  // Use the friendly display name when we have one — falls back to the raw
+  // slug for unknown houses. Raw slugs like "futureauctions" upper-cased to
+  // "FUTUREAUCTIONS" lose word boundaries; the display map fixes that.
+  const houseLabel = (typeof getHouseDisplay === 'function')
+    ? getHouseDisplay(l._house || l.house || '')
+    : (l._house || (l.house || '').toString());
   const lotNum = l.lot != null ? String(l.lot).padStart(2, '0') : '—';
   const dateShort = formatAuctionDateShort(l._auctionDate);
   const status = statusForStrip(l);
@@ -3175,7 +3415,7 @@ function card(l){
     ? safeHref(l.fundability.bridgematchUrl)
     : '/check?lot=' + esc(idx);
   const footerHtml = '<div class="lcv2-foot">' +
-    '<a class="view" href="' + viewHref + '" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">View lot <span class="arr">→</span></a>' +
+    '<a class="view" href="' + viewHref + '" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">View lot <span class="arr">↗</span></a>' +
     '<a class="bm card-bm-btn" href="' + bmHref + '" onclick="event.stopPropagation()">BridgeMatch it £ <span class="arr">→</span></a>' +
   '</div>';
 
@@ -4179,8 +4419,63 @@ function getSignalChips(lot) {
 // the .exp-v2 grid. Premium-feature gating + deal-stack widget + lender
 // summary all flow through unchanged — only the chrome around them is new.
 
+// Friendly display names for auction-house slugs that have no natural word
+// boundary (futureauctions, hollismorgan, …). Server-side lib/houses.js has
+// a richer lookup but isn't reachable from the frontend; mirror the most
+// common entries here so the strip header reads "FUTURE AUCTIONS" rather
+// than "FUTUREAUCTIONS".
+const _HOUSE_DISPLAY = {
+  hollismorgan: 'Hollis Morgan',
+  maggsandallen: 'Maggs & Allen',
+  mchughandco: 'McHugh & Co',
+  futureauctions: 'Future Property Auctions',
+  bondwolfe: 'Bond Wolfe',
+  auctionhouselondon: 'Auction House London',
+  auctionhouseeastanglia: 'Auction House East Anglia',
+  auctionhousescotland: 'Auction House Scotland',
+  auctionhousenorthwest: 'Auction House North West',
+  auctionhousesouthwest: 'Auction House South West',
+  auctionhousewestyorkshire: 'Auction House West Yorkshire',
+  auctionhousecumbria: 'Auction House Cumbria',
+  auctionhousenortheast: 'Auction House North East',
+  auctionhousecoventry: 'Auction House Coventry',
+  auctionhouseteesvalley: 'Auction House Tees Valley',
+  auctionhousebirmingham: 'Auction House Birmingham',
+  auctionhousenorthamptonshire: 'Auction House Northamptonshire',
+  auctionhousebedsandbucks: 'Auction House Beds & Bucks',
+  auctionhousekent: 'Auction House Kent',
+  auctionhousemanchester: 'Auction House Manchester',
+  auctionhousenational: 'Auction House National',
+  tcpa: 'Town & Country Property Auctions',
+  scargillmann: 'Scargill Mann',
+  edwardmellor: 'Edward Mellor',
+  paulfosh: 'Paul Fosh',
+  brutonknowles: 'Bruton Knowles',
+  cleetompkinson: 'Cleeton Tompkinson',
+  markjenkinson: 'Mark Jenkinson',
+  harmanhealy: 'Harman Healy',
+  barnettross: 'Barnett Ross',
+  clarkesimpson: 'Clarke & Simpson',
+  knightfrank: 'Knight Frank',
+  johnfrancis: 'John Francis',
+  pattinson: 'Pattinson',
+  loveitts: 'Loveitts',
+  cottons: 'Cottons',
+  landwood: 'Landwood',
+  seelauctions: 'SEEL Auctions',
+  austingray: 'Austin Gray',
+  purplebricksgoto: 'Purplebricks GoTo',
+  futuregroup: 'Future Group',
+};
+function getHouseDisplay(slug) {
+  if (!slug) return '';
+  const lower = String(slug).toLowerCase();
+  return _HOUSE_DISPLAY[lower] || String(slug);
+}
+
 function buildExpV2Header(lot, dealStackHtmlRef) {
-  const houseLabel = (lot._house || lot.house || '').toString().toUpperCase();
+  const slug = lot._house || lot.house || '';
+  const houseLabel = getHouseDisplay(slug).toUpperCase();
   const lotNum = lot.lot != null ? String(lot.lot).padStart(2, '0') : '—';
   const status = (typeof statusForStrip === 'function') ? statusForStrip(lot) : { dot: 'green', label: 'LIVE' };
 
@@ -4231,14 +4526,28 @@ function buildExpV2Header(lot, dealStackHtmlRef) {
   }
 
   const favActive = (typeof isFavourite === 'function') && isFavourite(lot);
-  const favBtn = '<button class="exp-v2-fav' + (favActive ? ' fav-active' : '') + '" onclick="toggleFav(' + lot._idx + ',event)" title="' + (favActive ? 'Saved' : 'Save lot') + '" aria-label="' + (favActive ? 'Remove from favourites' : 'Add to favourites') + '">' + (favActive ? '♥' : '♡') + '</button>';
+  const favBtn = '<button class="exp-v2-fav' + (favActive ? ' fav-active' : '') + '" onclick="toggleFav(' + lot._idx + ',event)" aria-pressed="' + (favActive ? 'true' : 'false') + '" aria-label="' + (favActive ? 'Remove from saved' : 'Save lot') + '"><span class="exp-v2-fav-icon" aria-hidden="true">' + (favActive ? '♥' : '♡') + '</span><span class="exp-v2-fav-label">' + (favActive ? 'Saved' : 'Save') + '</span></button>';
 
   const bidHref = lot.url ? safeHref(lot.url) : '#';
   const bidBtn = lot.url
-    ? '<a class="exp-v2-bid" href="' + bidHref + '" target="_blank" rel="noopener noreferrer" onclick="if(window.umami)umami.track(\'lot_outbound_click\',{lot:' + (lot.lot || 0) + ',house:\'' + esc((lot._house || '').replace(/\'/g, '')) + '\'})">I want to bid <span class="arr">→</span></a>'
+    ? '<a class="exp-v2-bid" href="' + bidHref + '" target="_blank" rel="noopener noreferrer" onclick="if(window.umami)umami.track(\'lot_outbound_click\',{lot:' + (lot.lot || 0) + ',house:\'' + esc((lot._house || '').replace(/\'/g, '')) + '\'})"><span class="exp-v2-bid-label">View on ' + esc(houseLabel || 'auction site') + '</span><span class="exp-v2-bid-arr" aria-hidden="true">↗</span></a>'
     : '<span class="exp-v2-bid disabled">No external link</span>';
 
+  // Hero image at the top of the expanded panel — review 2026-05-10
+  // L3 flagged this missing entirely (the panel was text-only, while
+  // the list card right above it carried the photo). Use the first item
+  // from lot.images if present (multi-image-sweep / Phase 4), else the
+  // single lot.imageUrl. Goes through optimImg() so wsrv.nl resizes for
+  // the larger 220px hero. Falls back to nothing if no image at all.
+  const heroSrc = (Array.isArray(lot.images) && lot.images.length && lot.images[0])
+    ? lot.images[0]
+    : (lot.imageUrl || '');
+  const heroImg = heroSrc && (typeof isValidImageUrl !== 'function' || isValidImageUrl(heroSrc))
+    ? '<img class="exp-v2-hero" src="' + esc(typeof optimImg === 'function' ? optimImg(heroSrc, 800) : heroSrc) + '" alt="' + esc(parsed.addr || 'Lot photo') + '" loading="eager" decoding="async">'
+    : '';
+
   return '<div class="exp-v2-header">' +
+    heroImg +
     '<div class="strip">' +
       '<span>' + esc(houseLabel || 'AUCTION HOUSE') + ' · LOT ' + lotNum + (dateLong ? ' · ' + dateLong : '') + '</span>' +
       '<span style="display:inline-flex;align-items:center;gap:6px"><span class="dot ' + status.dot + '"></span>' + status.label + ' LOT</span>' +
@@ -4336,7 +4645,7 @@ function buildExpV2DD(lot) {
 
   return '<section class="sec">' +
     '<div class="head">' +
-      '<span class="eyebrow ink">§1 · Due diligence checks</span>' +
+      '<span class="sec-head"><span class="sec-num-badge">__SEC_NUM__</span><span class="eyebrow ink">Due diligence checks</span></span>' +
       '<span style="font-family:var(--font-mono);font-size:11px;color:' + summaryColor + '">' + cleared + ' of ' + total + ' cleared</span>' +
     '</div>' +
     '<ul class="dd-list">' + liHtml + '</ul>' +
@@ -4357,7 +4666,7 @@ function buildExpV2Scores(lot) {
 
   return '<section class="sec">' +
     '<div class="head">' +
-      '<span class="eyebrow ink">§2 · Why this lot scores</span>' +
+      '<span class="sec-head"><span class="sec-num-badge">__SEC_NUM__</span><span class="eyebrow ink">Why this lot scores</span></span>' +
       '<a href="/scoring" class="eyebrow" style="color:var(--red);text-decoration:none">Scoring methodology →</a>' +
     '</div>' +
     '<div class="body">' +
@@ -4370,7 +4679,7 @@ function buildExpV2Scores(lot) {
 function buildExpV2Comparables(lot, premium) {
   if (!premium) {
     return '<section class="sec">' +
-      '<div class="head"><span class="eyebrow ink">§3 · Comparables on this street</span></div>' +
+      '<div class="head"><span class="sec-head"><span class="sec-num-badge">__SEC_NUM__</span><span class="eyebrow ink">Comparables on this street</span></span></div>' +
       '<div class="body" style="text-align:center;padding:24px">' +
         '<div style="font-family:var(--font-display);font-size:17px;color:var(--ink);margin-bottom:8px">Sign in free to see street-level comparables</div>' +
         '<div style="font-family:var(--font-main);font-size:13px;color:var(--muted);margin-bottom:14px">Median sold price, sales count, and how this guide compares.</div>' +
@@ -4386,7 +4695,7 @@ function buildExpV2Comparables(lot, premium) {
 
   if (!sa || !sales) {
     return '<section class="sec">' +
-      '<div class="head"><span class="eyebrow ink">§3 · Comparables on this street</span></div>' +
+      '<div class="head"><span class="sec-head"><span class="sec-num-badge">__SEC_NUM__</span><span class="eyebrow ink">Comparables on this street</span></span></div>' +
       '<div class="body" style="font-family:var(--font-display);font-size:15px;color:var(--ink-2)">No comparable sales found for this street in the last 12 months.</div>' +
     '</section>';
   }
@@ -4417,7 +4726,7 @@ function buildExpV2Comparables(lot, premium) {
     : 'Guide ' + fmtFull(guide || 0) + ' vs local median ' + fmtFull(sa) + '.';
 
   return '<section class="sec">' +
-    '<div class="head"><span class="eyebrow ink">§3 · Comparables on this street</span></div>' +
+    '<div class="head"><span class="sec-head"><span class="sec-num-badge">__SEC_NUM__</span><span class="eyebrow ink">Comparables on this street</span></span></div>' +
     '<div class="body">' +
       '<div class="cmp-top">' +
         '<div>' +
@@ -4528,6 +4837,10 @@ function expandCard(lot) {
   if (window.umami) umami.track('lot_expand', {
     lot_number: lot.lot || '', house: lot._house || '', guide_price: lot.price || 0
   });
+  // Anonymous-browsing nudge — counts unique lot views and shows a soft
+  // signup prompt at 10 (toast) and 25 (modal). Skipped for signed-in
+  // users so we don't badger people who have already converted.
+  try { if (typeof trackAnonViewNudge === 'function') trackAnonViewNudge(lot); } catch {}
   // Server-side activity event for the admin Intel dashboard. De-dupe per
   // session so a user toggling a lot open/closed doesn't inflate the count.
   try {
@@ -4774,13 +5087,32 @@ function expandCard(lot) {
     (lot.price ? '<div id="finance-summary-' + lot._idx + '" style="margin-top:10px"></div>' : '')
   );
 
-  panel.innerHTML =
+  // Number visible left-column sections sequentially. Previously the
+  // builders emitted hard-coded "1" / "2" / "3" — fine when all three
+  // rendered, but buildExpV2Scores returns '' when a lot has no opps
+  // and no risks, leaving 1 → 3 with a missing badge in between.
+  // Each builder now emits __SEC_NUM__ and we substitute as we walk
+  // the surviving non-empty fragments.
+  const _leftSectionsRaw = [
+    buildExpV2DD(lot),
+    buildExpV2Scores(lot),
+    buildExpV2Comparables(lot, premiumNow),
+  ];
+  let _secCounter = 0;
+  const _leftSections = _leftSectionsRaw
+    .filter(Boolean)
+    .map(function (html) {
+      return html.indexOf('__SEC_NUM__') >= 0
+        ? html.replace(/__SEC_NUM__/, function () { return String(++_secCounter); })
+        : html;
+    })
+    .join('');
+
+  panel.innerHTML = (
     '<button class="exp-close-btn" onclick="closeExpandedPanel()" aria-label="Close panel" title="Close">&times;</button>' +
     buildExpV2Header(lot) +
     '<div class="exp-v2-left">' +
-      buildExpV2DD(lot) +
-      buildExpV2Scores(lot) +
-      buildExpV2Comparables(lot, premiumNow) +
+      _leftSections +
     '</div>' +
     '<div class="exp-v2-right">' +
       dealStackPanelHtml +
@@ -4807,7 +5139,8 @@ function expandCard(lot) {
           'At auction, the fall of the hammer creates a binding contract. Do your due diligence before bidding, not after.' +
         '</div>' +
       '</div>' +
-    '</details>';
+    '</details>'
+  );
 
   // Insert after the card and cache
   cardEl.after(panel);
@@ -4996,24 +5329,79 @@ function syncFiltersToURL(){
   const url=qs?window.location.pathname+'?'+qs:window.location.pathname;
   if(url!==window.location.pathname+window.location.search) history.replaceState(null,'',url);
 }
+
+// Restore the URL we were on before the OAuth round-trip. Supabase's callback
+// appends #access_token=… to the bare-origin redirectTo, so any filters that
+// were in the query string are gone by the time the page loads. We saved the
+// search-string in handleGoogleSignIn / handleSendMagicLink — pull it back
+// before restoreFiltersFromURL() reads window.location.search. Only fires
+// when the URL hash carries auth tokens (i.e. we just bounced through OAuth)
+// so a fresh tab without an OAuth round-trip doesn't accidentally inherit a
+// stale search from a prior session.
+(function restoreSearchAfterOAuth(){
+  try {
+    const saved = sessionStorage.getItem('ab_post_auth_search');
+    if (!saved) return;
+    const justAuthed = (window.location.hash || '').includes('access_token=')
+      || (window.location.hash || '').includes('refresh_token=');
+    if (!justAuthed) {
+      sessionStorage.removeItem('ab_post_auth_search');
+      return;
+    }
+    if (saved && saved !== window.location.search) {
+      const restored = window.location.pathname + saved + window.location.hash;
+      history.replaceState(null, '', restored);
+    }
+    sessionStorage.removeItem('ab_post_auth_search');
+  } catch {}
+})();
+
 restoreFiltersFromURL();
 
-// Read showPast and status URL params on page load
+// Read showPast and status URL params on page load. ?status=unsold
+// activates the unsold view for Pro users (the alert email links land
+// here). For non-Pro the param is read but the toggle stays off — the
+// gating in toggleUnsoldView() also blocks any attempt to flip it on,
+// and the post-auth pass below force-clears stale state defensively.
 (function(){
   const p=new URLSearchParams(window.location.search);
   if(p.get('showPast')==='true'&&$('fShowPast')) $('fShowPast').checked=true;
-  // Support ?status=unsold from alert emails
   const statusParam=p.get('status');
   if(statusParam&&$('fSoldTop')){
-    $('fSoldTop').value=statusParam;
     if(statusParam==='unsold'){
-      if($('fShowPast')) $('fShowPast').checked=true;
-      $('fSort').value='days_unsold';
-      _unsoldViewActive=true;
-      $('unsoldToggle')?.classList.add('active');
+      // Defer the activation until the tier resolves — only Pro users
+      // get the unsold filter applied. window._userTier may not be set
+      // yet at IIFE time, so we route through onSignIn's enforce step.
+      window.__pendingUnsoldFromUrl = true;
+    } else {
+      $('fSoldTop').value=statusParam;
     }
   }
 })();
+
+// Run after every tier change to keep the unsold view honest. If the URL
+// said ?status=unsold and the user turned out to be Pro, activate it
+// here (now that the toggle's gate would pass). If they're not Pro and
+// somehow the state got set (legacy localStorage, manual fiddle), wipe
+// it and re-render so they don't see a sticky filter they can't disable.
+function enforceUnsoldGating() {
+  const isPro = window._userTier === 'premium';
+  if (isPro && window.__pendingUnsoldFromUrl) {
+    window.__pendingUnsoldFromUrl = false;
+    if ($('fSoldTop')) $('fSoldTop').value = 'unsold';
+    if ($('fShowPast')) $('fShowPast').checked = true;
+    if ($('fSort')) $('fSort').value = 'days_unsold';
+    _unsoldViewActive = true;
+    $('unsoldToggle')?.classList.add('active');
+    if (typeof renderLots === 'function') renderLots();
+  } else if (!isPro && _unsoldViewActive) {
+    _unsoldViewActive = false;
+    $('unsoldToggle')?.classList.remove('active');
+    if ($('fSoldTop')) $('fSoldTop').value = 'all';
+    if (typeof hideUnsoldAlertBar === 'function') hideUnsoldAlertBar();
+    if (typeof renderLots === 'function') renderLots();
+  }
+}
 
 // Init
 loadCalendar();

@@ -324,15 +324,38 @@ a{color:var(--red);text-decoration:none}a:hover{text-decoration:underline}
 .modal-icon{font-size:2rem;margin-bottom:10px}
 .modal h2{font-family:var(--font-main);font-size:1.3rem;font-weight:700;color:var(--navy);margin-bottom:6px}
 .modal p{color:var(--text2);font-size:.88rem;margin-bottom:20px}
-/* Paywall modal */
-.paywall-cards{display:flex;gap:12px;margin:16px 0}
-.paywall-card{flex:1;border:2px solid #e0e6ed;border-radius:12px;padding:18px 14px;text-align:center;cursor:pointer;transition:all .15s}
-.paywall-card:hover{border-color:var(--accent);box-shadow:0 4px 16px rgba(46,125,50,.12)}
-.paywall-card.popular{border-color:var(--accent);background:#fef6f5}
-.paywall-card .price{font-size:1.6rem;font-weight:700;color:var(--navy)}
-.paywall-card .period{font-size:.75rem;color:var(--text3)}
-.paywall-card .plan-name{font-weight:600;font-size:.9rem;margin-bottom:8px;color:var(--navy)}
-.paywall-card .plan-desc{font-size:.78rem;color:var(--text3);margin-top:6px}
+/* ── 3-tier paywall modal ── */
+.modal.pw-modal{position:relative;max-width:760px;padding:30px 26px;text-align:left}
+.pw-modal #paywallTitle{text-align:center;font-size:1.4rem;margin-bottom:6px;color:var(--navy)}
+.pw-modal .pw-reason{text-align:center;color:var(--text2);font-size:.9rem;margin:0 auto 22px;max-width:520px}
+.pw-tiers{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.pw-tier{background:var(--bg-primary,#f5f7fa);border:1px solid var(--border);border-radius:12px;padding:22px 18px 18px;position:relative;display:flex;flex-direction:column}
+.pw-tier h3{margin:0 0 10px;font-size:1rem;font-weight:700;color:var(--navy)}
+.pw-tier-label{position:absolute;top:10px;right:10px;font-size:.62rem;font-weight:700;text-transform:uppercase;color:var(--text4);letter-spacing:.05em}
+.pw-tier-featured{background:#fff;border-color:var(--accent);box-shadow:0 6px 22px rgba(0,0,0,.08)}
+.pw-tier-featured .pw-badge{position:absolute;top:-11px;left:50%;transform:translateX(-50%);background:var(--accent);color:#fff;font-size:.62rem;font-weight:700;padding:5px 12px;border-radius:99px;letter-spacing:.05em;white-space:nowrap}
+.pw-price{display:flex;align-items:baseline;gap:6px;margin-bottom:14px}
+.pw-amt{font-size:1.7rem;font-weight:800;color:var(--navy);font-family:var(--font-main)}
+.pw-price-sub{font-size:.78rem;color:var(--text4);font-weight:500}
+.pw-features{list-style:none;padding:0;margin:0 0 16px;font-size:.82rem;color:var(--text2);flex:1}
+.pw-features li{padding:5px 0 5px 22px;position:relative;line-height:1.45}
+.pw-features li::before{content:'\2713';position:absolute;left:0;top:5px;color:var(--green);font-weight:700}
+.pw-btn{width:100%;padding:11px 12px;border-radius:8px;border:none;cursor:pointer;font-size:.85rem;font-weight:600;font-family:var(--font-main);transition:filter .15s,background .15s}
+.pw-btn:hover{filter:brightness(.95)}
+.pw-btn-primary{background:var(--accent);color:#fff}
+.pw-btn-secondary{background:var(--navy);color:#fff}
+.pw-btn-ghost{background:transparent;color:var(--text4);border:1px solid var(--border)}
+.pw-btn-ghost:hover{background:var(--cream);color:var(--text2)}
+.pw-fine-print{text-align:center;font-size:.7rem;color:var(--text4);margin:18px 0 0}
+.pw-close{position:absolute;top:12px;right:12px;background:transparent;border:none;font-size:1.6rem;line-height:1;color:var(--text4);cursor:pointer;padding:4px 10px;font-weight:300}
+.pw-close:hover{color:var(--text)}
+@media (max-width:720px){
+  .modal.pw-modal{max-width:calc(100vw - 24px);padding:24px 16px 18px}
+  .pw-modal #paywallTitle{font-size:1.2rem}
+  .pw-tiers{grid-template-columns:1fr;gap:10px}
+  .pw-tier{padding:18px 16px 14px}
+  .pw-tier-featured .pw-badge{top:-9px}
+}
 .paywall-features{text-align:left;font-size:.82rem;line-height:1.9;margin:12px 0;padding-left:6px;list-style:none}
 .paywall-features li::before{content:'✓ ';color:var(--accent);font-weight:700}
 .paywall-free-note{font-size:.78rem;color:var(--text3);background:#f5f7fa;border-radius:8px;padding:8px 12px;margin-top:10px}
@@ -2265,3 +2288,412 @@ footer .logo-f span{color:var(--green)}
   color: #fff;
 }
 .ss-bell-on:hover { background: #a83020; }
+
+/* ── Pricing page (4-tier comparison at /pricing) ── */
+.pricing-page { background: var(--bg-primary, #f5f7fa); min-height: 100vh; }
+.pricing-main { max-width: 1180px; margin: 0 auto; padding: 28px 22px 60px; }
+.pricing-header { text-align: center; margin: 18px auto 32px; max-width: 720px; }
+.pricing-header h1 { font-family: var(--font-main); font-size: 2.1rem; font-weight: 700; color: var(--navy); margin: 0 0 10px; line-height: 1.15; }
+.pricing-header p { color: var(--text2); font-size: 1rem; line-height: 1.55; margin: 0; }
+.pricing-tiers { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
+.pr-tier { background: #fff; border: 1px solid var(--border); border-radius: 14px; padding: 26px 22px 22px; position: relative; display: flex; flex-direction: column; }
+.pr-tier h2 { margin: 0 0 12px; font-size: 1.05rem; font-weight: 700; color: var(--navy); font-family: var(--font-main); }
+.pr-tier-featured { border-color: var(--accent); box-shadow: 0 8px 28px rgba(0,0,0,.08); transform: scale(1.02); }
+.pr-tier-featured .pr-badge { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: var(--accent); color: #fff; font-size: .65rem; font-weight: 700; padding: 5px 14px; border-radius: 99px; letter-spacing: .05em; white-space: nowrap; text-transform: uppercase; }
+.pr-price { display: flex; align-items: baseline; gap: 6px; margin-bottom: 6px; }
+.pr-amt { font-size: 1.9rem; font-weight: 800; color: var(--navy); font-family: var(--font-main); }
+.pr-price-sub { font-size: .8rem; color: var(--text4); font-weight: 500; }
+.pr-tagline { font-size: .85rem; color: var(--text2); margin: 4px 0 16px; line-height: 1.4; min-height: 38px; }
+.pr-features { list-style: none; padding: 0; margin: 0 0 20px; font-size: .85rem; color: var(--text2); flex: 1; }
+.pr-features li { padding: 6px 0 6px 22px; position: relative; line-height: 1.5; }
+.pr-features li::before { content: '\2713'; position: absolute; left: 0; top: 6px; color: var(--green); font-weight: 700; }
+.pr-feature-off { color: var(--text4); }
+.pr-feature-off::before { content: '\2014' !important; color: var(--text4) !important; font-weight: 500 !important; }
+.pr-btn { display: block; width: 100%; padding: 12px 16px; border-radius: 8px; border: none; cursor: pointer; font-size: .9rem; font-weight: 600; font-family: var(--font-main); text-align: center; text-decoration: none; transition: filter .15s, background .15s, color .15s; box-sizing: border-box; }
+.pr-btn:hover { filter: brightness(.95); }
+.pr-btn-primary { background: var(--accent); color: #fff; }
+.pr-btn-secondary { background: var(--navy); color: #fff; }
+.pr-btn-ghost { background: transparent; color: var(--text2); border: 1px solid var(--border); }
+.pr-btn-ghost:hover { background: var(--cream); color: var(--navy); }
+.pricing-faq { max-width: 760px; margin: 50px auto 0; }
+.pricing-faq h2 { font-family: var(--font-main); font-size: 1.4rem; color: var(--navy); margin: 0 0 18px; text-align: center; }
+.pricing-faq details { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px; margin-bottom: 10px; }
+.pricing-faq summary { cursor: pointer; font-weight: 600; color: var(--navy); font-size: .95rem; }
+.pricing-faq details[open] summary { margin-bottom: 8px; }
+.pricing-faq details p { margin: 0; font-size: .88rem; color: var(--text2); line-height: 1.55; }
+.pricing-fine-print { text-align: center; font-size: .78rem; color: var(--text4); margin: 36px 0 0; }
+@media (max-width: 980px) {
+  .pricing-tiers { grid-template-columns: repeat(2, 1fr); }
+  .pr-tier-featured { transform: none; }
+}
+@media (max-width: 560px) {
+  .pricing-main { padding: 20px 14px 50px; }
+  .pricing-header h1 { font-size: 1.6rem; }
+  .pricing-tiers { grid-template-columns: 1fr; gap: 14px; }
+  .pr-tier { padding: 22px 18px 18px; }
+}
+
+/* ── Anonymous-browsing nudge toast (Milestone 1) ── */
+.anon-toast {
+  position: fixed;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--navy, #1a2332);
+  color: #fff;
+  padding: 12px 14px 12px 18px;
+  border-radius: 12px;
+  font-size: .88rem;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.25);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100vw - 32px);
+  animation: anon-toast-in .3s ease-out;
+  font-family: var(--font-main);
+}
+.anon-toast-msg { line-height: 1.4; }
+.anon-toast-cta {
+  color: var(--accent, #c0392b);
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.anon-toast-cta:hover { color: #fff; }
+.anon-toast-close {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 1.3rem;
+  line-height: 1;
+  padding: 2px 8px;
+  cursor: pointer;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+.anon-toast-close:hover { color: #fff; background: rgba(255, 255, 255, 0.1); }
+.anon-toast-out { opacity: 0; transform: translate(-50%, 8px); transition: all .35s ease-in; }
+@keyframes anon-toast-in {
+  from { opacity: 0; transform: translate(-50%, 12px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+@media (max-width: 560px) {
+  .anon-toast { bottom: 14px; padding: 11px 12px 11px 16px; font-size: .82rem; }
+}
+
+/* ── Footer weekly-digest signup (Milestone 6) ── */
+.digest-form {
+  max-width: 440px;
+  margin: 18px auto 24px;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid var(--border, #e4dfd6);
+  border-radius: 12px;
+  padding: 18px 20px;
+}
+.digest-form-label {
+  display: block;
+  font-family: var(--font-main, system-ui);
+  font-size: .92rem;
+  font-weight: 600;
+  color: var(--navy, #1a2332);
+  margin-bottom: 10px;
+  text-align: center;
+}
+.digest-form-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.digest-form-row input {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid var(--border, #e4dfd6);
+  border-radius: 8px;
+  font-size: .9rem;
+  font-family: var(--font-main, system-ui);
+  background: #fff;
+  color: var(--navy, #1a2332);
+  min-width: 0;
+}
+.digest-form-row input:focus {
+  outline: none;
+  border-color: var(--accent, #c0392b);
+  box-shadow: 0 0 0 3px rgba(192, 57, 43, 0.15);
+}
+.digest-form-btn {
+  background: var(--accent, #c0392b);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 18px;
+  font-size: .9rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-main, system-ui);
+  white-space: nowrap;
+  transition: filter .15s;
+}
+.digest-form-btn:hover:not(:disabled) { filter: brightness(.92); }
+.digest-form-btn:disabled { opacity: 0.65; cursor: wait; }
+.digest-form-status {
+  font-size: .8rem;
+  margin-top: 8px;
+  min-height: 1.1em;
+  text-align: center;
+  color: var(--text2, #6b7c8d);
+}
+.digest-form-status-ok { color: var(--green, #0f8a5f); font-weight: 600; }
+.digest-form-status-error { color: var(--accent, #c0392b); font-weight: 600; }
+.digest-form-fine {
+  text-align: center;
+  font-size: .72rem;
+  color: var(--text4, #8a847a);
+  margin-top: 4px;
+}
+@media (max-width: 480px) {
+  .digest-form { padding: 16px 14px; margin: 14px auto 20px; }
+  .digest-form-row { flex-direction: column; gap: 8px; }
+  .digest-form-btn { width: 100%; padding: 11px 16px; }
+}
+
+/* ── Pro-tool gating — items with [data-pro-only] only render for premium users ── */
+[data-pro-only] { display: none !important; }
+body.is-pro [data-pro-only] { display: inline-flex !important; }
+.unsold-toggle .pro-badge {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  background: var(--ink, #1a1a18);
+  color: var(--paper, #fff);
+  padding: 2px 6px;
+  border-radius: 3px;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+/* ── Numbered section heading badges — replace the "§1 · Title" pattern that
+   rendered as garbled glyphs on iOS Safari and on fonts missing the
+   section-sign character. The badge pattern is robust to font availability. ── */
+.sec-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.sec-num-badge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: var(--ink, #1a1a18);
+  color: var(--paper, #fff);
+  font-family: var(--font-mono, monospace);
+  font-weight: 700;
+  font-size: 11px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.exp-v2 .sec.bold .head .sec-num-badge {
+  background: var(--paper, #fff);
+  color: var(--ink, #1a1a18);
+}
+
+/* ── Expanded-card "View on auction site ↗" + "Save" button polish.
+   Previously these were unstyled and rendered as a default underlined
+   link "I want to bid →" immediately followed by a bare "♥" button —
+   read as a single garbled string. Now: clear pill bid button on the
+   left, distinct outlined Save button on the right, sensible gap. ── */
+.exp-v2 .exp-v2-header .right .ctas {
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.exp-v2-bid {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--red, #c0392b);
+  color: var(--paper, #fff);
+  padding: 11px 18px;
+  border-radius: 6px;
+  font-family: var(--font-main);
+  font-weight: 600;
+  font-size: 14px;
+  text-decoration: none;
+  line-height: 1;
+  transition: filter .15s, transform .1s;
+  white-space: nowrap;
+}
+.exp-v2-bid:hover { filter: brightness(.94); }
+.exp-v2-bid:active { transform: translateY(1px); }
+.exp-v2-bid.disabled {
+  background: transparent;
+  color: var(--muted, #6b7c8d);
+  border: 1px dashed var(--border-strong, #ccc);
+}
+.exp-v2-bid-arr {
+  font-family: var(--font-mono, monospace);
+  font-size: 13px;
+  opacity: 0.95;
+}
+.exp-v2-bid-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 240px;
+}
+.exp-v2-fav {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--paper, #fff);
+  color: var(--ink, #1a1a18);
+  border: 1px solid var(--ink, #1a1a18);
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-family: var(--font-main);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+  line-height: 1;
+}
+.exp-v2-fav:hover { background: var(--bg, #f5f1ea); }
+.exp-v2-fav.fav-active {
+  background: var(--red, #c0392b);
+  color: var(--paper, #fff);
+  border-color: var(--red, #c0392b);
+}
+.exp-v2-fav-icon { font-size: 15px; line-height: 1; }
+.exp-v2-fav-label { font-size: 13px; }
+
+/* ── Mobile right-edge clipping fixes. The lot-card body has a few flex
+   rows that didn't allow children to shrink below their content width
+   (default behaviour) — that overflowed to the right on narrow viewports
+   and clipped trailing characters. Force min-width:0 on the wrappers and
+   word-break on long strings. ── */
+@media (max-width: 560px) {
+  .lot-card-v2 { min-width: 0; }
+  .lot-card-v2 .lcv2-strip { min-width: 0; }
+  .lot-card-v2 .lcv2-strip-l,
+  .lot-card-v2 .lcv2-strip-r { min-width: 0; }
+  .lot-card-v2 .lcv2-meta { min-width: 0; word-break: break-word; }
+  .lot-card-v2 .lcv2-quote { word-break: break-word; overflow-wrap: anywhere; }
+  .lot-card-v2 .lcv2-foot { min-width: 0; }
+  .lot-card-v2 .lcv2-foot a {
+    padding: 11px 12px;
+    font-size: 12px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .exp-v2 .exp-v2-header .right .ctas { width: 100%; }
+  .exp-v2-bid { flex: 1 1 auto; justify-content: center; }
+  .exp-v2-bid-label { max-width: none; }
+  .exp-v2-fav { flex-shrink: 0; }
+  /* The Pro/Favourites/Analysed pill row was overflowing on narrow phones —
+     allow horizontal scroll instead of clipping trailing text. */
+  .sp-toggle-row {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .sp-toggle-row::-webkit-scrollbar { display: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Mobile launch fixes (audits/mobile-ui-review-2026-05-10.md)
+   B1, B2, F2, F4, L5, L8 — small surgical CSS, applied at the
+   widths the issues actually appear at.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* B1 — At iPhone-SE width, the right-hand nav (Pricing + Blog + Sign-in)
+   exceeded the 375px viewport, pushing the Sign-in CTA ~17px past the
+   right edge (overflow:hidden on body clipped it silently). Hide the
+   secondary text links at <420px — both are reachable from the footer. */
+@media (max-width: 419px) {
+  .nav .nav-link-blog { display: none !important; }
+}
+
+/* B2 — paywall modal was 1158px tall in 667–812px viewports with
+   overflow:visible and max-height:none; the title and reason text sat
+   at top:-148..-245 (off-screen, unreachable). Mirror the existing
+   #signupModal .modal scroll-within rule. */
+.modal.pw-modal {
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+@media (max-width: 720px) {
+  .modal.pw-modal {
+    max-height: calc(100vh - 16px);
+    max-height: calc(100dvh - 16px);
+  }
+}
+
+/* L5 — address postcode (.pc) was inline by default and collided with
+   the wrapped final word of the address h3 on narrow viewports
+   ("Whitehall Road, WhitehallBS5 9BJ"). Force it onto its own line. */
+.lcv2-addr .pc { display: block; margin-top: 4px; }
+
+/* F4 — every interactive input/select on mobile should clear the WCAG
+   2.5.5 minimum (44×44). Previous heights ranged 36–40px. Scoped to
+   <=720px so desktop can keep its tighter chrome. */
+@media (max-width: 720px) {
+  .tb-search,
+  .tb-select,
+  .digest-form-row input[type="email"],
+  input[type="text"]:not([class*="bc"]),
+  input[type="email"]:not([class*="bc"]),
+  input[type="number"]:not([class*="bc"]),
+  .mobile-filters-toggle {
+    min-height: 44px;
+  }
+  .pw-close { min-width: 44px; }
+}
+
+/* F2 — footer text links (Pricing / Privacy Policy / Terms / Contact)
+   were 16px tall as plain inline anchors. Pad them out so each is a
+   reasonable tap target. The horizontal margins are kept via the
+   existing inline `margin: 0 8px` on the anchors in index.html. */
+footer p a {
+  display: inline-block;
+  padding: 8px 4px;
+  min-height: 32px;
+  line-height: 1.6;
+}
+
+/* L8 — Save pill was positioned at the absolute right edge of the lot
+   hero image; on aerial-style photos it felt precarious. Push it inward
+   a few px so it has visual breathing room. */
+.lcv2-save { right: 12px !important; top: 12px !important; }
+
+/* L11 — expanded-panel address H1 was using a clamp that overshot at
+   <420px (3-line wrap for short addresses like "Whitehall Road,
+   Whitehall"). Cap the lower bound so it doesn't dominate. */
+@media (max-width: 480px) {
+  .exp-v2 .exp-v2-header .left h1 {
+    font-size: clamp(1.6rem, 6.5vw, 2.2rem);
+    line-height: 1.15;
+  }
+}
+
+/* L3 / L9 — expanded panel hero image. Added when the section gained
+   buildExpV2HeroImage() so it has somewhere to render at the top. */
+.exp-v2 .exp-v2-hero {
+  display: block;
+  width: 100%;
+  height: 220px;
+  object-fit: cover;
+  border-bottom: 1px solid var(--border-strong);
+}
+@media (max-width: 480px) {
+  .exp-v2 .exp-v2-hero { height: 180px; }
+}

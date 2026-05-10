@@ -1093,6 +1093,10 @@ async function buildAllLotsResponse({ isSignedIn, includePast }) {
       sqft: r.sqft,
       condition: r.condition,
       imageUrl: r.image_url,
+      // images JSONB array — populated by multi-image-sweep cron. Frontend's
+      // card-carousel branch (public/app.js) only renders when this is a
+      // length-2+ array; otherwise it falls back to the single image_url.
+      images: Array.isArray(r.images) ? r.images : [],
       bullets: r.bullets || [],
       units: r.units || 0,
       _auctionDate: r.auction_date,
