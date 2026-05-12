@@ -94,11 +94,38 @@ console.log('\nfindAuctionDateInBullets');
   );
   assert(noYearFuture === '2026-05-20', 'no-year bullet resolves to current-year May when still upcoming');
 
+  // Changed 2026-05-12: was '2027-05-20'. Returning null instead of rolling
+  // forward to next year fixed the Maggs year-typo bug where cache-enrich
+  // passes re-processed April 2026 bullets in May and persisted 18 lots with
+  // auction_date='2027-04-23'. Catalogue-level date fills the gap when known;
+  // otherwise auction_date is null (lot drops out of "upcoming" filters,
+  // history is preserved).
   const noYearPast = findAuctionDateInBullets(
     ['20 May LIVE ONLINE AUCTION'],
     '2026-09-01',
   );
-  assert(noYearPast === '2027-05-20', 'no-year bullet rolls to next year when current-year date is past');
+  assert(noYearPast === null, 'no-year bullet returns null when current-year date is past (no roll-forward to next year)');
+
+  // Edge: scraped on the auction day → still trust the date.
+  const noYearToday = findAuctionDateInBullets(
+    ['23 April LIVE ONLINE AUCTION'],
+    '2026-04-23',
+  );
+  assert(noYearToday === '2026-04-23', 'no-year bullet on the auction day → returns that date');
+
+  // Edge: scraped one day before → still trust the date.
+  const noYearTomorrow = findAuctionDateInBullets(
+    ['23 April LIVE ONLINE AUCTION'],
+    '2026-04-22',
+  );
+  assert(noYearTomorrow === '2026-04-23', 'no-year bullet one day before → returns that date');
+
+  // Regression: scraped one day after → null (was 2027-04-23 pre-fix).
+  const noYearJustPast = findAuctionDateInBullets(
+    ['23 April LIVE ONLINE AUCTION'],
+    '2026-04-24',
+  );
+  assert(noYearJustPast === null, 'no-year bullet one day past → null (was 2027-04-23 pre-Maggs-2026-05-12 fix)');
 
   // First-match-wins: bullets are usually ordered with the most relevant first.
   const multi = findAuctionDateInBullets(
