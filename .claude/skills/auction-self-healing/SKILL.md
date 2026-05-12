@@ -56,7 +56,10 @@ ORDER BY severity DESC, created_at DESC;
 -- For a specific slug
 SELECT * FROM auction_calendar  WHERE house_slug = $1 ORDER BY date DESC LIMIT 5;
 SELECT url, total_lots, expires_at FROM cached_analyses WHERE url ILIKE '%'||$1||'%';
-SELECT slug, healing_cooldown_until, image_coverage FROM house_skills WHERE slug = $1;
+SELECT slug, healing_cooldown_until, image_coverage,
+       next_scrape_at, consecutive_same_count, last_probe_result,
+       last_full_extract_at
+FROM house_skills WHERE slug = $1;
 SELECT count(*) FROM lots WHERE house = $1;
 ```
 
@@ -65,6 +68,8 @@ Then fetch the suspect URL **once** with Firecrawl (or curl if Firecrawl budget 
 - Whether the page is a JS-rendered template (jQuery-tmpl, Next.js, React).
 - Presence of captcha (`grecaptcha`, `stackProtect`, Cloudflare).
 - Presence of a "we've moved" / "now part of" / "visit our new website" notice.
+
+**Adaptive cadence check (added 2026-05-12):** If a house seems silently unscraped, check `next_scrape_at`. The scheduler in `_doAutoAnalyseAll` skips houses whose `next_scrape_at` is in the future. `consecutive_same_count` rises every Firecrawl `changeStatus='same'` and earns longer intervals up to a 7-day freshness cap (see `lib/pipeline/scheduling.js::BACKOFF_HOURS`). A high count + a future `next_scrape_at` is **not** a regression — it's the system correctly throttling a stable catalogue. To force an immediate re-scrape: `POST /api/admin/rescrape { house }` (calls `autoAnalyseOne` directly, bypassing the filter) or `POST /api/admin/heal { slug }` (also calls `resetAdaptiveBackoff` first).
 
 **Do not modify anything in this phase. Do not commit. Do not push. Do not rescrape.**
 

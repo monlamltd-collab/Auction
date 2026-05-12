@@ -8,6 +8,7 @@ import { normaliseUrl } from '../lib/utils.js';
 import { FALLBACK_CALENDAR, getAuctionCalendar } from '../lib/calendar.js';
 import { callAI } from '../lib/ai-provider.js';
 import { healBrokenHouse, getHealingState, clearHealingCooldown } from '../lib/analysis.js';
+import { resetAdaptiveBackoff } from '../lib/pipeline/scheduling.js';
 
 const router = Router();
 
@@ -134,6 +135,10 @@ router.post('/api/admin/heal', rateLimit(60000, 20), requireAdmin, async (req, r
 
   // Clear cooldown to allow immediate retry
   clearHealingCooldown(slug);
+  // A heal implies we don't trust the prior adaptive cadence — wipe
+  // next_scrape_at and consecutive_same_count so the post-heal scrape
+  // starts from a clean baseline (6h cadence, count=0).
+  try { await resetAdaptiveBackoff(supabase, slug); } catch (e) { log.warn('Heal: resetAdaptiveBackoff failed (non-fatal)', { slug, error: e.message }); }
 
   try {
     const healedUrl = await healBrokenHouse(slug, rootUrl);
