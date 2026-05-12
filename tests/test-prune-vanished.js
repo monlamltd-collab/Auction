@@ -143,5 +143,66 @@ console.log('\nTest 12: scrapedUrls as plain array (not Set) also accepted');
   assert(r.candidates.length === 0, 'array of scraped URLs treated as Set');
 }
 
+console.log('\nTest 13: prevCount excludes ended/sold/withdrawn rows');
+{
+  const existing = [
+    lot('1', 'u1', 'available', 30),
+    lot('2', 'u2', 'ended', 30),
+    lot('3', 'u3', 'sold', 30),
+    lot('4', 'u4', 'withdrawn', 30),
+    lot('5', 'u5', 'stc', 30),
+    lot('6', 'u6', 'unsold', 30),
+  ];
+  const r = selectPruneCandidates(existing, new Set(['u1', 'u5', 'u6']), NOW);
+  assert(r.prevCount === 3, 'prevCount counts only in-play (available/stc/unsold), not ended/sold/withdrawn');
+  assert(r.scrapedCount === 3, 'scrapedCount = 3 URLs');
+  assert(r.ratio === 1, 'ratio = 3/3 = 1 (all in-play accounted for)');
+  assert(r.candidates.length === 0, 'no candidates — every in-play row is in scrape');
+}
+
+console.log('\nTest 14: edwardmellor-style — 178 ended + 1 in-play stale + 4 in scrape → prunes the 1');
+{
+  const existing = [
+    ...Array.from({ length: 178 }, (_, i) => lot(`e${i}`, `ue${i}`, 'ended', 60)),
+    lot('stale', 'uStale', 'available', 30),
+    ...Array.from({ length: 4 }, (_, i) => lot(`a${i}`, `ua${i}`, 'available', 1)),
+  ];
+  const scraped = new Set(['ua0', 'ua1', 'ua2', 'ua3']);
+  const r = selectPruneCandidates(existing, scraped, NOW);
+  assert(r.prevCount === 5, `prevCount = 5 in-play (4 active + 1 stale), was ${r.prevCount}`);
+  assert(r.scrapedCount === 4, 'scrapedCount = 4');
+  assert(r.ratio === 0.8, `ratio = 4/5 = 0.8, got ${r.ratio}`);
+  assert(r.candidates.length === 1 && r.candidates[0].id === 'stale', '1 candidate: the stale in-play row');
+  assert(r.blockedByRatio === false, 'NOT blocked — 80% recall passes the 50% gate, prunes the 1 stale lot');
+}
+
+console.log('\nTest 15: venmore-style — 54 in-play stale + 1 in scrape → still blocked (correct safety behaviour)');
+{
+  const existing = [
+    ...Array.from({ length: 54 }, (_, i) => lot(`s${i}`, `us${i}`, 'available', 30)),
+    lot('fresh', 'uFresh', 'available', 1),
+  ];
+  const scraped = new Set(['uFresh']);
+  const r = selectPruneCandidates(existing, scraped, NOW);
+  assert(r.prevCount === 55, `prevCount = 55 in-play, got ${r.prevCount}`);
+  assert(r.scrapedCount === 1, 'scrapedCount = 1');
+  assert(Math.abs(r.ratio - (1 / 55)) < 1e-9, `ratio ≈ 1/55, got ${r.ratio}`);
+  assert(r.candidates.length === 54, '54 stale in-play candidates');
+  assert(r.blockedByRatio === true, 'BLOCKED — 2% recall trips the 50% gate, preserves the 54 lots');
+}
+
+console.log('\nTest 16: ratio defaults to 1 when no in-play rows exist (only history)');
+{
+  const existing = [
+    lot('1', 'u1', 'ended', 60),
+    lot('2', 'u2', 'sold', 60),
+  ];
+  const r = selectPruneCandidates(existing, new Set(), NOW);
+  assert(r.prevCount === 0, 'prevCount = 0 (no in-play rows)');
+  assert(r.ratio === 1, 'ratio defaults to 1 when prevCount=0 (no false-positive block)');
+  assert(r.candidates.length === 0, 'no candidates (terminal statuses skipped)');
+  assert(r.blockedByRatio === false, 'not blocked');
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);
