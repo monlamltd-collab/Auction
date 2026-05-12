@@ -18,7 +18,7 @@
 process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'http://localhost.invalid';
 process.env.SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || 'test-key';
 
-const { recogniseMaggsLotsFromMarkdown } = await import('../lib/pipeline/firecrawl-extract.js');
+const { recogniseMaggsLotsFromMarkdown, stripEigCatalogueParams } = await import('../lib/pipeline/firecrawl-extract.js');
 
 let passed = 0;
 let failed = 0;
@@ -140,6 +140,50 @@ console.log('\nTest 8: duplicate lot id (same ID appearing twice) is de-duped');
   const out = recogniseMaggsLotsFromMarkdown(dupMd);
   assert(out.size === 3, `dup ignored, size still 3, got ${out.size}`);
   assert(out.get('34630929').address.startsWith('30, Avonvale'), 'first occurrence wins');
+}
+
+// ─────────────────────────────────────────────────────────────
+// stripEigCatalogueParams — protects lots.url uniqueness against
+// the EIG white-label CMS embedding catalogue filter state in
+// every lot card href. Must NOT touch `?id=N`-style canonical
+// URLs used by other auction houses.
+// ─────────────────────────────────────────────────────────────
+
+console.log('\nTest 9: stripEigCatalogueParams — Hollis dirty URL stripped to canonical path');
+{
+  const dirty = 'https://www.hollismorgan.co.uk/property-details/34557432/bristol-city/bristol/27-4?page=1&bid=11&showstc=on&orderby=lot_no+asc&extra_2%21=501%2C502';
+  const clean = 'https://www.hollismorgan.co.uk/property-details/34557432/bristol-city/bristol/27-4';
+  assert(stripEigCatalogueParams(dirty) === clean, `cleaned to ${clean}`);
+}
+
+console.log('\nTest 10: stripEigCatalogueParams — fssproperty ?page=1 stripped');
+{
+  const dirty = 'https://www.fssproperty.co.uk/property-details/HAR240632/-/west-yorkshire/wetherby?page=1';
+  const clean = 'https://www.fssproperty.co.uk/property-details/HAR240632/-/west-yorkshire/wetherby';
+  assert(stripEigCatalogueParams(dirty) === clean, `cleaned to ${clean}`);
+}
+
+console.log('\nTest 11: stripEigCatalogueParams — preserves ?id=N canonical URLs (no false-positive)');
+{
+  const canonical = 'https://www.countrywidepropertyauctions.co.uk/property_details.php?auction_date=current&id=341663';
+  assert(stripEigCatalogueParams(canonical) === canonical, 'countrywide canonical URL untouched');
+  const cw2 = 'https://www.futurepropertyauctions.co.uk/property_details.asp?id=14495135';
+  assert(stripEigCatalogueParams(cw2) === cw2, 'futurepropertyauctions canonical URL untouched');
+}
+
+console.log('\nTest 12: stripEigCatalogueParams — mixed: keeps id, drops page+bid');
+{
+  const mixed = 'https://x.com/lot?id=99&page=2&bid=5';
+  const out = stripEigCatalogueParams(mixed);
+  assert(out === 'https://x.com/lot?id=99', `mixed cleaned to id-only, got ${out}`);
+}
+
+console.log('\nTest 13: stripEigCatalogueParams — handles falsy / non-string input');
+{
+  assert(stripEigCatalogueParams('') === '', 'empty string → empty');
+  assert(stripEigCatalogueParams(null) === '', 'null → empty');
+  assert(stripEigCatalogueParams(undefined) === '', 'undefined → empty');
+  assert(stripEigCatalogueParams(123) === '', 'non-string → empty');
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
