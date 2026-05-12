@@ -245,10 +245,10 @@ initManager({
   getCircuitBreakers,
 });
 
-// Wire auction-watcher deps (Firecrawl + AI for Tier 2 fallback)
+// Wire auction-watcher deps. Tier-2 AI fallback uses Firecrawl FIRE-1 via
+// the agentExtract export from lib/scraper/firecrawl.js (default in initWatcher).
 initWatcher({
   scrapeWithFirecrawl,
-  callAI,
   fireAlert: harnessFireAlert,
   budget,
 });
