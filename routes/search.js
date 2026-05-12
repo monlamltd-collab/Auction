@@ -8,6 +8,7 @@ import { dbRowToFrontendLot, LOTS_SELECT, logActivityEvent, getCreditExhausted, 
 import { enrichLotsWithFundability } from '../lib/fundability.js';
 import { normaliseUrl, findAuctionDateInBullets } from '../lib/utils.js';
 import { FALLBACK_CALENDAR } from '../lib/calendar.js';
+import { getLotsForCatalogues } from '../lib/pipeline/lot-lookup.js';
 import { normaliseLotStatuses, isValidImageUrl } from '../lib/scraper.js';
 import { createHash } from 'crypto';
 
@@ -347,29 +348,52 @@ async function getActiveCataloguesWithFallback() {
     .gt('expires_at', new Date().toISOString());
   if (cacheErr) return { rows: null, error: cacheErr, fromFallback: false };
   for (const r of (cacheRows || [])) {
-    merged.set(r.url, { url: r.url, house: r.house, created_at: r.created_at });
+    merged.set(r.url, { url: r.url, house: r.house, created_at: r.created_at, auctionId: null });
   }
 
   // (b) lots-table-recent — backfill houses whose cache has lapsed but
   // whose lots were scraped within the last 14 days. Skip URLs already
-  // seen via cached_analyses (a fresher source).
+  // seen via cached_analyses (a fresher source). Move 2: pull auction_id
+  // so the smart-search dual-read can hit the FK path.
   const { data: lotsRows, error: lotsErr } = await supabase
     .from('lots')
-    .select('catalogue_url, house, last_seen_at')
+    .select('catalogue_url, house, last_seen_at, auction_id')
     .gte('last_seen_at', fbCutoff)
     .not('catalogue_url', 'is', null)
     .limit(10000);
   if (!lotsErr && lotsRows) {
     for (const r of lotsRows) {
-      if (merged.has(r.catalogue_url)) continue;
+      const existing = merged.get(r.catalogue_url);
+      if (existing) {
+        // Cached_analyses won the URL. Promote auction_id from lots if cached
+        // entry has none — same catalogue, just enriches the join key.
+        if (!existing.auctionId && r.auction_id) existing.auctionId = r.auction_id;
+        continue;
+      }
       merged.set(r.catalogue_url, {
         url: r.catalogue_url,
         house: r.house,
         created_at: r.last_seen_at,
+        auctionId: r.auction_id || null,
       });
     }
   } else if (lotsErr) {
     log.warn('lots-table fallback query failed', { err: lotsErr.message });
+  }
+
+  // (c) auction_calendar fallback — for cached_analyses entries that still
+  // have no auction_id (no lot stamped yet — happens on brand-new houses or
+  // when lots-table query missed them), look up by URL. Cheap (~268 rows).
+  const stillMissing = [...merged.values()].some(v => !v.auctionId);
+  if (stillMissing) {
+    const { data: calRows } = await supabase.from('auction_calendar').select('url, id');
+    const urlToId = new Map((calRows || []).map(r => [r.url, r.id]));
+    for (const entry of merged.values()) {
+      if (!entry.auctionId) {
+        const aid = urlToId.get(entry.url);
+        if (aid) entry.auctionId = aid;
+      }
+    }
   }
 
   if (merged.size === 0) return { rows: null, error: null, fromFallback: true };
@@ -542,20 +566,30 @@ router.post('/api/smart-search', async (req, res) => {
         return res.json({ results: [], report: 'No cached auction data available. Please analyse some auction catalogues first.', sources: [], totalSearched: 0, searchesUsed, searchLimit });
       }
 
-      const activeUrls = [...new Set(activeCatalogues.map(c => c.url))];
-
-      // Build status filter at DB level
-      let dbQuery = supabase.from('lots').select(LOTS_SELECT).in('catalogue_url', activeUrls);
-      if (sf === 'available') dbQuery = dbQuery.or('status.eq.available,status.is.null');
-      else if (sf === 'sold') dbQuery = dbQuery.in('status', ['sold', 'stc', 'withdrawn']);
-      else if (sf === 'unsold') dbQuery = dbQuery.eq('status', 'unsold');
-      else if (sf === 'stc') dbQuery = dbQuery.eq('status', 'stc');
-      else if (sf === 'withdrawn') dbQuery = dbQuery.eq('status', 'withdrawn');
-      else if (sf !== 'everything') dbQuery = dbQuery.or('status.eq.available,status.eq.unsold,status.is.null');
-
-      dbQuery = applyUiLoc(dbQuery);
-      dbQuery = dbQuery.order('score', { ascending: false, nullsFirst: false }).limit(2000);
-      const { data: lotRows } = await dbQuery;
+      // Move 2: dual-read via the lot-lookup helper. activeCatalogues carries
+      // `auctionId` when known (stamped by getActiveCataloguesWithFallback
+      // above); the helper partitions and runs two parallel queries with the
+      // same filter chain, then merges + re-sorts the union.
+      const { data: lotRows } = await getLotsForCatalogues(supabase, activeCatalogues, {
+        select: LOTS_SELECT,
+        applyFilters: (q) => {
+          if (sf === 'available') q = q.or('status.eq.available,status.is.null');
+          else if (sf === 'sold') q = q.in('status', ['sold', 'stc', 'withdrawn']);
+          else if (sf === 'unsold') q = q.eq('status', 'unsold');
+          else if (sf === 'stc') q = q.eq('status', 'stc');
+          else if (sf === 'withdrawn') q = q.eq('status', 'withdrawn');
+          else if (sf !== 'everything') q = q.or('status.eq.available,status.eq.unsold,status.is.null');
+          q = applyUiLoc(q);
+          return q.order('score', { ascending: false, nullsFirst: false }).limit(2000);
+        },
+        sort: (a, b) => {
+          if (a.score == null && b.score == null) return 0;
+          if (a.score == null) return 1;
+          if (b.score == null) return -1;
+          return b.score - a.score;
+        },
+        limit: 2000,
+      });
 
       if (!lotRows || lotRows.length === 0) {
         await incrementSearchCounter();
@@ -621,8 +655,6 @@ router.post('/api/smart-search', async (req, res) => {
       await incrementSearchCounter();
       return res.json({ results: [], report: 'No active auction data available.', sources: [], totalSearched: 0, searchesUsed, searchLimit });
     }
-    const activeUrls = [...new Set(activeCatalogues.map(c => c.url))];
-
     const effectiveSold = sqParsed.filters.statusOverride || sf;
     const sortCol = sqParsed.filters.sortBy === 'yield' ? 'est_gross_yield' : 'score';
 
@@ -708,39 +740,54 @@ router.post('/api/smart-search', async (req, res) => {
     // Relaxation only kicks in if hard filters narrow to zero — drop hard
     // filters, then drop location, then wildcard. Each drop is reported to
     // Gemini so the report can be honest about what was matched.
-    function buildLayer1Query(tier) {
-      let q = supabase.from('lots').select(LOTS_SELECT).in('catalogue_url', activeUrls);
+    // Move 2: returns a Promise<{data, error}> via the dual-read helper
+    // (was a query builder pre-Move-2; caller still awaits the same shape).
+    async function buildLayer1Query(tier) {
+      return getLotsForCatalogues(supabase, activeCatalogues, {
+        select: LOTS_SELECT,
+        applyFilters: (q) => {
+          // Status (always applied — semantic meaning of 'available' / 'unsold' etc)
+          if (effectiveSold === 'available') q = q.or('status.eq.available,status.is.null');
+          else if (effectiveSold === 'sold') q = q.in('status', ['sold', 'stc', 'withdrawn']);
+          else if (effectiveSold === 'unsold') q = q.eq('status', 'unsold');
+          else if (effectiveSold === 'stc') q = q.eq('status', 'stc');
+          else if (effectiveSold === 'withdrawn') q = q.eq('status', 'withdrawn');
+          else if (effectiveSold !== 'everything') q = q.or('status.eq.available,status.eq.unsold,status.is.null');
 
-      // Status (always applied — semantic meaning of 'available' / 'unsold' etc)
-      if (effectiveSold === 'available') q = q.or('status.eq.available,status.is.null');
-      else if (effectiveSold === 'sold') q = q.in('status', ['sold', 'stc', 'withdrawn']);
-      else if (effectiveSold === 'unsold') q = q.eq('status', 'unsold');
-      else if (effectiveSold === 'stc') q = q.eq('status', 'stc');
-      else if (effectiveSold === 'withdrawn') q = q.eq('status', 'withdrawn');
-      else if (effectiveSold !== 'everything') q = q.or('status.eq.available,status.eq.unsold,status.is.null');
+          // Hard filters (tier 0 only) — explicit user constraints from query parser
+          if (tier === 0) {
+            if (sqParsed.filters.tenure) q = q.ilike('tenure', sqParsed.filters.tenure);
+            if (sqParsed.filters.maxPrice) q = q.lte('price', sqParsed.filters.maxPrice);
+            if (sqParsed.filters.minPrice) q = q.gte('price', sqParsed.filters.minPrice);
+            if (sqParsed.filters.beds) q = q.gte('beds', sqParsed.filters.beds);
+            if (sqParsed.filters.condition) q = q.in('condition', sqParsed.filters.condition);
+          }
 
-      // Hard filters (tier 0 only) — explicit user constraints from query parser
-      if (tier === 0) {
-        if (sqParsed.filters.tenure) q = q.ilike('tenure', sqParsed.filters.tenure);
-        if (sqParsed.filters.maxPrice) q = q.lte('price', sqParsed.filters.maxPrice);
-        if (sqParsed.filters.minPrice) q = q.gte('price', sqParsed.filters.minPrice);
-        if (sqParsed.filters.beds) q = q.gte('beds', sqParsed.filters.beds);
-        if (sqParsed.filters.condition) q = q.in('condition', sqParsed.filters.condition);
-      }
+          // Location (tiers 0-1)
+          if (tier <= 1) {
+            for (const loc of sqParsed.locationTerms) q = q.ilike('address', `%${loc}%`);
+            if (sqParsed.filters.regionPostcodes) {
+              const pcOr = sqParsed.filters.regionPostcodes.map(p => `postcode.ilike.${p}%`).join(',');
+              q = q.or(pcOr);
+            }
+          }
 
-      // Location (tiers 0-1)
-      if (tier <= 1) {
-        for (const loc of sqParsed.locationTerms) q = q.ilike('address', `%${loc}%`);
-        if (sqParsed.filters.regionPostcodes) {
-          const pcOr = sqParsed.filters.regionPostcodes.map(p => `postcode.ilike.${p}%`).join(',');
-          q = q.or(pcOr);
-        }
-      }
-
-      // Up the limit to 800 — Layer 2 (Gemini) gets a wider candidate pool to
-      // reason over so semantic concepts (title-split, HMO, refurb, etc.)
-      // can be recognised even when the database doesn't tag them.
-      return q.order(sortCol, { ascending: false, nullsFirst: false }).limit(800);
+          // Up the limit to 800 — Layer 2 (Gemini) gets a wider candidate pool to
+          // reason over so semantic concepts (title-split, HMO, refurb, etc.)
+          // can be recognised even when the database doesn't tag them.
+          return q.order(sortCol, { ascending: false, nullsFirst: false }).limit(800);
+        },
+        sort: (a, b) => {
+          // Mirror per-query order: sortCol desc, nulls last. Re-applied after
+          // the merge so the union is precisely sorted before slicing.
+          const av = a[sortCol]; const bv = b[sortCol];
+          if (av == null && bv == null) return 0;
+          if (av == null) return 1;
+          if (bv == null) return -1;
+          return bv - av;
+        },
+        limit: 800,
+      });
     }
 
     const TIER_LABELS = ['strict', 'location-only', 'wildcard'];
