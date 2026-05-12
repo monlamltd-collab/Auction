@@ -8,6 +8,7 @@ import { rateLimit, getClientIP, validateUserFromReq, requireAdmin } from '../li
 import { validateUrl } from '../lib/security.js';
 import { log } from '../lib/logging.js';
 import { getLotsForCatalogue } from '../lib/pipeline/lot-lookup.js';
+import { fetchRecallReport, summariseRecall } from '../lib/pipeline/recall.js';
 import { MAX_PUPPETEER_PAGES, MAX_LOTS_PER_SCRAPE, MAX_AUCTIONS_PER_HOUSE } from '../lib/config.js';
 import { HOUSE_ROOTS, PUPPETEER_IMAGE_HOUSES, detectAuctionHouse, HOUSE_DISPLAY_NAMES } from '../lib/houses.js';
 import {
@@ -1614,6 +1615,146 @@ router.post('/api/admin/alerts/cleanup', requireAdmin, async (req, res) => {
 // Sources are SpareRoom + OnTheMarket (plain HTTP, zero Firecrawl credit).
 // Monthly cadence: a (postcode, source) tuple is "stale" if not scraped
 // in the last 30 days. force=true bypasses the freshness check.
+// ── Move 3 Phase 3c — Recall report from catalogue_snapshots history ──
+//
+// Recall is per-auction: |today.lot_url_set ∩ yesterday.lot_url_set| / |yesterday.lot_url_set|.
+// A sudden drop is the canonical "venmore at 2%" signal that the old
+// RECALL_SENTINELS regex was trying to catch — except now it's a structural
+// metric, not a per-house regex.
+router.get('/api/admin/recall', requireAdmin, async (req, res) => {
+  try {
+    const sinceMs = Math.max(60 * 60 * 1000, Math.min(7 * 24 * 60 * 60 * 1000, parseInt(req.query?.sinceMs) || 24 * 60 * 60 * 1000));
+    const limit = Math.max(1, Math.min(2000, parseInt(req.query?.limit) || 500));
+    const worstN = Math.max(0, Math.min(50, parseInt(req.query?.worstN) || 10));
+
+    const pairs = await fetchRecallReport(supabase, { sinceMs, limit });
+
+    // Enrich each pair with the house_slug via auction_calendar — useful in the
+    // admin UI so operators can see "venmore: 2% recall" without joining manually.
+    const auctionIds = [...new Set(pairs.map(p => p.auction_id))];
+    let houseByAuctionId = {};
+    if (auctionIds.length > 0) {
+      const { data: calRows } = await supabase
+        .from('auction_calendar')
+        .select('id, house_slug')
+        .in('id', auctionIds);
+      houseByAuctionId = Object.fromEntries((calRows || []).map(r => [r.id, r.house_slug]));
+    }
+    const enriched = pairs.map(p => ({ ...p, house_slug: houseByAuctionId[p.auction_id] || null }));
+
+    const summary = summariseRecall(enriched, { worstN });
+
+    res.json({
+      window_ms: sinceMs,
+      generated_at: new Date().toISOString(),
+      summary,
+      pairs: enriched,
+    });
+  } catch (err) {
+    log.error('admin recall report failed', { error: err.message });
+    res.status(500).json({ error: 'recall_failed', detail: err.message });
+  }
+});
+
+// ── Move 3 Phase 3d — Time-travel snapshot detail ──
+//
+// Returns one catalogue_snapshots row with surrounding context: the auction
+// it belongs to (house_slug, date, title), the snapshot before it (for diff
+// inspection), and a count of lots in the lots table currently mapped to
+// the same auction_id. NOT a state-reconstruction endpoint — for the full
+// lot state at scrape time, query lot_history filtered by lot URL + scraped_at.
+router.get('/api/admin/snapshot/:id', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      return res.status(400).json({ error: 'invalid_id', detail: 'expected UUID' });
+    }
+    const { data: snapshot, error } = await supabase
+      .from('catalogue_snapshots')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+    if (error) return res.status(500).json({ error: 'db_error', detail: error.message });
+    if (!snapshot) return res.status(404).json({ error: 'not_found' });
+
+    const { data: auction } = await supabase
+      .from('auction_calendar')
+      .select('id, house, house_slug, date, title, url')
+      .eq('id', snapshot.auction_id)
+      .maybeSingle();
+
+    // The previous snapshot for the same auction — for diff inspection
+    const { data: prevSnapshot } = await supabase
+      .from('catalogue_snapshots')
+      .select('id, scraped_at, lot_count, content_hash, scrape_status, lot_url_set')
+      .eq('auction_id', snapshot.auction_id)
+      .lt('scraped_at', snapshot.scraped_at)
+      .order('scraped_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    let diff = null;
+    if (prevSnapshot && Array.isArray(prevSnapshot.lot_url_set)) {
+      const prev = new Set(prevSnapshot.lot_url_set);
+      const curr = new Set(snapshot.lot_url_set || []);
+      const added = [...curr].filter(u => !prev.has(u));
+      const removed = [...prev].filter(u => !curr.has(u));
+      diff = {
+        prev_snapshot_id: prevSnapshot.id,
+        added_count: added.length,
+        removed_count: removed.length,
+        retained_count: prev.size - removed.length,
+        added: added.slice(0, 100),
+        removed: removed.slice(0, 100),
+      };
+    }
+
+    const { count: live_lot_count } = await supabase
+      .from('lots')
+      .select('id', { count: 'exact', head: true })
+      .eq('auction_id', snapshot.auction_id);
+
+    res.json({ snapshot, auction: auction || null, diff, live_lot_count: live_lot_count ?? 0 });
+  } catch (err) {
+    log.error('admin snapshot detail failed', { error: err.message, id: req.params.id });
+    res.status(500).json({ error: 'snapshot_detail_failed', detail: err.message });
+  }
+});
+
+// ── List recent snapshots, optionally filtered ──
+router.get('/api/admin/snapshots', requireAdmin, async (req, res) => {
+  try {
+    const limit = Math.max(1, Math.min(500, parseInt(req.query?.limit) || 100));
+    const auctionId = req.query?.auction_id || null;
+    const houseSlug = req.query?.house_slug || null;
+
+    let q = supabase
+      .from('catalogue_snapshots')
+      .select('id, auction_id, scraped_at, lot_count, content_hash, scrape_status, extracted_with, scraped_with')
+      .order('scraped_at', { ascending: false })
+      .limit(limit);
+
+    if (auctionId) {
+      q = q.eq('auction_id', auctionId);
+    } else if (houseSlug) {
+      const { data: auctions } = await supabase
+        .from('auction_calendar')
+        .select('id')
+        .eq('house_slug', houseSlug);
+      const ids = (auctions || []).map(a => a.id);
+      if (ids.length === 0) return res.json({ count: 0, snapshots: [] });
+      q = q.in('auction_id', ids);
+    }
+
+    const { data: snapshots, error } = await q;
+    if (error) return res.status(500).json({ error: 'db_error', detail: error.message });
+    res.json({ count: snapshots?.length || 0, snapshots: snapshots || [] });
+  } catch (err) {
+    log.error('admin snapshots list failed', { error: err.message });
+    res.status(500).json({ error: 'snapshots_list_failed', detail: err.message });
+  }
+});
+
 router.post('/api/admin/rentals/drain', rateLimit(60000, 5), requireAdmin, async (req, res) => {
   const { drainStaleRentals } = await import('../lib/rentals/index.js');
   const limit = Math.max(1, Math.min(200, parseInt(req.body?.limit) || 20));
