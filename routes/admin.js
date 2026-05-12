@@ -7,6 +7,7 @@ import { supabase } from '../lib/supabase.js';
 import { rateLimit, getClientIP, validateUserFromReq, requireAdmin } from '../lib/auth.js';
 import { validateUrl } from '../lib/security.js';
 import { log } from '../lib/logging.js';
+import { getLotsForCatalogue } from '../lib/pipeline/lot-lookup.js';
 import { MAX_PUPPETEER_PAGES, MAX_LOTS_PER_SCRAPE, MAX_AUCTIONS_PER_HOUSE } from '../lib/config.js';
 import { HOUSE_ROOTS, PUPPETEER_IMAGE_HOUSES, detectAuctionHouse, HOUSE_DISPLAY_NAMES } from '../lib/houses.js';
 import {
@@ -110,11 +111,13 @@ router.post('/api/admin/backfill-images', rateLimit(60000, 20), requireAdmin, as
 
     const results = [];
     for (const entry of activeCats) {
-      // Read lots from lots table
-      const { data: lotRows } = await supabase
-        .from('lots')
-        .select(LOTS_SELECT)
-        .eq('catalogue_url', entry.url);
+      // Read lots from lots table. Move 2: dual-read helper; no auctionId
+      // resolved at this call site, so legacy (house, catalogue_url) path fires.
+      const { data: lotRows } = await getLotsForCatalogue(supabase, {
+        house: entry.house,
+        catalogueUrl: entry.url,
+        select: LOTS_SELECT,
+      });
       const lots = (lotRows || []).map(dbRowToFrontendLot);
       const missingImages = lots.filter(l => !l.imageUrl).length;
       if (missingImages === 0) {

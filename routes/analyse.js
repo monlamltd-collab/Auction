@@ -20,6 +20,7 @@ import { extractCatalogueListing, extractLotDetailFirecrawl } from '../lib/pipel
 import { enrichLots } from '../lib/enrichment.js';
 import { enrichLotsWithFundability } from '../lib/fundability.js';
 import { qualityGate, analyseLot, upsertToLotsTable, logActivityEvent, dbRowToFrontendLot, LOTS_SELECT } from '../lib/analysis.js';
+import { getLotsForCatalogue } from '../lib/pipeline/lot-lookup.js';
 import { enrichBatch } from '../lib/harness/enrichment-engine.js';
 
 const router = Router();
@@ -91,14 +92,23 @@ router.post('/api/analyse', async (req, res) => {
     const cachedDisplayName = HOUSE_DISPLAY_NAMES[cachedSlug] || cached.house;
     const isPremium = userTier === 'premium';
 
-    // Read fresh lot data from lots table (single source of truth)
-    const { data: lotRows } = await supabase
-      .from('lots')
-      .select(LOTS_SELECT)
-      .eq('catalogue_url', normalisedUrl)
-      .order('score', { ascending: false, nullsFirst: false });
+    // Read fresh lot data from lots table (single source of truth). Move 2:
+    // dual-read helper; no auctionId resolved here, legacy path fires. The
+    // helper returns rows unordered — sort client-side to preserve the
+    // pre-Move-2 score-desc ordering (nulls last).
+    const { data: lotRows } = await getLotsForCatalogue(supabase, {
+      house: cached.house,
+      catalogueUrl: normalisedUrl,
+      select: LOTS_SELECT,
+    });
+    const sortedLotRows = (lotRows || []).slice().sort((a, b) => {
+      if (a.score == null && b.score == null) return 0;
+      if (a.score == null) return 1;
+      if (b.score == null) return -1;
+      return b.score - a.score;
+    });
 
-    const freshLots = (lotRows || []).map(dbRowToFrontendLot);
+    const freshLots = sortedLotRows.map(dbRowToFrontendLot);
     const gatedLots = isPremium ? freshLots : stripAIFields(freshLots);
 
     // Recompute summary stats from fresh data
@@ -246,10 +256,12 @@ router.post('/api/analyse', async (req, res) => {
     await enrichLotsFromLotPages(analysed);
 
     // ── Harness enrichment: gap-filling, cross-lot inference, cache carry-forward ──
-    const { data: prevLotRows } = await supabase
-      .from('lots')
-      .select(LOTS_SELECT)
-      .eq('catalogue_url', normalisedUrl);
+    // Move 2: dual-read helper; no auctionId resolved here, legacy path fires.
+    const { data: prevLotRows } = await getLotsForCatalogue(supabase, {
+      house,
+      catalogueUrl: normalisedUrl,
+      select: LOTS_SELECT,
+    });
     const harnessResult = enrichBatch(analysed, house, {
       previousCache: (prevLotRows || []).map(dbRowToFrontendLot),
     });
