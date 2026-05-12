@@ -230,5 +230,117 @@ console.log('\nTest 12: getLotsForCatalogues — surfaces first error across que
   assert(r.data.length === 1, 'partial data still returned');
 }
 
+console.log('\nTest 13: getLotsForCatalogues — applyFilters callback runs on each scoped query');
+{
+  const calls = []; // each entry: { scopeKey, statusFilter }
+  const stubSupabase = {
+    from() {
+      // Capture the call's own index at creation — calls[calls.length-1] would
+      // be wrong once both builders exist and .then() runs asynchronously.
+      const idx = calls.length;
+      calls.push({ scopeKey: null, statusFilter: null });
+      let scopeKey = null;
+      const rows = idx === 0 ? [{ id: 'x', score: 5 }] : [{ id: 'y', score: 3 }];
+      const b = {
+        from() { return b; },
+        select() { return b; },
+        in(col) { if (scopeKey === null) scopeKey = col; return b; },
+        eq(col, val) { calls[idx].statusFilter = `${col}=${val}`; return b; },
+        or() { return b; },
+        order() { return b; },
+        limit() { return b; },
+        then(resolve) {
+          calls[idx].scopeKey = scopeKey;
+          resolve({ data: rows, error: null });
+        },
+      };
+      return b;
+    },
+  };
+  const applyFilters = (q) => q.eq('status', 'available').order('score', { ascending: false }).limit(10);
+
+  await getLotsForCatalogues(stubSupabase, [
+    { url: 'https://a.com/x', auctionId: 'id-1' },
+    { url: 'https://b.com/y' },
+  ], { applyFilters });
+
+  assert(calls.length === 2, 'two queries issued');
+  assert(calls.every(c => c.statusFilter === 'status=available'), 'applyFilters ran on each query (status=available eq)');
+  const scopes = calls.map(c => c.scopeKey).sort();
+  assert(scopes[0] === 'auction_id' && scopes[1] === 'catalogue_url', 'scopes are auction_id + catalogue_url');
+}
+
+console.log('\nTest 14: getLotsForCatalogues — sort comparator applied to merged set');
+{
+  let idx = 0;
+  const builder = {
+    from() { return builder; },
+    select() { return builder; },
+    in() { return builder; },
+    then(resolve) {
+      // First query returns score=2 first then 5; second returns 3.
+      // Without sort: merged order = [2, 5, 3]. With sort: [5, 3, 2].
+      if (idx++ === 0) resolve({ data: [{ id: 'a', score: 2 }, { id: 'b', score: 5 }], error: null });
+      else resolve({ data: [{ id: 'c', score: 3 }], error: null });
+    },
+  };
+  const sort = (a, b) => b.score - a.score;
+  const r = await getLotsForCatalogues(builder, [
+    { url: 'https://a.com', auctionId: 'id-1' },
+    { url: 'https://b.com' },
+  ], { sort });
+  assert(r.data.length === 3, '3 rows merged');
+  assert(r.data[0].id === 'b' && r.data[1].id === 'c' && r.data[2].id === 'a',
+    `merged sorted by score desc → b,c,a (got ${r.data.map(x => x.id).join(',')})`);
+}
+
+console.log('\nTest 15: getLotsForCatalogues — limit applied after merge + sort');
+{
+  let idx = 0;
+  const builder = {
+    from() { return builder; },
+    select() { return builder; },
+    in() { return builder; },
+    then(resolve) {
+      if (idx++ === 0) resolve({ data: [{ id: 'a', score: 2 }, { id: 'b', score: 5 }], error: null });
+      else resolve({ data: [{ id: 'c', score: 3 }, { id: 'd', score: 4 }], error: null });
+    },
+  };
+  const sort = (a, b) => b.score - a.score;
+  const r = await getLotsForCatalogues(builder, [
+    { url: 'https://a.com', auctionId: 'id-1' },
+    { url: 'https://b.com' },
+  ], { sort, limit: 2 });
+  assert(r.data.length === 2, `limit 2 applied (got ${r.data.length})`);
+  assert(r.data[0].id === 'b' && r.data[1].id === 'd', 'top 2 by score = b (5) + d (4)');
+}
+
+console.log('\nTest 16: getLotsForCatalogues — limit=0 returns empty, limit=null returns all');
+{
+  let idx = 0;
+  const builder = {
+    from() { return builder; },
+    select() { return builder; },
+    in() { return builder; },
+    then(resolve) {
+      if (idx++ === 0) resolve({ data: [{ id: 'a' }, { id: 'b' }], error: null });
+      else resolve({ data: [{ id: 'c' }], error: null });
+    },
+  };
+  idx = 0;
+  const r0 = await getLotsForCatalogues(builder, [
+    { url: 'https://a.com', auctionId: 'id-1' },
+    { url: 'https://b.com' },
+  ], { limit: 0 });
+  assert(r0.data.length === 0, 'limit=0 → empty result');
+
+  idx = 0;
+  const rAll = await getLotsForCatalogues(builder, [
+    { url: 'https://a.com', auctionId: 'id-1' },
+    { url: 'https://b.com' },
+  ], {});
+  assert(rAll.data.length === 3, 'no limit → all 3 rows returned');
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);
