@@ -32,7 +32,7 @@ function buildMap(rows) {
     if (k && !urlMap.has(k)) urlMap.set(k, { date: r.date, id: r.id });
     if (r.house_slug) {
       if (!houseMap.has(r.house_slug)) houseMap.set(r.house_slug, []);
-      houseMap.get(r.house_slug).push({ date: r.date, id: r.id });
+      houseMap.get(r.house_slug).push({ date: r.date, id: r.id, status: r.status || null });
     }
   }
   return { urlMap, houseMap };
@@ -125,6 +125,81 @@ console.log('\nTest 9: house with single row but null house_slug-keyed entry is 
   assert(resolveCalendarEntry(m, '', 'https://nope.com') === null, 'empty house string → no fallback');
   assert(resolveCalendarEntry(m, null, 'https://nope.com') === null, 'null house → no fallback');
   assert(resolveCalendarEntry(m, undefined, 'https://nope.com') === null, 'undefined house → no fallback');
+}
+
+// ─────────────────────────────────────────────────────────────
+// Follow-up F: always_on fallback (the generalisation of #5)
+// ─────────────────────────────────────────────────────────────
+
+console.log('\nTest 10: always_on fallback — multi-cal house, one always_on → falls back to always_on');
+{
+  // buttersjohnbee-style: 1 always_on + 1 upcoming. URL doesn't match either.
+  const m = buildMap([
+    { id: 'b-always', house_slug: 'buttersjohnbee', url: 'https://buttersjohnbee.com/listings?viewtype=gallery&...', date: '2099-12-31', status: 'always_on' },
+    { id: 'b-upcoming', house_slug: 'buttersjohnbee', url: 'https://buttersjohnbee.com/properties-for-auction', date: '2026-05-24', status: 'upcoming' },
+  ]);
+  const e = resolveCalendarEntry(m, 'buttersjohnbee', 'https://buttersjohnbee.com/listings?auction=1&status=all');
+  assert(e && e.id === 'b-always', 'always_on row picked (not the upcoming row)');
+}
+
+console.log('\nTest 11: always_on fallback — multiple always_on → NO fallback');
+{
+  // sdl-style: 3 always_on rows after PR #32 (sdlauctions, charlesdarrow, btgeddisons).
+  // URL doesn't match any. Ambiguous → no fallback.
+  const m = buildMap([
+    { id: 's-1', house_slug: 'sdl', url: 'https://sdlauctions.co.uk/x', date: '2099-12-31', status: 'always_on' },
+    { id: 's-2', house_slug: 'sdl', url: 'https://charlesdarrow.co.uk/y', date: '2099-12-31', status: 'always_on' },
+    { id: 's-3', house_slug: 'sdl', url: 'https://btgeddisons.com/z', date: '2099-12-31', status: 'always_on' },
+  ]);
+  const e = resolveCalendarEntry(m, 'sdl', 'https://unknown.com/w');
+  assert(e === null, 'multiple always_on rows → ambiguous → no fallback');
+}
+
+console.log('\nTest 12: always_on fallback — no always_on, only specific-date rows → NO fallback');
+{
+  // maggsandallen-style: 3 specific-month rows. None always_on. Lot URL doesn't match.
+  // We can't pick a date arbitrarily → no fallback.
+  const m = buildMap([
+    { id: 'm-apr', house_slug: 'maggsandallen', url: 'https://x/apr', date: '2026-04-15', status: 'upcoming' },
+    { id: 'm-may', house_slug: 'maggsandallen', url: 'https://x/may', date: '2026-05-15', status: 'upcoming' },
+    { id: 'm-jun', house_slug: 'maggsandallen', url: 'https://x/jun', date: '2026-06-15', status: 'upcoming' },
+  ]);
+  const e = resolveCalendarEntry(m, 'maggsandallen', 'https://x/?orderby=lot_no');
+  assert(e === null, 'no always_on + multiple specific-date → no fallback');
+}
+
+console.log('\nTest 13: always_on fallback — exactly 1 always_on among many specific-date');
+{
+  // Mixed: 1 always_on + many specific-date. Always_on wins.
+  const m = buildMap([
+    { id: 'b-1', house_slug: 'h', url: 'https://x/may', date: '2026-05-15', status: 'upcoming' },
+    { id: 'b-2', house_slug: 'h', url: 'https://x/jun', date: '2026-06-15', status: 'upcoming' },
+    { id: 'b-always', house_slug: 'h', url: 'https://x/all', date: '2099-12-31', status: 'always_on' },
+    { id: 'b-3', house_slug: 'h', url: 'https://x/jul', date: '2026-07-15', status: 'upcoming' },
+  ]);
+  const e = resolveCalendarEntry(m, 'h', 'https://x/unknown');
+  assert(e && e.id === 'b-always', 'always_on among many specific-date rows still wins');
+}
+
+console.log('\nTest 14: always_on fallback — does NOT override direct URL match');
+{
+  const m = buildMap([
+    { id: 'm-may', house_slug: 'h', url: 'https://x/may', date: '2026-05-15', status: 'upcoming' },
+    { id: 'b-always', house_slug: 'h', url: 'https://x/all', date: '2099-12-31', status: 'always_on' },
+  ]);
+  const e = resolveCalendarEntry(m, 'h', 'https://x/may');
+  assert(e && e.id === 'm-may', 'direct URL match wins, not always_on');
+}
+
+console.log('\nTest 15: always_on fallback — single-cal-row rule still wins when only 1 row');
+{
+  // Single row with status=upcoming. Single-cal rule (Test 2) still fires —
+  // we don't care about status when there's just one row.
+  const m = buildMap([
+    { id: 'l-1', house_slug: 'landwood', url: 'https://landwood.com/x', date: '2099-12-31', status: 'upcoming' },
+  ]);
+  const e = resolveCalendarEntry(m, 'landwood', 'https://landwood.com/bare');
+  assert(e && e.id === 'l-1', 'single-cal rule fires regardless of status');
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
