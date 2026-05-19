@@ -135,6 +135,7 @@ import searchRouter, { invalidateAllLotsCache, warmAllLotsCache } from './routes
 import adminRouter from './routes/admin.js';
 import userDataRouter from './routes/user_data.js';
 import curatorRouter from './routes/curator.js';
+import telegramWebhookRouter from './routes/telegram-webhook.js';
 import { sendWelcomeEmail } from './lib/email.js';
 
 // Wire up the new-user callback so validateUserFromReq can trigger welcome emails
@@ -153,6 +154,7 @@ app.use(curatorRouter);
 app.use(searchRouter);
 app.use(adminRouter);
 app.use(userDataRouter);
+app.use(telegramWebhookRouter);
 
 // ═══════════════════════════════════════════════════════════════
 // CATCH-ALL — must be AFTER all route registrations
@@ -620,10 +622,14 @@ function scheduleTick() {
     ])
       .then(async ([{ runHomepageWatchCycle }, telegram]) => {
         const sendTelegram = telegram.sendNotification;
+        const sendActionableCard = telegram.sendActionableCard;
+        const { classifyNewDomainDrift } = await import('./lib/pipeline/healing.js');
         const result = await runHomepageWatchCycle(supabase, {
           fireAlert: harnessFireAlert,
           healBrokenHouse,
           sendTelegram,
+          sendActionableCard,
+          classifyNewDomainDrift,
           log,
         });
         if (result.skipped) {
@@ -632,6 +638,14 @@ function scheduleTick() {
           const s = result.summary;
           console.log(`SCHEDULE homepage watch: total=${s.total} unchanged=${s.unchanged} drift=${s.drift} healed=${s.healed} alerts=${s.alerts} errors=${s.errors}`);
         }
+
+        // Backlog digest — surface unresolved alerts older than 24h as
+        // actionable cards so the long tail doesn't decay into noise.
+        try {
+          const { sendBacklogDigest } = await import('./lib/pipeline/telegram-backlog.js');
+          const backlog = await sendBacklogDigest(supabase, { sendTelegram, sendActionableCard, log });
+          if (backlog.sent > 0) console.log(`SCHEDULE backlog digest: sent ${backlog.sent} cards (${backlog.total} total open)`);
+        } catch (e) { console.warn('SCHEDULE backlog digest failed:', e.message); }
       })
       .catch(e => console.error('SCHEDULE homepage watch failed:', e.message));
   }
