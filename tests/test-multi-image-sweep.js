@@ -3,10 +3,13 @@
  *
  * The fair-share function itself is exercised in test-post-auction-sweep.js
  * (single source of truth, imported here). This file locks the wiring —
- * cap raised from 50 to a meaningful number, wall-clock budget present,
- * fair-share imported and applied, plus the integration checks that the
- * `images` field is now exposed end-to-end (LOTS_SELECT, mappers, RPC
- * not checked here — that's a live-DB query we ran during diagnosis).
+ * cap sized to bound Firecrawl spend (the dial is empirical — too low and
+ * the gallery backlog never clears, too high and the Firecrawl-fallback
+ * rate on JS-rendered houses blows through the daily budget), wall-clock
+ * budget present, fair-share imported and applied, plus the integration
+ * checks that the `images` field is now exposed end-to-end (LOTS_SELECT,
+ * mappers, RPC not checked here — that's a live-DB query we ran during
+ * diagnosis).
  */
 
 import { readFileSync } from 'node:fs';
@@ -22,15 +25,15 @@ function assert(cond, msg) {
   else { console.error(`  FAIL: ${msg}`); fail++; }
 }
 
-console.log('multi-image-sweep — cap raised + wall-clock + fairness');
+console.log('multi-image-sweep — batch cap + wall-clock + fairness');
 {
   const src = readFileSync(join(here, '..', 'lib', 'pipeline', 'multi-image-sweep.js'), 'utf8');
-  assert(/SWEEP_BATCH_LIMIT\s*=\s*1000/.test(src),
-    'batch limit raised from 50 to 1000 (10k-lot backlog clears in ~2-3 weeks)');
+  assert(/SWEEP_BATCH_LIMIT\s*=\s*200/.test(src),
+    'batch limit pulled back to 200 (Firecrawl-spend cap; 1000 burned ~600 credits/day on JS-rendered houses)');
   assert(/SWEEP_WALL_CLOCK_MS\s*=\s*30 \* 60_000/.test(src),
     'wall-clock budget = 30 minutes (the actual safety, not row count)');
-  assert(/SWEEP_FETCH_POOL\s*=\s*5000/.test(src),
-    'DB fetch pool widened so fair-share has variety to round-robin across');
+  assert(/SWEEP_FETCH_POOL\s*=\s*1500/.test(src),
+    'DB fetch pool keeps headroom for fair-share round-robin without over-fetching');
   assert(/import\s*\{\s*fairShareByHouse\s*\}\s*from\s*['"]\.\/post-auction-sweep\.js['"]/.test(src),
     'fairShareByHouse imported from post-auction-sweep — single source of truth');
   assert(/eligible\s*=\s*fairShareByHouse\(eligibleAll,\s*SWEEP_BATCH_LIMIT\)/.test(src),
