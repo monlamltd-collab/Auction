@@ -111,6 +111,8 @@ console.log('\nTest 8: writeSnapshot — skips entirely when auctionId is null')
 console.log('\nTest 9: writeSnapshot — full path when hash differs from previous');
 {
   let inserted = null;
+  // insert chains .select('id').single() so the writer can return the
+  // inserted row's id to callers (lot_events uses it as source.scrape_id).
   const stub = {
     from() { return stub; },
     select() { return stub; },
@@ -118,7 +120,13 @@ console.log('\nTest 9: writeSnapshot — full path when hash differs from previo
     order() { return stub; },
     limit() { return stub; },
     maybeSingle() { return Promise.resolve({ data: { content_hash: 'oldhash' } }); },
-    insert(payload) { inserted = payload; return Promise.resolve({ error: null }); },
+    insert(payload) {
+      inserted = payload;
+      return {
+        select() { return this; },
+        single() { return Promise.resolve({ data: { id: 'snap-9' }, error: null }); },
+      };
+    },
   };
   const r = await writeSnapshot(stub, {
     auctionId: 'aid-1',
@@ -148,7 +156,13 @@ console.log('\nTest 10: writeSnapshot — unchanged status when hash matches pre
     order() { return stub; },
     limit() { return stub; },
     maybeSingle() { return Promise.resolve({ data: { content_hash: expectedHash } }); },
-    insert(payload) { inserted = payload; return Promise.resolve({ error: null }); },
+    insert(payload) {
+      inserted = payload;
+      return {
+        select() { return this; },
+        single() { return Promise.resolve({ data: { id: 'snap-10' }, error: null }); },
+      };
+    },
   };
   const r = await writeSnapshot(stub, { auctionId: 'aid-1', rows: [{ url: 'https://x.com/1' }] });
   assert(r.status === 'unchanged', 'status=unchanged on hash match');
@@ -165,7 +179,13 @@ console.log('\nTest 11: writeSnapshot — statusOverride wins');
     order() { return stub; },
     limit() { return stub; },
     maybeSingle() { return Promise.resolve({ data: null }); },
-    insert(payload) { inserted = payload; return Promise.resolve({ error: null }); },
+    insert(payload) {
+      inserted = payload;
+      return {
+        select() { return this; },
+        single() { return Promise.resolve({ data: { id: 'snap-11' }, error: null }); },
+      };
+    },
   };
   const r = await writeSnapshot(stub, { auctionId: 'aid-1', rows: [], statusOverride: 'partial' });
   assert(r.status === 'partial', 'override returned');
@@ -181,7 +201,12 @@ console.log('\nTest 12: writeSnapshot — insert error is non-fatal, returns wri
     order() { return stub; },
     limit() { return stub; },
     maybeSingle() { return Promise.resolve({ data: null }); },
-    insert() { return Promise.resolve({ error: { message: 'boom' } }); },
+    insert() {
+      return {
+        select() { return this; },
+        single() { return Promise.resolve({ data: null, error: { message: 'boom' } }); },
+      };
+    },
   };
   const r = await writeSnapshot(stub, { auctionId: 'aid-1', rows: [{ url: 'https://x.com/1' }] });
   assert(r.written === false, 'written=false on insert error');

@@ -208,6 +208,7 @@ import { initRentals, drainStaleRentals } from './lib/rentals/index.js';
 import { initHpi } from './lib/land-registry-hpi.js';
 import { initCompanies } from './lib/land-registry-companies.js';
 import { sweepPostAuctionStatuses } from './lib/pipeline/post-auction-sweep.js';
+import { sweepSameDayStatuses } from './lib/pipeline/same-day-sweep.js';
 import { sweepMultiImages } from './lib/pipeline/multi-image-sweep.js';
 
 initAnalysis({
@@ -302,6 +303,8 @@ const _scheduleState = {
   lastCuratorCycle: 0,
   // Tier 17 (daily curator digest — daily, sends approved picks to subscribers):
   lastDailyDigest: 0,
+  // Tier 18 (same-day status sweep — daily 20:00 UK, today's auctions only):
+  lastSameDaySweep: 0,
 };
 
 function getUkHourMinute() {
@@ -773,6 +776,22 @@ function scheduleTick() {
         }
       })
       .catch(e => console.error('SCHEDULE daily-digest failed:', e.message));
+  }
+
+  // Tier 18: Same-day status sweep, daily 20:00 UK. Re-fetch lots whose
+  // auction is TODAY and status is still 'available' or 'unsold', flipping
+  // them to sold/unsold/withdrawn the same evening when the auction site
+  // updates. Closes the gap left by Tier 6 (post-auction-sweep), which waits
+  // 24h after auction_date by design. Lower wall-clock budget (15 min) and
+  // smaller cohort (today's auctions only, no 30-day backlog). ~10 active
+  // houses × ~50 lots avg = ~500 fetches/day, most plain-HTTP and free —
+  // <1% of the 100k Firecrawl plan quota.
+  if (hour === 20 && minute < 5 && now - _scheduleState.lastSameDaySweep > 60 * 60 * 1000) {
+    _scheduleState.lastSameDaySweep = now;
+    console.log('SCHEDULE: 20:00 UK — running sweepSameDayStatuses');
+    sweepSameDayStatuses()
+      .then(r => console.log(`SCHEDULE same-day sweep: eligible=${r.eligible} fetched=${r.fetched} updated=${r.statusUpdated} unchanged=${r.noChange} dead=${r.urlDead} failed=${r.fetchFailed}`))
+      .catch(e => console.error('SCHEDULE same-day sweep failed:', e.message));
   }
 }
 

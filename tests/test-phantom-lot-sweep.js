@@ -9,7 +9,13 @@
  * Run: node tests/test-phantom-lot-sweep.js
  */
 
-import { selectPhantomLots } from '../lib/pipeline/phantom-lot-sweep.js';
+// Env shim — phantom-lot-sweep now imports lot-events.js which pulls in
+// lib/supabase.js (createClient asserts SUPABASE_URL at import time).
+// Matches the pattern in tests/test-coverage-fix.js and tests/test-lot-events.js.
+process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'http://localhost.invalid';
+process.env.SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || 'test-key';
+
+const { selectPhantomLots } = await import('../lib/pipeline/phantom-lot-sweep.js');
 
 let passed = 0;
 let failed = 0;

@@ -45,7 +45,7 @@ Every house should have a recall pattern so the harness can measure scrape recal
 |---|---|
 | `GEMINI_API_KEY` | Gemini API key |
 | `FIRECRAWL_API_KEY` | Firecrawl API key (primary scraper) |
-| `FIRECRAWL_MONTHLY_BUDGET` | Credit cap per month (default 15000; actual quota is 500k) |
+| `FIRECRAWL_MONTHLY_BUDGET` | Credit cap per month (override default in `lib/resource-budget.js`) |
 | `FIRECRAWL_SKIP_HOUSES` | Comma-separated slugs to skip Firecrawl for |
 | `OS_DATA_HUB_KEY` | OS Places API key (UPRN + canonical address, free 100k/mo) |
 | `EPC_API_EMAIL` / `EPC_API_KEY` | EPC register API |
