@@ -13,6 +13,7 @@ import {
   VERDICTS,
   formatSummaryForTelegram,
   runHomepageWatchCycle,
+  buildActionableCardForDetail,
 } from '../lib/pipeline/homepage-watch.js';
 
 let passed = 0;
@@ -237,29 +238,53 @@ console.log('\nTest 15: formatSummaryForTelegram — first-run badge');
   assert(out.includes('150 baseline'), 'all baseline on first run');
 }
 
-console.log('\nTest 16: formatSummaryForTelegram — actionable cycle');
+console.log('\nTest 16: formatSummaryForTelegram — actionable cycle with per-verdict detail blocks');
 {
   const out = formatSummaryForTelegram({
     total: 150, unchanged: 140, contentChange: 5, baseline: 0,
     drift: 2, healed: 1, healFailed: 1, merger: 1, parked: 1,
-    notAuctionHouse: 0, noCatalogue: 0, unreachable: 0, alerts: 5, errors: 0,
+    notAuctionHouse: 0, noCatalogue: 1, unreachable: 1, alerts: 5, errors: 0,
   }, [
-    { slug: 'savills', from: 'https://savills.co.uk/old', to: 'https://savills.co.uk/new', kind: 'same-domain' },
-    { slug: 'pattinson', from: 'https://pattinson.co.uk/x', to: 'https://parent.com/p', kind: 'new-domain' },
+    { verdict: VERDICTS.URL_DRIFT_SAME_DOMAIN, slug: 'savills', displayName: 'Savills',
+      from: 'https://savills.co.uk/old', to: 'https://savills.co.uk/new', notes: '' },
+    { verdict: VERDICTS.URL_DRIFT_NEW_DOMAIN, slug: 'pattinson', displayName: 'Pattinson',
+      from: 'https://pattinson.co.uk/x', to: 'https://parent.com/p', notes: 'redirected to parent group' },
+    { verdict: VERDICTS.DOMAIN_PARKED, slug: 'scargill', displayName: 'Scargill Mann',
+      homepage: 'https://scargill.co.uk', notes: 'Domain for sale: contact GoDaddy' },
+    { verdict: VERDICTS.NO_CATALOGUE_FOUND, slug: 'bramleys', displayName: 'Bramleys',
+      consecutive: 4, notes: '', siteStatus: 'no_current_auction' },
+    { verdict: VERDICTS.UNREACHABLE, slug: 'sutton', displayName: 'Sutton Kersh',
+      consecutive: 5, fetchError: 'timeout after 90s' },
   ], false);
   assert(out.includes('🔀 2 URL drift'), 'drift bullet rendered');
   assert(out.includes('🩹 1 healed'), 'healed bullet rendered');
   assert(out.includes('⚠ 1 heal failed'), 'heal-failed bullet rendered');
   assert(out.includes('🏷 1 possible merger'), 'merger bullet rendered');
   assert(out.includes('💀 1 parked'), 'parked bullet rendered');
-  assert(out.includes('savills [same-domain]'), 'drift detail present');
-  assert(out.includes('pattinson [new-domain]'), 'merger detail present');
+  // Per-verdict detail block headers
+  assert(out.includes('<b>URL drift (same-domain):</b>'), 'same-domain section header');
+  assert(out.includes('<b>Possible merger (new domain):</b>'), 'new-domain section header');
+  assert(out.includes('<b>Parked / dead:</b>'), 'parked section header');
+  assert(out.includes('<b>No catalogue (3+ cycles):</b>'), 'no-catalogue section header');
+  assert(out.includes('<b>Unreachable (3+ cycles):</b>'), 'unreachable section header');
+  // Display names with slug in brackets
+  assert(out.includes('Savills [savills]'), 'savills display name + slug');
+  assert(out.includes('Pattinson [pattinson]'), 'pattinson display name + slug');
+  assert(out.includes('Scargill Mann [scargill]'), 'scargill display name + slug');
+  // Context lines
+  assert(out.includes('Domain for sale: contact GoDaddy'), 'parked notes surfaced');
+  assert(out.includes('redirected to parent group'), 'merger notes surfaced');
+  assert(out.includes('Bramleys [bramleys] (4 cycles)'), 'no-catalogue consecutive count');
+  assert(out.includes('Sutton Kersh [sutton] (5 cycles)'), 'unreachable consecutive count');
+  assert(out.includes('timeout after 90s'), 'unreachable error surfaced');
 }
 
-console.log('\nTest 17: formatSummaryForTelegram — drift detail capped at 10');
+console.log('\nTest 17: formatSummaryForTelegram — per-section detail capped at 10');
 {
   const drifts = Array.from({ length: 14 }, (_, i) => ({
-    slug: `house${i}`, from: 'https://x', to: 'https://y', kind: 'same-domain',
+    verdict: VERDICTS.URL_DRIFT_SAME_DOMAIN,
+    slug: `house${i}`, displayName: `House ${i}`,
+    from: 'https://x', to: 'https://y', notes: '',
   }));
   const out = formatSummaryForTelegram({
     total: 150, drift: 14, healed: 0, healFailed: 14, merger: 0, parked: 0,
@@ -316,6 +341,111 @@ console.log('\nTest 18: runHomepageWatchCycle — disabled flag short-circuits')
     if (prev === undefined) delete process.env.HOMEPAGE_WATCH_ENABLED;
     else process.env.HOMEPAGE_WATCH_ENABLED = prev;
   }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// buildActionableCardForDetail — per-detail card + button vocabulary
+// ═══════════════════════════════════════════════════════════════
+
+console.log('\nTest 19: buildActionableCardForDetail — returns null when no alertId');
+{
+  const card = buildActionableCardForDetail({ verdict: VERDICTS.DOMAIN_PARKED, slug: 'x', displayName: 'X' });
+  assert(card === null, 'no alertId → no card (can\'t reference an alert that wasn\'t persisted)');
+}
+
+console.log('\nTest 20: buildActionableCardForDetail — auto-healed drifts get no card');
+{
+  const card = buildActionableCardForDetail({
+    verdict: VERDICTS.URL_DRIFT_SAME_DOMAIN, slug: 'x', displayName: 'X',
+    alertId: 'abc-123', healOutcome: 'healed', from: 'https://x/old', to: 'https://x/new', notes: '',
+  });
+  assert(card === null, 'healed drift → no card needed');
+}
+
+console.log('\nTest 21: buildActionableCardForDetail — failed drift gets Apply/Re-heal/Snooze/Dismiss');
+{
+  const card = buildActionableCardForDetail({
+    verdict: VERDICTS.URL_DRIFT_SAME_DOMAIN, slug: 'savills', displayName: 'Savills',
+    alertId: 'abc-123', healOutcome: 'failed',
+    from: 'https://savills.co.uk/old', to: 'https://savills.co.uk/new', notes: '',
+  });
+  assert(card !== null, 'card returned');
+  assert(card.message.includes('Savills'), 'displays house name');
+  const labels = card.buttons.flat().map(b => b.label).join(' ');
+  assert(/Apply/.test(labels) && /Re-heal/.test(labels) && /Snooze/.test(labels) && /Dismiss/.test(labels),
+    'has Apply + Re-heal + Snooze + Dismiss buttons');
+  const cbs = card.buttons.flat().map(b => b.callback_data);
+  assert(cbs.includes('accept:abc-123'), 'accept callback has alertId');
+  assert(cbs.includes('snooze:abc-123'), 'snooze callback has alertId');
+}
+
+console.log('\nTest 22: buildActionableCardForDetail — new-domain (merger) card');
+{
+  const card = buildActionableCardForDetail({
+    verdict: VERDICTS.URL_DRIFT_NEW_DOMAIN, slug: 'pattinson', displayName: 'Pattinson',
+    alertId: 'm1', from: 'https://pattinson.co.uk/x', to: 'https://parent.com/p', notes: 'redirected',
+  });
+  assert(card !== null, 'card returned');
+  assert(card.message.includes('Possible merger'), 'merger framing');
+  const cbs = card.buttons.flat().map(b => b.callback_data);
+  assert(cbs.includes('accept:m1'), 'accept available for new-domain too');
+  assert(!cbs.some(c => c.startsWith('rerun:')), 'no re-heal — new-domain needs human, not retry');
+}
+
+console.log('\nTest 23: buildActionableCardForDetail — parked card has Snooze + Dismiss only');
+{
+  const card = buildActionableCardForDetail({
+    verdict: VERDICTS.DOMAIN_PARKED, slug: 'dead', displayName: 'Dead House',
+    alertId: 'p1', notes: 'Domain for sale: contact GoDaddy', homepage: 'https://dead.co/',
+  });
+  assert(card !== null, 'card returned');
+  const cbs = card.buttons.flat().map(b => b.callback_data);
+  assert(cbs.includes('snooze:p1') && cbs.includes('dismiss:p1'), 'snooze + dismiss present');
+  assert(!cbs.some(c => c.startsWith('accept:')), 'no accept — no candidate URL to apply');
+}
+
+console.log('\nTest 24a: buildActionableCardForDetail — merger card surfaces FIRE-1 classification when present');
+{
+  const card = buildActionableCardForDetail({
+    verdict: VERDICTS.URL_DRIFT_NEW_DOMAIN, slug: 'pattinson', displayName: 'Pattinson',
+    alertId: 'm2', from: 'https://pattinson.co.uk/x', to: 'https://parent.com/p', notes: '',
+    classification: {
+      classification: 'merger_to_known',
+      newOwnerName: 'Allsop',
+      confidence: 'high',
+      reason: 'Page footer reads "Now part of Allsop Group"',
+    },
+  });
+  assert(card !== null, 'card returned');
+  assert(/FIRE-1 verdict/.test(card.message), 'classification verdict labelled');
+  assert(/Merged into known parent/.test(card.message), 'human-readable classification rendered');
+  assert(/Allsop/.test(card.message), 'new owner name surfaced');
+  assert(/Now part of Allsop Group/.test(card.message), 'FIRE-1 reason quoted');
+}
+
+console.log('\nTest 24b: buildActionableCardForDetail — merger card without classification renders normally');
+{
+  const card = buildActionableCardForDetail({
+    verdict: VERDICTS.URL_DRIFT_NEW_DOMAIN, slug: 'x', displayName: 'X House',
+    alertId: 'm3', from: 'https://x.co/a', to: 'https://y.co/b', notes: '',
+    classification: null,
+  });
+  assert(card !== null, 'card returned');
+  assert(!/FIRE-1 verdict/.test(card.message), 'no verdict line when classification absent');
+}
+
+console.log('\nTest 24: buildActionableCardForDetail — no-catalogue + unreachable cards have Re-heal');
+{
+  const noCat = buildActionableCardForDetail({
+    verdict: VERDICTS.NO_CATALOGUE_FOUND, slug: 'bramleys', displayName: 'Bramleys',
+    alertId: 'nc1', consecutive: 4, notes: '', siteStatus: 'no_current_auction',
+  });
+  const unreach = buildActionableCardForDetail({
+    verdict: VERDICTS.UNREACHABLE, slug: 'sutton', displayName: 'Sutton Kersh',
+    alertId: 'u1', consecutive: 5, fetchError: 'timeout',
+  });
+  assert(noCat.buttons.flat().map(b => b.callback_data).includes('rerun:nc1'), 'no-catalogue has rerun');
+  assert(unreach.buttons.flat().map(b => b.callback_data).includes('rerun:u1'), 'unreachable has rerun');
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
