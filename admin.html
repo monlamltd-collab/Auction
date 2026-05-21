@@ -1954,7 +1954,7 @@ function getPipelineHtml(house, engine, extractedWith, aiTier) {
 
 // ── Add Auction ──
 const KNOWN_HOUSES = {
-  savills:'Savills', allsop:'Allsop', sdl:'BTG Eddisons', network:'Network Auctions',
+  savills:'Savills', allsop:'Allsop', sdl:'BTG Eddisons',
   bondwolfe:'Bond Wolfe', barnardmarcus:'Barnard Marcus', auctionhouselondon:'Auction House London',
   auctionhouse:'Auction House UK', cliveemson:'Clive Emson', strettons:'Strettons', acuitus:'Acuitus',
   hollismorgan:'Hollis Morgan', maggsandallen:'Maggs & Allen', mchughandco:'McHugh & Co',
@@ -2035,7 +2035,7 @@ const KNOWN_HOUSES = {
 // Auto-detect rules: URL substring → slug
 const HOUSE_DETECT = [
   ['savills.co.uk','savills'],['allsop.co.uk','allsop'],['btgeddisons','sdl'],
-  ['networkauctions','network'],['bondwolfe','bondwolfe'],['barnardmarcus','barnardmarcus'],
+  ['bondwolfe','bondwolfe'],['barnardmarcus','barnardmarcus'],
   ['auctionhouselondon','auctionhouselondon'],['auctionhouse.co.uk','auctionhouse'],
   ['cliveemson','cliveemson'],['strettons','strettons'],['acuitus','acuitus'],
   ['hollismorgan','hollismorgan'],['maggsandallen','maggsandallen'],['mchughandco','mchughandco'],
