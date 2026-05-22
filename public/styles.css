@@ -371,6 +371,19 @@ a{color:var(--red);text-decoration:none}a:hover{text-decoration:underline}
 .modal input[type="checkbox"]{width:auto}
 .modal-note{font-size:.75rem;color:var(--text4);margin-top:12px}
 
+/* ── BRIDGING-QUOTE LEAD-CAPTURE MODAL (lead-out funnel) ── */
+.bq-modal .modal{max-width:460px;text-align:left;position:relative}
+.bq-summary{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;margin:0 0 16px}
+.bq-summary-row{display:flex;justify-content:space-between;gap:14px;font-size:.82rem;padding:4px 0}
+.bq-summary-row .k{color:var(--text2);flex:0 0 auto}
+.bq-summary-row .v{color:var(--text);font-weight:600;text-align:right}
+.bq-field-label{display:block;font-size:.78rem;color:var(--text2);font-weight:600;margin:8px 0 3px}
+.bq-consent{display:flex;gap:8px;align-items:flex-start;font-size:.78rem;color:var(--text2);margin:12px 0 4px;line-height:1.4}
+.bq-consent input{margin-top:2px}
+.bq-status{font-size:.82rem;margin-top:10px;min-height:1.1em}
+.bq-status.err{color:var(--red,#c0392b)}
+.bq-status.ok{color:var(--green,#166534)}
+
 /* ── USER BAR ── */
 .user-bar{display:none}
 .nav-account{position:relative}

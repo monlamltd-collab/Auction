@@ -4859,6 +4859,19 @@ function buildExpV2Fundability(lot) {
 
   const bmUrl = (cached && cached.bridgematchUrl) ? safeHref(cached.bridgematchUrl) : 'https://www.bridgematch.co.uk';
 
+  // Lead-out CTA — captures a bridging-finance lead into Auction's own
+  // /api/leads. Sits in its own block AFTER #lender-summary so the async
+  // fetchLenderSummary() repaint (which replaces that div's innerHTML)
+  // can't wipe it. Shown only when there's a guide price to quote against.
+  const quoteCta = (lot.price > 0)
+    ? '<div class="body" style="padding-top:8px">' +
+        '<button type="button" class="btn-ed" onclick="openBridgingQuoteModal(LOTS[' + lot._idx + '])" ' +
+          'style="width:100%;justify-content:space-between;background:var(--ink);color:var(--paper);border-color:var(--ink)">' +
+          'Get a bridging quote <span class="arr">→</span></button>' +
+        '<div class="mono" style="color:var(--muted);font-size:10px;margin-top:6px;text-align:center">Free · no obligation · a specialist reviews this lot</div>' +
+      '</div>'
+    : '';
+
   return '<div class="sec">' +
     '<div class="head"><span class="eyebrow ink">Fundability</span></div>' +
     '<div class="body" id="lender-summary-' + lot._idx + '">' +
@@ -4866,7 +4879,227 @@ function buildExpV2Fundability(lot) {
       '<div style="margin:10px 0">' + tiersHtml + '</div>' +
       '<a href="' + bmUrl + '" target="_blank" rel="noopener noreferrer" class="btn-ed" style="width:100%;justify-content:space-between;background:var(--paper);color:var(--ink);border-color:var(--ink)">See all matches on BridgeMatch <span class="arr">→</span></a>' +
     '</div>' +
+    quoteCta +
   '</div>';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BRIDGING-QUOTE LEAD CAPTURE (lead-out funnel)
+// ═══════════════════════════════════════════════════════════════
+// The "Get a bridging quote" CTA in an expanded lot's Fundability
+// section opens this modal. On submit it POSTs the lot's deal essentials
+// to Auction's own /api/leads, which records the lead and emails the
+// bridging team. No cross-repo dependency. The modal DOM is built with
+// createElement / textContent (no raw HTML strings) so it is XSS-safe
+// by construction.
+let _bqLot = null;
+
+function _bqMoney(n) {
+  return (n != null && Number.isFinite(+n) && +n > 0)
+    ? '£' + Math.round(+n).toLocaleString('en-GB')
+    : null;
+}
+
+// Tiny DOM builder — props: text / class / style / on{event:fn} / <attr>;
+// children: an array of nodes. Avoids raw HTML injection entirely.
+function _bqMake(tag, props, children) {
+  const el = document.createElement(tag);
+  if (props) {
+    for (const k in props) {
+      const v = props[k];
+      if (v == null) continue;
+      if (k === 'text') el.textContent = v;
+      else if (k === 'class') el.className = v;
+      else if (k === 'style') el.style.cssText = v;
+      else if (k === 'on') { for (const ev in v) el.addEventListener(ev, v[ev]); }
+      else el.setAttribute(k, v);
+    }
+  }
+  if (children) { for (let i = 0; i < children.length; i++) { if (children[i]) el.appendChild(children[i]); } }
+  return el;
+}
+
+function _bqField(labelText, inputId, inputType, autocomplete) {
+  return [
+    _bqMake('label', { class: 'bq-field-label', for: inputId, text: labelText }),
+    _bqMake('input', { type: inputType, id: inputId, autocomplete: autocomplete, required: '' }),
+  ];
+}
+
+function openBridgingQuoteModal(lot) {
+  if (!lot) return;
+  _bqLot = lot;
+
+  let modal = document.getElementById('bqModal');
+  if (!modal) {
+    const closeBtn = _bqMake('button', {
+      type: 'button', id: 'bqClose', 'aria-label': 'Close', text: '×',
+      style: 'position:absolute;top:8px;right:12px;background:none;border:none;font-size:24px;line-height:1;color:var(--text4,#999);cursor:pointer;padding:4px',
+      on: { click: closeBridgingQuoteModal },
+    });
+    const consentLabel = _bqMake('label', { class: 'bq-consent' }, [
+      _bqMake('input', { type: 'checkbox', id: 'bqConsent' }),
+      _bqMake('span', { text: 'I’m happy for a bridging specialist to contact me about this enquiry.' }),
+    ]);
+    const form = _bqMake('form', { id: 'bqForm', novalidate: '', on: { submit: submitBridgingQuote } }, [
+      ..._bqField('Your name', 'bqName', 'text', 'name'),
+      ..._bqField('Email', 'bqEmail', 'email', 'email'),
+      ..._bqField('Phone', 'bqPhone', 'text', 'tel'),
+      consentLabel,
+      _bqMake('button', { type: 'submit', id: 'bqSubmit', class: 'cta-primary',
+        style: 'width:100%;justify-content:center', text: 'Request my quote' }),
+      _bqMake('div', { class: 'bq-status', id: 'bqStatus', role: 'status' }),
+    ]);
+    const box = _bqMake('div', { class: 'modal' }, [
+      closeBtn,
+      _bqMake('div', { class: 'modal-icon', text: '🏦' }),
+      _bqMake('h2', { text: 'Get a bridging quote' }),
+      _bqMake('p', { text: 'Free and no-obligation — a bridging specialist reviews this lot and comes back to you.' }),
+      _bqMake('div', { class: 'bq-summary', id: 'bqSummary' }),
+      form,
+      _bqMake('div', { id: 'bqSuccess', style: 'display:none' }),
+      _bqMake('p', { class: 'modal-note', text: 'Auction Brain passes this enquiry to its bridging partner so they can prepare your quote.' }),
+    ]);
+    modal = _bqMake('div', {
+      class: 'modal-bg bq-modal', id: 'bqModal',
+      on: { click: function (e) { if (e.target === modal) closeBridgingQuoteModal(); } },
+    }, [box]);
+    document.body.appendChild(modal);
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && modal.classList.contains('show')) closeBridgingQuoteModal();
+    });
+  }
+
+  // Per-lot deal summary (textContent only — no HTML parsing)
+  const summary = document.getElementById('bqSummary');
+  while (summary.firstChild) summary.removeChild(summary.firstChild);
+  const rows = [
+    ['Property', lot.address || '—'],
+    ['Guide price', _bqMoney(lot.price) || lot.priceText || 'TBC'],
+    ['Type', lot.propType || '—'],
+  ];
+  const loan = lot.fundability && _bqMoney(lot.fundability.loanAmount);
+  if (loan) rows.push(['Est. bridging loan', loan]);
+  const works = lot.suggested && _bqMoney(lot.suggested.worksCost);
+  if (works) rows.push(['Est. works budget', works]);
+  for (let i = 0; i < rows.length; i++) {
+    summary.appendChild(_bqMake('div', { class: 'bq-summary-row' }, [
+      _bqMake('span', { class: 'k', text: rows[i][0] }),
+      _bqMake('span', { class: 'v', text: rows[i][1] }),
+    ]));
+  }
+
+  // Reset to form state (clears any prior success panel); prefill email
+  document.getElementById('bqForm').style.display = '';
+  const succ = document.getElementById('bqSuccess');
+  succ.style.display = 'none';
+  while (succ.firstChild) succ.removeChild(succ.firstChild);
+  const status = document.getElementById('bqStatus');
+  status.textContent = '';
+  status.className = 'bq-status';
+  const submitBtn = document.getElementById('bqSubmit');
+  submitBtn.disabled = false;
+  submitBtn.textContent = 'Request my quote';
+  if (typeof currentUser !== 'undefined' && currentUser && currentUser.email) {
+    document.getElementById('bqEmail').value = currentUser.email;
+  }
+
+  modal.classList.add('show');
+  if (window.umami) { try { umami.track('bridging_quote_open', { house: lot._house || '', guide_price: lot.price || 0 }); } catch (e) {} }
+}
+
+function closeBridgingQuoteModal() {
+  const m = document.getElementById('bqModal');
+  if (m) m.classList.remove('show');
+}
+
+async function submitBridgingQuote(e) {
+  e.preventDefault();
+  const lot = _bqLot;
+  if (!lot) return;
+  const status = document.getElementById('bqStatus');
+  const submitBtn = document.getElementById('bqSubmit');
+  const name = document.getElementById('bqName').value.trim();
+  const email = document.getElementById('bqEmail').value.trim();
+  const phone = document.getElementById('bqPhone').value.trim();
+  const consent = document.getElementById('bqConsent').checked;
+
+  if (!name || !email || !phone) {
+    status.className = 'bq-status err';
+    status.textContent = 'Please add your name, email and phone.';
+    return;
+  }
+  if (!consent) {
+    status.className = 'bq-status err';
+    status.textContent = 'Please tick the consent box so we can contact you.';
+    return;
+  }
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Sending…';
+  status.className = 'bq-status';
+  status.textContent = '';
+
+  const f = lot.fundability || {};
+  const s = lot.suggested || {};
+  const payload = {
+    name: name, email: email, phone: phone, consent: true,
+    source: 'auction-lot',
+    isRegulated: false,
+    propertyPrice: lot.price || null,
+    propertyType: lot.propType || null,
+    propertyAddress: lot.address || null,
+    loanAmount: (f.loanAmount != null ? f.loanAmount : null),
+    ltvPercent: (f.ltv != null ? f.ltv : null),
+    worksBudget: (s.worksCost != null ? s.worksCost : null),
+    matchingLenders: (f.lenderCount != null ? f.lenderCount : null),
+    auctionUrl: lot.url || null,
+    dealData: {
+      lotId: lot.id || null,
+      house: lot._house || null,
+      lotNumber: lot.lot || null,
+      score: (lot.score != null ? lot.score : null),
+      condition: lot.condition || null,
+      gdv: (s.gdv != null ? s.gdv : null),
+      beds: (lot.beds != null ? lot.beds : null),
+    },
+  };
+
+  try {
+    const r = await fetch('/api/leads', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(typeof getAuthHeaders === 'function' ? getAuthHeaders() : {}) },
+      body: JSON.stringify(payload),
+    });
+    const data = await r.json().catch(function () { return {}; });
+    if (r.ok && data && data.ok) {
+      document.getElementById('bqForm').style.display = 'none';
+      const succ = document.getElementById('bqSuccess');
+      succ.style.display = '';
+      succ.appendChild(_bqMake('p', {
+        class: 'bq-status ok',
+        style: 'text-align:center;font-size:.92rem;margin:6px 0 14px',
+        text: 'Thanks, ' + (name.split(' ')[0] || 'there') + ' — a bridging specialist will be in touch shortly.',
+      }));
+      succ.appendChild(_bqMake('button', {
+        type: 'button', class: 'cta-primary', style: 'width:100%;justify-content:center',
+        text: 'Done', on: { click: closeBridgingQuoteModal },
+      }));
+      if (window.umami) { try { umami.track('bridging_quote_submit', { house: lot._house || '', guide_price: lot.price || 0 }); } catch (e2) {} }
+    } else {
+      status.className = 'bq-status err';
+      status.textContent = (data && data.error)
+        ? data.error
+        : 'Something went wrong. Email hello@bridgematch.co.uk and we will pick it up.';
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Request my quote';
+    }
+  } catch (err) {
+    status.className = 'bq-status err';
+    status.textContent = 'Network error — please try again, or email hello@bridgematch.co.uk.';
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Request my quote';
+  }
 }
 
 function buildExpV2Logistics(lot) {
