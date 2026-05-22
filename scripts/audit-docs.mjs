@@ -54,16 +54,16 @@ const CLAIMS = [
     failMessage: 'HOUSE_ROOTS or HOUSE_DISPLAY_NAMES missing from lib/houses.js',
   },
   {
-    docClaim: 'docs reference lib/analysis.js detectPlatformSentinel',
+    docClaim: 'docs reference lib/analysis.js detectPlatformSentinel + RECALL_SENTINELS',
     check: async () => {
       try {
         const src = await readFile(join(ROOT, 'lib', 'analysis.js'), 'utf8');
-        return /detectPlatformSentinel/.test(src);
+        return /detectPlatformSentinel/.test(src) && /RECALL_SENTINELS/.test(src);
       } catch {
         return false;
       }
     },
-    failMessage: 'detectPlatformSentinel missing from lib/analysis.js',
+    failMessage: 'detectPlatformSentinel or RECALL_SENTINELS missing from lib/analysis.js',
   },
   {
     docClaim: 'docs reference fireAlert single-object signature',
