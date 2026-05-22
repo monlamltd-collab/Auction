@@ -146,11 +146,13 @@ CREATE TABLE IF NOT EXISTS ai_usage (
   est_cost NUMERIC(10,6) DEFAULT 0,
   task_type TEXT,
   duration_ms INTEGER,
+  user_id UUID REFERENCES users(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_ai_usage_created ON ai_usage(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_ai_usage_provider ON ai_usage(provider, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ai_usage_user ON ai_usage(user_id, created_at DESC);
 ALTER TABLE ai_usage ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Service role full access" ON ai_usage FOR ALL USING (true) WITH CHECK (true);
 
