@@ -1,59 +1,20 @@
-name: Nightly Audit
+name: Nightly Visual Audit
 
 on:
   schedule:
     - cron: '0 5 * * *'    # 5am UTC daily
   workflow_dispatch:
-    inputs:
-      mode:
-        description: 'Audit mode'
-        required: false
-        default: 'fast'
-        type: choice
-        options:
-          - fast         # HTTP probes only (~5 min) — catches domain/DNS/block failures
-          - full         # + Puppeteer probes of all 173 houses (~40 min)
 
 permissions:
   contents: write
 
 jobs:
-  audit-and-fix:
+  visual-audit:
     runs-on: ubuntu-latest
-    # Fast mode fits comfortably in 15m. Full mode is a manual trigger only —
-    # allow 90m for the Puppeteer sweep of 173 houses.
-    timeout-minutes: 90
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v5
-
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 20
-          cache: 'npm'
-
-      - run: npm ci
-
-      # Chrome is only needed for full mode — skip install in fast mode to save ~2 min
-      - name: Install Chromium for Puppeteer
-        if: inputs.mode == 'full'
-        run: npx puppeteer browsers install chrome
-
-      - name: Run audit (fast — scheduled + default manual)
-        if: inputs.mode != 'full'
-        run: node scripts/audit.mjs --fast --json --save > audit-results.json 2>&1
-        continue-on-error: true
-
-      - name: Run audit (full — manual only)
-        if: inputs.mode == 'full'
-        run: node scripts/audit.mjs --json --save --concurrency 8 > audit-results.json 2>&1
-        continue-on-error: true
-
-      - name: Apply fixes + send report
-        run: node scripts/audit-fix.mjs
-        env:
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          ADMIN_SECRET: ${{ secrets.ADMIN_SECRET }}
 
       # Visual audit — Human-Eye Auditor (scripts/visual-audit.mjs).
       # Calls the in-process admin endpoint so we don't need new Supabase secrets in CI.
@@ -62,7 +23,6 @@ jobs:
       #   - autoFix:true        — applies known-recipe fixes (v1: hero_image_bleed)
       #   - includeMarkdown:true — returns the full markdown report; saved to audits/
       - name: Run visual audit (markdown report + auto-fix bot)
-        if: inputs.mode != 'full'
         continue-on-error: true
         run: |
           # Origin header is required by csrfCheck middleware (lib/security.js).
@@ -86,9 +46,9 @@ jobs:
         env:
           ADMIN_SECRET: ${{ secrets.ADMIN_SECRET }}
 
-      - name: Commit and push fixes
+      - name: Commit and push report
         run: |
           git config user.name "Auction Health Bot"
           git config user.email "noreply@bridgematch.co.uk"
-          git add server.js scripts/audit/ audits/
-          git diff --cached --quiet || (git commit -m "auto-fix: nightly audit $(date +%Y-%m-%d)" && git push)
+          git add audits/
+          git diff --cached --quiet || (git commit -m "chore: nightly visual audit $(date +%Y-%m-%d)" && git push)

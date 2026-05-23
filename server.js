@@ -604,16 +604,19 @@ function scheduleTick() {
       .catch(e => console.error('SCHEDULE sitemap regen failed:', e.message));
   }
 
-  // Tier 12: Daily homepage watch at 03:30 UK. For every house in
-  // HOUSE_ROOTS, ask Firecrawl whether the homepage changed since
-  // yesterday and what catalogue URL it currently links to. Drift on
-  // the same domain triggers healBrokenHouse() automatically; new-domain
-  // drift / parked / no-longer-auction fires alerts for human review.
-  // ~150 Firecrawl credits/day = ~4,500/month, well inside budget.
-  // Kill switch: HOMEPAGE_WATCH_ENABLED=false.
+  // Tier 12: Homepage watch at 03:30 UK, every other day (epoch-day parity).
+  // For every house in HOUSE_ROOTS, ask Firecrawl whether the homepage
+  // changed since last visit and what catalogue URL it currently links to.
+  // Drift on the same domain triggers healBrokenHouse() automatically;
+  // new-domain drift / parked / no-longer-auction fires alerts for human
+  // review. ~150 Firecrawl credits/run; every other day ≈ ~2,250/month.
+  // URL drift is also caught by the nightly 0-lot healing path, so a ≤1-day
+  // detection lag is acceptable. Kill switch: HOMEPAGE_WATCH_ENABLED=false.
   // Scheduled at 03:30 to give the 03:00 full pass a clear runway and
   // pick up any URL changes the full pass just discovered.
-  if (hour === 3 && minute >= 30 && minute < 35 && now - _scheduleState.lastHomepageWatch > 60 * 60 * 1000) {
+  if (hour === 3 && minute >= 30 && minute < 35
+      && Math.floor(now / 86400000) % 2 === 0
+      && now - _scheduleState.lastHomepageWatch > 60 * 60 * 1000) {
     _scheduleState.lastHomepageWatch = now;
     console.log('SCHEDULE: 03:30 UK — running homepage watch');
     Promise.all([
