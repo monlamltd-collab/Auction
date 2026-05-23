@@ -4781,26 +4781,77 @@ function buildExpV2DD(lot) {
 }
 
 function buildExpV2Scores(lot) {
+  const sb = Array.isArray(lot.scoreBreakdown) ? lot.scoreBreakdown : [];
   const opps = (lot.opps || []).slice(0, 8);
   const risks = (lot.risks || []).slice(0, 6);
-  if (!opps.length && !risks.length) return '';
+  if (!sb.length && !opps.length && !risks.length) return '';
 
-  const oppHtml = opps.map(function (o) {
-    return '<li><span class="ws-mark opp">+</span><span>' + esc(o) + '</span></li>';
-  }).join('');
-  const riskHtml = risks.map(function (r) {
-    return '<li><span class="ws-mark risk">!</span><span>' + esc(r) + '</span></li>';
-  }).join('');
+  const total = lot.score;
+  const totalLabel = total != null ? (total > 0 ? '+' : '') + total + ' / 10' : '';
+
+  // Opps/risks not explained by a scoreBreakdown row (e.g. "Listed building"
+  // is a risk with no points). Render them as text labels under the bars.
+  const sbLabels = new Set(sb.map(function (s) { return s.signal; }));
+  const extraOpps = opps.filter(function (o) { return !sbLabels.has(o); });
+  const extraRisks = risks.filter(function (r) { return !sbLabels.has(r); });
+
+  let bodyHtml = '';
+
+  if (sb.length) {
+    const maxPts = Math.max(2, ...sb.map(function (s) { return Math.abs(s.pts); }));
+    const rows = sb.map(function (s) {
+      const isPos = s.pts > 0;
+      const color = isPos ? 'var(--signal-pos,#2e7d32)' : 'var(--accent-danger,#8B0000)';
+      const pct = Math.round((Math.abs(s.pts) / maxPts) * 100);
+      return '<div class="score-popup-row">' +
+        '<span class="score-popup-label" style="max-width:none;flex:0 0 auto">' + esc(s.signal) + '</span>' +
+        '<div class="score-popup-bar"><div class="score-popup-fill" style="width:' + pct + '%;background:' + color + '"></div></div>' +
+        '<span class="score-popup-pts" style="color:' + color + '">' + (isPos ? '+' : '') + s.pts + '</span>' +
+      '</div>';
+    }).join('');
+    bodyHtml += '<div class="score-breakdown" style="margin-bottom:' + (extraOpps.length || extraRisks.length ? '14px' : '0') + '">' + rows + '</div>';
+  }
+
+  if (extraOpps.length) {
+    const oppHtml = extraOpps.map(function (o) {
+      return '<li><span class="ws-mark opp">+</span><span>' + esc(o) + '</span></li>';
+    }).join('');
+    bodyHtml += '<div class="eyebrow ink" style="margin-bottom:8px">Also noted</div><ul class="ws-list" style="margin-bottom:' + (extraRisks.length ? '14px' : '0') + '">' + oppHtml + '</ul>';
+  }
+  if (extraRisks.length) {
+    const riskHtml = extraRisks.map(function (r) {
+      return '<li><span class="ws-mark risk">!</span><span>' + esc(r) + '</span></li>';
+    }).join('');
+    bodyHtml += '<div class="eyebrow ink" style="margin-bottom:8px">Risks to verify</div><ul class="ws-list">' + riskHtml + '</ul>';
+  }
+
+  // Fallback when scoreBreakdown is absent (legacy lots) — keep original opps/risks layout
+  if (!sb.length) {
+    bodyHtml = '';
+    if (opps.length) {
+      const oppHtml = opps.map(function (o) {
+        return '<li><span class="ws-mark opp">+</span><span>' + esc(o) + '</span></li>';
+      }).join('');
+      bodyHtml += '<div class="eyebrow ink" style="margin-bottom:8px">Opportunities</div><ul class="ws-list" style="margin-bottom:14px">' + oppHtml + '</ul>';
+    }
+    if (risks.length) {
+      const riskHtml = risks.map(function (r) {
+        return '<li><span class="ws-mark risk">!</span><span>' + esc(r) + '</span></li>';
+      }).join('');
+      bodyHtml += '<div class="eyebrow ink" style="margin-bottom:8px">Risks to verify</div><ul class="ws-list">' + riskHtml + '</ul>';
+    }
+  }
+
+  const headerLabel = totalLabel
+    ? 'Why this lot scores · <span style="font-family:var(--font-mono);color:var(--text)">' + totalLabel + '</span>'
+    : 'Why this lot scores';
 
   return '<section class="sec">' +
     '<div class="head">' +
-      '<span class="sec-head"><span class="sec-num-badge">__SEC_NUM__</span><span class="eyebrow ink">Why this lot scores</span></span>' +
+      '<span class="sec-head"><span class="sec-num-badge">__SEC_NUM__</span><span class="eyebrow ink">' + headerLabel + '</span></span>' +
       '<a href="/scoring" class="eyebrow" style="color:var(--red);text-decoration:none">Scoring methodology →</a>' +
     '</div>' +
-    '<div class="body">' +
-      (opps.length ? '<div class="eyebrow ink" style="margin-bottom:8px">Opportunities</div><ul class="ws-list" style="margin-bottom:14px">' + oppHtml + '</ul>' : '') +
-      (risks.length ? '<div class="eyebrow ink" style="margin-bottom:8px">Risks to verify</div><ul class="ws-list">' + riskHtml + '</ul>' : '') +
-    '</div>' +
+    '<div class="body">' + bodyHtml + '</div>' +
   '</section>';
 }
 
