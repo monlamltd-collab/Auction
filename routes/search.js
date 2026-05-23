@@ -946,7 +946,7 @@ ${lotSummaries}
 Respond in this exact JSON format (and nothing else):
 {"indices":[0,5,12],"report":"Your investment commentary..."}
 
-Pick the indices of lots that genuinely match the user's INTENT — quality over quantity. Aim for 5-30 picks for a typical query; fewer if matches are weak. The report (2-3 paragraphs) should: (1) summarise what was found, (2) call out standout lots with their investment angle, (3) honestly note if the user's exact concept couldn't be matched and what was returned instead.`, { tier: 'fast', maxTokens: 4000, taskType: 'search' });
+Pick the indices of lots that genuinely match the user's INTENT — quality over quantity. Aim for 5-30 picks for a typical query; fewer if matches are weak. The report (2-3 paragraphs) should: (1) summarise what was found, (2) call out standout lots with their investment angle, (3) honestly note if the user's exact concept couldn't be matched and what was returned instead.`, { tier: 'fast', maxTokens: 4000, taskType: 'search', userId: user.id });
     log.info('smart_search_full', { tier: 'fast', preFiltered: totalSearched, sentToAI: geminiLots.length, relaxationTier: TIER_LABELS[searchTier] });
 
     let aiParsed;
