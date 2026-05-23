@@ -207,11 +207,13 @@ console.log('\n── getFundabilityBadge ──');
 // Save original fetch
 const _origFetch = globalThis.fetch;
 
-// Helper to mock fetch + capture the request body the badge sent
+// Helper to mock fetch + capture the request body and headers the badge sent
 let lastRequestBody = null;
+let lastRequestHeaders = null;
 function mockFetch(response, status = 200) {
   globalThis.fetch = async (_url, opts) => {
     lastRequestBody = opts?.body ? JSON.parse(opts.body) : null;
+    lastRequestHeaders = opts?.headers || null;
     return {
       ok: status >= 200 && status < 300,
       status,
@@ -234,6 +236,9 @@ assert(successResult._provenance?.confidence === 'high', 'non-refurb result carr
 assert(typeof successResult._provenance?.response_time_ms === 'number', 'provenance.response_time_ms set');
 assert(lastRequestBody?.loan_amount === 187500, 'API received 75% LTV loan_amount for residential');
 assert(lastRequestBody?.works_cost === undefined, 'API not sent works_cost for non-refurb');
+// X-Source header lets BridgeMatch skip activity-log writes for machine
+// traffic so the daily digest only counts real user searches.
+assert(lastRequestHeaders?.['X-Source'] === 'auctionbrain', 'API call tagged with X-Source: auctionbrain');
 
 // Test: refurb lot sends works_cost, gdv, loan_term to API
 mockFetch({ summary: { eligible: 8, possible: 2 } });
