@@ -92,5 +92,25 @@ console.log('\nTest 5: clearHealingCooldown is safe on unknown slug');
   assert(!threw, 'clearHealingCooldown on unknown slug does not throw');
 }
 
+// ── Test 6: healBrokenHouse honours MAX_HEAL_ATTEMPTS lifetime cap ──
+// Pre-seed _healingState with attempts AT the cap (8); the next call computes
+// attempts = 9 > MAX (8) and must short-circuit before any Firecrawl call.
+// This is the credit-protection guarantee for permanently-dead houses.
+console.log('\nTest 6: healBrokenHouse honours MAX_HEAL_ATTEMPTS cap (no Firecrawl call)');
+{
+  const CAP_SLUG = 'cap-test-slug';
+  const state = getHealingState();
+  state.set(CAP_SLUG, { lastAttempt: Date.now(), attempts: 8, cooldownUntil: 0 });
+  let firecrawlCalled = false;
+  const result = await healBrokenHouse(CAP_SLUG, 'https://example.invalid/old', {
+    FIRECRAWL_API_KEY: 'test-key',
+    scrapeWithFirecrawl: async () => { firecrawlCalled = true; return { html: '' }; },
+    HEADERS: {},
+  });
+  assert(result === null, 'returns null when at the cap');
+  assert(!firecrawlCalled, 'no Firecrawl call when capped');
+  state.delete(CAP_SLUG);
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
