@@ -289,16 +289,11 @@
 
   <!-- ═══════ UNIFIED FILTER BAR ═══════ -->
   <div class="search-panel" id="filterBar">
-    <!-- ROW 1: Search — primary action -->
+    <!-- ROW 1: Sticky bar — Filters + Sort + View toggle. The AI-powered
+         keyword search has moved into the filter sheet (see
+         .sp-keywords-section below) to match the Rightmove pattern:
+         it's a refinement tool, not the primary search affordance. -->
     <div class="sp-search-row">
-      <div class="sp-ai-group">
-        <input class="tb-search" id="smartQuery" placeholder="Search by address, postcode, or ask AI anything..." oninput="localFilter();updateSuggestions()" onfocus="showSuggestions()" aria-label="Search or AI-powered query" autocomplete="off">
-        <button class="btn-main" id="mainBtn" onclick="handleSearch()" aria-label="Search auction lots">Search</button>
-        <div class="ai-suggest" id="aiSuggest">
-          <div class="ai-suggest-header">Try asking AI</div>
-          <div id="aiSuggestList"></div>
-        </div>
-      </div>
       <button type="button" class="mobile-filters-toggle" id="mobileFiltersToggle" onclick="toggleMobileFilters()" aria-label="Show or hide filters" aria-expanded="false">Filters <span class="mf-active-count" id="mfActiveCount" style="display:none">0</span></button>
       <select class="tb-select sp-sort-mirror" id="fSortMirror" onchange="syncSortFromMirror()" aria-label="Sort lots by">
         <option value="date_asc">Soonest first</option>
@@ -324,6 +319,25 @@
       <div class="sp-sheet-header">
         <h3 class="sp-sheet-title">Filters</h3>
         <button type="button" class="sp-sheet-close" onclick="toggleMobileFilters()" aria-label="Close filters">✕</button>
+      </div>
+      <!-- Keywords (BETA) — Rightmove-style AI keyword refinement.
+           Demoted from the prominent top-bar CTA to a labelled section
+           inside the filter sheet to set realistic expectations about
+           what AI can and can't do. -->
+      <div class="sp-keywords-section">
+        <div class="sp-keywords-head">
+          <h4 class="sp-keywords-title">Keywords <span class="beta-tag">BETA</span></h4>
+          <p class="sp-keywords-sub">Choose up to 3 keywords to refine your search.</p>
+        </div>
+        <div class="sp-ai-group">
+          <input class="tb-search" id="smartQuery" placeholder="e.g. garden, planning, BTL" oninput="localFilter();updateSuggestions()" onfocus="showSuggestions()" aria-label="Refine search with up to 3 keywords" autocomplete="off">
+          <button class="btn-main" id="mainBtn" onclick="handleSearch()" aria-label="Search auction lots">Search</button>
+          <div class="ai-suggest" id="aiSuggest">
+            <div class="ai-suggest-header">Try asking AI</div>
+            <div id="aiSuggestList"></div>
+          </div>
+        </div>
+        <p class="sp-keywords-disclaimer">This tool uses AI to help you find relevant lots but it can make mistakes. Verify key details before relying on it.</p>
       </div>
       <!-- Auction date — Rightmove-style chip group; mirrors #fLookahead -->
       <div class="sp-date-chips" role="group" aria-label="Auction date">

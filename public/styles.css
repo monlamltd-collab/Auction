@@ -2810,6 +2810,101 @@ footer p a {
 .sp-date-chips { display: none; }
 .sp-sort-mirror { display: none; }
 
+/* Keywords (BETA) section — Rightmove-aligned. Demotes the AI search
+   from a prominent top-bar CTA to a labelled refinement tool inside
+   the filter area. Renders inline on desktop (since .sp-sheet-body is
+   display:contents) and inside the bottom sheet on mobile.
+   --------------------------------------------------------------- */
+.sp-keywords-section {
+  padding: 14px 18px;
+  background: var(--paper);
+  border-bottom: 1px solid var(--border-strong);
+}
+.sp-keywords-head { margin-bottom: 10px; }
+.sp-keywords-title {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.beta-tag {
+  font-family: var(--font-mono);
+  font-size: .62rem;
+  font-weight: 600;
+  letter-spacing: .08em;
+  color: var(--ink);
+  border: 1px solid var(--ink);
+  background: transparent;
+  padding: 2px 7px;
+  border-radius: 999px;
+  text-transform: uppercase;
+}
+.sp-keywords-sub {
+  font-family: var(--font-main);
+  font-size: .82rem;
+  color: var(--text2);
+  margin: 4px 0 0;
+  line-height: 1.4;
+}
+.sp-keywords-section .sp-ai-group {
+  position: relative;
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+  margin: 6px 0 10px;
+}
+.sp-keywords-section .sp-ai-group #smartQuery {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: auto;
+  min-height: 44px;
+  padding: 10px 14px;
+  font-family: var(--font-main);
+  font-size: .9rem;
+  text-transform: none;
+  letter-spacing: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--white);
+  color: var(--ink);
+}
+.sp-keywords-section .sp-ai-group #smartQuery::placeholder {
+  font-family: var(--font-main);
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: .9rem;
+  color: var(--text3);
+  opacity: 1;
+}
+.sp-keywords-section .sp-ai-group #mainBtn {
+  flex: 0 0 auto;
+  height: auto;
+  padding: 0 18px;
+  min-height: 44px;
+  border-radius: 10px;
+  border: 1px solid var(--red);
+  background: var(--red);
+  color: var(--white);
+  font-family: var(--font-main);
+  font-size: .9rem;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  cursor: pointer;
+}
+.sp-keywords-section .sp-ai-group #mainBtn:hover { background: var(--red-hover); border-color: var(--red-hover); }
+.sp-keywords-disclaimer {
+  font-family: var(--font-main);
+  font-size: .74rem;
+  color: var(--text3);
+  line-height: 1.45;
+  margin: 0;
+}
+
 @media (max-width: 640px) {
   /* ── Sticky top bar (Rightmove pattern) ──
      Row 1 (.sp-search-row) becomes the always-visible bar: search input,
@@ -2824,15 +2919,10 @@ footer p a {
     gap: 8px;
     padding: 10px 12px;
   }
-  .sp-search-row .sp-ai-group {
-    flex: 1 1 100%;
-    order: 1;
-    width: 100%;
-  }
-  .sp-search-row .mobile-filters-toggle { order: 2; flex: 1 1 auto; }
+  .sp-search-row .mobile-filters-toggle { order: 1; flex: 1 1 auto; }
   .sp-search-row .sp-sort-mirror {
     display: inline-flex;
-    order: 3;
+    order: 2;
     flex: 1 1 auto;
     min-width: 0;
     max-width: 160px;
@@ -2842,7 +2932,7 @@ footer p a {
     background: var(--white);
     border-radius: 8px;
   }
-  .sp-search-row .view-toggle { display: flex; order: 4; flex: 0 0 auto; }
+  .sp-search-row .view-toggle { display: flex; order: 3; flex: 0 0 auto; }
   .sp-search-row .sp-per-page,
   .sp-search-row .sp-page-info { display: none !important; }
 
@@ -2885,8 +2975,12 @@ footer p a {
   }
   body.sheet-open #sheetBackdrop { opacity: 1; pointer-events: auto; }
 
-  /* Lock body scroll while the sheet is open */
-  body.sheet-open { overflow: hidden; touch-action: none; }
+  /* Lock body scroll while the sheet is open. Use `overscroll-behavior`
+     and explicit overflow rather than `touch-action: none`, because
+     `touch-action: none` cascades to descendants and disables taps on
+     the sheet's own controls — leaving every filter looking inert. */
+  body.sheet-open { overflow: hidden; }
+  body.sheet-open #wrap { overflow: hidden; }
 
   /* Sheet header — drag handle + title + close */
   .sp-sheet-header {
@@ -2944,14 +3038,77 @@ footer p a {
   .sp-sheet-body .sp-toggle-row > * {
     width: 100%;
   }
+  /* Restyle the editorial chips (uppercase mono on cream paper — designed
+     for the desktop chip row) so they read as normal interactive form
+     fields inside the white sheet. Without this override they look
+     "greyed out" — the existing rules at styles.css:1797–1815 win on the
+     properties this block doesn't explicitly set. */
   .sp-sheet-body .sp-filter-row .tb-select,
   .sp-sheet-body .sp-filter-row .tb-search,
   .sp-sheet-body .sp-filter-row .price-dd-btn,
-  .sp-sheet-body .sp-filter-row .clear-all-btn {
+  .sp-sheet-body .sp-filter-row .clear-all-btn,
+  .sp-sheet-body .more-filters-pop .tb-select,
+  .sp-sheet-body .more-filters-pop .tb-search,
+  .sp-sheet-body .more-filters-pop .house-dropdown-btn {
     width: 100%;
     max-width: none;
-    min-height: 44px;
-    font-size: .9rem;
+    height: auto;
+    min-height: 48px;
+    padding: 12px 14px;
+    font-family: var(--font-main);
+    font-size: .95rem;
+    text-transform: none;
+    letter-spacing: 0;
+    background: var(--white);
+    color: var(--ink);
+    border: 1px solid var(--border-strong);
+    border-radius: 10px;
+    line-height: 1.2;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  /* Native arrow indicator for selects (the appearance reset removes it) */
+  .sp-sheet-body .sp-filter-row .tb-select,
+  .sp-sheet-body .more-filters-pop .tb-select {
+    background-image: linear-gradient(45deg, transparent 50%, var(--text2) 50%),
+                      linear-gradient(135deg, var(--text2) 50%, transparent 50%);
+    background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%;
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+    padding-right: 34px;
+  }
+  /* Placeholders are normal-case inside the sheet, not the desktop's
+     uppercase mono. */
+  .sp-sheet-body .sp-filter-row input.tb-search,
+  .sp-sheet-body .more-filters-pop input.tb-search {
+    font-family: var(--font-main);
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: .95rem;
+  }
+  .sp-sheet-body .sp-filter-row input.tb-search::placeholder,
+  .sp-sheet-body .more-filters-pop input.tb-search::placeholder {
+    font-family: var(--font-main);
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: .95rem;
+    color: var(--text3);
+    opacity: 1;
+  }
+  /* Active-filter ink-fill from the desktop row would invert text/bg
+     awkwardly inside the white sheet — neutralise it. */
+  .sp-sheet-body .sp-filter-row .tb-select.active-filter,
+  .sp-sheet-body .sp-filter-row .price-dd-btn.active-filter,
+  .sp-sheet-body .sp-filter-row .tb-search:not(:placeholder-shown) {
+    background: var(--white);
+    color: var(--ink);
+    border-color: var(--red);
+  }
+  /* "Clear all" inside the sheet — drop the red outline button styling */
+  .sp-sheet-body .sp-filter-row .clear-all-btn {
+    color: var(--text2);
+    border-color: var(--border-strong);
+    background: var(--white);
   }
 
   /* Auction-date chip group — Rightmove-style segmented control,
