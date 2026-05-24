@@ -300,6 +300,14 @@
         </div>
       </div>
       <button type="button" class="mobile-filters-toggle" id="mobileFiltersToggle" onclick="toggleMobileFilters()" aria-label="Show or hide filters" aria-expanded="false">Filters <span class="mf-active-count" id="mfActiveCount" style="display:none">0</span></button>
+      <select class="tb-select sp-sort-mirror" id="fSortMirror" onchange="syncSortFromMirror()" aria-label="Sort lots by">
+        <option value="date_asc">Soonest first</option>
+        <option value="price_asc">Price low → high</option>
+        <option value="price_desc">Price high → low</option>
+        <option value="yield">Best yield</option>
+        <option value="score">Best score</option>
+        <option value="days_unsold">Longest unsold</option>
+      </select>
       <select class="tb-select sp-per-page" id="fPerPage" onchange="savePerPage();_currentPage=1;renderLots()" aria-label="Lots per page"><option value="10">10 / page</option><option value="20">20 / page</option><option value="30" selected>30 / page</option><option value="50">50 / page</option><option value="100">100 / page</option></select>
       <div class="view-toggle" id="gridListToggle">
         <button class="active" id="gridViewBtn" onclick="setView('grid')" title="Grid view"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></button>
@@ -308,8 +316,24 @@
       <span class="sp-page-info" id="filterBarCount"></span>
       <select class="tb-select sp-lots-dd" id="fAfford" onchange="debouncedRender()" style="display:none"><option value="all">All lots</option><option value="affordable">Affordable</option><option value="in_budget">In budget only</option><option value="full_finance">Zero deposit only</option></select>
     </div>
-    <!-- ROW 2: Filters -->
-    <div class="sp-filter-row sp-primary">
+    <!-- Sheet body — wraps the secondary filter rows. On desktop this is
+         display:contents (invisible to layout). On mobile (≤640px) it
+         becomes a fixed bottom sheet that slides up when "Filters" is
+         tapped. -->
+    <div class="sp-sheet-body" id="filterSheet">
+      <div class="sp-sheet-header">
+        <h3 class="sp-sheet-title">Filters</h3>
+        <button type="button" class="sp-sheet-close" onclick="toggleMobileFilters()" aria-label="Close filters">✕</button>
+      </div>
+      <!-- Auction date — Rightmove-style chip group; mirrors #fLookahead -->
+      <div class="sp-date-chips" role="group" aria-label="Auction date">
+        <span class="sp-section-label">Auction date</span>
+        <button type="button" class="sp-chip" data-look="1" onclick="setLookaheadFromChip('1')">Next auction</button>
+        <button type="button" class="sp-chip is-active" data-look="2" onclick="setLookaheadFromChip('2')">Next 2</button>
+        <button type="button" class="sp-chip" data-look="all" onclick="setLookaheadFromChip('all')">All</button>
+      </div>
+      <!-- ROW 2: Filters -->
+      <div class="sp-filter-row sp-primary">
       <button class="clear-all-btn" onclick="clearAllFilters()" title="Reset all filters">Clear all</button>
       <div class="price-dd" id="priceDropdown">
         <button class="price-dd-btn" id="priceDdBtn" onclick="togglePricePopover(event)">Any price</button>
@@ -402,6 +426,12 @@
       <div data-anon-hide style="width:1px;height:20px;background:var(--border);margin:0 4px;flex-shrink:0"></div>
       <div class="saved-search-bar" id="savedSearchBar" style="display:none;padding:0;flex:1;min-width:0"></div>
       <button class="ss-save-btn" id="ssSaveBtn" data-anon-hide onclick="saveCurrentSearch()" title="Save current filters">+ Save search</button>
+      </div>
+      <!-- Sticky footer CTA inside the sheet (mobile only — hidden on desktop) -->
+      <div class="sp-sheet-footer">
+        <button type="button" class="sp-sheet-reset" onclick="clearAllFilters()">Reset all</button>
+        <button type="button" class="sp-sheet-apply" onclick="toggleMobileFilters()">Show <span id="sheetCtaCount">0</span> results</button>
+      </div>
     </div>
     <div class="advanced" id="advancedPanel">
       <div style="font-size:.75rem;color:#6b7c8d;padding:0 0 8px;line-height:1.4;">Set your bridging finance parameters below. Lots will show a funding badge indicating how many lenders would finance the deal and at what terms.</div>
@@ -430,6 +460,9 @@
       <div class="fp-summary" id="fpSummary"></div>
     </div>
   </div>
+
+  <!-- ═══════ FILTER SHEET BACKDROP (mobile only) ═══════ -->
+  <div id="sheetBackdrop" onclick="toggleMobileFilters()" aria-hidden="true"></div>
 
   <!-- ═══════ BACK BUTTON (visible in results view) ═══════ -->
   <div class="back-bar" id="backBar">
