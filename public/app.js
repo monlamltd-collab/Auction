@@ -129,9 +129,43 @@ function toggleMobileFilters() {
   var panel = $('filterBar');
   if (!panel) return;
   var expanded = panel.classList.toggle('mobile-expanded');
+  document.body.classList.toggle('sheet-open', expanded);
   var btn = $('mobileFiltersToggle');
   if (btn) btn.setAttribute('aria-expanded', String(expanded));
   refreshMobileFilterCount();
+}
+
+// Mirror select in the sticky top bar (#fSortMirror) and the canonical
+// #fSort inside the sheet stay in sync. When the user changes either,
+// both reflect the new value and we trigger a re-render.
+function syncSortFromMirror() {
+  var src = $('fSortMirror'); var tgt = $('fSort');
+  if (!src || !tgt) return;
+  tgt.value = src.value;
+  if (typeof debouncedRender === 'function') debouncedRender();
+}
+function syncSortToMirror() {
+  var src = $('fSort'); var tgt = $('fSortMirror');
+  if (src && tgt) tgt.value = src.value;
+}
+
+// Auction-date chip group inside the sheet — mirrors #fLookahead.
+function setLookaheadFromChip(val) {
+  var sel = $('fLookahead'); if (!sel) return;
+  sel.value = String(val);
+  if (typeof saveLookahead === 'function') saveLookahead();
+  // Repaint chip active state
+  document.querySelectorAll('.sp-date-chips .sp-chip').forEach(function(b){
+    b.classList.toggle('is-active', b.getAttribute('data-look') === String(val));
+  });
+  if (typeof debouncedRender === 'function') debouncedRender();
+}
+function refreshAuctionDateChips() {
+  var sel = $('fLookahead'); if (!sel) return;
+  var val = sel.value || '2';
+  document.querySelectorAll('.sp-date-chips .sp-chip').forEach(function(b){
+    b.classList.toggle('is-active', b.getAttribute('data-look') === val);
+  });
 }
 
 // ── FAVOURITES ──
@@ -2938,6 +2972,10 @@ function renderLots(){
   // Update filter count
   const filterCountEl=$('filterBarCount');
   if(filterCountEl) filterCountEl.textContent='Showing '+lots.length.toLocaleString()+' of '+LOTS.length.toLocaleString()+' lots';
+  // Mobile sheet CTA + sort mirror + auction-date chips sync
+  const sheetCta=$('sheetCtaCount'); if(sheetCta) sheetCta.textContent=lots.length.toLocaleString();
+  if(typeof syncSortToMirror==='function') syncSortToMirror();
+  if(typeof refreshAuctionDateChips==='function') refreshAuctionDateChips();
 
   // Highlight active filters in unified bar
   document.querySelectorAll('.unified-bar .tb-select').forEach(sel=>{
@@ -3371,9 +3409,21 @@ function card(l){
     (isFav ? 'Saved — tap to remove' : 'Save this lot') + '">' +
     (isFav ? '♥ Saved' : '♡ Save') +
     '</button>';
+  // Mobile-only overlays — surface AI score (top-left of hero), auction
+  // house + lot # + date (bottom-left "footer pill" inside hero). CSS
+  // hides .lcv2-mobile-overlays on ≥641px so desktop is unaffected.
+  const mobileScoreHtml = (scoreNum != null)
+    ? '<div class="lcv2-score-mobile ' + scoreKind + '" aria-label="AI score ' + scoreNum + ' out of 10">' + scoreNum + '</div>'
+    : '';
+  const mobileStripHtml = '<div class="lcv2-strip-mobile">' +
+    '<span class="dot ' + status.dot + '"></span>' +
+    '<span>' + esc((houseLabel || 'AUCTION HOUSE').toUpperCase()) + ' · LOT ' + lotNum + '</span>' +
+    (dateShort ? '<span>· ' + dateShort + '</span>' : '') +
+  '</div>';
+  const mobileOverlays = '<div class="lcv2-mobile-overlays">' + mobileScoreHtml + mobileStripHtml + '</div>';
   if (l.imageUrl && typeof isValidImageUrl === 'function' && isValidImageUrl(l.imageUrl)) {
     const imgSrc = (typeof optimImg === 'function') ? optimImg(l.imageUrl, 600) : l.imageUrl;
-    heroHtml = '<div class="lcv2-hero-img" style="background-image:url(\'' + esc(imgSrc) + '\')">' + saveBtnHtml + '</div>';
+    heroHtml = '<div class="lcv2-hero-img" style="background-image:url(\'' + esc(imgSrc) + '\')">' + saveBtnHtml + mobileOverlays + '</div>';
     addressRowHtml = '<div class="lcv2-addr">' +
       '<h3>' + esc(addr) + '</h3>' +
       (pc ? '<span class="pc">' + esc(pc) + '</span>' : '') +
@@ -3381,6 +3431,7 @@ function card(l){
   } else {
     heroHtml = '<div class="lcv2-hero-stripe">' +
       saveBtnHtml +
+      mobileOverlays +
       '<span class="noimg-label">▢ NO CATALOGUE IMAGE · ADDRESS ONLY</span>' +
       '<h3 class="addr">' + esc(addr) + '</h3>' +
       (pc ? '<span class="pc">' + esc(pc) + '</span>' : '') +
