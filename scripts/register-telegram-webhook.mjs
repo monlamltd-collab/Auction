@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // scripts/register-telegram-webhook.mjs
 // One-off setup: register our /telegram/webhook endpoint with Telegram so
-// callback_query updates arrive at the Express app.
+// callback_query (button taps) and message (verified-URL replies) updates
+// arrive at the Express app.
 //
 // Usage:
 //   TELEGRAM_BOT_TOKEN=... TELEGRAM_WEBHOOK_SECRET=... \
@@ -26,7 +27,8 @@ const resp = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
   body: JSON.stringify({
     url: webhookUrl,
     secret_token: secret,
-    allowed_updates: ['callback_query'],   // we only care about button taps
+    // button taps + replies (a human-verified catalogue URL sent as a reply)
+    allowed_updates: ['callback_query', 'message'],
   }),
 });
 
