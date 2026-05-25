@@ -16,7 +16,7 @@
 
 import { Router } from 'express';
 import { supabase } from '../lib/supabase.js';
-import { LOTS_SELECT, dbRowToFrontendLot } from '../lib/pipeline/lot-mappers.js';
+import { LOTS_SELECT, dbRowToLot } from '../lib/types/lot.js';
 import { getHouseDisplayName } from '../lib/houses.js';
 import { log } from '../lib/logging.js';
 import {
@@ -55,7 +55,7 @@ router.get('/lot/:id', async (req, res) => {
     return res.redirect(302, '/');
   }
 
-  const lot = dbRowToFrontendLot(row);
+  const lot = dbRowToLot(row);
   const displayName = getHouseDisplayName(row.house, row.url) || row.house;
   const shortAddress = (lot.address || '').split(',').slice(0, 2).join(',').trim() || 'Auction lot';
   const priceLabel = lot.priceText || (lot.price ? `£${lot.price.toLocaleString('en-GB')}` : 'Guide TBA');
@@ -132,7 +132,7 @@ router.get('/og/lot/:id.png', async (req, res) => {
 
   try {
     const { default: sharp } = await import('sharp');
-    const lot = dbRowToFrontendLot(row);
+    const lot = dbRowToLot(row);
     const displayName = getHouseDisplayName(row.house, row.url) || row.house;
     const priceLabel = lot.priceText || (lot.price ? `£${lot.price.toLocaleString('en-GB')}` : 'Guide TBA');
     const scoreLabel = lot.score != null ? `${lot.score.toFixed(1)}` : null;

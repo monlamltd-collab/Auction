@@ -44,11 +44,13 @@ console.log('multi-image-sweep — batch cap + wall-clock + fairness');
 
 console.log('\nimages field exposed end-to-end');
 {
-  const lotMappers = readFileSync(join(here, '..', 'lib', 'pipeline', 'lot-mappers.js'), 'utf8');
-  assert(/image_url,\s*images,/.test(lotMappers),
-    'LOTS_SELECT includes images column (was deliberately held out historically)');
-  assert(/images:\s*Array\.isArray\(r\.images\)\s*\?\s*r\.images\s*:\s*\[\]/.test(lotMappers),
-    'dbRowToFrontendLot maps images with safe array fallback');
+  // Canonical Lot contract lives in lib/types/lot.js since the
+  // lot-mappers.js → lib/types/lot.js consolidation. We check the new file.
+  const lotTypes = readFileSync(join(here, '..', 'lib', 'types', 'lot.js'), 'utf8');
+  assert(/'image_url',\s*'images',/.test(lotTypes),
+    'LOT_COLUMNS includes images column adjacent to image_url (was deliberately held out historically)');
+  assert(/images:\s*Array\.isArray\(row\.images\)\s*\?\s*row\.images\s*:\s*\[\]/.test(lotTypes),
+    'dbRowToLot maps images with safe array fallback');
 
   const searchRoute = readFileSync(join(here, '..', 'routes', 'search.js'), 'utf8');
   assert(/images:\s*Array\.isArray\(r\.images\)\s*\?\s*r\.images\s*:\s*\[\]/.test(searchRoute),

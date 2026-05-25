@@ -19,7 +19,8 @@ import { getLastExtractorUsed } from '../lib/scraper/state.js';
 import { extractCatalogueListing, extractLotDetailFirecrawl } from '../lib/pipeline/firecrawl-extract.js';
 import { enrichLots } from '../lib/enrichment.js';
 import { enrichLotsWithFundability } from '../lib/fundability.js';
-import { qualityGate, analyseLot, upsertToLotsTable, logActivityEvent, dbRowToFrontendLot, LOTS_SELECT } from '../lib/analysis.js';
+import { qualityGate, analyseLot, upsertToLotsTable, logActivityEvent } from '../lib/analysis.js';
+import { LOTS_SELECT, dbRowToLot } from '../lib/types/lot.js';
 import { getLotsForCatalogue } from '../lib/pipeline/lot-lookup.js';
 import { enrichBatch } from '../lib/harness/enrichment-engine.js';
 
@@ -108,7 +109,7 @@ router.post('/api/analyse', async (req, res) => {
       return b.score - a.score;
     });
 
-    const freshLots = sortedLotRows.map(dbRowToFrontendLot);
+    const freshLots = sortedLotRows.map(dbRowToLot);
     const gatedLots = isPremium ? freshLots : stripAIFields(freshLots);
 
     // Recompute summary stats from fresh data
@@ -263,7 +264,7 @@ router.post('/api/analyse', async (req, res) => {
       select: LOTS_SELECT,
     });
     const harnessResult = enrichBatch(analysed, house, {
-      previousCache: (prevLotRows || []).map(dbRowToFrontendLot),
+      previousCache: (prevLotRows || []).map(dbRowToLot),
     });
     const enrichedAnalysed = harnessResult.lots;
     if (harnessResult.stats.enriched > 0) {
@@ -301,7 +302,7 @@ router.post('/api/analyse', async (req, res) => {
 
     // ── Quality gate — validate batch before caching ──
     // prevLotRows already fetched above for enrichBatch
-    const qg = qualityGate(enrichedAnalysed, house, prevCached, (prevLotRows || []).map(dbRowToFrontendLot));
+    const qg = qualityGate(enrichedAnalysed, house, prevCached, (prevLotRows || []).map(dbRowToLot));
     // For manual analyses, log but don't reject — user explicitly asked for this
     if (qg.alerts.length > 0) {
       for (const a of qg.alerts) sseWrite(res, 'warn', { message: a });
