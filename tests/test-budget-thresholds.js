@@ -163,5 +163,99 @@ console.log('\nTest 7: monthlyBudget=0 disables threshold alerts');
   b.destroy();
 }
 
+// ── Test 8: recordFcMapRequest books 1 credit per /v2/map call ──
+console.log('\nTest 8: recordFcMapRequest books 1 credit and attributes by tier');
+{
+  const b = makeBudget(1000);
+  const before = b.getFirecrawlStatus();
+
+  b.recordFcMapRequest('healing');
+  b.recordFcMapRequest('healing');
+
+  const after = b.getFirecrawlStatus();
+  assert(after.creditsUsed - before.creditsUsed === 2, '2 map calls = +2 credits');
+  assert((after.creditsByTier.healing || 0) - (before.creditsByTier.healing || 0) === 2, 'attributed to healing tier');
+
+  b.destroy();
+}
+
+// ── Test 9: planRefreshDay env defaults to 0 (legacy UTC-month behaviour) ──
+console.log('\nTest 9: planRefreshDay default is 0 (legacy UTC-month cycle key)');
+{
+  const prev = process.env.FIRECRAWL_PLAN_REFRESH_DAY;
+  delete process.env.FIRECRAWL_PLAN_REFRESH_DAY;
+  try {
+    const b = makeBudget(100);
+    assert(b.planRefreshDay === 0, 'planRefreshDay is 0');
+    const key = b._planCycleKey();
+    assert(/^\d{4}-\d{2}$/.test(key), `cycle key matches YYYY-MM (got ${key})`);
+    assert(key === b._utcMonthKey(), 'falls back to UTC month key');
+    b.destroy();
+  } finally {
+    if (prev === undefined) delete process.env.FIRECRAWL_PLAN_REFRESH_DAY;
+    else process.env.FIRECRAWL_PLAN_REFRESH_DAY = prev;
+  }
+}
+
+// ── Test 10: planRefreshDay=14 produces a YYYY-MM-14 anchored cycle key ──
+console.log('\nTest 10: planRefreshDay=14 anchors cycle key to YYYY-MM-14');
+{
+  const prev = process.env.FIRECRAWL_PLAN_REFRESH_DAY;
+  process.env.FIRECRAWL_PLAN_REFRESH_DAY = '14';
+  try {
+    const b = makeBudget(100);
+    assert(b.planRefreshDay === 14, 'planRefreshDay is 14');
+    const key = b._planCycleKey();
+    assert(/^\d{4}-\d{2}-14$/.test(key), `cycle key matches YYYY-MM-14 (got ${key})`);
+    b.destroy();
+  } finally {
+    if (prev === undefined) delete process.env.FIRECRAWL_PLAN_REFRESH_DAY;
+    else process.env.FIRECRAWL_PLAN_REFRESH_DAY = prev;
+  }
+}
+
+// ── Test 11: invalid planRefreshDay values fall back to 0 ──
+console.log('\nTest 11: invalid planRefreshDay falls back to 0 (legacy)');
+{
+  const prev = process.env.FIRECRAWL_PLAN_REFRESH_DAY;
+  for (const bad of ['0', '-1', '29', '32', 'abc', '']) {
+    process.env.FIRECRAWL_PLAN_REFRESH_DAY = bad;
+    const b = makeBudget(100);
+    assert(b.planRefreshDay === 0, `"${bad}" → planRefreshDay 0`);
+    b.destroy();
+  }
+  if (prev === undefined) delete process.env.FIRECRAWL_PLAN_REFRESH_DAY;
+  else process.env.FIRECRAWL_PLAN_REFRESH_DAY = prev;
+}
+
+// ── Test 12: threshold flags clear at plan-cycle boundary, not UTC month ──
+console.log('\nTest 12: threshold flags reset on plan-cycle rollover');
+{
+  const prev = process.env.FIRECRAWL_PLAN_REFRESH_DAY;
+  process.env.FIRECRAWL_PLAN_REFRESH_DAY = '14';
+  try {
+    const fired = [];
+    const b = makeBudget(100);
+    b.setAlertHook(p => fired.push(p));
+
+    for (let i = 0; i < 80; i++) b.recordFcRequest('full');
+    assert(fired.length === 1, 'one 80% alert in cycle A');
+
+    // Force a cycle rollover by faking the prior cycle key.
+    b._fc.monthStartedAt = '1970-01-14';
+    b._fc.creditsUsed = 0;
+    b._fc.creditsUsedToday = 0;
+
+    for (let i = 0; i < 80; i++) b.recordFcRequest('full');
+    assert(fired.length === 2, 'second 80% alert fires in cycle B');
+    assert(/^\d{4}-\d{2}-14$/.test(b._fc.monthStartedAt), 'monthStartedAt is plan-cycle format');
+
+    b.destroy();
+  } finally {
+    if (prev === undefined) delete process.env.FIRECRAWL_PLAN_REFRESH_DAY;
+    else process.env.FIRECRAWL_PLAN_REFRESH_DAY = prev;
+  }
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
