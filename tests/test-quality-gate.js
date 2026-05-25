@@ -22,16 +22,18 @@ function assert(cond, msg) {
   else { console.error(`  FAIL: ${msg}`); failed++; }
 }
 
-console.log('Test 1: Guard 1b nulls residential house/flat with sub-£5k "guide"');
+console.log('Test 1: Guard 1b nulls residential house/flat with sub-£5k "guide" (with or without beds)');
 {
   const lots = [
     { address: '12 Acacia Ave', price: 1200, propType: 'house', beds: 3, url: 'x' },
     { address: '7 Oak St', price: 1800, propType: 'flat', beds: 2, url: 'y' },
+    { address: '99 Bed-Null Rd', price: 1500, propType: 'house', beds: null, url: 'z' },
   ];
   const { lots: out, alerts } = qualityGate(lots, 'ahlondon', null, null);
-  assert(out.length === 2, 'both lots kept (not stripped)');
+  assert(out.length === 3, 'all lots kept (not stripped)');
   assert(out[0].price === null, 'house £1,200 nulled');
   assert(out[1].price === null, 'flat £1,800 nulled');
+  assert(out[2].price === null, 'house with beds=null also nulled (no longer excluded)');
   assert(alerts.some(a => /buyer's-premium/.test(a)), 'single aggregated alert fired');
   assert(alerts.filter(a => /buyer's-premium/.test(a)).length === 1, 'alert is aggregated, not per-lot');
 }
@@ -52,13 +54,13 @@ console.log('\nTest 2: Guard 1b ignores land, garages, commercial, "other"');
   assert(out[3].price === 3000, 'other price untouched');
 }
 
-console.log('\nTest 3: Guard 1b ignores studios (beds === 0) — conservative');
+console.log('\nTest 3: Guard 1b also nulls studios (beds === 0) — same rule applies');
 {
   const lots = [
     { address: 'Studio 1', price: 1200, propType: 'flat', beds: 0, url: 'x' },
   ];
   const { lots: out } = qualityGate(lots, 'h', null, null);
-  assert(out[0].price === 1200, 'studio price left alone (out of safe set)');
+  assert(out[0].price === null, 'studio £1,200 nulled — no legitimate sub-£5k studio guide either');
 }
 
 console.log('\nTest 4: Guard 1b ignores residential >=£5k (real cheap-end guides survive)');
