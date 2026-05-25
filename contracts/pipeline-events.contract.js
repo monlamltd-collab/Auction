@@ -13,7 +13,7 @@
 // Additive changes pass without a version bump but the bump is still
 // recommended discipline so consumers know to look.
 
-export const PIPELINE_EVENTS_SCHEMA_VERSION = '1.0.0';
+export const PIPELINE_EVENTS_SCHEMA_VERSION = '1.1.0';
 
 export const PIPELINE_EVENTS_TABLE = Object.freeze({
   columns: {
@@ -35,6 +35,7 @@ export const PIPELINE_EVENT_TYPES_PINNED = Object.freeze([
   'enrich_uprn_fail',
   'enrich_uprn_circuit_open',
   'enrich_uprn_circuit_closed',
+  'enrich_uprn_rate_limited',
 ]);
 
 // Per-event-type event_data shape. CI gate compares key sets and types;
@@ -83,5 +84,14 @@ export const PIPELINE_EVENT_PAYLOADS = Object.freeze({
   enrich_uprn_circuit_closed: {
     reason: 'string|null',
     breaker: 'string',
+  },
+  // Emitted when the OS Places token bucket forces a live call to wait
+  // longer than the throttle threshold. Cache hits never emit this — they
+  // bypass the bucket entirely.
+  enrich_uprn_rate_limited: {
+    waited_ms: 'number',
+    threshold_ms: 'number',
+    bucket_tokens: 'number',
+    bucket_capacity: 'number',
   },
 });
