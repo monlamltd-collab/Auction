@@ -316,10 +316,6 @@
         <option value="days_unsold">Longest unsold</option>
       </select>
       <select class="tb-select sp-per-page" id="fPerPage" onchange="savePerPage();_currentPage=1;renderLots()" aria-label="Lots per page"><option value="10">10 / page</option><option value="20">20 / page</option><option value="30" selected>30 / page</option><option value="50">50 / page</option><option value="100">100 / page</option></select>
-      <div class="view-toggle" id="gridListToggle">
-        <button class="active" id="gridViewBtn" onclick="setView('grid')" title="Grid view"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></button>
-        <button id="listViewBtn" onclick="setView('list')" title="List view"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="3" y2="6" stroke-linecap="round"/><line x1="8" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="3" y2="12" stroke-linecap="round"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="3" y2="18" stroke-linecap="round"/><line x1="8" y1="18" x2="21" y2="18"/></svg></button>
-      </div>
       <span class="sp-page-info" id="filterBarCount"></span>
       <select class="tb-select sp-lots-dd" id="fAfford" onchange="debouncedRender()" style="display:none"><option value="all">All lots</option><option value="affordable">Affordable</option><option value="in_budget">In budget only</option><option value="full_finance">Zero deposit only</option></select>
     </div>
