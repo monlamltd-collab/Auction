@@ -20,12 +20,12 @@ import {
 } from '../lib/scraper.js';
 import {
   autoAnalyseAll, autoAnalyseOne, analyseLot,
-  dbRowToLot, dbRowToFrontendLot, LOTS_SELECT,
   upsertToLotsTable, saveDailySnapshot,
   logActivityEvent, runEnrichmentWave, isEnrichmentWaveRunning,
   isAutoAnalysisRunning,
   getCreditExhausted, getApiCallCount, getHashHitCount, getServerStartTime,
 } from '../lib/analysis.js';
+import { LOTS_SELECT, dbRowToLot } from '../lib/types/lot.js';
 import { getAICostSummary } from '../lib/ai-provider.js';
 import { enrichLots, getCircuitBreakers } from '../lib/enrichment.js';
 import { normaliseUrl, applyUmamiInjection } from '../lib/utils.js';
@@ -119,7 +119,7 @@ router.post('/api/admin/backfill-images', rateLimit(60000, 20), requireAdmin, as
         catalogueUrl: entry.url,
         select: LOTS_SELECT,
       });
-      const lots = (lotRows || []).map(dbRowToFrontendLot);
+      const lots = (lotRows || []).map(dbRowToLot);
       const missingImages = lots.filter(l => !l.imageUrl).length;
       if (missingImages === 0) {
         results.push({ house: entry.house, url: entry.url, total: lots.length, missing: 0, gained: 0, status: 'skipped — all have images' });
@@ -881,7 +881,7 @@ router.get('/api/quality-report', requireAdmin, async (req, res) => {
     for (const house of allHouses) {
       const cache = cacheByHouse[house] || { urls: [], isStale: true, created_at: null };
       const rows = lotsByHouse[house] || [];
-      const lots = rows.map(dbRowToFrontendLot);
+      const lots = rows.map(dbRowToLot);
       const isStale = cache.isStale;
       const ageHours = cache.created_at ? Math.round((now - new Date(cache.created_at)) / 3600000) : null;
 
@@ -941,7 +941,7 @@ router.get('/api/enrichment/report', requireAdmin, async (req, res) => {
       .select(LOTS_SELECT)
       .eq('house', house);
     if (lotRows && lotRows.length > 0) {
-      return res.json(getEnrichmentReport(lotRows.map(dbRowToFrontendLot), house));
+      return res.json(getEnrichmentReport(lotRows.map(dbRowToLot), house));
     }
   }
   res.json({ message: 'Provide ?house=slug for per-house report' });

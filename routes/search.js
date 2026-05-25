@@ -4,7 +4,8 @@ import { validateUserFromReq, rateLimit, getClientIP, safeCompare } from '../lib
 import { log } from '../lib/logging.js';
 import { resolveEffectiveTier, getAISearchLimit, STRIPE_ENABLED, stripAIFields } from '../lib/config.js';
 import { callAI } from '../lib/ai-provider.js';
-import { dbRowToFrontendLot, LOTS_SELECT, logActivityEvent, getCreditExhausted, setCreditExhausted, getCreditExhaustedAt, setCreditExhaustedAt } from '../lib/analysis.js';
+import { logActivityEvent, getCreditExhausted, setCreditExhausted, getCreditExhaustedAt, setCreditExhaustedAt } from '../lib/analysis.js';
+import { LOTS_SELECT, dbRowToLot } from '../lib/types/lot.js';
 import { enrichLotsWithFundability } from '../lib/fundability.js';
 import { normaliseUrl, findAuctionDateInBullets } from '../lib/utils.js';
 import { FALLBACK_CALENDAR } from '../lib/calendar.js';
@@ -596,7 +597,7 @@ router.post('/api/smart-search', async (req, res) => {
         return res.json({ results: [], report: 'No lots found matching criteria.', sources: [], totalSearched: 0, searchesUsed, searchLimit });
       }
 
-      const allLots = lotRows.map(dbRowToFrontendLot);
+      const allLots = lotRows.map(dbRowToLot);
       const sources = [];
       const sourceMap = {};
       for (const c of activeCatalogues) {
@@ -826,7 +827,7 @@ router.post('/api/smart-search', async (req, res) => {
     }
 
     // Merge active + persisted unsold, dedup by URL
-    const allRows = [...(lotRows || []).map(dbRowToFrontendLot), ...unsoldExtra.map(dbRowToFrontendLot)];
+    const allRows = [...(lotRows || []).map(dbRowToLot), ...unsoldExtra.map(dbRowToLot)];
     const dedupMap = new Map();
     for (const lot of allRows) {
       const key = lot.url || `${lot._house}|${(lot.address || '').toLowerCase().replace(/[\s,]+/g, ' ').trim()}`;

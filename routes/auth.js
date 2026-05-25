@@ -6,7 +6,8 @@ import { log } from '../lib/logging.js';
 import { STRIPE_ENABLED } from '../lib/config.js';
 import { escHtml } from '../lib/utils.js';
 import { sendWelcomeEmail, abEmailWrap, abCtaButton } from '../lib/email.js';
-import { logActivityEvent, dbRowToFrontendLot, LOTS_SELECT } from '../lib/analysis.js';
+import { logActivityEvent } from '../lib/analysis.js';
+import { LOTS_SELECT, dbRowToLot } from '../lib/types/lot.js';
 
 const router = Router();
 
@@ -345,7 +346,7 @@ router.post('/api/cron/unsold-alerts', rateLimit(60000, 1), async (req, res) => 
       .select(LOTS_SELECT)
       .or(`status.eq.unsold,and(auction_date.lt.${todayStr},or(status.eq.available,status.is.null))`)
       .limit(1000);
-    const allUnsold = (unsoldRows || []).map(dbRowToFrontendLot);
+    const allUnsold = (unsoldRows || []).map(dbRowToLot);
 
     let sent = 0;
 
