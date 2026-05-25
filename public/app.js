@@ -4348,6 +4348,17 @@ function getCardImageBadges(lot) {
     html += '<div class="card-badge badge-score ' + sc + '" style="cursor:pointer;position:relative" onclick="event.stopPropagation();toggleScorePopup(this,' + lot._idx + ')" onmouseenter="showScoreTip(this,' + lot._idx + ')" onmouseleave="hideScoreTip(this)">' + sign + clampedScore + '</div>';
   }
   if (lot.vacant) html += '<div class="badge-vacant">Vacant possession</div>';
+  // Photo-count badge — tells investors "more inside, don't bounce out"
+  // (PR A3.3). Only render when there's actually more than the hero to
+  // see: 2+ photos in the gallery, or a floor plan, or both.
+  const photoCount = (typeof _galleryPhotos === 'function') ? _galleryPhotos(lot).length : 0;
+  if (photoCount >= 2 || lot.floorPlanUrl) {
+    let label = '';
+    if (photoCount >= 2 && lot.floorPlanUrl) label = photoCount + ' photos · floor plan';
+    else if (photoCount >= 2) label = photoCount + ' photos';
+    else label = 'Floor plan';
+    html += '<div class="card-badge badge-photos">' + label + '</div>';
+  }
   // Urgency / ended badge
   if (lot._auctionDate) {
     const days = Math.ceil((new Date(lot._auctionDate) - new Date()) / 86400000);
@@ -4781,26 +4792,77 @@ function buildExpV2DD(lot) {
 }
 
 function buildExpV2Scores(lot) {
+  const sb = Array.isArray(lot.scoreBreakdown) ? lot.scoreBreakdown : [];
   const opps = (lot.opps || []).slice(0, 8);
   const risks = (lot.risks || []).slice(0, 6);
-  if (!opps.length && !risks.length) return '';
+  if (!sb.length && !opps.length && !risks.length) return '';
 
-  const oppHtml = opps.map(function (o) {
-    return '<li><span class="ws-mark opp">+</span><span>' + esc(o) + '</span></li>';
-  }).join('');
-  const riskHtml = risks.map(function (r) {
-    return '<li><span class="ws-mark risk">!</span><span>' + esc(r) + '</span></li>';
-  }).join('');
+  const total = lot.score;
+  const totalLabel = total != null ? (total > 0 ? '+' : '') + total + ' / 10' : '';
+
+  // Opps/risks not explained by a scoreBreakdown row (e.g. "Listed building"
+  // is a risk with no points). Render them as text labels under the bars.
+  const sbLabels = new Set(sb.map(function (s) { return s.signal; }));
+  const extraOpps = opps.filter(function (o) { return !sbLabels.has(o); });
+  const extraRisks = risks.filter(function (r) { return !sbLabels.has(r); });
+
+  let bodyHtml = '';
+
+  if (sb.length) {
+    const maxPts = Math.max(2, ...sb.map(function (s) { return Math.abs(s.pts); }));
+    const rows = sb.map(function (s) {
+      const isPos = s.pts > 0;
+      const color = isPos ? 'var(--signal-pos,#2e7d32)' : 'var(--accent-danger,#8B0000)';
+      const pct = Math.round((Math.abs(s.pts) / maxPts) * 100);
+      return '<div class="score-popup-row">' +
+        '<span class="score-popup-label" style="max-width:none;flex:0 0 auto">' + esc(s.signal) + '</span>' +
+        '<div class="score-popup-bar"><div class="score-popup-fill" style="width:' + pct + '%;background:' + color + '"></div></div>' +
+        '<span class="score-popup-pts" style="color:' + color + '">' + (isPos ? '+' : '') + s.pts + '</span>' +
+      '</div>';
+    }).join('');
+    bodyHtml += '<div class="score-breakdown" style="margin-bottom:' + (extraOpps.length || extraRisks.length ? '14px' : '0') + '">' + rows + '</div>';
+  }
+
+  if (extraOpps.length) {
+    const oppHtml = extraOpps.map(function (o) {
+      return '<li><span class="ws-mark opp">+</span><span>' + esc(o) + '</span></li>';
+    }).join('');
+    bodyHtml += '<div class="eyebrow ink" style="margin-bottom:8px">Also noted</div><ul class="ws-list" style="margin-bottom:' + (extraRisks.length ? '14px' : '0') + '">' + oppHtml + '</ul>';
+  }
+  if (extraRisks.length) {
+    const riskHtml = extraRisks.map(function (r) {
+      return '<li><span class="ws-mark risk">!</span><span>' + esc(r) + '</span></li>';
+    }).join('');
+    bodyHtml += '<div class="eyebrow ink" style="margin-bottom:8px">Risks to verify</div><ul class="ws-list">' + riskHtml + '</ul>';
+  }
+
+  // Fallback when scoreBreakdown is absent (legacy lots) — keep original opps/risks layout
+  if (!sb.length) {
+    bodyHtml = '';
+    if (opps.length) {
+      const oppHtml = opps.map(function (o) {
+        return '<li><span class="ws-mark opp">+</span><span>' + esc(o) + '</span></li>';
+      }).join('');
+      bodyHtml += '<div class="eyebrow ink" style="margin-bottom:8px">Opportunities</div><ul class="ws-list" style="margin-bottom:14px">' + oppHtml + '</ul>';
+    }
+    if (risks.length) {
+      const riskHtml = risks.map(function (r) {
+        return '<li><span class="ws-mark risk">!</span><span>' + esc(r) + '</span></li>';
+      }).join('');
+      bodyHtml += '<div class="eyebrow ink" style="margin-bottom:8px">Risks to verify</div><ul class="ws-list">' + riskHtml + '</ul>';
+    }
+  }
+
+  const headerLabel = totalLabel
+    ? 'Why this lot scores · <span style="font-family:var(--font-mono);color:var(--text)">' + totalLabel + '</span>'
+    : 'Why this lot scores';
 
   return '<section class="sec">' +
     '<div class="head">' +
-      '<span class="sec-head"><span class="sec-num-badge">__SEC_NUM__</span><span class="eyebrow ink">Why this lot scores</span></span>' +
+      '<span class="sec-head"><span class="sec-num-badge">__SEC_NUM__</span><span class="eyebrow ink">' + headerLabel + '</span></span>' +
       '<a href="/scoring" class="eyebrow" style="color:var(--red);text-decoration:none">Scoring methodology →</a>' +
     '</div>' +
-    '<div class="body">' +
-      (opps.length ? '<div class="eyebrow ink" style="margin-bottom:8px">Opportunities</div><ul class="ws-list" style="margin-bottom:14px">' + oppHtml + '</ul>' : '') +
-      (risks.length ? '<div class="eyebrow ink" style="margin-bottom:8px">Risks to verify</div><ul class="ws-list">' + riskHtml + '</ul>' : '') +
-    '</div>' +
+    '<div class="body">' + bodyHtml + '</div>' +
   '</section>';
 }
 
@@ -4894,18 +4956,12 @@ function buildExpV2Fundability(lot) {
   // the cached fundability if present, else a loading state.
   const cached = lot.fundability;
   let countDisplay = '<span class="num-lg">…</span>';
-  let tiersHtml = '<span class="mono" style="color:var(--muted);font-size:11px">Checking lenders</span>';
+  let statusHtml = '<span class="mono" style="color:var(--muted);font-size:11px">Checking lenders</span>';
   if (cached && cached.lenderCount != null) {
     countDisplay = '<span class="num-lg">' + cached.lenderCount + '</span>';
-    if (cached.lenderCount > 0) {
-      tiersHtml = '<div class="fund-tiers">' +
-        '<span class="tag green" style="flex:1;justify-content:center">Tier 1 ✓</span>' +
-        '<span class="tag green" style="flex:1;justify-content:center">Tier 2 ✓</span>' +
-        '<span class="tag green" style="flex:1;justify-content:center">Tier 3 ✓</span>' +
-      '</div>';
-    } else {
-      tiersHtml = '<span class="mono" style="color:var(--red);font-size:11px">No bridging matches at 70% LTV</span>';
-    }
+    statusHtml = cached.lenderCount > 0
+      ? ''
+      : '<span class="mono" style="color:var(--red);font-size:11px">No bridging matches at 70% LTV</span>';
   }
 
   const bmUrl = (cached && cached.bridgematchUrl) ? safeHref(cached.bridgematchUrl) : 'https://www.bridgematch.co.uk';
@@ -4927,11 +4983,215 @@ function buildExpV2Fundability(lot) {
     '<div class="head"><span class="eyebrow ink">Fundability</span></div>' +
     '<div class="body" id="lender-summary-' + lot._idx + '">' +
       '<div class="fund-row"><span class="lbl">Bridging matches</span>' + countDisplay + '</div>' +
-      '<div style="margin:10px 0">' + tiersHtml + '</div>' +
+      (statusHtml ? '<div style="margin:10px 0">' + statusHtml + '</div>' : '') +
       '<a href="' + bmUrl + '" target="_blank" rel="noopener noreferrer" class="btn-ed" style="width:100%;justify-content:space-between;background:var(--paper);color:var(--ink);border-color:var(--ink)">See all matches on BridgeMatch <span class="arr">→</span></a>' +
     '</div>' +
     quoteCta +
   '</div>';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// LOT GALLERY + LIGHTBOX (PR A3)
+// ═══════════════════════════════════════════════════════════════
+// Goal: keep users on-platform by surfacing every photo + the floor plan
+// inside the expanded panel, so they don't bounce out to the auction
+// house's site to see the rest of the gallery.
+//
+// Data sources:
+//   - lot.imageUrl    — primary hero (also shown big in buildExpV2Header)
+//   - lot.images      — array populated by lib/pipeline/multi-image-sweep
+//   - lot.floorPlanUrl — newly persisted via PR A3.1 (Firecrawl extracts it)
+//
+// Skip the section entirely when there's only one photo and no floor plan
+// — duplicating the hero adds nothing.
+
+function _galleryPhotos(lot) {
+  // Build a deduped photo list with imageUrl first (when present),
+  // followed by lot.images in order. multi-image-sweep already filters
+  // out junk (logos, banners) so we trust the list as-is.
+  const seen = new Set();
+  const out = [];
+  const push = (u) => { if (u && !seen.has(u)) { seen.add(u); out.push(u); } };
+  if (lot.imageUrl && (typeof isValidImageUrl !== 'function' || isValidImageUrl(lot.imageUrl))) push(lot.imageUrl);
+  if (Array.isArray(lot.images)) {
+    lot.images.forEach((u) => {
+      if (u && (typeof isValidImageUrl !== 'function' || isValidImageUrl(u))) push(u);
+    });
+  }
+  return out;
+}
+
+function buildExpV2Gallery(lot) {
+  const photos = _galleryPhotos(lot);
+  const fp = lot.floorPlanUrl || null;
+  // Single hero + no floor plan → the header already shows everything we have
+  if (photos.length <= 1 && !fp) return '';
+
+  const MAX_VISIBLE = 8;
+  const visiblePhotos = photos.slice(0, MAX_VISIBLE);
+  const overflowCount = Math.max(0, photos.length - MAX_VISIBLE);
+
+  const tiles = visiblePhotos.map(function (src, i) {
+    const isLastVisible = i === visiblePhotos.length - 1;
+    const overlay = (isLastVisible && overflowCount > 0)
+      ? '<span class="exp-gallery-more">+' + overflowCount + ' more</span>'
+      : '';
+    const optimSrc = (typeof optimImg === 'function') ? optimImg(src, 400) : src;
+    return '<button type="button" class="exp-gallery-tile" ' +
+      'onclick="openLotLightbox(' + lot._idx + ',' + i + ')" ' +
+      'aria-label="Photo ' + (i + 1) + ' of ' + photos.length + '">' +
+      '<img src="' + esc(optimSrc) + '" alt="" loading="lazy" decoding="async">' +
+      overlay +
+    '</button>';
+  }).join('');
+
+  const floorPlanTile = fp
+    ? '<button type="button" class="exp-gallery-tile exp-gallery-floorplan" ' +
+        'onclick="openLotLightbox(' + lot._idx + ',' + photos.length + ')" ' +
+        'aria-label="Floor plan">' +
+        '<img src="' + esc(typeof optimImg === 'function' ? optimImg(fp, 400) : fp) + '" alt="" loading="lazy" decoding="async">' +
+        '<span class="exp-gallery-fp-label">Floor plan</span>' +
+      '</button>'
+    : '';
+
+  const photosLabel = photos.length === 1 ? '1 photo' : photos.length + ' photos';
+  const fpLabel = fp ? ' · 1 floor plan' : '';
+
+  return '<section class="exp-gallery">' +
+    '<div class="exp-gallery-head">' +
+      '<span class="eyebrow ink">Gallery · ' + photosLabel + fpLabel + '</span>' +
+    '</div>' +
+    '<div class="exp-gallery-grid">' + tiles + floorPlanTile + '</div>' +
+  '</section>';
+}
+
+// ── Lightbox (singleton overlay, created on first open) ──
+let _lightboxItems = [];   // [{ src, label }]
+let _lightboxIdx = 0;
+let _lightboxEl = null;
+
+function _ensureLightboxEl() {
+  if (_lightboxEl) return _lightboxEl;
+  // Build via createElement (no innerHTML on the root — keeps the
+  // security-reminder hook quiet). Structure is static, all text is set
+  // via textContent / setAttribute.
+  const el = document.createElement('div');
+  el.className = 'exp-lightbox';
+  el.id = 'exp-lightbox';
+  el.setAttribute('aria-hidden', 'true');
+  el.setAttribute('role', 'dialog');
+  el.setAttribute('aria-modal', 'true');
+  el.setAttribute('aria-label', 'Image viewer');
+
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.className = 'exp-lightbox-close';
+  closeBtn.setAttribute('aria-label', 'Close');
+  closeBtn.textContent = '×'; // ×
+  closeBtn.addEventListener('click', closeLotLightbox);
+
+  const prevBtn = document.createElement('button');
+  prevBtn.type = 'button';
+  prevBtn.className = 'exp-lightbox-nav exp-lightbox-prev';
+  prevBtn.setAttribute('aria-label', 'Previous');
+  prevBtn.textContent = '‹'; // ‹
+  prevBtn.addEventListener('click', function () { navLotLightbox(-1); });
+
+  const nextBtn = document.createElement('button');
+  nextBtn.type = 'button';
+  nextBtn.className = 'exp-lightbox-nav exp-lightbox-next';
+  nextBtn.setAttribute('aria-label', 'Next');
+  nextBtn.textContent = '›'; // ›
+  nextBtn.addEventListener('click', function () { navLotLightbox(1); });
+
+  const stage = document.createElement('div');
+  stage.className = 'exp-lightbox-stage';
+
+  const img = document.createElement('img');
+  img.className = 'exp-lightbox-img';
+  img.alt = '';
+  stage.appendChild(img);
+
+  const cap = document.createElement('div');
+  cap.className = 'exp-lightbox-caption';
+  cap.setAttribute('aria-live', 'polite');
+  stage.appendChild(cap);
+
+  el.appendChild(closeBtn);
+  el.appendChild(prevBtn);
+  el.appendChild(stage);
+  el.appendChild(nextBtn);
+
+  // Click on backdrop (not on img/buttons) closes
+  el.addEventListener('click', function (e) {
+    if (e.target === el || e.target === stage) closeLotLightbox();
+  });
+
+  document.body.appendChild(el);
+  _lightboxEl = el;
+  return el;
+}
+
+function _renderLightbox() {
+  if (!_lightboxEl || !_lightboxItems.length) return;
+  const item = _lightboxItems[_lightboxIdx];
+  const img = _lightboxEl.querySelector('.exp-lightbox-img');
+  const cap = _lightboxEl.querySelector('.exp-lightbox-caption');
+  // Full-size: pass 1600 through optimImg (wsrv.nl handles the resize)
+  img.src = (typeof optimImg === 'function') ? optimImg(item.src, 1600) : item.src;
+  img.alt = item.label || ('Image ' + (_lightboxIdx + 1));
+  cap.textContent = item.label
+    ? item.label + ' · ' + (_lightboxIdx + 1) + ' of ' + _lightboxItems.length
+    : (_lightboxIdx + 1) + ' of ' + _lightboxItems.length;
+  // Hide nav arrows when only one item
+  const single = _lightboxItems.length <= 1;
+  _lightboxEl.querySelector('.exp-lightbox-prev').style.display = single ? 'none' : '';
+  _lightboxEl.querySelector('.exp-lightbox-next').style.display = single ? 'none' : '';
+}
+
+function _lightboxKeyHandler(e) {
+  if (!_lightboxEl || _lightboxEl.getAttribute('aria-hidden') === 'true') return;
+  if (e.key === 'Escape') { e.preventDefault(); closeLotLightbox(); }
+  else if (e.key === 'ArrowRight') { e.preventDefault(); navLotLightbox(1); }
+  else if (e.key === 'ArrowLeft')  { e.preventDefault(); navLotLightbox(-1); }
+}
+
+function openLotLightbox(lotIdx, itemIdx) {
+  const lot = (typeof LOTS !== 'undefined' && LOTS) ? LOTS[lotIdx] : null;
+  if (!lot) return;
+  const photos = _galleryPhotos(lot);
+  const items = photos.map(function (src, i) {
+    return { src: src, label: 'Photo ' + (i + 1) };
+  });
+  if (lot.floorPlanUrl) items.push({ src: lot.floorPlanUrl, label: 'Floor plan' });
+  if (!items.length) return;
+  _lightboxItems = items;
+  _lightboxIdx = Math.max(0, Math.min(items.length - 1, itemIdx || 0));
+  const el = _ensureLightboxEl();
+  el.setAttribute('aria-hidden', 'false');
+  el.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  _renderLightbox();
+  document.addEventListener('keydown', _lightboxKeyHandler);
+  // Move focus to close button for screen-reader users
+  const closeBtn = el.querySelector('.exp-lightbox-close');
+  if (closeBtn) closeBtn.focus();
+  if (window.umami) try { umami.track('lightbox_open', { lot: lot.lot || '', house: lot._house || '' }); } catch (_) {}
+}
+
+function closeLotLightbox() {
+  if (!_lightboxEl) return;
+  _lightboxEl.setAttribute('aria-hidden', 'true');
+  _lightboxEl.classList.remove('open');
+  document.body.style.overflow = '';
+  document.removeEventListener('keydown', _lightboxKeyHandler);
+}
+
+function navLotLightbox(delta) {
+  if (!_lightboxItems.length) return;
+  const n = _lightboxItems.length;
+  _lightboxIdx = ((_lightboxIdx + delta) % n + n) % n;
+  _renderLightbox();
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -5153,40 +5413,6 @@ async function submitBridgingQuote(e) {
   }
 }
 
-function buildExpV2Logistics(lot) {
-  // Auction logistics card — most fields are derived from common auction
-  // norms when not explicitly captured per-lot. House-specific overrides
-  // can be added later.
-  let dateStr = '';
-  if (lot._auctionDate) {
-    const d = new Date(lot._auctionDate + 'T12:00:00');
-    if (!isNaN(d.getTime())) {
-      const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-      dateStr = days[d.getDay()] + ' ' + d.getDate() + ' ' + months[d.getMonth()] + ' ' + d.getFullYear();
-      if (lot._auctionTime) dateStr += ', ' + lot._auctionTime;
-    }
-  }
-
-  const rows = [
-    { k: 'Date', v: dateStr || 'TBA' },
-    { k: 'Format', v: lot._auctionFormat || 'Live online' },
-    { k: 'Reserve', v: 'Disclosed at sale' },
-    { k: 'Buyer’s premium', v: '£1,500 + VAT (typical)' },
-    { k: 'Completion', v: '28 days (or per legal pack)' },
-    { k: 'Deposit', v: '10% on the fall' }
-  ];
-
-  const rowHtml = rows.map(function (r, i) {
-    return '<div class="log-row"><span class="k">' + esc(r.k) + '</span><span class="v">' + esc(r.v) + '</span></div>';
-  }).join('');
-
-  return '<div class="sec">' +
-    '<div class="head"><span class="eyebrow ink">Auction logistics</span></div>' +
-    '<div class="body">' + rowHtml + '</div>' +
-  '</div>';
-}
-
 function expandCard(lot) {
   // Anonymous users can OPEN any lot card — address, price, image, house,
   // status, auction date, bullets are all visible. Sensitive AI fields
@@ -5272,99 +5498,10 @@ function expandCard(lot) {
 
   // Build expanded panel — image, AI prose, EPC/flood badges, and the property
   // strip have been moved off the panel; the card already shows them.
-  const signalsHtml = (lot.opps || []).map(o =>
-    '<div class="exp-signal-row"><span class="exp-signal-chip" style="background:var(--signal-pos-bg);color:var(--signal-pos)">+</span> ' + esc(o) + '</div>'
-  ).concat((lot.risks || []).map(r =>
-    '<div class="exp-signal-row"><span class="exp-signal-chip" style="background:#fdf0ee;color:#c0392b">\u26a0</span> ' + esc(r) + '</div>'
-  )).join('');
-
-  const bulletsHtml = (lot.bullets || []).slice(0, 6).map(b => '<li>' + esc(b) + '</li>').join('');
-
   const panel = document.createElement('div');
   panel.className = 'expanded-panel expanded-panel-visible';
   panel.id = 'expanded-' + lot._idx;
 
-  // ── Premium feature sections (Yield Analysis, Comparables, Deal Stacking) ──
-  const yieldSection = (function() {
-    const gy = lot.estGrossYield;
-    const mr = lot.estMonthlyRent;
-    if (isPremium()) {
-      const gyDisplay = gy ? gy.toFixed(1) + '%' : 'N/A';
-      const nyDisplay = gy ? (gy * 0.867).toFixed(1) + '%' : 'N/A';
-      const mrDisplay = mr ? '\u00a3' + mr.toLocaleString() + (lot._rentEstimated ? ' (est.)' : '') : 'N/A';
-      let ratingLabel, ratingBg, ratingColor, verdict;
-      if (!gy) { ratingLabel = 'N/A'; ratingBg = '#e9ecef'; ratingColor = '#6b7c8d'; verdict = ''; }
-      else if (gy >= 7) { ratingLabel = 'Good'; ratingBg = '#e8f5ee'; ratingColor = 'var(--signal-pos)'; verdict = 'Strong rental yield \u2014 above average for this area'; }
-      else if (gy >= 5) { ratingLabel = 'Fair'; ratingBg = '#fef3e2'; ratingColor = 'var(--accent-warn)'; verdict = 'Moderate yield \u2014 typical for the area'; }
-      else { ratingLabel = 'Poor'; ratingBg = '#fdf0ee'; ratingColor = 'var(--accent-danger)'; verdict = 'Below-average yield \u2014 consider capital growth potential instead'; }
-      const yieldWarning = lot._yieldEstimateWarning
-        ? '<div style="padding:6px 10px;border-radius:6px;font-size:.78rem;background:#fef3e2;color:var(--accent-warn);font-weight:500;margin-bottom:8px">Yield over 30% — likely unrealistic. Very low guide prices produce inflated yield estimates. Verify actual achievable rent independently before relying on this figure.</div>'
-        : '';
-      return '<details class="premium-feature">' +
-        '<summary>Yield Analysis</summary>' +
-        '<div class="pf-content">' +
-          yieldWarning +
-          '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span>Gross Yield</span><span style="font-weight:600">' + gyDisplay + '</span></div>' +
-          '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span>Net Yield</span><span style="font-weight:600">' + nyDisplay + '</span></div>' +
-          '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span>Monthly Rent</span><span style="font-weight:600">' + mrDisplay + '</span></div>' +
-          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span>Rating</span><span style="background:' + ratingBg + ';color:' + ratingColor + ';padding:2px 10px;border-radius:4px;font-weight:600;font-size:12px">' + ratingLabel + '</span></div>' +
-          (verdict ? '<div style="font-size:12px;color:var(--text-muted);margin-top:4px;font-style:italic">' + verdict + '</div>' : '') +
-        '</div></details>';
-    } else {
-      return '<details class="premium-feature">' +
-        '<summary>Yield Analysis</summary>' +
-        '<div class="pf-blurred">' +
-          '<div class="pf-blur-content">' +
-            '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span>Gross Yield</span><span>X.X%</span></div>' +
-            '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span>Net Yield</span><span>X.X%</span></div>' +
-            '<div style="display:flex;justify-content:space-between"><span>Rating</span><span style="background:#fdf0ee;padding:2px 8px;border-radius:4px">Good</span></div>' +
-          '</div>' +
-          '<div class="pf-upgrade-cta">' +
-            '<div style="font-size:14px;font-weight:600;color:var(--text)">Sign in free for Yield Analysis</div>' +
-            '<button onclick="showPaywall(\'yield_analysis\')">Sign in free</button>' +
-          '</div>' +
-        '</div></details>';
-    }
-  })();
-  const compSection = (function() {
-    if (isPremium()) {
-      const sa = lot.streetAvg;
-      const gp = lot.price;
-      const bm = lot.belowMarket;
-      const saDisplay = sa ? '\u00a3' + sa.toLocaleString() : 'No comparable data available';
-      const gpDisplay = gp ? '\u00a3' + gp.toLocaleString() : 'TBA';
-      let bmDisplay, bmColor, contextNote;
-      if (bm && bm > 0) { bmDisplay = bm + '% below market average'; bmColor = 'var(--accent)'; }
-      else if (bm && bm < 0) { bmDisplay = Math.abs(bm) + '% above market average'; bmColor = 'var(--accent-danger)'; }
-      else { bmDisplay = 'At market level'; bmColor = 'var(--text-muted)'; }
-      if (bm && bm > 20) contextNote = 'Significant discount \u2014 strong uplift potential on refurb';
-      else if (bm && bm >= 10) contextNote = 'Moderate discount \u2014 potential for value-add';
-      else if (bm && bm > 0) contextNote = 'Marginal discount \u2014 limited upside without development';
-      else contextNote = 'At or above market \u2014 ensure your exit strategy supports the numbers';
-      return '<div style="padding:12px 14px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;background:var(--bg-card)">' +
-          '<div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:10px">Comparables</div>' +
-          '<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center">' +
-            '<div style="display:flex;gap:6px;align-items:baseline"><span style="color:var(--text-muted);font-size:12px">Street Average</span><span style="font-weight:600">' + saDisplay + '</span></div>' +
-            '<div style="display:flex;gap:6px;align-items:baseline"><span style="color:var(--text-muted);font-size:12px">Guide Price</span><span style="font-weight:600">' + gpDisplay + '</span></div>' +
-            '<div style="display:flex;gap:6px;align-items:baseline"><span style="color:var(--text-muted);font-size:12px">vs Market</span><span style="font-weight:600;color:' + bmColor + '">' + bmDisplay + '</span></div>' +
-            '<div style="font-size:12px;color:var(--text-muted);font-style:italic">' + contextNote + '</div>' +
-          '</div>' +
-        '</div>';
-    } else {
-      return '<div style="padding:12px 14px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;background:var(--bg-card);position:relative">' +
-          '<div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:10px">Comparables</div>' +
-          '<div style="filter:blur(4px);pointer-events:none;user-select:none;display:flex;flex-wrap:wrap;gap:16px">' +
-            '<div style="display:flex;gap:6px;align-items:baseline"><span style="color:var(--text-muted);font-size:12px">Street Average</span><span style="font-weight:600">\u00a3XXX,XXX</span></div>' +
-            '<div style="display:flex;gap:6px;align-items:baseline"><span style="color:var(--text-muted);font-size:12px">Guide Price</span><span style="font-weight:600">\u00a3XX,XXX</span></div>' +
-            '<div style="display:flex;gap:6px;align-items:baseline"><span style="color:var(--text-muted);font-size:12px">vs Market</span><span style="font-weight:600;color:var(--accent)">XX% below</span></div>' +
-          '</div>' +
-          '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;z-index:2;background:rgba(255,255,255,0.9);padding:16px 24px;border-radius:10px;box-shadow:0 2px 12px rgba(0,0,0,0.1)">' +
-            '<div style="font-size:14px;font-weight:600;color:var(--text)">Sign in free for Comparables</div>' +
-            '<button onclick="showPaywall(\'comparables\')" style="margin-top:8px;padding:8px 20px;background:var(--accent);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">Sign in free</button>' +
-          '</div>' +
-        '</div>';
-    }
-  })();
   // Build deal stacking calculator HTML
   var dealStackHtml = (isPremium() ? (function() {
         var sug = suggestWorksAndGdv(lot);
@@ -5472,13 +5609,16 @@ function expandCard(lot) {
   panel.innerHTML = (
     '<button class="exp-close-btn" onclick="closeExpandedPanel()" aria-label="Close panel" title="Close">&times;</button>' +
     buildExpV2Header(lot) +
+    // Gallery sits above the analysis grid and spans both columns —
+    // photos are the primary "stay on platform" anchor. Returns '' when
+    // the lot has no extra photos and no floor plan.
+    buildExpV2Gallery(lot) +
     '<div class="exp-v2-left">' +
       _leftSections +
     '</div>' +
     '<div class="exp-v2-right">' +
       dealStackPanelHtml +
       buildExpV2Fundability(lot) +
-      buildExpV2Logistics(lot) +
     '</div>' +
     // The "what happens next" buyer's guide stays as an opt-in details
     // disclosure below the magazine grid.
