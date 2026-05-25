@@ -498,6 +498,20 @@ A targeted diagnostic prompt is recommended (see Section 6). This audit delibera
 - **`property_key`** (the physical-property synthetic ID introduced in Phase A on 2026-04-26) is **fully alive, GENERATED ALWAYS, and 100% populated** when address is present. Cross-catalogue stability test confirms ~30% of physical properties are re-scraped under 2+ rows and keep the same key. No regression.
 - **`uprn`** (the authoritative OS Places identifier, intended as the eventual cross-source key) **has silently regressed**. Coverage is 5.3% overall, 0/20 in the most recent sample, 97.8% `circuit_open` in the last 30 days. Cause is environmental / circuit-state, not source-code regression. See Section 6 for the recommended diagnostic prompt.
 
+### 3.8 Correction note — 2026-05-25 (post-audit)
+
+§3.5 and §3.6 above state that `os_places_cache` had **0 rows** and that "the cache write path appears disconnected". This was wrong. The claim came from `mcp__supabase__list_tables.rows`, which reads `pg_class.reltuples` — a planner estimate that is stale on rarely-vacuumed tables. A direct `SELECT COUNT(*) FROM os_places_cache` returns **2,269 rows** (latest `fetched_at` 2026-04-27).
+
+Implications for the rest of §3.5/§3.6:
+
+- The `cache_hit` manifest entries were **not** "fooling the manifest" — they were genuine reads from a populated cache, until the structural bug below masked them.
+- The actual regression mechanism was a cache-ordering bug in `lib/os-places.js::lookupAddress`: the OS Places circuit breaker was checked *before* the cache lookup. Once the breaker latched (≈ 2026-04-30 on a 429 storm), all 2,269 cached UPRNs became unreachable, every retry went live, every live call re-tripped the breaker — stable broken state.
+- "No single commit broke the integration" remains correct for the latch event itself, but the cache-before-breaker order in the original Phase A code (`e63d21c`) is the structural predisposition that turned a transient 429 into a permanent outage.
+
+Full root-cause analysis, including the controlled 20-lot cache-backfill that verifies the fix: **`audit/2026-05-25-uprn-rca.md`**.
+
+The rest of this audit (Sections 1–2, 4–6) has not been re-verified against this correction. Future readers: treat any "X is empty / has 0 rows" claim that came from `list_tables.rows` as **suspect** — confirm with `COUNT(*)` before acting.
+
 ---
 
 ## 4. Per-house data quality scorecard
