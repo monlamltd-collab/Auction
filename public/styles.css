@@ -2984,6 +2984,17 @@ footer p a {
   body.sheet-open { overflow: hidden; }
   body.sheet-open #wrap { overflow: hidden; }
 
+  /* Stacking-context escape. `.search-panel` is `position: sticky;
+     z-index: 10`, which creates a stacking context that traps any
+     descendant z-index relative to it. The bottom sheet inside the panel
+     declares `z-index: 60`, but in the root stacking context the whole
+     panel still sits at z:10 — below `#sheetBackdrop` at z:59. The
+     visible symptom: controls in the sheet look greyed out (the
+     backdrop's 45% black paints on top of them) and every tap lands on
+     the backdrop instead of the underlying control. Raising the panel
+     above the backdrop while the sheet is open fixes both. */
+  body.sheet-open .search-panel { z-index: 70; }
+
   /* Sheet header — drag handle + title + close */
   .sp-sheet-header {
     display: flex;
@@ -3039,6 +3050,12 @@ footer p a {
   .sp-sheet-body .sp-filter-row > *,
   .sp-sheet-body .sp-toggle-row > * {
     width: 100%;
+    /* The desktop `.sp-filter-row > *` rule sets `flex: 1 1 140px` to equalise
+       widths in a horizontal row. Under the sheet's `flex-direction: column`
+       that 140px becomes the basis on the *vertical* axis — every child
+       renders 140px tall (massive "Clear all" / select boxes). Reset. */
+    flex: 0 0 auto;
+    min-height: 0;
   }
   /* Restyle the editorial chips (uppercase mono on cream paper — designed
      for the desktop chip row) so they read as normal interactive form
