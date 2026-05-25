@@ -3343,3 +3343,167 @@ footer p a {
   .lcv2-mobile-overlays { display: none !important; }
 }
 
+/* ───────────────────────────────────────────────────────────────
+   LOT GALLERY + LIGHTBOX (PR A3)
+   Shown inside expanded lot panel, between the header (with big hero)
+   and the analysis grid. Spans both columns of .exp-v2 layout so the
+   thumbnails get room to breathe.
+   ─────────────────────────────────────────────────────────────── */
+.exp-gallery {
+  grid-column: 1 / -1;
+  border: 1px solid var(--border, rgba(0,0,0,.08));
+  border-radius: 10px;
+  background: var(--paper, #fff);
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+.exp-gallery-head {
+  padding: 10px 14px;
+  background: var(--cream2, #E8E4DC);
+  border-bottom: 1px solid var(--border, rgba(0,0,0,.08));
+}
+.exp-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  padding: 12px;
+}
+@media (max-width: 900px) { .exp-gallery-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 600px) { .exp-gallery-grid { grid-template-columns: repeat(2, 1fr); gap: 6px; padding: 8px; } }
+
+.exp-gallery-tile {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  padding: 0;
+  border: 1px solid var(--border, rgba(0,0,0,.08));
+  border-radius: 6px;
+  background: var(--cream, #F5F1EA);
+  cursor: pointer;
+  overflow: hidden;
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.exp-gallery-tile:hover,
+.exp-gallery-tile:focus-visible {
+  transform: scale(1.02);
+  box-shadow: 0 4px 12px rgba(0,0,0,.12);
+  outline: none;
+  border-color: var(--red, #C0392B);
+}
+.exp-gallery-tile img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.exp-gallery-more {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(26, 26, 24, 0.65);
+  color: #fff;
+  font-family: var(--font-mono, monospace);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  pointer-events: none;
+}
+.exp-gallery-floorplan {
+  /* Floor plan is a different content type — cream background + label
+     to distinguish from photos in the grid. */
+  background: var(--cream, #F5F1EA);
+}
+.exp-gallery-floorplan img {
+  object-fit: contain;
+  background: #fff;
+  padding: 6px;
+}
+.exp-gallery-fp-label {
+  position: absolute;
+  left: 6px; bottom: 6px;
+  padding: 2px 6px;
+  background: var(--ink, #1A1A18);
+  color: var(--paper, #fff);
+  font-family: var(--font-mono, monospace);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  border-radius: 3px;
+  pointer-events: none;
+}
+
+/* ─── Lightbox overlay ─── */
+.exp-lightbox {
+  display: none;
+  position: fixed; inset: 0;
+  z-index: 9999;
+  background: rgba(15, 15, 14, 0.92);
+  align-items: center; justify-content: center;
+  padding: 32px;
+}
+.exp-lightbox.open { display: flex; }
+.exp-lightbox-stage {
+  position: relative;
+  max-width: min(1400px, 95vw);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+.exp-lightbox-img {
+  max-width: 100%;
+  max-height: calc(90vh - 40px);
+  object-fit: contain;
+  background: #fff;
+  border-radius: 4px;
+  box-shadow: 0 4px 24px rgba(0,0,0,.4);
+}
+.exp-lightbox-caption {
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  color: rgba(255,255,255,.85);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  text-align: center;
+}
+.exp-lightbox-close,
+.exp-lightbox-nav {
+  position: absolute;
+  background: rgba(255,255,255,.1);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,.25);
+  cursor: pointer;
+  font-family: var(--font-mono, monospace);
+  line-height: 1;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .15s ease, border-color .15s ease;
+}
+.exp-lightbox-close:hover,
+.exp-lightbox-nav:hover,
+.exp-lightbox-close:focus-visible,
+.exp-lightbox-nav:focus-visible {
+  background: rgba(255,255,255,.2);
+  border-color: rgba(255,255,255,.5);
+  outline: none;
+}
+.exp-lightbox-close {
+  top: 16px; right: 16px;
+  width: 40px; height: 40px;
+  font-size: 24px;
+}
+.exp-lightbox-nav {
+  top: 50%;
+  transform: translateY(-50%);
+  width: 48px; height: 48px;
+  font-size: 28px;
+}
+.exp-lightbox-prev { left: 16px; }
+.exp-lightbox-next { right: 16px; }
+@media (max-width: 600px) {
+  .exp-lightbox { padding: 8px; }
+  .exp-lightbox-close { top: 8px; right: 8px; width: 36px; height: 36px; }
+  .exp-lightbox-nav { width: 40px; height: 40px; font-size: 24px; }
+  .exp-lightbox-prev { left: 8px; }
+  .exp-lightbox-next { right: 8px; }
+}

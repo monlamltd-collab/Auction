@@ -4980,6 +4980,210 @@ function buildExpV2Fundability(lot) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// LOT GALLERY + LIGHTBOX (PR A3)
+// ═══════════════════════════════════════════════════════════════
+// Goal: keep users on-platform by surfacing every photo + the floor plan
+// inside the expanded panel, so they don't bounce out to the auction
+// house's site to see the rest of the gallery.
+//
+// Data sources:
+//   - lot.imageUrl    — primary hero (also shown big in buildExpV2Header)
+//   - lot.images      — array populated by lib/pipeline/multi-image-sweep
+//   - lot.floorPlanUrl — newly persisted via PR A3.1 (Firecrawl extracts it)
+//
+// Skip the section entirely when there's only one photo and no floor plan
+// — duplicating the hero adds nothing.
+
+function _galleryPhotos(lot) {
+  // Build a deduped photo list with imageUrl first (when present),
+  // followed by lot.images in order. multi-image-sweep already filters
+  // out junk (logos, banners) so we trust the list as-is.
+  const seen = new Set();
+  const out = [];
+  const push = (u) => { if (u && !seen.has(u)) { seen.add(u); out.push(u); } };
+  if (lot.imageUrl && (typeof isValidImageUrl !== 'function' || isValidImageUrl(lot.imageUrl))) push(lot.imageUrl);
+  if (Array.isArray(lot.images)) {
+    lot.images.forEach((u) => {
+      if (u && (typeof isValidImageUrl !== 'function' || isValidImageUrl(u))) push(u);
+    });
+  }
+  return out;
+}
+
+function buildExpV2Gallery(lot) {
+  const photos = _galleryPhotos(lot);
+  const fp = lot.floorPlanUrl || null;
+  // Single hero + no floor plan → the header already shows everything we have
+  if (photos.length <= 1 && !fp) return '';
+
+  const MAX_VISIBLE = 8;
+  const visiblePhotos = photos.slice(0, MAX_VISIBLE);
+  const overflowCount = Math.max(0, photos.length - MAX_VISIBLE);
+
+  const tiles = visiblePhotos.map(function (src, i) {
+    const isLastVisible = i === visiblePhotos.length - 1;
+    const overlay = (isLastVisible && overflowCount > 0)
+      ? '<span class="exp-gallery-more">+' + overflowCount + ' more</span>'
+      : '';
+    const optimSrc = (typeof optimImg === 'function') ? optimImg(src, 400) : src;
+    return '<button type="button" class="exp-gallery-tile" ' +
+      'onclick="openLotLightbox(' + lot._idx + ',' + i + ')" ' +
+      'aria-label="Photo ' + (i + 1) + ' of ' + photos.length + '">' +
+      '<img src="' + esc(optimSrc) + '" alt="" loading="lazy" decoding="async">' +
+      overlay +
+    '</button>';
+  }).join('');
+
+  const floorPlanTile = fp
+    ? '<button type="button" class="exp-gallery-tile exp-gallery-floorplan" ' +
+        'onclick="openLotLightbox(' + lot._idx + ',' + photos.length + ')" ' +
+        'aria-label="Floor plan">' +
+        '<img src="' + esc(typeof optimImg === 'function' ? optimImg(fp, 400) : fp) + '" alt="" loading="lazy" decoding="async">' +
+        '<span class="exp-gallery-fp-label">Floor plan</span>' +
+      '</button>'
+    : '';
+
+  const photosLabel = photos.length === 1 ? '1 photo' : photos.length + ' photos';
+  const fpLabel = fp ? ' · 1 floor plan' : '';
+
+  return '<section class="exp-gallery">' +
+    '<div class="exp-gallery-head">' +
+      '<span class="eyebrow ink">Gallery · ' + photosLabel + fpLabel + '</span>' +
+    '</div>' +
+    '<div class="exp-gallery-grid">' + tiles + floorPlanTile + '</div>' +
+  '</section>';
+}
+
+// ── Lightbox (singleton overlay, created on first open) ──
+let _lightboxItems = [];   // [{ src, label }]
+let _lightboxIdx = 0;
+let _lightboxEl = null;
+
+function _ensureLightboxEl() {
+  if (_lightboxEl) return _lightboxEl;
+  // Build via createElement (no innerHTML on the root — keeps the
+  // security-reminder hook quiet). Structure is static, all text is set
+  // via textContent / setAttribute.
+  const el = document.createElement('div');
+  el.className = 'exp-lightbox';
+  el.id = 'exp-lightbox';
+  el.setAttribute('aria-hidden', 'true');
+  el.setAttribute('role', 'dialog');
+  el.setAttribute('aria-modal', 'true');
+  el.setAttribute('aria-label', 'Image viewer');
+
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.className = 'exp-lightbox-close';
+  closeBtn.setAttribute('aria-label', 'Close');
+  closeBtn.textContent = '×'; // ×
+  closeBtn.addEventListener('click', closeLotLightbox);
+
+  const prevBtn = document.createElement('button');
+  prevBtn.type = 'button';
+  prevBtn.className = 'exp-lightbox-nav exp-lightbox-prev';
+  prevBtn.setAttribute('aria-label', 'Previous');
+  prevBtn.textContent = '‹'; // ‹
+  prevBtn.addEventListener('click', function () { navLotLightbox(-1); });
+
+  const nextBtn = document.createElement('button');
+  nextBtn.type = 'button';
+  nextBtn.className = 'exp-lightbox-nav exp-lightbox-next';
+  nextBtn.setAttribute('aria-label', 'Next');
+  nextBtn.textContent = '›'; // ›
+  nextBtn.addEventListener('click', function () { navLotLightbox(1); });
+
+  const stage = document.createElement('div');
+  stage.className = 'exp-lightbox-stage';
+
+  const img = document.createElement('img');
+  img.className = 'exp-lightbox-img';
+  img.alt = '';
+  stage.appendChild(img);
+
+  const cap = document.createElement('div');
+  cap.className = 'exp-lightbox-caption';
+  cap.setAttribute('aria-live', 'polite');
+  stage.appendChild(cap);
+
+  el.appendChild(closeBtn);
+  el.appendChild(prevBtn);
+  el.appendChild(stage);
+  el.appendChild(nextBtn);
+
+  // Click on backdrop (not on img/buttons) closes
+  el.addEventListener('click', function (e) {
+    if (e.target === el || e.target === stage) closeLotLightbox();
+  });
+
+  document.body.appendChild(el);
+  _lightboxEl = el;
+  return el;
+}
+
+function _renderLightbox() {
+  if (!_lightboxEl || !_lightboxItems.length) return;
+  const item = _lightboxItems[_lightboxIdx];
+  const img = _lightboxEl.querySelector('.exp-lightbox-img');
+  const cap = _lightboxEl.querySelector('.exp-lightbox-caption');
+  // Full-size: pass 1600 through optimImg (wsrv.nl handles the resize)
+  img.src = (typeof optimImg === 'function') ? optimImg(item.src, 1600) : item.src;
+  img.alt = item.label || ('Image ' + (_lightboxIdx + 1));
+  cap.textContent = item.label
+    ? item.label + ' · ' + (_lightboxIdx + 1) + ' of ' + _lightboxItems.length
+    : (_lightboxIdx + 1) + ' of ' + _lightboxItems.length;
+  // Hide nav arrows when only one item
+  const single = _lightboxItems.length <= 1;
+  _lightboxEl.querySelector('.exp-lightbox-prev').style.display = single ? 'none' : '';
+  _lightboxEl.querySelector('.exp-lightbox-next').style.display = single ? 'none' : '';
+}
+
+function _lightboxKeyHandler(e) {
+  if (!_lightboxEl || _lightboxEl.getAttribute('aria-hidden') === 'true') return;
+  if (e.key === 'Escape') { e.preventDefault(); closeLotLightbox(); }
+  else if (e.key === 'ArrowRight') { e.preventDefault(); navLotLightbox(1); }
+  else if (e.key === 'ArrowLeft')  { e.preventDefault(); navLotLightbox(-1); }
+}
+
+function openLotLightbox(lotIdx, itemIdx) {
+  const lot = (typeof LOTS !== 'undefined' && LOTS) ? LOTS[lotIdx] : null;
+  if (!lot) return;
+  const photos = _galleryPhotos(lot);
+  const items = photos.map(function (src, i) {
+    return { src: src, label: 'Photo ' + (i + 1) };
+  });
+  if (lot.floorPlanUrl) items.push({ src: lot.floorPlanUrl, label: 'Floor plan' });
+  if (!items.length) return;
+  _lightboxItems = items;
+  _lightboxIdx = Math.max(0, Math.min(items.length - 1, itemIdx || 0));
+  const el = _ensureLightboxEl();
+  el.setAttribute('aria-hidden', 'false');
+  el.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  _renderLightbox();
+  document.addEventListener('keydown', _lightboxKeyHandler);
+  // Move focus to close button for screen-reader users
+  const closeBtn = el.querySelector('.exp-lightbox-close');
+  if (closeBtn) closeBtn.focus();
+  if (window.umami) try { umami.track('lightbox_open', { lot: lot.lot || '', house: lot._house || '' }); } catch (_) {}
+}
+
+function closeLotLightbox() {
+  if (!_lightboxEl) return;
+  _lightboxEl.setAttribute('aria-hidden', 'true');
+  _lightboxEl.classList.remove('open');
+  document.body.style.overflow = '';
+  document.removeEventListener('keydown', _lightboxKeyHandler);
+}
+
+function navLotLightbox(delta) {
+  if (!_lightboxItems.length) return;
+  const n = _lightboxItems.length;
+  _lightboxIdx = ((_lightboxIdx + delta) % n + n) % n;
+  _renderLightbox();
+}
+
+// ═══════════════════════════════════════════════════════════════
 // BRIDGING-QUOTE LEAD CAPTURE (lead-out funnel)
 // ═══════════════════════════════════════════════════════════════
 // The "Get a bridging quote" CTA in an expanded lot's Fundability
@@ -5394,6 +5598,10 @@ function expandCard(lot) {
   panel.innerHTML = (
     '<button class="exp-close-btn" onclick="closeExpandedPanel()" aria-label="Close panel" title="Close">&times;</button>' +
     buildExpV2Header(lot) +
+    // Gallery sits above the analysis grid and spans both columns —
+    // photos are the primary "stay on platform" anchor. Returns '' when
+    // the lot has no extra photos and no floor plan.
+    buildExpV2Gallery(lot) +
     '<div class="exp-v2-left">' +
       _leftSections +
     '</div>' +
