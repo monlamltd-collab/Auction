@@ -163,5 +163,27 @@ console.log('\nTest 7: monthlyBudget=0 disables threshold alerts');
   b.destroy();
 }
 
+// ── Test 8: recordFcSearchRequest books 1 credit per call ──
+console.log('\nTest 8: recordFcSearchRequest credits ~1 per /v1/search query');
+{
+  const b = makeBudget(1000);
+  const beforeUsed = b.getFcCreditsUsed();
+  const beforeStatus = b.getFirecrawlStatus();
+  const beforeHealing = beforeStatus.creditsByTier?.healing || 0;
+
+  b.recordFcSearchRequest('healing');
+  b.recordFcSearchRequest('healing');
+  b.recordFcSearchRequest('healing');
+
+  const afterUsed = b.getFcCreditsUsed();
+  const afterStatus = b.getFirecrawlStatus();
+  const afterHealing = afterStatus.creditsByTier?.healing || 0;
+
+  assert(afterUsed - beforeUsed === 3, '3 search requests = +3 credits total');
+  assert(afterHealing - beforeHealing === 3, '3 search requests attributed to healing tier');
+
+  b.destroy();
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
