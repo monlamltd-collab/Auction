@@ -259,6 +259,7 @@ CREATE TABLE IF NOT EXISTS lots (
   sqft INTEGER,
   condition TEXT,
   image_url TEXT,
+  floor_plan_url TEXT,
   bullets JSONB DEFAULT '[]',
   units INTEGER DEFAULT 0,
   auction_date DATE,
