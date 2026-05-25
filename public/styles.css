@@ -586,6 +586,8 @@ footer .logo-f span{color:var(--green)}
 .badge-vacant{position:absolute;bottom:10px;left:10px;background:rgba(192,57,43,0.85);color:#fff;font-size:10px;border-radius:20px;padding:3px 8px;font-family:var(--font-main)}
 .badge-urgency{position:absolute;bottom:10px;right:10px;background:rgba(230,126,34,0.9);color:#fff;font-size:10px;font-weight:700;border-radius:20px;padding:3px 8px;font-family:var(--font-main)}
 .badge-ended{position:absolute;bottom:10px;right:10px;background:rgba(120,120,120,0.85);color:#fff;font-size:10px;font-weight:700;border-radius:20px;padding:3px 8px;font-family:var(--font-main)}
+/* Photo-count badge: "stay here, more inside" cue. Sits under badge-house. */
+.badge-photos{top:42px;left:10px;background:rgba(26,26,24,0.78);color:#fff;font-size:10px;font-weight:600;border-radius:20px;padding:3px 8px;font-family:var(--font-main);letter-spacing:.02em}
 .card-ended{opacity:0.72;position:relative;overflow:hidden}
 .card-ended::after{content:'AUCTION ENDED';position:absolute;top:22px;right:-34px;background:rgba(192,57,43,0.88);color:#fff;font-size:9px;font-weight:900;font-family:var(--font-main);letter-spacing:1.5px;padding:4px 44px;transform:rotate(45deg);z-index:5;pointer-events:none}
 .card-body{padding:14px 16px}

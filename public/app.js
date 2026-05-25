@@ -4348,6 +4348,17 @@ function getCardImageBadges(lot) {
     html += '<div class="card-badge badge-score ' + sc + '" style="cursor:pointer;position:relative" onclick="event.stopPropagation();toggleScorePopup(this,' + lot._idx + ')" onmouseenter="showScoreTip(this,' + lot._idx + ')" onmouseleave="hideScoreTip(this)">' + sign + clampedScore + '</div>';
   }
   if (lot.vacant) html += '<div class="badge-vacant">Vacant possession</div>';
+  // Photo-count badge — tells investors "more inside, don't bounce out"
+  // (PR A3.3). Only render when there's actually more than the hero to
+  // see: 2+ photos in the gallery, or a floor plan, or both.
+  const photoCount = (typeof _galleryPhotos === 'function') ? _galleryPhotos(lot).length : 0;
+  if (photoCount >= 2 || lot.floorPlanUrl) {
+    let label = '';
+    if (photoCount >= 2 && lot.floorPlanUrl) label = photoCount + ' photos · floor plan';
+    else if (photoCount >= 2) label = photoCount + ' photos';
+    else label = 'Floor plan';
+    html += '<div class="card-badge badge-photos">' + label + '</div>';
+  }
   // Urgency / ended badge
   if (lot._auctionDate) {
     const days = Math.ceil((new Date(lot._auctionDate) - new Date()) / 86400000);
