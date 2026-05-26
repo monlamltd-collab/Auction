@@ -47,6 +47,7 @@ import { getCalendarAuctions } from './lib/calendar.js';
 
 // ── Harness modules (adaptive resilience framework) ──
 import { initAlerts, fireAlert as harnessFireAlert, resolveAlert as harnessResolveAlert } from './lib/harness/alert-router.js';
+import { emitPipelineEvent } from './lib/pipeline/pipeline-events.js';
 import { initHouseHealth, updateHealth as harnessUpdateHealth } from './lib/harness/house-health.js';
 import { initDiscovery } from './lib/harness/house-discovery.js';
 import { initManager, runManagerCycle, getManagerDirectives } from './lib/harness/manager.js';
@@ -107,6 +108,12 @@ initDiscovery(supabase, callAI);
 // → resource-budget). MUST be set before the first scrape — bootDecision()
 // runs after a 60s delay, so this ordering is safe.
 budget.setAlertHook((payload) => harnessFireAlert(payload));
+
+// Wire the pipeline-events hook so every booked Firecrawl call emits one
+// 'firecrawl_call' row into pipeline_events. Same indirection rationale as
+// setAlertHook above. Best-effort: emitPipelineEvent() swallows insert
+// errors so observability writes never block scrape correctness.
+budget.setEventHook((payload) => emitPipelineEvent(payload));
 
 // Inject server-level dependencies into lib/houses.js (rewriteUrl needs these)
 initHouses({

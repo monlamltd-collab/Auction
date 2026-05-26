@@ -163,5 +163,239 @@ console.log('\nTest 7: monthlyBudget=0 disables threshold alerts');
   b.destroy();
 }
 
+// ── Test 8: recordFcMapRequest books 1 credit per /v2/map call ──
+console.log('\nTest 8: recordFcMapRequest books 1 credit and attributes by tier');
+{
+  const b = makeBudget(1000);
+  const before = b.getFirecrawlStatus();
+
+  b.recordFcMapRequest('healing');
+  b.recordFcMapRequest('healing');
+
+  const after = b.getFirecrawlStatus();
+  assert(after.creditsUsed - before.creditsUsed === 2, '2 map calls = +2 credits');
+  assert((after.creditsByTier.healing || 0) - (before.creditsByTier.healing || 0) === 2, 'attributed to healing tier');
+
+  b.destroy();
+}
+
+// ── Test 9: planRefreshDay env defaults to 0 (legacy UTC-month behaviour) ──
+console.log('\nTest 9: planRefreshDay default is 0 (legacy UTC-month cycle key)');
+{
+  const prev = process.env.FIRECRAWL_PLAN_REFRESH_DAY;
+  delete process.env.FIRECRAWL_PLAN_REFRESH_DAY;
+  try {
+    const b = makeBudget(100);
+    assert(b.planRefreshDay === 0, 'planRefreshDay is 0');
+    const key = b._planCycleKey();
+    assert(/^\d{4}-\d{2}$/.test(key), `cycle key matches YYYY-MM (got ${key})`);
+    assert(key === b._utcMonthKey(), 'falls back to UTC month key');
+    b.destroy();
+  } finally {
+    if (prev === undefined) delete process.env.FIRECRAWL_PLAN_REFRESH_DAY;
+    else process.env.FIRECRAWL_PLAN_REFRESH_DAY = prev;
+  }
+}
+
+// ── Test 10: planRefreshDay=14 produces a YYYY-MM-14 anchored cycle key ──
+console.log('\nTest 10: planRefreshDay=14 anchors cycle key to YYYY-MM-14');
+{
+  const prev = process.env.FIRECRAWL_PLAN_REFRESH_DAY;
+  process.env.FIRECRAWL_PLAN_REFRESH_DAY = '14';
+  try {
+    const b = makeBudget(100);
+    assert(b.planRefreshDay === 14, 'planRefreshDay is 14');
+    const key = b._planCycleKey();
+    assert(/^\d{4}-\d{2}-14$/.test(key), `cycle key matches YYYY-MM-14 (got ${key})`);
+    b.destroy();
+  } finally {
+    if (prev === undefined) delete process.env.FIRECRAWL_PLAN_REFRESH_DAY;
+    else process.env.FIRECRAWL_PLAN_REFRESH_DAY = prev;
+  }
+}
+
+// ── Test 11: invalid planRefreshDay values fall back to 0 ──
+console.log('\nTest 11: invalid planRefreshDay falls back to 0 (legacy)');
+{
+  const prev = process.env.FIRECRAWL_PLAN_REFRESH_DAY;
+  for (const bad of ['0', '-1', '29', '32', 'abc', '']) {
+    process.env.FIRECRAWL_PLAN_REFRESH_DAY = bad;
+    const b = makeBudget(100);
+    assert(b.planRefreshDay === 0, `"${bad}" → planRefreshDay 0`);
+    b.destroy();
+  }
+  if (prev === undefined) delete process.env.FIRECRAWL_PLAN_REFRESH_DAY;
+  else process.env.FIRECRAWL_PLAN_REFRESH_DAY = prev;
+}
+
+// ── Test 12: threshold flags clear at plan-cycle boundary, not UTC month ──
+console.log('\nTest 12: threshold flags reset on plan-cycle rollover');
+{
+  const prev = process.env.FIRECRAWL_PLAN_REFRESH_DAY;
+  process.env.FIRECRAWL_PLAN_REFRESH_DAY = '14';
+  try {
+    const fired = [];
+    const b = makeBudget(100);
+    b.setAlertHook(p => fired.push(p));
+
+    for (let i = 0; i < 80; i++) b.recordFcRequest('full');
+    assert(fired.length === 1, 'one 80% alert in cycle A');
+
+    // Force a cycle rollover by faking the prior cycle key.
+    b._fc.monthStartedAt = '1970-01-14';
+    b._fc.creditsUsed = 0;
+    b._fc.creditsUsedToday = 0;
+
+    for (let i = 0; i < 80; i++) b.recordFcRequest('full');
+    assert(fired.length === 2, 'second 80% alert fires in cycle B');
+    assert(/^\d{4}-\d{2}-14$/.test(b._fc.monthStartedAt), 'monthStartedAt is plan-cycle format');
+
+    b.destroy();
+  } finally {
+    if (prev === undefined) delete process.env.FIRECRAWL_PLAN_REFRESH_DAY;
+    else process.env.FIRECRAWL_PLAN_REFRESH_DAY = prev;
+  }
+}
+
+// ── Test 13: event hook fires when eventMeta supplied ──
+console.log('\nTest 13: setEventHook + recordFcRequest(_, _, eventMeta) emits event');
+{
+  const events = [];
+  const b = makeBudget(100);
+  b.setEventHook(p => events.push(p));
+
+  b.recordFcRequest('full', 1, {
+    endpoint: '/v2/scrape',
+    caller: 'firecrawl.test',
+    outcome: 'success',
+    url: 'https://example.com/a',
+    elapsedMs: 42,
+  });
+
+  assert(events.length === 1, 'one event emitted');
+  assert(events[0].eventType === 'firecrawl_call', 'event_type is firecrawl_call');
+  assert(events[0].source === 'resource-budget.recordFcRequest', 'source matches producer label');
+  assert(events[0].eventData.endpoint === '/v2/scrape', 'endpoint propagated');
+  assert(events[0].eventData.caller === 'firecrawl.test', 'caller propagated');
+  assert(events[0].eventData.outcome === 'success', 'outcome propagated');
+  assert(events[0].eventData.weight === 1, 'weight is booked credit count');
+  assert(events[0].eventData.tier === 'full', 'tier propagated');
+  assert(events[0].eventData.url === 'https://example.com/a', 'url propagated');
+  assert(events[0].eventData.elapsedMs === 42, 'elapsedMs propagated');
+
+  b.destroy();
+}
+
+// ── Test 14: no eventMeta = no event (legacy callers stay silent) ──
+console.log('\nTest 14: recordFcRequest without eventMeta emits no event');
+{
+  const events = [];
+  const b = makeBudget(100);
+  b.setEventHook(p => events.push(p));
+
+  for (let i = 0; i < 5; i++) b.recordFcRequest('full');
+  assert(events.length === 0, 'legacy two-arg calls do not emit');
+  assert(b.getFcCreditsUsed() === 5, 'credit accounting still ran');
+
+  b.destroy();
+}
+
+// ── Test 15: throwing event hook is contained, budget keeps going ──
+console.log('\nTest 15: throwing event hook does not break recordFcRequest');
+{
+  const b = makeBudget(100);
+  b.setEventHook(() => { throw new Error('boom'); });
+
+  let threw = false;
+  try {
+    b.recordFcRequest('full', 1, {
+      endpoint: '/v2/scrape', caller: 'firecrawl.test', outcome: 'success', elapsedMs: 1,
+    });
+  } catch (e) { threw = true; }
+
+  assert(!threw, 'recordFcRequest swallows hook throw');
+  assert(b.getFcCreditsUsed() === 1, 'credit still booked after hook throw');
+
+  b.destroy();
+}
+
+// ── Test 16: recordFcAgentRequest forwards eventMeta + uses fire1CreditMult ──
+console.log('\nTest 16: recordFcAgentRequest forwards eventMeta with FIRE-1 weight');
+{
+  const events = [];
+  const b = makeBudget(1000);
+  b.setEventHook(p => events.push(p));
+
+  b.recordFcAgentRequest('full', {
+    endpoint: '/v2/extract', caller: 'firecrawl.agentExtract', outcome: 'success',
+    url: 'https://example.com/x', elapsedMs: 5000,
+  });
+
+  assert(events.length === 1, 'one event emitted');
+  assert(events[0].eventData.weight === b.fire1CreditMult, 'weight matches fire1CreditMult');
+  assert(events[0].eventData.endpoint === '/v2/extract', 'endpoint propagated');
+  assert(events[0].eventData.outcome === 'success', 'outcome propagated');
+
+  b.destroy();
+}
+
+// ── Test 17: recordFcMapRequest forwards eventMeta with weight=1 ──
+console.log('\nTest 17: recordFcMapRequest forwards eventMeta with map weight');
+{
+  const events = [];
+  const b = makeBudget(1000);
+  b.setEventHook(p => events.push(p));
+
+  b.recordFcMapRequest('healing', {
+    endpoint: '/v2/map', caller: 'firecrawl.mapSiteUrls', outcome: 'success',
+    url: 'https://example.com/', elapsedMs: 100,
+  });
+
+  assert(events.length === 1, 'one event emitted');
+  assert(events[0].eventData.weight === 1, 'map weight is 1');
+  assert(events[0].eventData.endpoint === '/v2/map', 'endpoint propagated');
+  assert(events[0].eventData.tier === 'healing', 'tier propagated');
+
+  b.destroy();
+}
+
+// ── Test 18: url longer than 256 chars is truncated ──
+console.log('\nTest 18: long url is truncated to 256 chars');
+{
+  const events = [];
+  const b = makeBudget(100);
+  b.setEventHook(p => events.push(p));
+
+  const longUrl = 'https://example.com/' + 'a'.repeat(500);
+  b.recordFcRequest('full', 1, {
+    endpoint: '/v2/scrape', caller: 'firecrawl.test', outcome: 'success',
+    url: longUrl, elapsedMs: 1,
+  });
+
+  assert(events.length === 1, 'one event emitted');
+  assert(events[0].eventData.url.length === 256, 'url truncated to 256 chars');
+  assert(longUrl.startsWith(events[0].eventData.url), 'truncation preserves prefix');
+
+  b.destroy();
+}
+
+// ── Test 19: null url stays null (search-style endpoints) ──
+console.log('\nTest 19: null url propagates as null');
+{
+  const events = [];
+  const b = makeBudget(100);
+  b.setEventHook(p => events.push(p));
+
+  b.recordFcRequest('full', 1, {
+    endpoint: '/v1/search', caller: 'firecrawl.search', outcome: 'success',
+    url: null, elapsedMs: 1,
+  });
+
+  assert(events.length === 1, 'one event emitted');
+  assert(events[0].eventData.url === null, 'null url stays null');
+
+  b.destroy();
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

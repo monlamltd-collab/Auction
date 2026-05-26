@@ -157,9 +157,34 @@ The OS Places circuit breaker transitioned open → closed.
 - `lot_id`: NULL
 - `auction_id`: NULL
 
+### `firecrawl_call`
+One row per Firecrawl HTTP call from the scraper layer. Emitted by `lib/resource-budget.js::_fireEvent` when a wrapper in `lib/scraper/firecrawl.js` passes an `eventMeta` object alongside the booked credit weight. Cardinality matches the Firecrawl dashboard line-item count, so the `firecrawl_spend_*` views below reconcile directly against the provider's billing screen.
+
+```json
+{
+  "endpoint":  "/v2/scrape" | "/v2/extract" | "/v2/map",     // text — Firecrawl API path
+  "caller":    "firecrawl.<wrapperName>",                    // text — e.g. "firecrawl.extractCatalogue"
+  "outcome":   "success" | "failed" | "cancelled" | "timeout", // text — agentExtract is the only emitter of non-success
+  "weight":    1,                                            // number — credits debited locally for this call
+  "tier":      "full" | "free-enrichment" | "status-drift" | "on-demand" | "healing" | "unknown",  // text — ResourceBudget tier label
+  "url":       "https://...",                                // text|null — target URL, truncated to 256 chars; null for endpoints without a single URL (e.g. /v1/search if future-added)
+  "elapsedMs": 1234                                          // number — per-attempt wall-clock duration; retries each get their own row
+}
+```
+- `source`: `resource-budget.recordFcRequest`
+- `lot_id`: NULL (Firecrawl calls aren't lot-scoped at the budget layer)
+- `auction_id`: NULL
+
+`outcome` mapping for `agentExtract`:
+- `success` — poll loop saw `status: 'completed'`.
+- `failed` / `cancelled` — poll loop saw the matching `pollData.status`. Firecrawl bills started jobs regardless of final state, so the row is emitted before the throw.
+- `timeout` — client-side poll deadline elapsed. The job is still likely running on Firecrawl's side and will bill, so the row is emitted before the throw.
+
+Other wrappers (`scrapeWithFirecrawl`, `extractCatalogue`, `extractHomepage`, `extractDetail`, `mapSiteUrls`) emit only on the success path — they throw before reaching the recordFcRequest call when the HTTP request itself fails, so failed scrape attempts do NOT show up in this stream. That matches Firecrawl's billing model: failed `/v2/scrape` requests aren't billed.
+
 ---
 
-## 4. The three views
+## 4. The views
 
 All three are pure `pipeline_events` readers. At first deploy they return empty result sets until the next scrape/enrichment cycle fires — that's expected. For retroactive equivalents (running against pre-deploy manifest data) see section 6 below.
 
@@ -205,6 +230,37 @@ Any house that has appeared in `pipeline_events` but whose latest `scrape_persis
 | `failure_count_30d` | int | Count of `scrape_failed` events in last 30 days |
 
 Dormancy uses *absence of recent `scrape_persisted`* rather than a `lot_disappeared` event — per the agreed Option B framing, "lot vanishes" is a per-lot concept (`lot_events.lot_vanished`), while "source went quiet" is a pipeline concept. The right signal here is the absence of forward activity.
+
+### `firecrawl_spend_24h` — endpoint × caller Firecrawl spend (24h)
+Pivot of `firecrawl_call` rows by endpoint and caller. Each row is one (endpoint, caller) pair active in the last 24 hours.
+
+| Column | Type | Meaning |
+|---|---|---|
+| `endpoint` | text | Firecrawl API path from `event_data->>'endpoint'` |
+| `caller` | text | Wrapper name from `event_data->>'caller'` (e.g. `firecrawl.extractCatalogue`) |
+| `call_count` | int | Number of `firecrawl_call` rows for this (endpoint, caller) pair |
+| `total_weight` | numeric | Sum of `event_data->>'weight'` — credits debited locally |
+| `success_count` | int | Count of `outcome = 'success'` rows |
+| `failure_count` | int | Count of `outcome IN ('failed','cancelled','timeout')` rows |
+| `avg_elapsed_ms` | numeric | Mean wall-clock latency in ms |
+| `last_call_at` | timestamptz | Most recent `firecrawl_call` for this pair |
+
+Ordered by `total_weight DESC`. Designed to match the Firecrawl dashboard line-item shape — when the dashboard shows 21–26 credits per FIRE-1 call, this view's `total_weight / call_count` for `endpoint='/v2/extract'` should agree.
+
+### `firecrawl_spend_7d` — per-endpoint roll-up (7d)
+Same idea but rolled up across callers, over 7 days. The `avg_weight_per_call` column is the multiplier-drift detector.
+
+| Column | Type | Meaning |
+|---|---|---|
+| `endpoint` | text | Firecrawl API path |
+| `call_count_7d` | int | Total `firecrawl_call` rows over 7 days |
+| `total_weight_7d` | numeric | Sum of `weight` |
+| `avg_weight_per_call` | numeric | `total_weight_7d / call_count_7d` — surfaces divergence from `FIRECRAWL_FIRE1_CREDIT_MULT` etc. |
+| `success_count_7d` | int | Count of `outcome = 'success'` rows |
+| `failure_count_7d` | int | Count of `outcome IN ('failed','cancelled','timeout')` rows |
+| `avg_elapsed_ms_7d` | numeric | Mean wall-clock latency over the window |
+
+Run this view weekly: if `avg_weight_per_call` for `/v2/extract` diverges from `FIRECRAWL_FIRE1_CREDIT_MULT` by more than ~10%, the multiplier needs retuning to match Firecrawl's actual billing — exactly the case the FIRE-1 leak (audit 2026-05-25) was meant to catch.
 
 ---
 
