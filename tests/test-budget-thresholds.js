@@ -257,5 +257,145 @@ console.log('\nTest 12: threshold flags reset on plan-cycle rollover');
   }
 }
 
+// ── Test 13: event hook fires when eventMeta supplied ──
+console.log('\nTest 13: setEventHook + recordFcRequest(_, _, eventMeta) emits event');
+{
+  const events = [];
+  const b = makeBudget(100);
+  b.setEventHook(p => events.push(p));
+
+  b.recordFcRequest('full', 1, {
+    endpoint: '/v2/scrape',
+    caller: 'firecrawl.test',
+    outcome: 'success',
+    url: 'https://example.com/a',
+    elapsedMs: 42,
+  });
+
+  assert(events.length === 1, 'one event emitted');
+  assert(events[0].eventType === 'firecrawl_call', 'event_type is firecrawl_call');
+  assert(events[0].source === 'resource-budget.recordFcRequest', 'source matches producer label');
+  assert(events[0].eventData.endpoint === '/v2/scrape', 'endpoint propagated');
+  assert(events[0].eventData.caller === 'firecrawl.test', 'caller propagated');
+  assert(events[0].eventData.outcome === 'success', 'outcome propagated');
+  assert(events[0].eventData.weight === 1, 'weight is booked credit count');
+  assert(events[0].eventData.tier === 'full', 'tier propagated');
+  assert(events[0].eventData.url === 'https://example.com/a', 'url propagated');
+  assert(events[0].eventData.elapsedMs === 42, 'elapsedMs propagated');
+
+  b.destroy();
+}
+
+// ── Test 14: no eventMeta = no event (legacy callers stay silent) ──
+console.log('\nTest 14: recordFcRequest without eventMeta emits no event');
+{
+  const events = [];
+  const b = makeBudget(100);
+  b.setEventHook(p => events.push(p));
+
+  for (let i = 0; i < 5; i++) b.recordFcRequest('full');
+  assert(events.length === 0, 'legacy two-arg calls do not emit');
+  assert(b.getFcCreditsUsed() === 5, 'credit accounting still ran');
+
+  b.destroy();
+}
+
+// ── Test 15: throwing event hook is contained, budget keeps going ──
+console.log('\nTest 15: throwing event hook does not break recordFcRequest');
+{
+  const b = makeBudget(100);
+  b.setEventHook(() => { throw new Error('boom'); });
+
+  let threw = false;
+  try {
+    b.recordFcRequest('full', 1, {
+      endpoint: '/v2/scrape', caller: 'firecrawl.test', outcome: 'success', elapsedMs: 1,
+    });
+  } catch (e) { threw = true; }
+
+  assert(!threw, 'recordFcRequest swallows hook throw');
+  assert(b.getFcCreditsUsed() === 1, 'credit still booked after hook throw');
+
+  b.destroy();
+}
+
+// ── Test 16: recordFcAgentRequest forwards eventMeta + uses fire1CreditMult ──
+console.log('\nTest 16: recordFcAgentRequest forwards eventMeta with FIRE-1 weight');
+{
+  const events = [];
+  const b = makeBudget(1000);
+  b.setEventHook(p => events.push(p));
+
+  b.recordFcAgentRequest('full', {
+    endpoint: '/v2/extract', caller: 'firecrawl.agentExtract', outcome: 'success',
+    url: 'https://example.com/x', elapsedMs: 5000,
+  });
+
+  assert(events.length === 1, 'one event emitted');
+  assert(events[0].eventData.weight === b.fire1CreditMult, 'weight matches fire1CreditMult');
+  assert(events[0].eventData.endpoint === '/v2/extract', 'endpoint propagated');
+  assert(events[0].eventData.outcome === 'success', 'outcome propagated');
+
+  b.destroy();
+}
+
+// ── Test 17: recordFcMapRequest forwards eventMeta with weight=1 ──
+console.log('\nTest 17: recordFcMapRequest forwards eventMeta with map weight');
+{
+  const events = [];
+  const b = makeBudget(1000);
+  b.setEventHook(p => events.push(p));
+
+  b.recordFcMapRequest('healing', {
+    endpoint: '/v2/map', caller: 'firecrawl.mapSiteUrls', outcome: 'success',
+    url: 'https://example.com/', elapsedMs: 100,
+  });
+
+  assert(events.length === 1, 'one event emitted');
+  assert(events[0].eventData.weight === 1, 'map weight is 1');
+  assert(events[0].eventData.endpoint === '/v2/map', 'endpoint propagated');
+  assert(events[0].eventData.tier === 'healing', 'tier propagated');
+
+  b.destroy();
+}
+
+// ── Test 18: url longer than 256 chars is truncated ──
+console.log('\nTest 18: long url is truncated to 256 chars');
+{
+  const events = [];
+  const b = makeBudget(100);
+  b.setEventHook(p => events.push(p));
+
+  const longUrl = 'https://example.com/' + 'a'.repeat(500);
+  b.recordFcRequest('full', 1, {
+    endpoint: '/v2/scrape', caller: 'firecrawl.test', outcome: 'success',
+    url: longUrl, elapsedMs: 1,
+  });
+
+  assert(events.length === 1, 'one event emitted');
+  assert(events[0].eventData.url.length === 256, 'url truncated to 256 chars');
+  assert(longUrl.startsWith(events[0].eventData.url), 'truncation preserves prefix');
+
+  b.destroy();
+}
+
+// ── Test 19: null url stays null (search-style endpoints) ──
+console.log('\nTest 19: null url propagates as null');
+{
+  const events = [];
+  const b = makeBudget(100);
+  b.setEventHook(p => events.push(p));
+
+  b.recordFcRequest('full', 1, {
+    endpoint: '/v1/search', caller: 'firecrawl.search', outcome: 'success',
+    url: null, elapsedMs: 1,
+  });
+
+  assert(events.length === 1, 'one event emitted');
+  assert(events[0].eventData.url === null, 'null url stays null');
+
+  b.destroy();
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
