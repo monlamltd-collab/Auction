@@ -13,7 +13,7 @@
 // Additive changes pass without a version bump but the bump is still
 // recommended discipline so consumers know to look.
 
-export const PIPELINE_EVENTS_SCHEMA_VERSION = '1.1.0';
+export const PIPELINE_EVENTS_SCHEMA_VERSION = '1.2.0';
 
 export const PIPELINE_EVENTS_TABLE = Object.freeze({
   columns: {
@@ -36,6 +36,7 @@ export const PIPELINE_EVENT_TYPES_PINNED = Object.freeze([
   'enrich_uprn_circuit_open',
   'enrich_uprn_circuit_closed',
   'enrich_uprn_rate_limited',
+  'firecrawl_call',
 ]);
 
 // Per-event-type event_data shape. CI gate compares key sets and types;
@@ -93,5 +94,22 @@ export const PIPELINE_EVENT_PAYLOADS = Object.freeze({
     threshold_ms: 'number',
     bucket_tokens: 'number',
     bucket_capacity: 'number',
+  },
+  // One row per Firecrawl HTTP call, emitted from
+  // lib/resource-budget.js _fireEvent() when a scraper wrapper supplies
+  // an eventMeta object. endpoint is the Firecrawl API path; caller is
+  // 'firecrawl.<wrapperName>'; outcome covers success / failed /
+  // cancelled / timeout. weight is the credit count debited locally
+  // for this call (allows the firecrawl_spend_7d view to surface
+  // multiplier drift). url may be null for endpoints that aren't
+  // URL-scoped (e.g. /v1/search) and is truncated to 256 chars.
+  firecrawl_call: {
+    endpoint: 'string',
+    caller: 'string',
+    outcome: 'string',
+    weight: 'number',
+    tier: 'string',
+    url: 'string|null',
+    elapsedMs: 'number',
   },
 });
