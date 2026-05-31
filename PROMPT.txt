@@ -1,0 +1,44 @@
+AuctionBrain Database Rebuild
+
+Context: Current lots table has 66 columns with 14 dead/derived, 3 overlapping change-logs, and a 646MB raw-HTML cache. Strip it to essentials.
+
+Write a single idempotent SQL migration (migrations/rebuild-lots.sql) that creates the lean schema. Then update lib/types/lot.js (the canonical mapper) and the get_active_lots RPC to match.
+
+THE LEAN LOTS TABLE
+
+Listing facts (mirror the source):
+auctioneer, auction_type (traditional/modern), auction_date, status (upcoming/unsold/withdrawn), lot_number, source_url, address, postcode, guide_price (numeric), guide_text (verbatim), property_type, tenure, lease_length (int nullable), bedrooms (int nullable), description (text[]), images (text[] - URLs, NOT binary), image_url (text nullable - best main image), floor_plans (text[] nullable)
+
+Assessment overlay:
+uprn, lat, lng, epc_rating, floor_area_sqm (numeric), flood_risk, comparable_price (numeric - nearby sold avg from LR), est_monthly_rent (numeric), score (0-10), opportunities (text[]), risks (text[]), sources (jsonb - {field: {source, fetched_at, status}})
+
+System:
+house, catalogue_url, property_key (generated), last_seen_at (timestamptz), first_seen_at (timestamptz default now()), search_text, created_at (timestamptz default now())
+
+IMAGES — SCRAPE AT POPULATE TIME, NOT HOTLINK
+
+Scrape all images during lot extraction. Store URLs in images[]. Run every image through an image quality filter (Gemini Flash vision) that classifies each as property_photo, floor_plan, logo, banner, stock_photo, auction_sign, document, or unknown. Discard logos/banners/stock/auction signs. Mark the best exterior front shot as image_url. Tag floor plans separately in floor_plans[].
+
+After classification, proxy-fetch all kept images, resize to consistent dimensions (1200px wide), and store in Supabase Storage. The frontend serves from Storage, never from auction house URLs. Cache TTL: 30 days after last lot view.
+
+This replaces the old hero_image_bleed self-healing pattern — reject junk at the boundary instead of detecting it after it pollutes the DB.
+
+EXPLICITLY DO NOT INCLUDE
+
+sold_price, raw_text, search_vector + GIN index, est_annual_rent (derive from monthly), epc_floor_area_sqft (derive from sqm), street_sales/street_sales_count/street_avg, epc_works_summary/epc_works_cost_mid, os_classification, extracted_with/scraped_with, field_sources/quality_score/quality_issues/price_status, floor_plan_url (replaced by floor_plans[]), enrichment_manifest (collapse into sources jsonb)
+
+Any column not displayed to investor AND not feeding score/fundability = cut.
+
+MIGRATION RULES
+
+Idempotent (IF EXISTS / IF NOT EXISTS). Create lots_v2, populate from lots, swap. Drop lot_history and lot_status_history. Comment every column with why it exists.
+
+AFTER MIGRATION
+
+Update lib/types/lot.js - remove dead columns. Update get_active_lots() RPC - cut dead columns. Update lib/pipeline/persist-lots.js - stop writing dead columns. Wire lib/pipeline/image-quality-filter.js into enrich-stage.js (run after images extracted, before persist). Add tests/test-lot-columns.js that asserts every column is displayed or feeds scoring.
+
+THE GATE RULE (enforce in test)
+
+Add a column only if displayed to investor OR feeds score/fundability. Everything else derived-on-read or doesn't exist.
+
+Write migration, update mapper/RPC/persist, wire image filter, add gate test. No documentation files.
