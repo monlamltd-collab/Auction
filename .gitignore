@@ -78,3 +78,4 @@ scripts/.tmp/
 # Local-only assets dropped at the repo root
 AuctionBrain pages.zip
 AuctionBrain pages/
+VARIABLES.txt
