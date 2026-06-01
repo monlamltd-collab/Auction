@@ -79,3 +79,6 @@ scripts/.tmp/
 AuctionBrain pages.zip
 AuctionBrain pages/
 VARIABLES.txt
+
+# Never commit example env files — they may contain real keys
+.env.example
