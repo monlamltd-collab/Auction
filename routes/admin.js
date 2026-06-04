@@ -1131,7 +1131,7 @@ router.post('/api/admin/re-enrich', requireAdmin, async (req, res) => {
         noScore: lots.filter(l => l.score == null).length,
         noEnrichedAt: lots.filter(l => !l.enriched_at).length,
         noPostcode: lots.filter(l => !l.postcode).length,
-        noStreetAvg: lots.filter(l => l.street_avg == null).length,
+        noStreetAvg: lots.filter(l => l.comparable_price == null).length,
         noYield: lots.filter(l => l.est_gross_yield == null).length,
         noCondition: lots.filter(l => !l.condition).length,
         noEpc: lots.filter(l => !l.epc_rating).length,

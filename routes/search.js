@@ -1127,6 +1127,7 @@ async function buildAllLotsResponse({ isSignedIn, includePast }) {
     // ── Step 3: Map snake_case DB columns → camelCase frontend format ──
     const lots = allLotRows.map(r => ({
       _house: r.house,
+      auctioneer: r.auctioneer,
       lot: r.lot_number,
       url: r.url,
       _sourceUrl: r.catalogue_url,
@@ -1145,6 +1146,10 @@ async function buildAllLotsResponse({ isSignedIn, includePast }) {
       // card-carousel branch (public/app.js) only renders when this is a
       // length-2+ array; otherwise it falls back to the single image_url.
       images: Array.isArray(r.images) ? r.images : [],
+      // floor_plan_url → floor_plans[] (lean rebuild). floorPlanUrl kept as
+      // the first-plan alias for public/app.js's gallery branch.
+      floorPlans: Array.isArray(r.floor_plans) ? r.floor_plans : [],
+      floorPlanUrl: (Array.isArray(r.floor_plans) && r.floor_plans[0]) || null,
       bullets: r.bullets || [],
       units: r.units || 0,
       _auctionDate: r.auction_date,
@@ -1152,15 +1157,18 @@ async function buildAllLotsResponse({ isSignedIn, includePast }) {
       soldPrice: r.sold_price,
       epcRating: r.epc_rating,
       epcScore: r.epc_score,
-      epcDate: r.epc_date,
+      floorAreaSqm: r.floor_area_sqm ?? null,
       floodZone: r.flood_zone,
       floodRiskLevel: r.flood_risk,
-      streetAvg: r.street_avg,
-      streetSales: r.street_sales,
+      // street_avg → comparable_price (lean rebuild). streetAvg kept as alias
+      // for public/app.js; street_sales (raw array) dropped.
+      comparablePrice: r.comparable_price,
+      streetAvg: r.comparable_price,
       streetSalesCount: r.street_sales_count,
       belowMarket: r.below_market,
       estMonthlyRent: r.est_monthly_rent,
-      estAnnualRent: r.est_annual_rent,
+      // est_annual_rent dropped — derived on read.
+      estAnnualRent: r.est_monthly_rent != null ? r.est_monthly_rent * 12 : null,
       estGrossYield: r.est_gross_yield != null ? parseFloat(r.est_gross_yield) : null,
       score: r.score != null ? parseFloat(r.score) : null,
       scoreBreakdown: r.score_breakdown || [],
@@ -1169,6 +1177,7 @@ async function buildAllLotsResponse({ isSignedIn, includePast }) {
       dealType: r.deal_type,
       vacant: r.vacant,
       titleSplit: r.title_split,
+      valueEstimate: r.value_estimate || null,
       _lat: r.lat != null ? parseFloat(r.lat) : null,
       _lng: r.lng != null ? parseFloat(r.lng) : null,
       _lastSeenAt: r.last_seen_at || null,
