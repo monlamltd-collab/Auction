@@ -1238,13 +1238,16 @@ router.get('/api/admin/intel', requireAdmin, async (req, res) => {
         .limit(2000),
       // Lots seen in last 7d for status-pipeline counts
       supabase.from('lots')
-        .select('id, house, lot_number, address, price, status, score, est_gross_yield, prop_type, vacant, title_split, deal_type, last_seen_at, first_seen_at, sold_price')
+        .select('id, house, lot_number, address, price, status, score, est_gross_yield, prop_type, vacant, title_split, deal_type, last_seen_at, first_seen_at')
         .gte('last_seen_at', since7d)
         .limit(8000),
-      // Lot status changes in last 7d for pipeline view
-      supabase.from('lot_status_history')
-        .select('lot_id, old_status, new_status, changed_at')
-        .gte('changed_at', since7d)
+      // Lot status changes in last 7d for pipeline view.
+      // Reads lot_events (the consolidated source of truth) — lot_status_history
+      // was archived to lot_status_history_archive in the 2026-06-04 migration.
+      supabase.from('lot_events')
+        .select('lot_id, old_value, new_value, detected_at')
+        .eq('event_type', 'lot_status_changed')
+        .gte('detected_at', since7d)
         .limit(20000),
       // New lots today (cheap aggregate)
       supabase.from('lots').select('id', { count: 'exact', head: true }).gte('first_seen_at', todayStart),
@@ -1275,7 +1278,14 @@ router.get('/api/admin/intel', requireAdmin, async (req, res) => {
     const allUsers = usersAllRes.data || [];
     const events = eventsRes.data || [];
     const lots = lotsRecentRes.data || [];
-    const statusHistory = statusHistoryRes.data || [];
+    // Reshape lot_events rows → the {lot_id, old_status, new_status, changed_at}
+    // shape the pipeline view below expects (was lot_status_history's native shape).
+    const statusHistory = (statusHistoryRes.data || []).map(e => ({
+      lot_id: e.lot_id,
+      old_status: e.old_value?.status ?? null,
+      new_status: e.new_value?.status ?? null,
+      changed_at: e.detected_at,
+    }));
     const topScored = topScoredRes.data || [];
     const emailSignups = emailSignupsRes.data || [];
     const leads = leadsRes.data || [];
