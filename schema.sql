@@ -241,14 +241,26 @@ ALTER TABLE manager_cycles ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Service role full access" ON manager_cycles FOR ALL USING (true) WITH CHECK (true);
 
 -- 17. LOTS TABLE
--- Primary data store for individual auction lots (single source of truth)
+-- Primary data store for individual auction lots (single source of truth).
+--
+-- Regenerated 2026-06-04 from the LIVE schema after the lean rebuild
+-- (migrations/rebuild-lots.sql): dropped 13 dead columns
+-- (raw_text, search_vector, est_annual_rent, epc_date, epc_floor_area_sqft,
+--  epc_works_cost_mid, epc_works_summary, os_classification, extracted_with,
+--  scraped_with, quality_score, quality_issues, street_sales);
+-- renamed street_avg→comparable_price, epc_floor_area_sqm→floor_area_sqm,
+-- floor_plan_url→floor_plans; added auctioneer + created_at.
+-- The unique key is UNIQUE(url) (was (house,url) — changed by the 2026-05-07
+-- cross-house dedup migration).
+-- NOTE: sold_price + price_status are pending removal in the lot_events
+-- migration-completion work (lot_history/lot_status_history → *_archive).
 CREATE TABLE IF NOT EXISTS lots (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   house TEXT NOT NULL,
   lot_number TEXT,
-  url TEXT NOT NULL,
-  catalogue_url TEXT NOT NULL,
-  address TEXT NOT NULL,
+  url TEXT,
+  catalogue_url TEXT,
+  address TEXT,
   postcode TEXT,
   price INTEGER,
   price_text TEXT,
@@ -259,53 +271,58 @@ CREATE TABLE IF NOT EXISTS lots (
   sqft INTEGER,
   condition TEXT,
   image_url TEXT,
-  floor_plan_url TEXT,
-  bullets JSONB DEFAULT '[]',
+  bullets JSONB DEFAULT '[]'::jsonb,
   units INTEGER DEFAULT 0,
   auction_date DATE,
   status TEXT DEFAULT 'available',
   sold_price INTEGER,
   epc_rating TEXT,
   epc_score INTEGER,
-  epc_date DATE,
   flood_zone INTEGER,
   flood_risk TEXT,
-  street_avg INTEGER,
-  street_sales JSONB,
+  comparable_price NUMERIC,
   street_sales_count INTEGER,
-  below_market NUMERIC(5,2),
+  below_market INTEGER,
   est_monthly_rent INTEGER,
-  est_annual_rent INTEGER,
-  est_gross_yield NUMERIC(5,2),
-  score NUMERIC(4,1),
-  score_breakdown JSONB DEFAULT '[]',
-  opps JSONB DEFAULT '[]',
-  risks JSONB DEFAULT '[]',
+  est_gross_yield NUMERIC,
+  score NUMERIC,
+  score_breakdown JSONB DEFAULT '[]'::jsonb,
+  opps JSONB DEFAULT '[]'::jsonb,
+  risks JSONB DEFAULT '[]'::jsonb,
   deal_type TEXT,
   vacant BOOLEAN,
   title_split BOOLEAN,
-  raw_text TEXT,
-  search_text TEXT,
-  search_vector TSVECTOR GENERATED ALWAYS AS (to_tsvector('english', COALESCE(search_text, ''))) STORED,
-  extracted_with TEXT,
-  scraped_with TEXT,
-  last_seen_at TIMESTAMPTZ DEFAULT NOW(),
+  first_seen_at TIMESTAMPTZ DEFAULT now(),
+  last_seen_at TIMESTAMPTZ DEFAULT now(),
   enriched_at TIMESTAMPTZ,
-  lat NUMERIC(9,6),
-  lng NUMERIC(9,6),
-  first_seen_at TIMESTAMPTZ DEFAULT NOW(),
+  search_text TEXT,
+  lat NUMERIC,
+  lng NUMERIC,
   enrichment_manifest JSONB DEFAULT '{}'::jsonb,
-  UNIQUE(house, url)
+  field_sources JSONB DEFAULT '{}'::jsonb,
+  uprn TEXT,
+  property_key TEXT GENERATED ALWAYS AS ((lower(COALESCE(postcode, ''::text)) || '|'::text) || lower(split_part(COALESCE(address, ''::text), ','::text, 1))) STORED,
+  images JSONB,
+  price_status TEXT,
+  floor_area_sqm NUMERIC,
+  value_estimate JSONB,
+  auction_id UUID NOT NULL,
+  floor_plans JSONB,
+  auctioneer TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(url)
 );
 
-CREATE INDEX IF NOT EXISTS idx_lots_catalogue_url ON lots(catalogue_url);
-CREATE INDEX IF NOT EXISTS idx_lots_status ON lots(status);
 CREATE INDEX IF NOT EXISTS idx_lots_auction_date ON lots(auction_date);
-CREATE INDEX IF NOT EXISTS idx_lots_score ON lots(score DESC NULLS LAST);
+CREATE INDEX IF NOT EXISTS idx_lots_auction_id ON lots(auction_id);
+CREATE INDEX IF NOT EXISTS idx_lots_enriched_stale ON lots(enriched_at NULLS FIRST, last_seen_at DESC);
 CREATE INDEX IF NOT EXISTS idx_lots_house ON lots(house);
-CREATE INDEX IF NOT EXISTS idx_lots_last_seen_at ON lots(last_seen_at);
-CREATE INDEX IF NOT EXISTS idx_lots_search_vector ON lots USING GIN(search_vector);
-CREATE INDEX IF NOT EXISTS idx_lots_manifest_gin ON lots USING GIN(enrichment_manifest);
+CREATE INDEX IF NOT EXISTS idx_lots_last_seen ON lots(last_seen_at);
+CREATE INDEX IF NOT EXISTS idx_lots_postcode ON lots(postcode) WHERE postcode IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_lots_status ON lots(status);
+CREATE INDEX IF NOT EXISTS idx_lots_uprn_null ON lots(last_seen_at DESC) WHERE uprn IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS lots_url_unique ON lots(url);
+CREATE INDEX IF NOT EXISTS lots_value_estimate_gin_idx ON lots USING GIN(value_estimate);
 
 ALTER TABLE lots ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Service role full access" ON lots FOR ALL USING (true) WITH CHECK (true);
