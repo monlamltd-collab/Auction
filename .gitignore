@@ -9,6 +9,9 @@ node_modules/
 .claude/*
 !.claude/skills/
 
+# Ruflo / claude-flow local state (auto-generated)
+.claude-flow/
+
 # Audit script persistent state (auto-generated)
 scripts/audit/*.json
 
