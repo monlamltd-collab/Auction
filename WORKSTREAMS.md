@@ -125,7 +125,7 @@ Out-of-scope: `public/*`, `lib/scraper/*`, `lib/types/*`.
 
 - **`docs/ARCHITECTURE.md` layout is stale** — still shows `lib/extractors/` (deleted 2026-05-08), `scripts/audit.mjs`, and the DOM→Gemini merge flow. Needs a re-verify pass; CLAUDE.md points every fresh session at it.
 
-- **`l.streetAvg`** — empty stray file at repo root (shell-redirect accident). Delete.
+- **`l.streetAvg`** — zero-byte stray at repo root. Deleted 2026-06-10 but recreated once by an unidentified local background process (not the test suite — a per-file bisect ran clean; the machine runs ~39 long-lived node daemons). Now gitignored so it can't pollute the tree; root cause open.
 
 ---
 

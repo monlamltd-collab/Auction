@@ -62,6 +62,10 @@ discovery-output-search.json
 # random binary assets dropped into repo root by mistake
 email headers*
 
+# zero-byte stray recreated by an unidentified local background process
+# (not the test suite — per-file bisect 2026-06-10 ran clean)
+l.streetAvg
+
 # scratch scripts not part of pipeline
 scripts/backfill-lots.cjs
 
