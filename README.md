@@ -1,164 +1,272 @@
-# Bridgematch — UK Property Auction Directory
+# AuctionBrain — UK Property Auction Directory
 
-A free public auction directory and AI-powered deal analyser at [bridgematch.co.uk](https://bridgematch.co.uk). Lists upcoming auction dates across all major UK houses, with a built-in catalogue analyser that scores every lot, finds title splits, and filters to your budget.
+A free public auction directory and AI-powered deal analyser at [bridgematch.co.uk](https://bridgematch.co.uk).
 
-## URLs
+Covers upcoming auction dates across all major UK houses, with a continuously updated lot database, AI scoring of every lot for investment potential, title split detection, UPRN enrichment, rental yield comps, and bridging finance fundability via BridgeMatch.
 
-- `bridgematch.co.uk/auctions` — Upcoming auction dates directory
-- `bridgematch.co.uk/analyse` — AI-powered catalogue analyser
+---
+
+## The Goal
+
+**Become the place UK auction buyers start their search — then monetise the traffic.**
+
+The thesis is simple: a free, complete, continuously fresh directory of every UK auction lot, with intelligent assessment built in (scores, value estimates, yields, risk flags, finance checks), grows to tens of thousands of monthly users. That audience is monetised through bridging-finance leads (BridgeMatch), advertising/sponsorship, and premium tools — in that order, because finance leads pay from the first hundred users while display ads only pay meaningfully past ~50k sessions/month.
+
+Every change should advance one of four pillars:
+
+| Pillar | Meaning |
+|---|---|
+| **Coverage** | Every lot, every house, fresh and accurate — the moat |
+| **Trust** | Assessment users believe: scoring, value estimates, risk flags |
+| **Growth** | Indexable pages, shareable lots, alerts that bring users back |
+| **Revenue** | Finance leads first; ads and subscriptions as traffic compounds |
+
+If a change doesn't move one of these, question it. The phased roadmap lives in `WORKSTREAMS.md`.
+
+---
+
+## Live URLs
+
+| URL | Purpose |
+|---|---|
+| `bridgematch.co.uk/auctions` | Upcoming auction dates directory |
+| `bridgematch.co.uk/analyse` | AI-powered catalogue analyser |
+| `bridgematch.co.uk/admin` | Admin dashboard (authenticated) |
+| `bridgematch.co.uk/admin-curator` | Lot curation interface (authenticated) |
+
+---
 
 ## Architecture
+Railway Worker Process (background)
+├── Adaptive scrape scheduler  →  Firecrawl (primary)
+│                                  Markdown recogniser (Pattinson, John Pye)
+│                                  Gemini fallback (Flash / Pro)
+│                                  Allsop JSON API (direct exception)
+│                                  Puppeteer (browser fallback)
+├── Self-healing harness       →  healBrokenHouse() + circuit breakers
+├── Enrichment pipeline        →  UPRN (OS Places) + EPC + value estimator
+│                                  OpenRent rental comps
+│                                  BridgeMatch fundability badge
+├── Post-auction sweep         →  Phantom lot removal + status transitions
+├── Weekly digest              →  Email + Telegram
+└── Alert sweeper              →  Saved search notifications
+Railway Web Process (HTTP)
+├── Express server (server.js → routes/)
+├── GET  /api/auctions         →  Upcoming auction dates + lot counts
+├── POST /api/analyse          →  On-demand catalogue analysis
+├── GET  /api/lots/:id         →  Individual lot detail
+├── GET  /api/admin/*          →  Admin routes (authenticated)
+└── GET  /                     →  Serves index.html
+Supabase (Postgres)
+├── lots                       →  Current lot state + enrichment_manifest
+├── lot_events                 →  Append-only event log (the only active event table)
+├── lot_history_archive        →  Archived 2026-06-04 — read-only legacy history
+├── lot_status_history_archive →  Archived 2026-06-04 — read-only legacy history
+├── scrape_health_daily        →  Per-house daily health metrics
+├── house_skills               →  Per-house scraping config
+├── catalogue_snapshots        →  Change detection cache
+├── leads                      →  User registrations
+└── cached_analyses            →  Analysis result cache
 
-```
-Express server (server.js)
-├── GET  /api/auctions     → Returns upcoming auction dates
-├── POST /api/analyse       → Scrapes catalogue, Claude extracts, scores lots
-├── GET  /auctions          → Serves index.html (directory tab)
-├── GET  /analyse           → Serves index.html (analyser tab)
-└── GET  /                  → Serves index.html
-```
+---
 
-## Deploy to Railway (5 minutes)
+## Scraping Pipeline
 
-### Prerequisites
-- GitHub account
-- Railway account (railway.app)
-- Anthropic API key (console.anthropic.com)
+The pipeline is strictly ordered. Never reverse it.
 
-### Steps
+**1. Firecrawl JSON extract** (primary)
+AI-driven extraction with no per-house DOM code. Handles single-page and paginated catalogues. `changeTracking` short-circuits unchanged pages at ~1 credit. Lives in `lib/pipeline/firecrawl-extract.js`. Called via HTTP fetch — no SDK.
 
-1. **Push to GitHub**
-   ```bash
-   cd auction-directory
-   git init
-   git add -A
-   git commit -m "Initial commit"
-   gh repo create bridgematch --private --push
-   ```
+**2. Markdown recogniser** (optional per-house override)
+In `HOUSE_OVERRIDES` — currently Pattinson and John Pye only. Reads the same Firecrawl markdown response to recover lots the JSON extractor missed. Firecrawl-at-heart by definition.
 
-2. **Connect to Railway**
-   - Go to [railway.app/new](https://railway.app/new)
-   - Select "Deploy from GitHub repo"
-   - Pick your `bridgematch` repo
-   - Railway auto-detects Node.js and runs `npm start`
+**3. Gemini fallback** (fires when Firecrawl returns 0 lots)
+Flash model for known houses, Pro for unknown houses or PDF catalogues. SDK: `@google/generative-ai`.
 
-3. **Add your API key**
-   - In Railway dashboard → your service → Variables tab
-   - Add: `ANTHROPIC_API_KEY` = `sk-ant-your-key-here`
-   - Railway auto-redeploys
+**4. Allsop JSON-API exception**
+`lib/scraper/allsop.js` consumes Allsop's private JSON endpoint directly. Zero API credits, ~50ms/page. Not a scraper — a structured API consumer.
 
-4. **Custom domain**
-   - Settings → Networking → Custom Domain
-   - Add `bridgematch.co.uk`
-   - Update your DNS as Railway instructs (CNAME record)
+**5. Puppeteer** (browser fallback for JS-heavy pages)
+Full headless Chrome. Heavier than Firecrawl. Used for pages that require a real browser session. SDK: `puppeteer`.
 
-5. **Done.** Your site is live at `bridgematch.co.uk`
+> **DOM extractors were retired 2026-05-08.** `lib/extractors/` was deleted. References to `USE_FIRECRAWL_EXTRACT`, `FORCE_EXTRACT_HOUSES`, `BROKEN_EXTRACTORS`, or DOM→Gemini merge code are stale — flag them.
 
-## How It Works
+---
 
-### Auction Calendar
-The `/api/auctions` endpoint returns upcoming auction dates. Currently this is a manually curated list — update it monthly or set up a scraper cron job.
+## Self-Healing Harness
 
-### Catalogue Analyser
-1. User pastes any auction catalogue URL
-2. Frontend sends URL to `/api/analyse`
-3. Server fetches all catalogue pages directly (no CORS issues)
-4. Each page's HTML is stripped and sent to Claude (Sonnet) with extraction instructions
-5. Claude returns structured lot data as JSON
-6. Server runs the scoring engine (identical to the Python version):
-   - Property type, bedrooms, tenure, condition detection
-   - Title split detection (7 pattern types)
-   - Opportunity scoring: modernisation, executor, receivership, dev potential, extension, £/sqft, yield
-   - Risk scoring: sitting tenants, knotweed, flood, non-standard construction
-   - Budget filtering with separate limits for standard vs title split deals
-7. Results returned to frontend as structured JSON
+`lib/harness/` handles autonomous recovery from scraper failures.
 
-### Supported Auction Houses
-The Claude-powered parser works with any HTML structure. Tested/optimised for:
-- Savills
-- Allsop
-- SDL Auctions
-- Network Auctions
-- Auction House UK
-- Barnard Marcus
-- Clive Emson
-- Strettons
-- Pugh
+- **`healBrokenHouse()`** — when a house returns 0 lots, searches for the new catalogue URL via Firecrawl + Gemini with exponential cooldown (24h → 7d backoff).
+- **Circuit breakers** (`house-health.js`) — 3 consecutive failures → auto-skip with backoff.
+- **Recall sentinels** — every house should have a recall pattern. EIG / AH UK / Bamboo platforms are auto-detected by `detectPlatformSentinel()` in `lib/analysis.js`. Non-platform houses need a `RECALL_SENTINELS[slug]` regex.
+- **Telegram alerts** — self-healing reports delivered via `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID`.
 
-Pagination patterns are handled for each house.
+Invoke the `auction-self-healing` skill for the full diagnose-classify-fix-verify-report playbook.
 
-## API Costs
+---
 
-Each catalogue analysis uses Claude Sonnet. Typical costs:
-- 28-page Savills catalogue: ~10 API calls × ~4k tokens each ≈ $0.15
-- Smaller catalogues (10 pages): ~$0.05
-- Very small catalogues (1-3 pages): ~$0.02
+## Enrichment Pipeline
 
-At 10 analyses per day, expect ~$1.50/day or ~$45/month.
+After lot extraction, each lot is enriched with:
 
-## Updating the Auction Calendar
+| Source | Data | API |
+|---|---|---|
+| OS Data Hub | UPRN, canonical address, lat/lng | `OS_DATA_HUB_KEY` (free 100k/mo) |
+| EPC Register | Energy performance rating | `EPC_API_EMAIL` / `EPC_API_KEY` |
+| OpenRent | Rental comparables for yield | HTTP fetch |
+| BridgeMatch | Bridging finance fundability badge | `BRIDGEMATCH_API_URL` |
+| Value estimator | Estimated market value | `lib/pipeline/value-estimator.js` |
 
-Edit `api/auctions.js` to add/remove upcoming auctions. The data structure is:
-```js
-{
-  house: 'Savills',           // Display name
-  houseSlug: 'savills',       // URL-safe identifier
-  logo: '🏛️',                // Emoji for card display
-  date: '2026-03-24',         // Auction date (YYYY-MM-DD)
-  title: '24 March 2026',     // Display title
-  lots: 280,                  // Expected lot count (null if unknown)
-  url: 'https://...',         // Direct catalogue URL
-  location: 'Online',         // Venue/location
-  type: 'Residential',        // Category
-  status: 'upcoming',         // upcoming | past
-}
-```
+Every enrichment result (success or failure) is recorded in `lots.enrichment_manifest`. Silent failures are banned — every skipped lookup records a reason.
 
-### Future: Automated Calendar
-To auto-populate the calendar, add a Vercel Cron Job that scrapes each house's website weekly. This would go in `api/cron/update-calendar.js`.
+---
+
+## Scoring System
+
+`lib/pipeline/scoring.js:analyseLot()` — score range **0–10**, always clamped.
+
+| Signal | Score |
+|---|---|
+| Needs modernisation | +2.0 |
+| Poor/derelict condition | +2.5 |
+| Executor/probate | +1.5 |
+| Receivership/distressed | +2.0 |
+| Development potential | +2.0 |
+| Extension/HMO potential | +1.5 |
+| Vacant (residential) | +1.0 |
+| Freehold house | +0.5 |
+| Low £/sqft (<£200) | +2.0 |
+| Good yield (6–8% GIY) | +1.5 |
+| High yield (>8% GIY) | +2.5 |
+| Quick completion | +0.5 |
+| Motivated seller | +0.5 |
+| Title split potential | +1.0 |
+| Sitting tenant | -2.0 |
+| Knotweed | -2.0 |
+| Flying freehold | -1.0 |
+| Non-standard construction | -1.0 |
+| Flood risk | -1.0 |
+| Contamination | -1.0 |
+
+Manifest gating prevents double-counting: `canScoreYield` and `canScoreBelowMarket` gates must pass before yield or below-market signals are applied.
+
+---
+
+## Tech Stack
+
+### Runtime dependencies (package.json)
+
+| Package | Version | Purpose |
+|---|---|---|
+| express | ^4.21.0 | Web server |
+| puppeteer | ^24.0.0 | Browser automation fallback |
+| @google/generative-ai | ^0.24.1 | Gemini AI fallback |
+| @supabase/supabase-js | ^2.45.0 | Database |
+| @sentry/node | ^8.0.0 | Error monitoring |
+| stripe | ^20.4.0 | Payments |
+| jose | ^5.0.0 | JWT authentication |
+| sharp | ^0.34.5 | Image processing |
+| jsdom | ^24.0.0 | DOM parsing |
+| yauzl | ^3.3.0 | ZIP/catalogue file handling |
+| compression | ^1.8.1 | HTTP response compression |
+
+### External services called via HTTP (no SDK)
+
+| Service | Purpose |
+|---|---|
+| Firecrawl | Primary scraper — no version pin |
+| OS Data Hub | UPRN + canonical address |
+| OpenRent | Rental comparables |
+| BridgeMatch API | Fundability badge |
+
+---
+
+## Environment Variables
+
+| Variable | Purpose |
+|---|---|
+| `GEMINI_API_KEY` | Gemini API |
+| `FIRECRAWL_API_KEY` | Primary scraper |
+| `FIRECRAWL_MONTHLY_BUDGET` | Credit cap (see `lib/resource-budget.js`) |
+| `FIRECRAWL_SKIP_HOUSES` | Comma-separated slugs to bypass Firecrawl |
+| `OS_DATA_HUB_KEY` | UPRN enrichment (free 100k/mo) |
+| `EPC_API_EMAIL` / `EPC_API_KEY` | EPC register |
+| `SUPABASE_URL` | Supabase project URL |
+| `SUPABASE_ANON_KEY` | Public Supabase key |
+| `SUPABASE_SERVICE_KEY` | Server-side writes |
+| `BRIDGEMATCH_API_URL` | Fundability badge API base |
+| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | Self-healing alerts |
+| `STRIPE_SECRET_KEY` | Payment processing |
+| `SENTRY_DSN` | Error monitoring |
+| `ROLE` | `web` / `worker` / unset (single process) |
+
+---
 
 ## Development
 
 ```bash
-# Install dependencies
 npm install
-
-# Run locally
-ANTHROPIC_API_KEY=sk-ant-xxx npm run dev
-
-# Opens at http://localhost:3000
+cp .env.example .env
+# populate with real API keys
+npm run dev        # runs with --watch, opens at http://localhost:3000
 ```
 
-## Scoring System
+### Running tests
 
-| Signal                     | Score |
-|---------------------------|-------|
-| Needs modernisation       | +2.0  |
-| Poor/derelict condition   | +2.5  |
-| Executor/probate          | +1.5  |
-| Receivership/distressed   | +2.0  |
-| Development potential     | +2.0  |
-| Extension/HMO potential   | +1.5  |
-| Vacant (residential)      | +1.0  |
-| Freehold house            | +0.5  |
-| Low £/sqft (<£200)        | +2.0  |
-| Good yield (6-8% GIY)    | +1.5  |
-| High yield (>8% GIY)     | +2.5  |
-| Quick completion          | +0.5  |
-| Motivated seller          | +0.5  |
-| Title split potential     | +1.0  |
-| Sitting tenant            | -2.0  |
-| Knotweed                  | -2.0  |
-| Flying freehold           | -1.0  |
-| Non-standard construction | -1.0  |
-| Flood risk                | -1.0  |
-| Contamination             | -1.0  |
+```bash
+npm test           # runs all 45+ test files
+```
 
-## Next Steps
+Key test files: `test-scoring.js`, `test-harness.js`, `test-enrichment.js`, `test-healing-agent.js`, `test-recall.js`, `test-fundability.js`, `test-manifest.js`.
 
-- [ ] Automated calendar scraping via cron
-- [ ] Email alerts when new catalogues drop
-- [ ] Blog/content section for SEO
-- [ ] Land Registry comps integration
-- [ ] EPC rating lookups
-- [ ] Bridging Brain integration for fundability scoring
+---
+
+## Deploy to Railway
+
+The project deploys automatically to Railway on push to `main`.
+
+Two processes run separately:
+- `npm run start:web` (`ROLE=web`) — HTTP server only
+- `npm run start:worker` (`ROLE=worker`) — HTTP + all background schedulers
+
+Add all environment variables from the table above in Railway → Service → Variables.
+
+---
+
+## Known Structural Debt
+
+These are documented open issues, not bugs:
+
+1. **UPRN enrichment regression** — OS Places circuit breaker firing due to rate limiting. Tracked in enrichment_manifest but not yet resolved.
+
+2. **SQL files at root level** — `schema.sql`, `leads_schema.sql`, `auction_calendar_schema.sql`, `smart_search_cache_schema.sql`, `analytics_snapshots_schema.sql`, `add_session_token.sql`, `add_stats_columns.sql` should be in `migrations/`.
+
+3. **Stale JSDoc references** — five files still reference deleted symbols (`dbRowToFrontendLot`, `normaliseLot`). See WORKSTREAMS.md for specific locations.
+
+4. **Helper duplication** — `looksLikeRealAddress`, `stripEigCatalogueParams`, `PLACEHOLDER_PHRASES`, `UK_POSTCODE_RE` exist in both `lib/pipeline/firecrawl-extract.js` and `lib/types/lot.js`. Intentional during transition; long-term should consolidate to `lib/types/lot.js`.
+
+---
+
+## Sister Projects
+
+**BridgeMatch / Bridging-Brain** — Python FastAPI, ~50+ UK lender database. Repo: `monlamltd-collab/Bridging-Brain`. Integration live via `lib/fundability.js`. See `AUCTION_REPO__BRIDGING_FINANCE_KNOWLEDGE_PACK.md` for domain knowledge.
+
+**ContentBrain** — the outward-reach programme for both AuctionBrain and BridgeMatch: automated social/content distribution and audience acquisition. Repo: `monlamltd-collab/ContentBrain`. Outbound marketing lives there; this repo owns the indexable surface and on-site conversion.
+
+---
+
+## Non-Negotiables
+
+- **Firecrawl primary, Puppeteer fallback, HTTP last** — never reverse
+- **Score range 0–10**, always clamped (`Math.max(0, Math.min(10, ...))`)
+- **Silent failures banned** — every skipped/failed lookup records a reason in `lots.enrichment_manifest`
+- **`lib/scoring.js` was deleted** — never reintroduce; use `lib/pipeline/scoring.js::analyseLot`
+- **No server.js monolith** — logic lives in `routes/`, `lib/`, `lib/pipeline/`, `lib/harness/`
+- **Frontend edits** go in `public/app.js` / `public/styles.css`, NOT inline in `index.html`
+- **Do not modify `bridgematch-lite.html`** without explicit confirmation — logic is fragile
+- **Harness alert signature** — always `fireAlert({ type, severity, house, message, meta })`
+
+---
+
+*Last updated: June 2026*

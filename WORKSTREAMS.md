@@ -1,97 +1,148 @@
-# Worktrees
+# WORKSTREAMS.md — AuctionBrain
 
-## main
+Current open work, resolved items, and the goal-aligned roadmap.
+*Last updated: 2026-06-10*
 
+---
+
+## Roadmap to 10k+ users
+
+**The goal (canonical wording in `README.md` → "The Goal"):** tens of thousands of monthly users, monetised via bridging-finance leads first, then advertising/sponsorship and premium tools. Pillars in priority order: **Coverage → Trust → Growth → Revenue**.
+
+**Review verdict (2026-06-10):** scraping/assessment foundations are strong. The growth surface is largely *built but unplugged*, and the lead funnel is live but loses attribution. Work the phases top-down — each unlocks the next.
+
+**Division of labour:** outward-reach (social, content distribution, audience acquisition for both AuctionBrain and BridgeMatch) lives in the separate **ContentBrain** repo. This repo's growth remit is the indexable surface (Phases 1–2) and converting the traffic it earns (Phase 3); assets like the market report are produced here, distributed via ContentBrain.
+
+### Phase 1 — Plug in the growth engine (days; highest ROI in the repo)
+
+- **Serve the sitemap dynamically.** `scripts/regenerate-sitemap.mjs` can emit ~40k lot URLs, but it runs only on the worker (`server.js:602`) and writes a local file, while the web container serves the 5-URL repo copy via `sendFile` (`routes/admin.js:478`) — Google has never seen the lot URLs. Replace with a dynamic `/sitemap.xml` route querying Supabase (cache ~1h).
+- **Link lot cards to `/lot/:id`.** The server-rendered lot pages (`routes/lots.js`) have full meta/JSON-LD/OG and are production-quality — and zero internal links point at them (`public/app.js` has no `/lot/` hrefs). Real anchors on cards + JS intercept for the inline expand.
+- **True 404s.** The catch-all serves the SPA with HTTP 200 for every unknown path (`server.js:195`) — soft-404s waste crawl budget. Return real 404s; fix the phantom `/auctions` breadcrumb in `index.html`.
+- **Keep sold lots indexable.** Sold lots are dropped from the sitemap and missing lots 302 to `/` — but sold-price pages are compounding SEO content ("what did X sell for at auction"). Keep them live as an archive.
+
+### Phase 2 — Mid-tail SEO surfaces (reuse the `lots-render.js` pattern; data already in the DB)
+
+- `/auction-houses/:slug` pages (~173 houses — "[house] next auction" queries).
+- `/auctions/:town` directory pages ("property auctions leeds").
+- An HTML auction-calendar page (the calendar is currently JSON-API-only).
+- **Consolidate domain authority** — blog on `auctionbrain.co.uk`, app on `auctions.bridgematch.co.uk`, Organization schema pointing at `bridgematch.co.uk`. Pick one canonical home, 301 the rest.
+
+### Phase 3 — Convert: finance leads first
+
+Leads pay at hundreds of users; ads need ~50k sessions/month.
+
+- **Attribution:** carry `lot_ref` + a click id through `buildBridgematchUrl` (`lib/fundability.js:168`) so BridgeMatch conversions are provable per lot/user.
+- **CTAs where traffic lands:** lot-contextual finance block on `/lot/:id` (today a bare "Check finance options" link with no lot context) and a finance CTA in the daily/weekly digest emails (today none).
+- **Lead form before handoff:** the per-card "BridgeMatch it" button goes straight off-site; the on-site form (name/email/phone → `leads` table + Resend) is buried in the expanded panel.
+- **Mail the consented segment:** `users.consent_partner_marketing=true` is stored with an audit trail and has never been used.
+
+### Phase 4 — Retain
+
+- **Free saved-search alerts.** Alerts are Pro-gated server-side (`lib/pipeline/saved-search-alerts.js:197`), so free users' saved searches silently never email — the core return loop should be free; premium buys immediacy/granularity.
+- Close Umami event gaps (saved-search creation untracked; finance CTA events use array index, not lot id).
+
+### Phase 5 — Harden for the traffic (2026-06-10 robustness review)
+
+- `/api/analyse` cost amplification: abort on client disconnect, key limits on user id not just IP, cap per-call enrichment fan-out (`routes/analyse.js:35`).
+- Smart-search cache key omits `location` → cross-user wrong results (`routes/search.js:547`). One-line fix.
+- Add `Cache-Control` to anonymous `/api/all-lots` (ETag-only today; every visitor hits origin — `routes/search.js:1597`).
+- Express error middleware + `Sentry.setupExpressErrorHandler` + `unhandledRejection` handler (async route failures currently hang the request, invisible to Sentry).
+- Stripe webhook idempotency race: insert `processed_webhook_events` first, bail on `23505` (`routes/stripe.js:104`).
+- Per-instance in-memory caches/rate-limits are fine at one web instance; add shared invalidation before scaling out (`lib/auth.js:113`, `server.js:831` TODO).
+
+### Phase 6 — Monetise breadth (after Phases 1–3 prove traffic + lead value)
+
+- Un-hibernate Stripe (`STRIPE_ENABLED` — checkout/webhook/Day-Pass expiry already built and tested) with a real free-tier limit so willingness-to-pay data accumulates; move CSV export behind a server-side Pro check.
+- Featured/sponsored slots in the daily digest + curator widget (`curator_picks` needs only a `sponsored` flag) — auction houses want bidders.
+- Display ads only past ~50k sessions/month (ad-network thresholds); earlier, ads depress trust for pennies.
+- Data plays: quarterly UK auction market report from `lot_events` (PR + backlinks); CSV/API export as Pro features; AI legal-pack summariser as a paid add-on (the scariest part of buying at auction — strong willingness to pay; needs careful not-legal-advice framing).
+
+---
+
+## Worktrees
+
+### main
 Foundation work only. Lot contract, observability views, schema reconciliation.
 
-## worktree-ui (not yet created)
-
-In-scope: `public/app.js`, `public/*.html`, `public/*.css`, route handlers that
-shape API responses for the frontend.
+### worktree-ui (not yet created)
+In-scope: `public/app.js`, `public/*.html`, `public/*.css`, route handlers that shape API responses for the frontend.
 
 Out-of-scope: `lib/scraper/*`, `lib/pipeline/*`, `migrations/*`, `lib/types/*`.
 
 Reads from the canonical Lot shape. Does not redefine field names.
 
-## worktree-data (not yet created)
+### worktree-data (not yet created)
+In-scope: queries and views over `lot_events`, `scrape_health_daily`, `house_skills`, `catalogue_snapshots`. New SQL views, diagnostic CLI commands, admin route surfacing per-source health.
 
-In-scope: queries and views over `lot_events`, `scrape_health_daily`,
-`house_skills`, `catalogue_snapshots`. New SQL views, diagnostic CLI commands,
-admin route surfacing per-source health.
+Out-of-scope: `public/*`, `lib/scraper/*`, `lib/types/*`.
 
-Out-of-scope: `public/*`, `lib/scraper/*` (scraper fixes belong in a separate
-focused branch once health views tell us which scraper to fix), `lib/types/*`.
+---
 
-# Open notes (things spotted but deliberately not fixed yet)
+## Open Issues (deliberately not fixed yet)
 
-- Three event tables co-exist (`lot_events`, `lot_history`, `lot_status_history`).
-  Consolidation onto `lot_events` is in progress per the migration comment.
+### Data model
 
-- `bullets` field has two semantic shapes upstream (multi-element vs single-
-  element from description). Needs reconciliation in `normaliseScrapedLot`
-  but flag if behaviour changes.
+- **`bullets` field has two semantic shapes upstream** — multi-element vs single-element from description. Needs reconciliation in `normaliseScrapedLot`. Flag if behaviour changes.
 
-- `auction_date` has no timezone handling at any boundary. Europe/London is
-  assumed implicitly. Out of scope for now.
+- **`auction_date` has no timezone handling** at any boundary. Europe/London assumed implicitly. Out of scope for now.
 
-- `cached_analyses.lots` JSONB blob is untyped. Consider validating against
-  the canonical Lot shape on read in a future pass.
+- **`cached_analyses.lots` JSONB blob is untyped.** Validate against canonical Lot shape on read in a future pass.
 
-- **Stale JSDoc / inline comments referencing deleted symbols.** Five files
-  still mention `dbRowToFrontendLot` or `normaliseLot` in non-code positions
-  (left intact per surgical-change principle during Task 3):
+- **`dbRowToLot` emits `enrichedAt` and `rawText`** but canonical `LOTS_SELECT` doesn't fetch `enriched_at` / `raw_text`. Keys always resolve to `undefined` unless caller expands their select. Either (a) add columns to `LOT_COLUMNS`, or (b) drop keys from `dbRowToLot`.
+
+### Stale code (comment/JSDoc only — no functional impact)
+
+- **Stale JSDoc in 5 files** — all reference deleted symbols `dbRowToFrontendLot` or `normaliseLot`:
   - `lib/pipeline/value-estimator.js` lines 8 and 74
   - `lib/curator/select-picks.js` line 33
   - `lib/curator/generate-prose.js` line 40
   - `lib/pipeline/cache-enrich-stage.js` line 23
   - `lib/pipeline/firecrawl-extract.js` placeholder-address comment block
-    (the `// see normaliseLot + looksLikeRealAddress` cross-reference)
 
-- **`lib/types/lot.js` header has two now-stale sentences.** The "Migration
-  status" block (lines ~53–62) says "Consumers will be migrated to this
-  module in Task 3" and "DO NOT delete the originals before all callers
-  are migrated" — the migration is complete and the originals were deleted
-  in commit `1a73fe1`. Comment-only, no functional impact.
+- **`lib/types/lot.js` header** — "Migration status" block (lines ~53–62) says "DO NOT delete the originals before all callers are migrated" but migration completed in commit `1a73fe1`. Comment-only fix.
 
-- **`lib/types/lot.js:89` lists `floor_plan_url` as intentionally omitted**
-  from `LOT_COLUMNS`. The investor-trust merge (`ea1b454 feat(schema):
-  persist lot.floorPlanUrl end-to-end`) added it to the column list at
-  line 118 and wired it through `dbRowToLot` (line 233) and `lotToDbRow`
-  (line 339). The header comment needs that entry removed from the
-  "intentionally OMITTED" list to match reality.
+- **`lib/types/lot.js:89`** — `floor_plan_url` listed as intentionally omitted from `LOT_COLUMNS` but was added at line 118 in `ea1b454`. Remove from the "intentionally OMITTED" comment.
 
-- **Helper duplication between `lib/pipeline/firecrawl-extract.js` and
-  `lib/types/lot.js`.** `looksLikeRealAddress`, `stripEigCatalogueParams`,
-  `PLACEHOLDER_PHRASES`, `UK_POSTCODE_RE`. Intentional during the
-  transition — firecrawl-extract.js's secondary detail-page normaliser and
-  `tests/test-address-validation.js` still import them from
-  firecrawl-extract.js, and `lib/types/lot.js` needs its own copies to
-  stay leaf-level (no `lib/pipeline/` imports). Long-term these belong in
-  one place; the safest move is to migrate the remaining consumers to
-  import from `lib/types/lot.js` and delete the firecrawl-extract.js
-  copies.
+### Refactors (safe, no behaviour change)
 
-- **`scrape-diff.js` keys lots by `l.lotNumber || l.address || l.lot`.**
-  After the canonical-shape migration, `l.lotNumber` is always undefined,
-  so the diff keys by `l.address` (since address comes before `lot` in the
-  OR chain). The diff is stable, but the fallback order should be flipped
-  to `l.lot || l.address` for clarity. Pure refactor — behaviour
-  identical because both candidate keys are non-null after normalisation.
+- **Helper duplication** — `looksLikeRealAddress`, `stripEigCatalogueParams`, `PLACEHOLDER_PHRASES`, `UK_POSTCODE_RE` exist in both `lib/pipeline/firecrawl-extract.js` and `lib/types/lot.js`. Intentional during transition. Long-term: migrate consumers to `lib/types/lot.js`, delete from firecrawl-extract.js.
 
-- **`dbRowToLot` emits `enrichedAt` and `rawText` keys but canonical
-  `LOTS_SELECT` doesn't fetch `enriched_at` / `raw_text`.** Those keys
-  always resolve to `undefined` unless the caller has expanded their
-  select. Latent contract gap predating the consolidation — matches
-  existing behaviour, but the canonical module exposes the gap more
-  visibly than the legacy mappers did. Either (a) add the columns to
-  `LOT_COLUMNS`, or (b) drop the keys from `dbRowToLot`.
+- **`scrape-diff.js` key order** — keys by `l.lotNumber || l.address || l.lot`. Post-migration `l.lotNumber` is always undefined. Flip to `l.lot || l.address` for clarity. Behaviour unchanged.
 
-- **`LOTS_SELECT` divergence (Task 1 finding) — RESOLVED.** Listed here
-  for historical reference only.
-  `lib/pipeline/persist-stage.js:28` previously defined a local
-  `LOTS_SELECT` referencing six columns that do not exist in the live
-  `lots` table (`guide_price_text`, `sq_ft`, `opportunities`,
-  `price_per_sqft`, `fundability_badge`, `fundability_url`). Reads on
-  that stage had been silently failing with PostgREST 400. Fixed in
-  commit `1a73fe1` by replacing the broken local const with the canonical
-  import.
+- **`lib/pipeline/persist-lots.js:128`** — JSDoc still says "append-only inserts to the lot_history table". Superseded by the 2026-06-04 archive migration; the correct note is at line 561.
+
+### Infrastructure / housekeeping
+
+- **SQL files scattered at root** — `schema.sql`, `leads_schema.sql`, `auction_calendar_schema.sql`, `smart_search_cache_schema.sql`, `analytics_snapshots_schema.sql`, `add_session_token.sql`, `add_stats_columns.sql` should be consolidated into `migrations/`.
+
+- **Two audit folders** — `audit/` and `audits/` both exist at root. Consolidate or remove the redundant one.
+
+- **`server.js.txt`** at root alongside `server.js`. Unclear purpose — likely a backup artifact. Review and delete if safe.
+
+- **UPRN enrichment regression** — OS Places circuit breaker firing due to rate limiting. See remediation plan in `.planning/`.
+
+- **Uncommitted regression on `feat/lot-events-teardown`** — `lib/houses.js:543`: the johnpye removal deleted the `gth.net` detection line by mistake (the comment says johnpye; the removed code was gth's). `gth` (Greenslade Taylor Hunt) is still a live house — restore `if (u.includes('gth.net')) return 'gth';` before committing.
+
+- **`docs/ARCHITECTURE.md` layout is stale** — still shows `lib/extractors/` (deleted 2026-05-08), `scripts/audit.mjs`, and the DOM→Gemini merge flow. Needs a re-verify pass; CLAUDE.md points every fresh session at it.
+
+- **`l.streetAvg`** — empty stray file at repo root (shell-redirect accident). Delete.
+
+---
+
+## Resolved (historical reference)
+
+- **`lot_events` consolidation complete (2026-06-04)** — `lot_history` and `lot_status_history` archived to `*_archive` via `migrations/2026-06-04-archive-lot-history.sql` (all rows preserved: ~297k + ~39k). `lots.sold_price` / `price_status` columns dropped. `lot_events` is the only active event table.
+
+- **`LOTS_SELECT` divergence** — `lib/pipeline/persist-stage.js:28` previously defined a local `LOTS_SELECT` referencing six columns that don't exist in the live `lots` table. Fixed in commit `1a73fe1` by replacing with canonical import.
+
+- **DOM extractor retirement** — `lib/extractors/` deleted 2026-05-08. `USE_FIRECRAWL_EXTRACT`, `FORCE_EXTRACT_HOUSES`, `BROKEN_EXTRACTORS`, DOM→Gemini merge code all removed.
+
+- **Canonical Lot shape migration** — `lib/types/lot.js` established as the single source of truth for the Lot shape. Legacy mappers deleted in `1a73fe1`.
+
+---
+
+## Planned Work (not started)
+
+- **Always-cached architecture** — tiered refresh with fingerprinting and staggered scheduling. Design in `ALWAYS_CACHED_ARCHITECTURE.md`. Phase A (design) complete. Phase B onwards not yet started.
+
+- **Hermes agent integration** — autonomous scraper monitoring via Hermes + Supabase MCP. Context file at `~/.hermes/context/auctionbrain.md`. Not yet active.
