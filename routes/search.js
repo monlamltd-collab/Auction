@@ -1154,7 +1154,6 @@ async function buildAllLotsResponse({ isSignedIn, includePast }) {
       units: r.units || 0,
       _auctionDate: r.auction_date,
       status: r.status,
-      soldPrice: r.sold_price,
       epcRating: r.epc_rating,
       epcScore: r.epc_score,
       floorAreaSqm: r.floor_area_sqm ?? null,
@@ -1459,7 +1458,7 @@ async function buildAllLotsResponse({ isSignedIn, includePast }) {
         const minDate = unsoldAddrs.reduce((min, x) => x.date < min ? x.date : min, '9999-12-31');
         const { data: newerLots } = await supabase
           .from('lots')
-          .select('house, address, auction_date, status, sold_price')
+          .select('house, address, auction_date, status')
           .in('house', houses)
           .in('status', ['sold', 'stc', 'available'])
           .gte('auction_date', minDate);
@@ -1480,7 +1479,8 @@ async function buildAllLotsResponse({ isSignedIn, includePast }) {
             const newer = newerMap.get(key);
             if (newer && newer.auction_date > date) {
               lot._relistStatus = newer.status;
-              lot._relistPrice = newer.sold_price || null;
+              // sold_price dropped (lot_events-completion); relist price now
+              // lives in lot_events (lot_sold_price_set) / lot_history_archive.
               lot._relistDate = newer.auction_date;
               relistCount++;
             }

@@ -33,7 +33,6 @@ const GATE = {
   house: 'system',                // canonical slug / join key
   url: 'system',                  // detail link + upsert conflict key
   catalogue_url: 'system',        // source catalogue
-  price_status: 'system',         // structured price intent (DEFERRED removal)
   search_text: 'system',          // ILIKE search blob
   enrichment_manifest: 'system',  // per-scrape observability (no silent failures)
   last_seen_at: 'system',         // active-feed recency gate
@@ -52,7 +51,6 @@ const GATE = {
   floor_plans: 'displayed',
   auction_date: 'displayed',
   status: 'displayed',
-  sold_price: 'displayed',        // past-auction price (DEFERRED removal)
   epc_rating: 'displayed',
   epc_score: 'displayed',
   flood_zone: 'displayed',
@@ -91,7 +89,7 @@ const BANNED = new Set([
   'epc_floor_area_sqft', 'epc_floor_area_sqm', 'epc_works_cost_mid',
   'epc_works_summary', 'os_classification', 'extracted_with', 'scraped_with',
   'quality_score', 'quality_issues', 'street_sales', 'street_avg',
-  'floor_plan_url',
+  'floor_plan_url', 'sold_price', 'price_status',
 ]);
 
 const VALID_REASONS = new Set(['displayed', 'scoring', 'system']);
