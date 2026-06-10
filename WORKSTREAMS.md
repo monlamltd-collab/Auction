@@ -46,7 +46,7 @@ Leads pay at hundreds of users; ads need ~50k sessions/month.
 - `/api/analyse` cost amplification: abort on client disconnect, key limits on user id not just IP, cap per-call enrichment fan-out (`routes/analyse.js:35`).
 - Smart-search cache key omits `location` → cross-user wrong results (`routes/search.js:547`). One-line fix.
 - Add `Cache-Control` to anonymous `/api/all-lots` (ETag-only today; every visitor hits origin — `routes/search.js:1597`).
-- Express error middleware + `Sentry.setupExpressErrorHandler` + `unhandledRejection` handler (async route failures currently hang the request, invisible to Sentry).
+- Express error middleware + Sentry error handler + `unhandledRejection` hook — **done 2026-06-10**; what remains is asyncHandler wrapping so async route rejections return JSON errors instead of hanging the request.
 - Stripe webhook idempotency race: insert `processed_webhook_events` first, bail on `23505` (`routes/stripe.js:104`).
 - Per-instance in-memory caches/rate-limits are fine at one web instance; add shared invalidation before scaling out (`lib/auth.js:113`, `server.js:831` TODO).
 
@@ -113,15 +113,9 @@ Out-of-scope: `public/*`, `lib/scraper/*`, `lib/types/*`.
 
 ### Infrastructure / housekeeping
 
-- **SQL files scattered at root** — `schema.sql`, `leads_schema.sql`, `auction_calendar_schema.sql`, `smart_search_cache_schema.sql`, `analytics_snapshots_schema.sql`, `add_session_token.sql`, `add_stats_columns.sql` should be consolidated into `migrations/`.
+- **UPRN enrichment still down (OS Places 429 wall)** — every live probe has returned 429 (~200/day) since mid-May, **including across the June 1 month boundary**, so this is not our request rate: the May code remediation (token bucket, cache-before-breaker, transition events — `lib/os-places.js`) landed and behaves correctly. Last successful lookup 2026-06-03; 165k+ `enrich_uprn_fail` events; `os_places_cache` frozen at 2,269 rows since 2026-04-27. Resolution lives in the **OS Data Hub dashboard** (plan/quota/key state) — account-side only. Recovery runbook once unblocked: restart the worker, then `node scripts/backfill-uprn-from-cache-2026-05-26.mjs`.
 
-- **Two audit folders** — `audit/` and `audits/` both exist at root. Consolidate or remove the redundant one.
-
-- **`server.js.txt`** at root alongside `server.js`. Unclear purpose — likely a backup artifact. Review and delete if safe.
-
-- **UPRN enrichment regression** — OS Places circuit breaker firing due to rate limiting. See remediation plan in `.planning/`.
-
-- **Uncommitted regression on `feat/lot-events-teardown`** — `lib/houses.js:543`: the johnpye removal deleted the `gth.net` detection line by mistake (the comment says johnpye; the removed code was gth's). `gth` (Greenslade Taylor Hunt) is still a live house — restore `if (u.includes('gth.net')) return 'gth';` before committing.
+- **Firecrawl plan exhausted (2026-06-03 02:32 UTC)** — 100k credits burned in ~2 weeks; zero Firecrawl calls since (scraping degraded to Puppeteer/HTTP fallbacks). Root causes, both fixed 2026-06-10: (1) the in-memory budget counter zeroed on every deploy, so the 80/95/100% alerts never fired while the real plan drained — now hydrated from `pipeline_events` at boot, reset properly at cycle rollover, and paced daily against the cycle remainder (`lib/resource-budget.js`); (2) FIRE-1 credit leaks in healing + homepage-watch (~23 credits/call on junk URLs, duplicate calls, retired houses) — the stranded `fix/firecrawl-fire1-leak` branch is now landed. Outstanding operator actions: set `FIRECRAWL_PLAN_REFRESH_DAY` on Railway to the plan's real reset day (Firecrawl dashboard shows it), and decide top-up now vs waiting for the refresh.
 
 - **`docs/ARCHITECTURE.md` layout is stale** — still shows `lib/extractors/` (deleted 2026-05-08), `scripts/audit.mjs`, and the DOM→Gemini merge flow. Needs a re-verify pass; CLAUDE.md points every fresh session at it.
 
@@ -130,6 +124,8 @@ Out-of-scope: `public/*`, `lib/scraper/*`, `lib/types/*`.
 ---
 
 ## Resolved (historical reference)
+
+- **2026-06-10 tidy-up (incomplete-ideas audit)** — gth.net detection restored + johnpye retired (shipped in PR #65); zombie `api/auctions.js`, `bridgematch-agents/`, `bugs/`, and root scratch files deleted; root SQL snapshots archived to `migrations/archive/`; `audit/` merged into `audits/`; `smart_search_cache` retired (dead half-feature — code + table); legacy `session_token` auth fallback removed; unsold-lot alerts wired into the scheduler (Tier 19 — endpoint existed since April with no caller); Sentry Express error handler + unhandledRejection hook added; FIRE-1 leak fix landed from its stranded branch; budget counter made restart-proof with dynamic daily pacing.
 
 - **`lot_events` consolidation complete (2026-06-04)** — `lot_history` and `lot_status_history` archived to `*_archive` via `migrations/2026-06-04-archive-lot-history.sql` (all rows preserved: ~297k + ~39k). `lots.sold_price` / `price_status` columns dropped. `lot_events` is the only active event table.
 

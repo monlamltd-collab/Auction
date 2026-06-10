@@ -238,13 +238,11 @@ Add all environment variables from the table above in Railway → Service → Va
 
 These are documented open issues, not bugs:
 
-1. **UPRN enrichment regression** — OS Places circuit breaker firing due to rate limiting. Tracked in enrichment_manifest but not yet resolved.
+1. **UPRN enrichment down** — OS Places has returned 429 on every live call since mid-May (account/plan-side; the code remediation landed). Runbook in WORKSTREAMS.md.
 
-2. **SQL files at root level** — `schema.sql`, `leads_schema.sql`, `auction_calendar_schema.sql`, `smart_search_cache_schema.sql`, `analytics_snapshots_schema.sql`, `add_session_token.sql`, `add_stats_columns.sql` should be in `migrations/`.
+2. **Stale JSDoc references** — five files still reference deleted symbols (`dbRowToFrontendLot`, `normaliseLot`). See WORKSTREAMS.md for specific locations.
 
-3. **Stale JSDoc references** — five files still reference deleted symbols (`dbRowToFrontendLot`, `normaliseLot`). See WORKSTREAMS.md for specific locations.
-
-4. **Helper duplication** — `looksLikeRealAddress`, `stripEigCatalogueParams`, `PLACEHOLDER_PHRASES`, `UK_POSTCODE_RE` exist in both `lib/pipeline/firecrawl-extract.js` and `lib/types/lot.js`. Intentional during transition; long-term should consolidate to `lib/types/lot.js`.
+3. **Helper duplication** — `looksLikeRealAddress`, `stripEigCatalogueParams`, `PLACEHOLDER_PHRASES`, `UK_POSTCODE_RE` exist in both `lib/pipeline/firecrawl-extract.js` and `lib/types/lot.js`. Intentional during transition; long-term should consolidate to `lib/types/lot.js`.
 
 ---
 
