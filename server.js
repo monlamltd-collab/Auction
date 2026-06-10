@@ -115,6 +115,14 @@ budget.setAlertHook((payload) => harnessFireAlert(payload));
 // errors so observability writes never block scrape correctness.
 budget.setEventHook((payload) => emitPipelineEvent(payload));
 
+// Rehydrate the Firecrawl cycle-spend counter from pipeline_events so the
+// monthly cap survives restarts — every deploy used to zero it, which is why
+// the 80%/95% budget alerts never fired while the real plan drained dry
+// (May–June 2026 incident). Best-effort: needs fc_cycle_spend() in Postgres.
+budget.hydrateFcSpend(supabase)
+  .then(r => { if (r) console.log(`ResourceBudget: hydrated Firecrawl spend from pipeline_events — cycle=${r.cycleCredits} today=${r.todayCredits}`); })
+  .catch(e => console.warn('ResourceBudget: spend hydration failed (continuing with zeroed counters):', e.message));
+
 // Inject server-level dependencies into lib/houses.js (rewriteUrl needs these)
 initHouses({
   firecrawlApiKey: FIRECRAWL_API_KEY,

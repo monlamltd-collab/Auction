@@ -419,5 +419,73 @@ console.log('\nTest 20: recordFcSearchRequest credits ~1 per /v1/search query');
   b.destroy();
 }
 
+// ── Test 21: cycle rollover banks spend into lifetime and zeroes counters ──
+console.log('\nTest 21: plan-cycle rollover resets creditsUsed + tiers, banks lifetime');
+{
+  const b = makeBudget(1000);
+  for (let i = 0; i < 50; i++) b.recordFcRequest('full');
+  assert(b.getFcCreditsUsed() === 50, '50 credits booked in cycle A');
+
+  b._fc.monthStartedAt = '1970-01'; // force rollover on next booking
+  b.recordFcRequest('healing');
+
+  assert(b.getFcCreditsUsed() === 1, 'cycle B starts from the new booking only');
+  assert(b.getFirecrawlStatus().lifetimeCreditsUsed === 50, 'cycle A spend banked into lifetime');
+  assert((b.getCreditsByTier().full || 0) === 0, 'tier counters zeroed at rollover');
+  assert((b.getCreditsByTier().healing || 0) === 1, 'new cycle tier booking recorded');
+
+  b.destroy();
+}
+
+// ── Test 22: dynamic daily allowance paces against cycle remainder ──
+console.log('\nTest 22: _dynamicDailyAllowance = remaining/daysLeft * 1.25, floored at 250');
+{
+  const b = makeBudget(3000);
+  b._fc.monthStartedAt = '2026-06-01'; // YYYY-MM-DD form → next refresh 2026-07-01
+  const now = new Date(Date.UTC(2026, 5, 21)); // 10 days left in cycle
+
+  assert(b._cycleDaysRemaining(now) === 10, '10 days remaining in cycle');
+  assert(b._dynamicDailyAllowance(now) === 375, 'fresh cycle: floor(3000/10*1.25) = 375');
+
+  b._fc.creditsUsed = 2900;
+  assert(b._dynamicDailyAllowance(now) === 250, 'nearly-spent cycle floors at 250');
+
+  b._fc.creditsUsed = 3000;
+  assert(b._dynamicDailyAllowance(now) === 0, 'exhausted cycle: allowance 0');
+
+  const unlimited = makeBudget(100);
+  unlimited.monthlyBudget = 0; // constructor treats 0 as falsy → set directly
+  assert(unlimited._dynamicDailyAllowance(now) === Infinity, 'monthlyBudget=0 disables pacing');
+  unlimited.destroy();
+
+  b.destroy();
+}
+
+// ── Test 23: _isOverDailyCap honours the dynamic allowance ──
+console.log('\nTest 23: dynamic allowance gates the daily cap below the static budget');
+{
+  const b = makeBudget(1000); // static dailyBudget default = 8000
+  b._fc.creditsUsed = 999;    // remaining 1 → dynamic allowance floors at 250
+
+  b._fc.creditsUsedToday = 249;
+  assert(b._isOverDailyCap() === false, '249 today < 250 dynamic allowance');
+
+  b._fc.creditsUsedToday = 250;
+  assert(b._isOverDailyCap() === true, '250 today hits dynamic allowance well below static 8000');
+
+  b.destroy();
+}
+
+// ── Test 24: _cycleStartIso formats for both cycle-key shapes ──
+console.log('\nTest 24: _cycleStartIso handles YYYY-MM and YYYY-MM-DD keys');
+{
+  const b = makeBudget(100);
+  b._fc.monthStartedAt = '2026-06';
+  assert(b._cycleStartIso() === '2026-06-01T00:00:00Z', 'month key → first of month');
+  b._fc.monthStartedAt = '2026-05-14';
+  assert(b._cycleStartIso() === '2026-05-14T00:00:00Z', 'plan-cycle key → that day');
+  b.destroy();
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
