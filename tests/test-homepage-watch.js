@@ -14,7 +14,9 @@ import {
   formatSummaryForTelegram,
   runHomepageWatchCycle,
   buildActionableCardForDetail,
+  selectHousesForWatch,
 } from '../lib/pipeline/homepage-watch.js';
+import { HOUSE_ROOTS, RETIRED_HOUSES } from '../lib/houses.js';
 
 let passed = 0;
 let failed = 0;
@@ -446,6 +448,33 @@ console.log('\nTest 24: buildActionableCardForDetail — no-catalogue + unreacha
   });
   assert(noCat.buttons.flat().map(b => b.callback_data).includes('rerun:nc1'), 'no-catalogue has rerun');
   assert(unreach.buttons.flat().map(b => b.callback_data).includes('rerun:u1'), 'unreachable has rerun');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// selectHousesForWatch — retired-slug filter
+// ═══════════════════════════════════════════════════════════════
+
+console.log('\nTest 25: selectHousesForWatch — filters out retired slugs');
+{
+  const fakeRoots = { a: 'https://a', b: 'https://b', c: 'https://c' };
+  const fakeRetired = new Set(['b']);
+  const out = selectHousesForWatch(fakeRoots, fakeRetired);
+  const slugs = out.map(([s]) => s);
+  assert(slugs.includes('a') && slugs.includes('c'), 'active slugs preserved');
+  assert(!slugs.includes('b'), 'retired slug removed');
+  assert(out.length === 2, 'length matches active count');
+}
+
+console.log('\nTest 26: selectHousesForWatch — matches production HOUSE_ROOTS / RETIRED_HOUSES');
+{
+  const out = selectHousesForWatch(HOUSE_ROOTS, RETIRED_HOUSES);
+  const allKeys = new Set(Object.keys(HOUSE_ROOTS));
+  const expected = allKeys.size - [...RETIRED_HOUSES].filter(s => allKeys.has(s)).length;
+  assert(out.length === expected, `cycle iterates ${out.length}/${allKeys.size} houses (skipping retired)`);
+  for (const retired of RETIRED_HOUSES) {
+    if (!allKeys.has(retired)) continue; // some retired slugs have already been removed from HOUSE_ROOTS
+    assert(!out.some(([s]) => s === retired), `retired slug "${retired}" excluded`);
+  }
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

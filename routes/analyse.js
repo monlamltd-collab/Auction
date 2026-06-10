@@ -341,23 +341,6 @@ router.post('/api/analyse', async (req, res) => {
       extractedWith: getLastExtractorUsed(),
     });
 
-    // Mark preset cache entries as partially stale (only the changed catalogue needs re-searching)
-    if (catalogueChanged) {
-      const { data: affected } = await supabase
-        .from('smart_search_cache')
-        .select('query_key, stale_urls')
-        .contains('source_urls', [normalisedUrl]);
-      if (affected && affected.length > 0) {
-        for (const row of affected) {
-          const updatedStale = [...new Set([...(row.stale_urls || []), normalisedUrl])];
-          await supabase.from('smart_search_cache')
-            .update({ stale_urls: updatedStale })
-            .eq('query_key', row.query_key);
-        }
-        console.log(`Marked ${affected.length} preset cache entries stale for: ${normalisedUrl}`);
-      }
-    }
-
     // ── Update user count ──
     await supabase.from('users')
       .update({ analyses_count: (user.analyses_count || 0) + 1 })
