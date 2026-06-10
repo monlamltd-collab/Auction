@@ -115,6 +115,14 @@ budget.setAlertHook((payload) => harnessFireAlert(payload));
 // errors so observability writes never block scrape correctness.
 budget.setEventHook((payload) => emitPipelineEvent(payload));
 
+// Rehydrate the Firecrawl cycle-spend counter from pipeline_events so the
+// monthly cap survives restarts — every deploy used to zero it, which is why
+// the 80%/95% budget alerts never fired while the real plan drained dry
+// (May–June 2026 incident). Best-effort: needs fc_cycle_spend() in Postgres.
+budget.hydrateFcSpend(supabase)
+  .then(r => { if (r) console.log(`ResourceBudget: hydrated Firecrawl spend from pipeline_events — cycle=${r.cycleCredits} today=${r.todayCredits}`); })
+  .catch(e => console.warn('ResourceBudget: spend hydration failed (continuing with zeroed counters):', e.message));
+
 // Inject server-level dependencies into lib/houses.js (rewriteUrl needs these)
 initHouses({
   firecrawlApiKey: FIRECRAWL_API_KEY,
@@ -203,6 +211,26 @@ app.get('*', (req, res) => {
   } else {
     res.sendFile(join(__dirname, 'index.html'));
   }
+});
+
+// ── Error handling — must come after all routes ──
+// Sentry was initialised at the top of this file but never given an Express
+// error handler, so route errors reached neither Sentry nor the client as
+// JSON (2026-06-10 audit). Express 4 only routes sync throws and explicit
+// next(err) calls here — async rejections without try/catch still escape to
+// the unhandledRejection hook below (full asyncHandler wrapping is a
+// separate roadmap item, WORKSTREAMS Phase 5).
+if (process.env.SENTRY_DSN) Sentry.setupExpressErrorHandler(app);
+app.use((err, req, res, next) => {
+  log.error('Unhandled route error', { method: req.method, path: req.path, error: err?.message || String(err) });
+  if (res.headersSent) return next(err);
+  res.status(500).json({ error: 'Internal server error' });
+});
+
+process.on('unhandledRejection', (reason) => {
+  const msg = reason?.message || String(reason);
+  log.error('Unhandled promise rejection', { error: msg });
+  if (process.env.SENTRY_DSN) Sentry.captureException(reason instanceof Error ? reason : new Error(msg));
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -314,6 +342,9 @@ const _scheduleState = {
   lastDailyDigest: 0,
   // Tier 18 (same-day status sweep — daily 20:00 UK, today's auctions only):
   lastSameDaySweep: 0,
+  // Tier 19 (unsold-lot alerts — daily 08:10 UK; endpoint existed since April
+  // but no scheduler ever called it until the 2026-06-10 tidy):
+  lastUnsoldAlerts: 0,
 };
 
 function getUkHourMinute() {
@@ -688,6 +719,18 @@ function scheduleTick() {
         }
       })
       .catch(e => console.error('SCHEDULE saved-search alerts failed:', e.message));
+  }
+
+  // Tier 19: Unsold-lot alert emails, daily 08:10 UK. The POST
+  // /api/cron/unsold-alerts endpoint was fully built in April but nothing
+  // ever invoked it (2026-06-10 audit). Module no-ops without RESEND key.
+  if (hour === 8 && minute >= 10 && minute < 15 && now - _scheduleState.lastUnsoldAlerts > 60 * 60 * 1000) {
+    _scheduleState.lastUnsoldAlerts = now;
+    console.log('SCHEDULE: 08:10 UK — running unsold-lot alert emails');
+    import('./lib/pipeline/unsold-alerts.js')
+      .then(({ runUnsoldAlertsCycle }) => runUnsoldAlertsCycle(supabase))
+      .then(r => console.log(`SCHEDULE unsold alerts: sent=${r.sent} total=${r.total}${r.skipped ? ` (${r.skipped})` : ''}`))
+      .catch(e => console.error('SCHEDULE unsold alerts failed:', e.message));
   }
 
   // Tier 14: Weekly digest, Mondays 09:00 UK. Pulls top scored lots from

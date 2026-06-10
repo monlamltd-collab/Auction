@@ -43,8 +43,6 @@ export function renderValueEstimateSection(valueEstimate) {
   const breakdown = valueEstimate.breakdown || {};
   const formula = breakdown.formula_text || '';
 
-  const compRows = Array.isArray(breakdown.comp_count) ? '' : ''; // placeholder for future comp listing
-
   return [
     `<section class="lot-section lot-est-value">`,
     `  <h2>Estimated value</h2>`,
@@ -54,7 +52,7 @@ export function renderValueEstimateSection(valueEstimate) {
     `    <span class="lev-conf lev-conf-${escHtml(conf)}">${escHtml(confLabel)}</span>`,
     `  </div>`,
     formula
-      ? `  <details class="lev-working"><summary>How we worked this out</summary><p>${escHtml(formula)}</p>${compRows}</details>`
+      ? `  <details class="lev-working"><summary>How we worked this out</summary><p>${escHtml(formula)}</p></details>`
       : '',
     `  <p class="lev-disclaimer">Indication only — based on Land Registry sales and EPC data, not a formal valuation.</p>`,
     `</section>`,

@@ -1,0 +1,18 @@
+#!/usr/bin/env sh
+# Git pre-push hook. Runs the doc-drift check against the push range.
+# Bypass for one push: `git push --no-verify` or `CHECK_DOC_DRIFT=skip git push`.
+
+# Read stdin to find the actual remote ref being pushed (default: origin/main).
+remote_sha=""
+while read -r local_ref local_sha remote_ref remote_sha_in; do
+  if [ "$remote_ref" = "refs/heads/main" ] || [ "$remote_ref" = "refs/heads/master" ]; then
+    remote_sha="$remote_sha_in"
+    local_target="$local_sha"
+  fi
+done
+
+if [ -n "$remote_sha" ] && [ "$remote_sha" != "0000000000000000000000000000000000000000" ]; then
+  exec node scripts/check-doc-drift.mjs "$remote_sha" "$local_target"
+else
+  exec node scripts/check-doc-drift.mjs
+fi
