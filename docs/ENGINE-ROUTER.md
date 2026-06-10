@@ -184,3 +184,46 @@ never shadow-compares or cold-starts an engine on the latency-sensitive user req
 **Verify:** `node scripts/test-engine-ab.mjs <slug> <url> [paginateAs]` prints the side-by-side
 parity verdict; `tests/test-parity-gate.js` + `tests/test-engine-decision.js` cover the gate
 and the decision seam.
+
+---
+
+## Phase 3 — unblock the markdown-recogniser houses + Crawlee as zero-credit failover
+
+The 6 recogniser houses (Pattinson, John Pye, McHugh, Mark Jenkinson, Maggs & Allen,
+Hollis Morgan) are the dense, multi-page catalogues — the most expensive on Firecrawl and the
+last structural blocker to Crawlee-default. Their recall depends on parsing **Firecrawl's
+markdown**; Crawlee yields HTML only. Phase 3 closes that gap.
+
+**The turndown bridge.** A `turndown` HTML→markdown step in the Crawlee path
+(`renderAndExtractWithCrawlee` gains `recogniseFromMarkdown` + `recallSentinelPattern`): each
+rendered page's HTML is converted to markdown, the existing `recogniseFromMarkdown` runs on it,
+and recovered lots are merged with the Gemini lots (dedup by `lot+address`, mirroring the
+Firecrawl JSON+markdown merge). turndown preserves the structures the recognisers anchor on
+(detail links `[text](/lot/…)`, headings, bullets, em-dash chains), so most recognisers work
+with little or no change — and the **product-integrity gate decides empirically**: a recogniser
+house only promotes if turndown+recogniser+Gemini hits strict parity, so no degradation ships.
+
+**Guard relaxed (allowlist + gate decides).** `hasMarkdownRecogniser` no longer hard-pins a
+house to Firecrawl. Recogniser houses become normal `CRAWLEE_HOUSES` candidates; the cron path
+always passes their recogniser into the Crawlee path; the parity gate guards promotion.
+
+**Crawlee as the universal zero-credit failover.** The most valuable Phase 3 behaviour: when
+`canUseFirecrawl()` is false (budget exhausted / plan down), **any** house — recogniser houses
+included — fails over to the Crawlee turndown path rather than going unscraped. Degraded-but-
+present beats a stale catalogue. This decouples the *failover* availability (`crawleeInstalled`
+= `hasCrawlee()`, any house) from *proactive migration* availability (`crawleeAvailable`
+= `hasCrawlee()` + allowlist). When credits return a non-promoted house reverts to Firecrawl;
+a promoted one (passed the gate) stays on Crawlee. Provenance records the
+`reason=firecrawl-exhausted` failover so it's auditable.
+
+**Pattinson (84 pages)** is enabled now precisely as that no-credit fallback: it runs on Crawlee
+while there are no Firecrawl credits, and reverts to Firecrawl's managed render once credits
+exist — unless it clears the parity gate, in which case it stays. The page-1 hash gate skips
+unchanged cycles for free.
+
+**Rollout order:** John Pye → Hollis Morgan → Maggs → McHugh → Mark Jenkinson → Pattinson.
+
+**Files:** `lib/scraper/html-to-markdown.js` (turndown helper) · `lib/pipeline/crawlee-extract.js`
+(recogniser-aware) · `lib/scraper/engine-router.js` (relax guard, add failover availability) ·
+`lib/analysis.js` (pass recognisers + sentinel into the Crawlee branch) · `scripts/test-engine-ab.mjs`
+(recogniser-recall column) · recogniser fixture parity tests.
