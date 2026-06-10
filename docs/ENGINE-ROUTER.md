@@ -131,3 +131,56 @@ Three additive, nullable columns on `house_skills`:
 
 Within any rendering engine the existing fallback chain (Firecrawl → Puppeteer → HTTP) is
 unchanged; the router decides the *primary* engine, not the fallback tiers.
+
+---
+
+## Phase 2 — wiring + the product-integrity gate (landed)
+
+Phase 2 makes Crawlee+Gemini a real, gate-guarded engine. It ships **dormant**:
+`crawlee` is a dependency but the router only picks it when `hasCrawlee()` is true *and*
+the house is enabled via config, so behaviour is unchanged until an operator opts in.
+
+**The single seam.** `lib/pipeline/engine-decision.js::resolveEngineForHouse()` is the one
+place the router is consulted — from the cron path (`lib/analysis.js::autoAnalyseOne`) and
+the on-demand path (`routes/analyse.js`). It gathers a house's live signals (engine policy
+from `house_skills`, `rewriteUrl` shape, PDF check, crawlee availability, Firecrawl budget)
+and hands them to the pure `chooseEngine()`. `isCrawleeEnabled()` holds the
+dormant→allowlist→default progression.
+
+**Render + extract.** `lib/scraper/crawlee-render.js::scrapeAllPagesWithCrawlee` mirrors the
+Firecrawl multi-page wrapper (reusing `detectTotalPages`/`buildPageUrl`, capped at
+`MAX_PUPPETEER_PAGES`). `lib/pipeline/crawlee-extract.js::renderAndExtractWithCrawlee` renders
+then runs the existing `extractLotsWithAI` (Gemini), and computes recall against the house's
+sentinel so the gate has a comparable challenger figure. Firecrawl's
+`extractCatalogueListing` now also returns `recall`/`sentinelLots` for the same comparison.
+
+**The gate.** `lib/pipeline/parity-gate.js::evaluateParity()` composes
+`shouldDemote` (strict recall parity) + `validateBatch().batchQuality` (per-lot completeness)
++ `detectFieldRegressions` (no field may regress). `promote` requires all three. This is the
+enforcement of the "scraper builds the product" ethos: lot count alone never promotes.
+
+**Migration flow (cron path).**
+- *Candidate, not yet promoted* (`isCrawleeEnabled` + structurally eligible, `preferred_engine`
+  ≠ crawlee): Firecrawl runs and is persisted (investors see the incumbent); then Crawlee runs
+  as a **shadow** challenger and `evaluateParity` decides whether to set
+  `preferred_engine='crawlee'`. Every run folds an outcome into `engine_stats`.
+- *Promoted/locked* (`chosenEngine === CRAWLEE`): Crawlee renders + extracts and is persisted;
+  no Firecrawl spend. A free page-1 MD5 gate (`scrapeWithCrawlee` probe vs
+  `getCataloguePage1Hash`) skips the Gemini extract when nothing changed. On 0 lots it falls
+  back to Firecrawl.
+
+**On-demand path** is conservative: it honours Crawlee only for an already-promoted house and
+never shadow-compares or cold-starts an engine on the latency-sensitive user request.
+
+**Provenance.** `scraped_with='crawlee'` / `extracted_with='gemini'` flow from the existing
+`state.js` stamps; the Firecrawl JSON path now correctly stamps `extracted_with='firecrawl-json'`
+(it previously defaulted to `'unknown'`).
+
+**Config:** `CRAWLEE_DEFAULT` (master switch), `CRAWLEE_HOUSES` (first-migration allowlist),
+`CRAWLEE_SHADOW` (run shadow comparison, default on). First candidates: `astleys`, `brownco`,
+`stags`, `paulfosh`, `auctionhouseeastanglia`. Roll back any house with
+`house_skills.engine_locked='firecrawl'`.
+
+**Verify:** `node scripts/test-engine-ab.mjs <slug> <url> [paginateAs]` prints the side-by-side
+parity verdict; `tests/test-parity-gate.js` + `tests/test-engine-decision.js` cover the gate
+and the decision seam.

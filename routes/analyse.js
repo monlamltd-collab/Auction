@@ -17,6 +17,9 @@ import {
 } from '../lib/scraper.js';
 import { getLastExtractorUsed } from '../lib/scraper/state.js';
 import { extractCatalogueListing, extractLotDetailFirecrawl } from '../lib/pipeline/firecrawl-extract.js';
+import { resolveEngineForHouse } from '../lib/pipeline/engine-decision.js';
+import { ENGINES } from '../lib/scraper/engine-router.js';
+import { renderAndExtractWithCrawlee } from '../lib/pipeline/crawlee-extract.js';
 import { enrichLots } from '../lib/enrichment.js';
 import { enrichLotsWithFundability } from '../lib/fundability.js';
 import { qualityGate, analyseLot, upsertToLotsTable, logActivityEvent } from '../lib/analysis.js';
@@ -197,19 +200,44 @@ router.post('/api/analyse', async (req, res) => {
         rawLots = extractAllsopLotsFromJson(pages);
       }
     } else {
-      // ── Firecrawl JSON extract — handles pagination natively ──
-      // forceExtract=true: /analyse is user-initiated, bypass changeTracking
-      // short-circuit so the response always reflects the live catalogue.
+      // ── Engine router (conservative on the latency-sensitive user path) ──
+      // Only honour Crawlee for a house already PROMOTED to it (preferred_engine
+      // ='crawlee'); never shadow-compare or cold-start a new engine here. The
+      // migration/evaluation happens on the cron path (lib/analysis.js).
       sseWrite(res, 'phase', { step: 'extracting' });
+      let engineSkill = null;
       try {
-        const result = await extractCatalogueListing(scrapeUrl, house, {
-          paginateAs: rewritten.paginateAs,
-          maxPages: 25,
-          forceExtract: true,
-        });
-        rawLots = result.lots || [];
-        sseWrite(res, 'scrape', { pages: 1, lots: rawLots.length });
-        console.log(`Firecrawl extract for ${house}: ${rawLots.length} lots`);
+        const { data } = await supabase
+          .from('house_skills')
+          .select('preferred_engine, engine_locked')
+          .eq('slug', house)
+          .maybeSingle();
+        engineSkill = data || null;
+      } catch { /* fall back to Firecrawl if the lookup fails */ }
+      const { engine: chosenEngine } = resolveEngineForHouse({
+        house, rewritten, catalogueUrl: scrapeUrl, engineSkill,
+      });
+
+      try {
+        if (chosenEngine === ENGINES.CRAWLEE) {
+          console.log(`Engine router: ${house} → crawlee (on-demand, promoted)`);
+          const cr = await renderAndExtractWithCrawlee(scrapeUrl, house, { maxPages: 25, onExtract });
+          rawLots = cr.lots || [];
+          sseWrite(res, 'scrape', { pages: cr.renderedPages.length, lots: rawLots.length });
+          console.log(`Crawlee+Gemini for ${house}: ${rawLots.length} lots`);
+        } else {
+          // ── Firecrawl JSON extract — handles pagination natively ──
+          // forceExtract=true: /analyse is user-initiated, bypass changeTracking
+          // short-circuit so the response always reflects the live catalogue.
+          const result = await extractCatalogueListing(scrapeUrl, house, {
+            paginateAs: rewritten.paginateAs,
+            maxPages: 25,
+            forceExtract: true,
+          });
+          rawLots = result.lots || [];
+          sseWrite(res, 'scrape', { pages: 1, lots: rawLots.length });
+          console.log(`Firecrawl extract for ${house}: ${rawLots.length} lots`);
+        }
 
         // Gemini fallback if Firecrawl JSON returned nothing useful.
         if (rawLots.length === 0) {
