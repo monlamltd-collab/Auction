@@ -8,7 +8,7 @@
 // Why a one-shot script and not a permanent code path: the regular
 // enrichment-wave already handles this in steady state. The cache rows
 // became unreachable for 25 days under the cache-before-breaker bug
-// (audit/2026-05-25-uprn-rca.md); this script catches up the backlog in
+// (audits/2026-05-25-uprn-rca.md); this script catches up the backlog in
 // one pass.
 //
 // What it touches:
