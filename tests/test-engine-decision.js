@@ -48,18 +48,33 @@ console.log('\nTest 2: isShadowMode — default ON, opt out');
   resetEnv();
 }
 
-console.log('\nTest 3: markdown-recogniser house NEVER routes to Crawlee');
+console.log('\nTest 3: markdown-recogniser house CAN route to Crawlee (Phase 3)');
 {
   resetEnv();
   process.env.CRAWLEE_HOUSES = 'pattinson';
+  // The Crawlee path is now recogniser-aware (turndown bridge), so a promoted
+  // recogniser house routes to crawlee — no longer pinned to firecrawl.
   const v = resolveEngineForHouse({
     house: 'pattinson',
     rewritten: { paginateAs: 'pattinson_p' },
-    engineSkill: { preferred_engine: 'crawlee' }, // even if policy says crawlee
+    engineSkill: { preferred_engine: 'crawlee' },
     hasMarkdownRecogniser: true,
   }, upDeps);
-  assert(v.engine === ENGINES.FIRECRAWL && v.reason === 'markdown-recogniser-dependency',
-    'recogniser dependency pins to firecrawl despite allowlist + crawlee policy');
+  assert(v.engine === ENGINES.CRAWLEE && v.reason === 'learned-policy',
+    'recogniser house with crawlee policy routes to crawlee (recogniser-aware path)');
+  resetEnv();
+}
+
+console.log('\nTest 3b: zero-credit failover — any house → Crawlee when Firecrawl exhausted');
+{
+  resetEnv();
+  // House NOT in CRAWLEE_HOUSES, no policy, but crawlee installed + firecrawl down.
+  const v = resolveEngineForHouse({
+    house: 'somehouse',
+    rewritten: {},
+  }, { hasCrawlee: () => true, canUseFirecrawl: () => false, isPdfUrl: () => false });
+  assert(v.engine === ENGINES.CRAWLEE && /firecrawl-exhausted/.test(v.reason),
+    'firecrawl exhausted → crawlee failover even for non-allowlisted house');
   resetEnv();
 }
 

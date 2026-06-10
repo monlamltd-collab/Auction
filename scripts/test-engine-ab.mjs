@@ -18,6 +18,7 @@ import { extractCatalogueListing } from '../lib/pipeline/firecrawl-extract.js';
 import { renderAndExtractWithCrawlee } from '../lib/pipeline/crawlee-extract.js';
 import { hasCrawlee, teardownCrawlee } from '../lib/scraper/crawlee.js';
 import { evaluateParity } from '../lib/pipeline/parity-gate.js';
+import { houseRecogniser } from '../lib/scraper/house-recognisers.js';
 
 const [slug, url, paginateAs] = process.argv.slice(2);
 if (!slug || !url) {
@@ -38,29 +39,35 @@ function sentinelFor(u) {
   if (/bambooauctions\.com/.test(u)) return /\/property\/([a-z0-9_-]{6,})/gi;
   return null;
 }
-const recallSentinelPattern = sentinelFor(url);
+// Recogniser houses use their registered sentinel + recogniser so both engines
+// run the same recall-recovery they get in production (Phase 3).
+const rec = houseRecogniser(slug);
+const recallSentinelPattern = rec?.recallSentinelPattern || sentinelFor(url);
+const maxPages = rec?.maxPages || (paginateAs ? 25 : 1);
 
 function pct(r) { return r == null ? 'n/a' : `${(r * 100).toFixed(0)}%`; }
 
 async function main() {
-  console.log(`\nA/B engine test — ${slug}\n${url}\n${'='.repeat(60)}`);
+  console.log(`\nA/B engine test — ${slug}${rec ? ' (recogniser house)' : ''}\n${url}\n${'='.repeat(60)}`);
 
   console.log('\n[1/2] Firecrawl incumbent…');
   const fc = await extractCatalogueListing(url, slug, {
     paginateAs: paginateAs || 'query_page',
-    maxPages: paginateAs ? 25 : 1,
+    maxPages,
     changeTracking: false,
     forceExtract: true,
     recallSentinelPattern,
+    recogniseFromMarkdown: rec?.recogniseFromMarkdown,
   });
-  console.log(`  Firecrawl: ${fc.lots.length} lots, recall ${pct(fc.recall)}`);
+  console.log(`  Firecrawl: ${fc.lots.length} lots (${fc.markdownRecognised || 0} via recogniser), recall ${pct(fc.recall)}`);
 
   console.log('\n[2/2] Crawlee + Gemini challenger…');
   const cr = await renderAndExtractWithCrawlee(url, slug, {
-    maxPages: paginateAs ? 25 : 1,
+    maxPages,
     recallSentinelPattern,
+    recogniseFromMarkdown: rec?.recogniseFromMarkdown,
   });
-  console.log(`  Crawlee+Gemini: ${cr.lots.length} lots, recall ${pct(cr.recall)}`);
+  console.log(`  Crawlee+Gemini: ${cr.lots.length} lots (${cr.recognised || 0} via recogniser), recall ${pct(cr.recall)}`);
 
   const verdict = evaluateParity({
     incumbent: { lots: fc.lots, recall: fc.recall },

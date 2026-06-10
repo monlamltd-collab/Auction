@@ -20,6 +20,7 @@ import { extractCatalogueListing, extractLotDetailFirecrawl } from '../lib/pipel
 import { resolveEngineForHouse } from '../lib/pipeline/engine-decision.js';
 import { ENGINES } from '../lib/scraper/engine-router.js';
 import { renderAndExtractWithCrawlee } from '../lib/pipeline/crawlee-extract.js';
+import { houseRecogniser } from '../lib/scraper/house-recognisers.js';
 import { enrichLots } from '../lib/enrichment.js';
 import { enrichLotsWithFundability } from '../lib/fundability.js';
 import { qualityGate, analyseLot, upsertToLotsTable, logActivityEvent } from '../lib/analysis.js';
@@ -220,8 +221,15 @@ router.post('/api/analyse', async (req, res) => {
 
       try {
         if (chosenEngine === ENGINES.CRAWLEE) {
-          console.log(`Engine router: ${house} → crawlee (on-demand, promoted)`);
-          const cr = await renderAndExtractWithCrawlee(scrapeUrl, house, { maxPages: 25, onExtract });
+          // Recogniser houses keep full recall via the turndown bridge (Phase 3).
+          const rec = houseRecogniser(house);
+          console.log(`Engine router: ${house} → crawlee (on-demand, promoted)${rec ? ' +recogniser' : ''}`);
+          const cr = await renderAndExtractWithCrawlee(scrapeUrl, house, {
+            maxPages: rec?.maxPages || 25,
+            recogniseFromMarkdown: rec?.recogniseFromMarkdown,
+            recallSentinelPattern: rec?.recallSentinelPattern,
+            onExtract,
+          });
           rawLots = cr.lots || [];
           sseWrite(res, 'scrape', { pages: cr.renderedPages.length, lots: rawLots.length });
           console.log(`Crawlee+Gemini for ${house}: ${rawLots.length} lots`);

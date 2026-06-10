@@ -38,9 +38,11 @@ console.log('Test 1: chooseEngine — deterministic overrides win in priority or
   v = chooseEngine({ isPdf: true });
   assert(v.engine === ENGINES.PDF_GEMINI && v.reason === 'pdf-catalogue', 'isPdf → pdf-gemini');
 
+  // Phase 3: markdown-recogniser flag no longer pins to firecrawl (the Crawlee
+  // path is recogniser-aware) — the house follows normal policy.
   v = chooseEngine({ hasMarkdownRecogniser: true, preferredEngine: ENGINES.CRAWLEE, crawleeAvailable: true });
-  assert(v.engine === ENGINES.FIRECRAWL && v.reason === 'markdown-recogniser-dependency',
-    'markdown recogniser pins to firecrawl even when policy says crawlee');
+  assert(v.engine === ENGINES.CRAWLEE && v.reason === 'learned-policy',
+    'markdown-recogniser flag no longer pins to firecrawl');
 
   v = chooseEngine({ botProtected: true, preferredEngine: ENGINES.CRAWLEE, crawleeAvailable: true });
   assert(v.engine === ENGINES.FIRECRAWL && v.reason === 'bot-protected',
@@ -71,11 +73,17 @@ console.log('\nTest 3: chooseEngine — availability degradation never silently 
 
   // default firecrawl but budget exhausted, crawlee available → use crawlee
   v = chooseEngine({ firecrawlAvailable: false, crawleeAvailable: true });
-  assert(v.engine === ENGINES.CRAWLEE && /firecrawl-unavailable/.test(v.reason), 'firecrawl exhausted → crawlee');
+  assert(v.engine === ENGINES.CRAWLEE && /firecrawl-exhausted/.test(v.reason), 'firecrawl exhausted → crawlee');
 
-  // both down → puppeteer last resort
-  v = chooseEngine({ firecrawlAvailable: false, crawleeAvailable: false });
-  assert(v.engine === 'puppeteer' && /unavailable/.test(v.reason), 'both down → puppeteer fallback');
+  // Phase 3 zero-credit failover: house NOT allowlisted (crawleeAvailable=false)
+  // but crawlee installed + firecrawl exhausted → still fail over to crawlee.
+  v = chooseEngine({ firecrawlAvailable: false, crawleeAvailable: false, crawleeInstalled: true });
+  assert(v.engine === ENGINES.CRAWLEE && /firecrawl-exhausted/.test(v.reason),
+    'firecrawl exhausted + crawlee installed (not allowlisted) → crawlee failover');
+
+  // both down AND crawlee not installed → puppeteer last resort
+  v = chooseEngine({ firecrawlAvailable: false, crawleeAvailable: false, crawleeInstalled: false });
+  assert(v.engine === 'puppeteer' && /unavailable/.test(v.reason), 'no firecrawl, no crawlee → puppeteer fallback');
 }
 
 // ── recallRatio ────────────────────────────────────────────────────────────
