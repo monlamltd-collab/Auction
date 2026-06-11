@@ -34,7 +34,17 @@ import {
 // ── Resource budget — single source of truth for resource state ──
 const budget = new ResourceBudget();
 if (puppeteer) budget.setPuppeteer(puppeteer);
-initScraper({ budget });
+// callAI MUST be injected here: lib/scraper/extraction.js::extractLotsWithAI
+// reads it via state.getCallAI(). It was missing, so every AI-extraction
+// batch threw `getCallAI(...) is not a function` — silently 0-lotting the
+// Gemini fallback for days and, once Crawlee became primary (Firecrawl dead,
+// 2026-06-11), the entire catalogue. callAI is a stable module function;
+// its provider internals initialise later via initAI(), which is fine
+// because extraction only runs long after boot.
+// extractPostcode had the same gap (guarded, so it silently skipped postcode
+// recovery in lot-detail.js rather than crashing). ESM imports are hoisted,
+// so the line-38 import is initialised by the time this executes.
+initScraper({ budget, callAI, extractPostcode });
 import { extractPostcode, enrichLots, getCircuitBreakers, initEnrichment } from './lib/enrichment.js';
 import { log, requestLoggerMiddleware } from './lib/logging.js';
 import { validateEnv, ALLOWED_ORIGINS } from './lib/config.js';
