@@ -10,6 +10,58 @@
 
 ---
 
+## ⚠️ UPDATE 2026-06-10 (later) — root cause found: BRAND→PROJECT MISROUTING
+
+The first pass (below) looked only at the **`pohrbfhftbprlfzsozyj` ("Auction.Bridgematch")**
+project and wrongly concluded the drafts were ContentBrain-local. They are **not** — they were
+in the **second** Supabase project the account owns:
+
+- **`pohrbfhftbprlfzsozyj` ("Auction.Bridgematch")** — AuctionBrain's *published* blog (28 rows,
+  live site). **Zero drafts.**
+- **`omlsxojblgigenfuirbs` ("Bridgematch")** — Bridgematch blog flowing normally
+  (33 published, 16 rejected) **+ 10 orphaned `brand='auctionbrain'` drafts**, created
+  **2026-05-21 → 2026-06-01, never updated since.**
+
+Those 10 = the exact drafts re-announced to Telegram and the ones the user "deletes" but
+that reappear. Decisive evidence:
+
+- **Stale, not regenerating** — newest June 1; nothing new in 9 days. They aren't being
+  *re-created*; they're **never removed**.
+- **Never published/rejected** — in the *same table*, Bridgematch rows transition fine
+  (draft→published/rejected). Only the `auctionbrain` rows are frozen as `draft`. ⇒ the
+  AuctionBrain approve/reject/**delete** actions **don't operate on this project**, so the
+  dashboard delete hits the wrong DB and these orphans persist, getting re-announced on every
+  "ContentBrain started" boot.
+
+**Root cause:** ContentBrain's AuctionBrain blog **generator writes drafts to the Bridgematch
+project (`omlsxojblgigenfuirbs`)**, while its AuctionBrain **dashboard/approval/delete reads &
+writes the Auction project (`pohrbfhftbprlfzsozyj`)**. Split-brain across two Supabase projects.
+The brand→project (or SUPABASE_URL) mapping is crossed for the auctionbrain blog path.
+
+**Immediate action taken (this session):** the 10 orphaned `auctionbrain` drafts in
+`omlsxojblgigenfuirbs.blog_posts` were set `status='rejected'` (reversible; `revision_feedback`
+stamped). Dashboard draft count for auctionbrain is now **0**. If they reappear as *new* draft
+rows, the generator is actively re-seeding and the routing fix (below) is mandatory; if they
+stay gone, they were pure orphans.
+
+**Durable fix (ContentBrain-side):**
+1. **Fix the routing** so the AuctionBrain blog generator writes to the **same** project the
+   AuctionBrain dashboard reads/writes (`pohrbfhftbprlfzsozyj`). Audit the `SUPABASE_URL` /
+   per-brand client selection in the blog generator vs the dashboard — they disagree for
+   `brand='auctionbrain'`.
+2. Make **delete** a hard delete (or terminal `status`) **in the project the rows actually live
+   in**, and have the boot announcer read drafts from that same project — so a delete sticks.
+3. Everything in the "Fix spec" below (persist rejections, dedup gate, mark seeds consumed,
+   refresh inputs, cluster rotation) still applies once routing is single-project.
+
+**Security note (surfaced by Supabase advisor):** in `omlsxojblgigenfuirbs`, **RLS is disabled**
+on `blog_posts`, `scraped_articles`, `content_sources` — these are fully readable/writable by
+anyone holding the anon key. The other project locks `social_tokens` down correctly; this one
+does not. Recommend enabling RLS with a service-role-only policy (don't enable without policies
+or it blocks all access). Not auto-applied.
+
+---
+
 ## Symptom (user-reported, Telegram, 2026-06-10 23:28 & 23:45)
 
 - The **same 10 "AuctionBrain Blog Draft" suggestions** are announced day after day.
