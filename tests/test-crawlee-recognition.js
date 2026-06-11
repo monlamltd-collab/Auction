@@ -7,6 +7,8 @@
  */
 
 import { renderAndExtractWithCrawlee } from '../lib/pipeline/crawlee-extract.js';
+import { htmlToRecognitionMarkdown } from '../lib/scraper/html-to-markdown.js';
+import { recognisePattinsonLotsFromMarkdown } from '../lib/pipeline/firecrawl-extract.js';
 
 let passed = 0, failed = 0;
 function assert(cond, msg) {
@@ -71,6 +73,42 @@ console.log('\nTest 3: recogniser does not duplicate a lot Gemini already found'
   }, { scrapeAllPagesWithCrawlee: fakeRender, extractLotsWithAI: fakeExtract });
   assert(r.lots.length === 3, `still 3 lots, no duplicate (got ${r.lots.length})`);
   assert(r.recognised === 1, 'only the genuinely-missing lot recovered');
+}
+
+// ── The decisive test: the REAL Pattinson recogniser over turndown output ──
+// Phase 3's central claim is that recogniser houses keep recall on Crawlee via
+// the turndown bridge. That only holds if turndown reproduces the two Firecrawl
+// idioms the recogniser depends on: `\\`+newline hard breaks, and absolute
+// hrefs. This test renders Pattinson-shaped HTML → turndown → the real
+// recogniser, and asserts a lot is recovered (the bug the review caught: with
+// turndown's default two-space breaks + relative hrefs, this returned 0).
+console.log('\nTest 4: real Pattinson recogniser recovers from turndown markdown');
+{
+  // A Pattinson lot card as a <br>-separated flow (image, price, "Guide Price",
+  // type/beds, address, then the `parking` detail link with a RELATIVE href).
+  // This is the bug the review caught end-to-end: with turndown's default
+  // two-space hard breaks the recogniser split matched nothing, and with
+  // relative hrefs the absolute-URL detail link never formed. Both are fixed
+  // by the br rule + absolutise in html-to-markdown.js.
+  // (Caveat: cards that render the <img> as a separate block glue it to the
+  // price line via a paragraph break; such houses must be A/B-validated — the
+  // parity gate holds promotion until recall is proven, so this fails safe.)
+  const html = '<div class="lot"><img src="/media/photo99.jpg"><br>£175,000<br>Guide Price<br>3 bed semi-detached<br>14 Hillside Avenue, Sunderland, SR4 7QP<br><a href="/property/99012">parking</a></div>';
+  const md = htmlToRecognitionMarkdown(html, 'https://www.pattinson.co.uk/auction');
+  const recovered = recognisePattinsonLotsFromMarkdown(md);
+
+  assert(recovered.size >= 1, `real recogniser found a lot (got ${recovered.size})`);
+  const lot = recovered.get('99012');
+  assert(!!lot, 'lot keyed by detail-page id 99012');
+  assert(lot && /Hillside Avenue/.test(lot.address || ''), `address parsed (got "${lot?.address}")`);
+  assert(lot && /pattinson\.co\.uk\/property\/99012/.test(lot.detail_url || ''), 'absolute detail_url preserved');
+}
+
+console.log('\nTest 5: turndown reproduces the Firecrawl idioms');
+{
+  const md = htmlToRecognitionMarkdown('<p>a<br>b</p><a href="/lot/5">x</a>', 'https://h.test/cat');
+  assert(/\\\\\s*\n/.test(md), 'hard break emitted as backslash+newline (Firecrawl idiom)');
+  assert(/\(https:\/\/h\.test\/lot\/5\)/.test(md), 'relative href absolutised');
 }
 
 console.log(`\n${'═'.repeat(50)}`);

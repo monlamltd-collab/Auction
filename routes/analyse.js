@@ -202,9 +202,10 @@ router.post('/api/analyse', async (req, res) => {
       }
     } else {
       // ── Engine router (conservative on the latency-sensitive user path) ──
-      // Only honour Crawlee for a house already PROMOTED to it (preferred_engine
-      // ='crawlee'); never shadow-compare or cold-start a new engine here. The
-      // migration/evaluation happens on the cron path (lib/analysis.js).
+      // Crawlee runs here only for a house already PROMOTED to it, or as the
+      // zero-credit failover when Firecrawl is exhausted (better a slower
+      // answer than none). Never shadow-compare here — migration/evaluation
+      // happens on the cron path (lib/analysis.js).
       sseWrite(res, 'phase', { step: 'extracting' });
       let engineSkill = null;
       try {
@@ -223,9 +224,11 @@ router.post('/api/analyse', async (req, res) => {
         if (chosenEngine === ENGINES.CRAWLEE) {
           // Recogniser houses keep full recall via the turndown bridge (Phase 3).
           const rec = houseRecogniser(house);
-          console.log(`Engine router: ${house} → crawlee (on-demand, promoted)${rec ? ' +recogniser' : ''}`);
+          console.log(`Engine router: ${house} → crawlee (on-demand)${rec ? ' +recogniser' : ''}`);
           const cr = await renderAndExtractWithCrawlee(scrapeUrl, house, {
-            maxPages: rec?.maxPages || 25,
+            // Hard cap: local sequential renders inside an SSE request must
+            // stay bounded (Pattinson's 84-page cap is a cron-path budget).
+            maxPages: Math.min(rec?.maxPages || 25, 25),
             recogniseFromMarkdown: rec?.recogniseFromMarkdown,
             recallSentinelPattern: rec?.recallSentinelPattern,
             onExtract,

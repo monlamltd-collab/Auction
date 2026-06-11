@@ -43,7 +43,13 @@ function sentinelFor(u) {
 // run the same recall-recovery they get in production (Phase 3).
 const rec = houseRecogniser(slug);
 const recallSentinelPattern = rec?.recallSentinelPattern || sentinelFor(url);
-const maxPages = rec?.maxPages || (paginateAs ? 25 : 1);
+// Multi-page only when paginateAs is given — without the right pagination
+// scheme the page-N URLs would be wrong anyway (and pattinson's 84-page cap
+// would burn Firecrawl credits on a mis-paginated walk).
+const maxPages = paginateAs ? (rec?.maxPages || 25) : 1;
+if (rec?.maxPages > 1 && !paginateAs) {
+  console.warn(`NOTE: ${slug} is paginated (${rec.maxPages} pages) — pass its paginateAs arg for a full-catalogue comparison; running page 1 only.`);
+}
 
 function pct(r) { return r == null ? 'n/a' : `${(r * 100).toFixed(0)}%`; }
 

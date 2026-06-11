@@ -2,8 +2,8 @@
  * Tests for the shared engine-decision seam (lib/pipeline/engine-decision.js).
  * Verifies the config gate (dormant → allowlist → default) and that
  * resolveEngineForHouse composes chooseEngine correctly from live signals —
- * crucially that override houses (markdown recogniser, API, PDF) never route
- * to Crawlee.
+ * structural overrides (API, PDF, manual lock) hold, recogniser houses route
+ * normally (Phase 3 turndown bridge), and the zero-credit failover fires.
  *
  * Run: node tests/test-engine-decision.js
  */

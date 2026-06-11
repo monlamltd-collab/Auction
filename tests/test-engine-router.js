@@ -32,6 +32,13 @@ console.log('Test 1: chooseEngine — deterministic overrides win in priority or
   let v = chooseEngine({ manualEngine: ENGINES.CRAWLEE, isApi: true, crawleeAvailable: true });
   assert(v.engine === ENGINES.CRAWLEE && v.reason === 'manual-lock', 'engine_locked wins over isApi');
 
+  // A lock is ABSOLUTE: a firecrawl-locked house must NOT fail over to crawlee
+  // on exhaustion (the operator locked it off crawlee on purpose) — degrade to
+  // puppeteer instead.
+  v = chooseEngine({ manualEngine: ENGINES.FIRECRAWL, firecrawlAvailable: false, crawleeInstalled: true });
+  assert(v.engine === 'puppeteer' && /manual-lock/.test(v.reason),
+    'firecrawl lock does NOT fail over to crawlee on exhaustion → puppeteer');
+
   v = chooseEngine({ isApi: true });
   assert(v.engine === ENGINES.API && v.reason === 'structured-api', 'isApi → api');
 

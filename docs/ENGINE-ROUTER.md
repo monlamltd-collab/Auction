@@ -227,3 +227,22 @@ unchanged cycles for free.
 (recogniser-aware) · `lib/scraper/engine-router.js` (relax guard, add failover availability) ·
 `lib/analysis.js` (pass recognisers + sentinel into the Crawlee branch) · `scripts/test-engine-ab.mjs`
 (recogniser-recall column) · recogniser fixture parity tests.
+
+**Turndown fidelity (verified 2026-06-11).** The recognisers depend on two
+Firecrawl markdown idioms, so `htmlToRecognitionMarkdown` reproduces them: a
+`<br>` becomes `\\`+newline (the Pattinson recogniser splits cards on this —
+turndown's default two-space break recognises nothing), and relative hrefs/srcs
+are absolutised against the page URL (four recognisers and the markjenkinson
+sentinel anchor on `https://www.<domain>/…`). A real-recogniser-over-turndown
+fixture test guards this. Cards that render the image as a separate block can
+still glue it to the price line — such houses must be A/B-validated; the parity
+gate holds promotion until recall is proven, so it fails safe.
+
+**Failover policy.** The zero-credit failover (`crawleeInstalled`) reaches every
+house when Firecrawl is exhausted — **except** a `manual-lock`, which is absolute
+(a firecrawl-locked house degrades to puppeteer, never to the engine the
+operator locked it off). Bot-protected houses are never *proactively* given to
+Crawlee, but the failover does reach them (Crawlee's fingerprint hardening beats
+bare puppeteer, and degraded-but-present beats stale). A recogniser house renders
+at most once per cron pass (`crawleeTried` guards the second extraction block);
+the on-demand path caps Crawlee at 25 pages to bound SSE latency.
