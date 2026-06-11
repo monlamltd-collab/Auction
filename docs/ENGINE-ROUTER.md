@@ -251,9 +251,22 @@ the on-demand path caps Crawlee at 25 pages to bound SSE latency.
 things: opens the allowlist to every house AND makes Crawlee the *desired*
 engine for any house without a structural override (api/pdf/bot), learned
 policy, or lock (`chooseEngine` reason `config-default`). Firecrawl remains the
-in-run fallback whenever a Crawlee run yields 0 lots. Unset it to revert to
-Firecrawl-first instantly — promotion state earned via the gate
+in-run fallback whenever a Crawlee run yields 0 lots **or under-recalls** (below
+`CRAWLEE_RECALL_FLOOR`, default 0.85) *while Firecrawl is available*. Unset it to
+revert to Firecrawl-first instantly — promotion state earned via the gate
 (`preferred_engine='crawlee'`) survives the flip.
+
+**Trial-hardening knobs (2026-06-11, PR review fixes).** `CRAWLEE_HOUSE_TIMEOUT_MS`
+(default 600000) gives likely-Crawlee houses a longer wall-clock than the 90s
+Firecrawl budget; `CRAWLEE_RENDER_BUDGET_MS` (420000) bounds multi-page renders;
+`CRAWLEE_RECALL_FLOOR` (0.85) gates fallback; `CRAWLEE_PROMOTE_PASSES` (2)
+requires consecutive parity passes before promotion. A 402 from Firecrawl now
+latches `planExhausted` until cycle rollover (no hourly thrash); the Crawlee
+renderer uses the per-house `paginateAs` scheme (Pattinson `?p=N`), caps at
+`MAX_PUPPETEER_PAGES`, reuses the change-gate's page-1 render, and stops on a
+repeated page. The vanished-lot pruner requires 90% retention (not 50%) on a
+Crawlee run before withdrawing lots. Full operator guide:
+`docs/CRAWLEE-TRIAL-RUNBOOK.md`.
 
 **Validation harness.** `scripts/validate-crawlee-houses.mjs [slugs…]` renders
 live catalogues with Crawlee and reports render health, sentinel lot-ID counts
