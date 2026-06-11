@@ -246,3 +246,20 @@ Crawlee, but the failover does reach them (Crawlee's fingerprint hardening beats
 bare puppeteer, and degraded-but-present beats stale). A recogniser house renders
 at most once per cron pass (`crawleeTried` guards the second extraction block);
 the on-demand path caps Crawlee at 25 pages to bound SSE latency.
+
+**`CRAWLEE_DEFAULT=true` = the main-engine switch (2026-06-11).** It does two
+things: opens the allowlist to every house AND makes Crawlee the *desired*
+engine for any house without a structural override (api/pdf/bot), learned
+policy, or lock (`chooseEngine` reason `config-default`). Firecrawl remains the
+in-run fallback whenever a Crawlee run yields 0 lots. Unset it to revert to
+Firecrawl-first instantly — promotion state earned via the gate
+(`preferred_engine='crawlee'`) survives the flip.
+
+**Validation harness.** `scripts/validate-crawlee-houses.mjs [slugs…]` renders
+live catalogues with Crawlee and reports render health, sentinel lot-ID counts
+(the recall denominator), and — for recogniser houses — turndown→recogniser
+recovery with `validateBatch` field coverage. Needs no Gemini/Supabase keys, so
+it runs anywhere with open egress (it does NOT run in the Claude dev container,
+whose network policy blocks auction domains — `x-deny-reason: host_not_allowed`).
+`CRAWLEE_IGNORE_CERT_ERRORS=true` is a dev-only knob for TLS-intercepting
+proxies; never set it in production.

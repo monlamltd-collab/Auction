@@ -67,6 +67,17 @@ console.log('\nTest 2: chooseEngine — learned policy and default');
   v = chooseEngine({});
   assert(v.engine === ENGINES.FIRECRAWL && v.reason === 'default', 'no policy → firecrawl default');
 
+  // CRAWLEE_DEFAULT semantics: crawlee becomes the MAIN engine for plain houses…
+  v = chooseEngine({ crawleeIsDefault: true, crawleeAvailable: true });
+  assert(v.engine === ENGINES.CRAWLEE && v.reason === 'config-default', 'crawleeIsDefault → crawlee main engine');
+  // …but never overrides structural/learned/locked policy.
+  v = chooseEngine({ crawleeIsDefault: true, crawleeAvailable: true, isApi: true });
+  assert(v.engine === ENGINES.API, 'config-default does not override api');
+  v = chooseEngine({ crawleeIsDefault: true, crawleeAvailable: true, botProtected: true, firecrawlAvailable: true });
+  assert(v.engine === ENGINES.FIRECRAWL, 'config-default does not override bot-protected');
+  v = chooseEngine({ crawleeIsDefault: true, crawleeAvailable: true, manualEngine: ENGINES.FIRECRAWL, firecrawlAvailable: true });
+  assert(v.engine === ENGINES.FIRECRAWL && v.reason === 'manual-lock', 'config-default does not override engine_locked');
+
   // a junk/unknown preferred_engine is ignored, falls through to default
   v = chooseEngine({ preferredEngine: 'bogus' });
   assert(v.engine === ENGINES.FIRECRAWL && v.reason === 'default', 'unknown preferred engine ignored → default');
