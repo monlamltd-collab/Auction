@@ -30,8 +30,12 @@ RUN if [ "$INSTALL_CHROMIUM" = "true" ]; then \
     && rm -rf /var/lib/apt/lists/*; \
   fi
 
-# Tell Puppeteer to use installed Chromium (no-op if Chromium not installed)
+# Tell Puppeteer to use installed Chromium (no-op if Chromium not installed).
+# Crawlee bundles its own puppeteer; PUPPETEER_SKIP_DOWNLOAD covers the newer
+# var name so neither re-downloads Chromium — both reuse the system binary via
+# PUPPETEER_EXECUTABLE_PATH (see lib/scraper/crawlee.js).
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_SKIP_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 WORKDIR /app

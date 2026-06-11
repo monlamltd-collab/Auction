@@ -130,7 +130,8 @@ From `package.json`:
 
 ## Non-Negotiables
 
-- **Firecrawl primary, Puppeteer fallback, HTTP last** — never reverse the order
+- **Best-engine-first** — the pipeline selects the best scraping engine *per house* by scored trade-off (recall → reliability → cost), conditioned on the house's nature (platform type, bot protection, API/PDF/markdown needs). Recall is never knowingly sacrificed for cost: a cheaper engine is preferred only when its recall is proven equal to the incumbent against the house's recall sentinel (**strict parity**). Within a chosen engine, the render fallback chain is Firecrawl → Puppeteer → HTTP. Engine choice is recorded and auditable; manual overrides via `house_skills.engine_locked` always win. Decision logic: `lib/scraper/engine-router.js`; design: `docs/ENGINE-ROUTER.md`.
+- **The scraper builds the product** — the scraping layer exists to manufacture the product: clean, *complete* per-lot data that lets investors decide and unearth opportunities. **Engines are judged by the quality of the per-lot product they yield — recall AND field completeness (`batchQuality` + no per-field coverage regression) — never by lot count alone.** A house migrates Firecrawl→Crawlee only after passing the product-integrity parity gate (`lib/pipeline/parity-gate.js`) in shadow; no investor ever sees degraded data. This principle outranks cost in every engine decision.
 - **Score range 0–10**, always clamped
 - **Silent failures banned** — every skipped/failed lookup records a reason in `lots.enrichment_manifest`
 - **Manifest gating on yield + below-market** to prevent double-counting
