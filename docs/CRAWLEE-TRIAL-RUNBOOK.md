@@ -45,6 +45,7 @@ Optional tuning (defaults are sensible — leave unless a watch-list signal says
 | `CRAWLEE_RENDER_BUDGET_MS` | `420000` (7 min) | Multi-page render stops adding pages past this, leaving headroom for Gemini. |
 | `CRAWLEE_RECALL_FLOOR` | `0.85` | Below this, a Crawlee run falls back to Firecrawl **if available**; while dry, it serves the best available result. |
 | `CRAWLEE_PROMOTE_PASSES` | `2` | Consecutive parity passes required before a house is promoted to `preferred_engine='crawlee'`. |
+| `CRAWLEE_REQUEST_TIMEOUT_MS` | `300000` (5 min) | Hard per-render bridge timeout: bounds queue starvation under full-fleet load (N houses share the 3-slot crawler) and guarantees abandoned callers can't leak pending bridge entries. |
 
 Rollback (no deploy): `UPDATE house_skills SET engine_locked='firecrawl' WHERE slug='<house>';` — a lock is absolute and never fails over to Crawlee. Global revert: unset `CRAWLEE_DEFAULT`.
 
@@ -60,7 +61,8 @@ Each row: the risk, the signal to look for, and the action if it fires.
 | **Product completeness** (F4) | `pipeline_alerts` types `extractor_image_regression` / `_tenure_` / `_beds_`. SQL below. | Some drop vs Firecrawl is expected (no detail-page backfill while dry). A house at ~0% image needs its hint reviewed. |
 | **Failover correctness** (F5) | Logs: `→ engine crawlee (…firecrawl-exhausted)` and the hourly `BUDGET-FC … flags=plan-exhausted` staying **latched** (not toggling). | If `flags` toggles hourly, confirm `FIRECRAWL_MONTHLY_BUDGET=1` is set. |
 | **/api/lot health** (F6) | Web-role 503s / user reports on lot deep-dives | Should now fall back to render+Gemini; a 503 means even that failed (rare). |
-| **Crawlee health** | Logs: `Crawlee: crawler.run() ended —`, container RSS on Railway (one Chromium) | A crashed crawler stops all Crawlee renders → houses fall to legacy. Restart the service. |
+| **Crawlee health** | `pipeline_alerts` type `crawlee_crawler_restart`; logs: `Crawlee: crawler died`; container RSS on Railway (one Chromium) | The crawler auto-relaunches on the next render request (in-flight renders fail fast; those houses retry next cycle). Repeated restarts = memory pressure: lower the wave concurrency or raise the Railway plan. |
+| **Extractor health** | `pipeline_alerts` type `ai_extraction_failure` (severity error) | Every AI batch threw for that house — wiring/provider/auth, NOT page content. Read `meta.lastError`, then confirm `ai_usage` shows successful `task_type='extraction'` rows again after the fix. |
 | **Gemini saturation** | Logs: `Gemini API rate limited -- stopping all extraction` | The rest of that hour's houses get 0 lots. If frequent, stagger the wave or raise `GEMINI_MIN_GAP_MS`. |
 | **Recall** | `pipeline_alerts` type `recall_diagnostic` (engine=crawlee) — now emitted on the Crawlee path | Track per-house recall trend; persistent <0.85 = recogniser/sentinel needs tuning. |
 
