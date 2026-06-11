@@ -22,6 +22,7 @@ drop-in second source.
 | `AI_PROVIDER` | `openrouter` | Makes OpenRouter the **primary** extractor while the direct Gemini key is dead (avoids a wasted failed Gemini call per batch). Set back to `gemini` once Gemini is healthy — OpenRouter then stays as the auto-fallback. |
 | `AI_FALLBACK_PROVIDERS` | *(unset)* | Defaults to `openrouter` whenever `OPENROUTER_API_KEY` is set. Override with a comma list (e.g. `openrouter,grok`) to chain more; set to empty string to disable fallback. |
 | `OPENROUTER_FAST_MODEL` / `OPENROUTER_CAPABLE_MODEL` | *(optional)* | Default `google/gemini-2.5-flash-lite` / `google/gemini-2.5-pro` (parity, on OpenRouter's billing). Swap to e.g. `anthropic/claude-3.5-haiku` for full independence from Google. |
+| `OPENROUTER_FALLBACK_MODELS` | *(optional)* | Comma-separated backup model slugs, e.g. `deepseek/deepseek-chat-v4-flash`. OpenRouter's `models` array tries them in order **within one request**, so if the primary model is down it rolls over automatically. Copy exact slugs from openrouter.ai → Models. |
 
 Once set, `initAI` logs `AI provider initialized: chain=[openrouter → …]`, and the
 `Gemini API rate limited` short-circuit is ignored while a non-Gemini path exists
