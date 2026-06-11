@@ -6,6 +6,28 @@ hardening below addresses the PR #67 post-merge review; the matching env knobs
 have safe defaults, so the only **required** action is the deploy + the two
 go-live vars.
 
+## AI extractor resilience (OpenRouter) — removes the single point of failure
+
+Crawlee renders, but a *render* is useless without an *extractor*. With Firecrawl
+dead, Gemini was the only extractor, and a single Gemini 429/quota stalled the
+whole catalogue (observed 2026-06-11: 0 extraction calls, every house 0 lots).
+`callAI` is now a **provider cascade** (`lib/ai-provider.js`): it tries the
+primary provider and rolls over to fallbacks on any failure. OpenRouter (one
+key, OpenAI-compatible, access to Gemini/Claude/Kimi/… on its own billing) is the
+drop-in second source.
+
+| Var | Set to | Why |
+|---|---|---|
+| `OPENROUTER_API_KEY` | `sk-or-...` (from openrouter.ai) | Enables OpenRouter. **Required** for the fallback. |
+| `AI_PROVIDER` | `openrouter` | Makes OpenRouter the **primary** extractor while the direct Gemini key is dead (avoids a wasted failed Gemini call per batch). Set back to `gemini` once Gemini is healthy — OpenRouter then stays as the auto-fallback. |
+| `AI_FALLBACK_PROVIDERS` | *(unset)* | Defaults to `openrouter` whenever `OPENROUTER_API_KEY` is set. Override with a comma list (e.g. `openrouter,grok`) to chain more; set to empty string to disable fallback. |
+| `OPENROUTER_FAST_MODEL` / `OPENROUTER_CAPABLE_MODEL` | *(optional)* | Default `google/gemini-2.5-flash-lite` / `google/gemini-2.5-pro` (parity, on OpenRouter's billing). Swap to e.g. `anthropic/claude-3.5-haiku` for full independence from Google. |
+
+Once set, `initAI` logs `AI provider initialized: chain=[openrouter → …]`, and the
+`Gemini API rate limited` short-circuit is ignored while a non-Gemini path exists
+(so a stale Gemini exhaustion flag can't block extraction). Verify via the
+`ai_usage` query below — extraction calls should appear with the OpenRouter model.
+
 ## Railway env vars
 
 | Var | Set to | Why |
