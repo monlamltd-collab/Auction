@@ -439,9 +439,28 @@ router.post('/api/lot', async (req, res) => {
     if (!house || house === 'unknown') return res.status(400).json({ error: 'Could not detect auction house from URL' });
 
     // Firecrawl JSON detail extract — single call, fetches + extracts.
-    const detail = await extractLotDetailFirecrawl(url, house);
+    // Falls back to render (Puppeteer/HTTP) + Gemini when Firecrawl is
+    // unavailable (e.g. plan exhausted), so lot deep-dives don't 502 for the
+    // whole dead-credit window. PR #67 review F6.
+    let detail = null;
+    try {
+      detail = await extractLotDetailFirecrawl(url, house);
+    } catch (fcErr) {
+      console.warn(`/api/lot: Firecrawl detail failed (${fcErr.message}) — trying render+Gemini fallback`);
+    }
     if (!detail) {
-      return res.status(502).json({ error: 'Failed to fetch lot page' });
+      try {
+        const rendered = await scrapeRenderedPage(url, house);
+        if (rendered?.html) {
+          const lots = await extractLotsWithAI([{ page: 1, html: rendered.html, markdown: rendered.markdown }], house, null, url) || [];
+          if (lots[0]) detail = lots[0];
+        }
+      } catch (fbErr) {
+        console.warn(`/api/lot: render+Gemini fallback failed (${fbErr.message})`);
+      }
+    }
+    if (!detail) {
+      return res.status(503).json({ error: 'Lot detail temporarily unavailable — please try again shortly.' });
     }
 
     // Build a lot object — fall back to URL-only if extractor returned nothing

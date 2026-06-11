@@ -487,5 +487,33 @@ console.log('\nTest 24: _cycleStartIso handles YYYY-MM and YYYY-MM-DD keys');
   b.destroy();
 }
 
+// ── 402 plan-exhaustion latches; 429 rate-limit keeps the 1h TTL (review F5) ──
+console.log('\nTest 7: 402 latches hard, 429 clears on 1h TTL');
+{
+  const b = makeBudget(100);
+
+  // 429 → exhausted with a clearable TTL.
+  b.recordFcError(429, new Error('rate limited'));
+  assert(b.canUseFirecrawl() === false, '429 → firecrawl unavailable');
+  assert(b.whyBlocked() === 'rate-limited-429', '429 → whyBlocked rate-limited-429');
+  b._fc.exhaustedAt = Date.now() - 3600001; // simulate >1h elapsed
+  b._autoReset();
+  assert(b.canUseFirecrawl() === true, '429 flag auto-clears after 1h TTL');
+
+  // 402 → plan exhausted, NOT cleared by the 1h TTL.
+  b.recordFcError(402, new Error('payment required'));
+  assert(b.whyBlocked() === 'plan-exhausted-402', '402 → whyBlocked plan-exhausted-402');
+  b._fc.exhaustedAt = Date.now() - 3600001;
+  b._autoReset();
+  assert(b.canUseFirecrawl() === false, '402 plan-exhaustion stays latched past the 1h TTL');
+
+  // Cycle rollover lifts the 402 latch.
+  b._fc.monthStartedAt = 'force-rollover';
+  b._autoReset();
+  assert(b.canUseFirecrawl() === true, '402 latch lifts at cycle rollover');
+  assert(b._fc.planExhausted === false, 'planExhausted cleared at rollover');
+  b.destroy();
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
