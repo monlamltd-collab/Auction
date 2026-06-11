@@ -14,7 +14,7 @@ function assert(cond, msg) {
   else { console.error(`  FAIL: ${msg}`); failed++; }
 }
 
-const KEYS = ['AI_PROVIDER', 'AI_FALLBACK_PROVIDERS', 'OPENROUTER_API_KEY'];
+const KEYS = ['AI_PROVIDER', 'AI_FALLBACK_PROVIDERS', 'OPENROUTER_API_KEY', 'GEMINI_API_KEY'];
 const saved = {};
 for (const k of KEYS) saved[k] = process.env[k];
 function reset() { for (const k of KEYS) delete process.env[k]; }
@@ -35,15 +35,27 @@ console.log('\nTest 2: OPENROUTER_API_KEY present → gemini → openrouter');
   assert(hasAIFallback() === true, 'hasAIFallback true (openrouter fallback exists)');
 }
 
-console.log('\nTest 3: AI_PROVIDER=openrouter → openrouter primary');
+console.log('\nTest 3: AI_PROVIDER=openrouter + GEMINI_API_KEY → openrouter primary, gemini fallback');
+{
+  reset();
+  process.env.AI_PROVIDER = 'openrouter';
+  process.env.OPENROUTER_API_KEY = 'sk-or-test';
+  process.env.GEMINI_API_KEY = 'AIza-test';
+  const chain = buildProviderChain({ tier: 'fast' });
+  // 2026-06-11 incident: this used to dedupe to [openrouter] ONLY — the healthy
+  // direct-Gemini key was silently dropped, so any OpenRouter failure had no
+  // fallback at all. Every configured provider must stay in the chain.
+  assert(eq(chain, ['openrouter', 'gemini']), `chain = [openrouter, gemini] (got ${chain})`);
+  assert(hasAIFallback() === true, 'hasAIFallback true (primary not gemini)');
+}
+
+console.log('\nTest 3b: AI_PROVIDER=openrouter WITHOUT a gemini key → openrouter only');
 {
   reset();
   process.env.AI_PROVIDER = 'openrouter';
   process.env.OPENROUTER_API_KEY = 'sk-or-test';
   const chain = buildProviderChain({ tier: 'fast' });
-  // openrouter primary; default fallback is also openrouter → deduped to one.
-  assert(chain[0] === 'openrouter', 'openrouter is primary');
-  assert(chain.length === 1, 'deduped to a single entry');
+  assert(eq(chain, ['openrouter']), `chain = [openrouter] (got ${chain})`);
   assert(hasAIFallback() === true, 'hasAIFallback true (primary not gemini)');
 }
 
