@@ -180,3 +180,34 @@ select title, published_at::date from public.blog_posts
 where title ilike '%first-time%' or title ilike '%rate hold%' or title ilike '%bridging%'
 order by published_at desc;
 ```
+
+---
+
+## Topic-rotation ledger (explicit user priority, 2026-06-10)
+
+**Requirement (Simon):** keep a durable record of every blog posted, and use it to rotate
+topics and avoid repeating ourselves.
+
+**Status — the record exists and is intact; nothing reads it. That is the whole bug.**
+
+| Ledger (per brand → correct project) | Published | Range | Clusters used |
+|---|---|---|---|
+| auctionbrain → `pohrbfhftbprlfzsozyj` | 28 | 2026-03-25 → **2026-05-21** | **3** |
+| bridgematch → `omlsxojblgigenfuirbs` | 33 | 2026-03-25 → 2026-06-07 | 10 |
+
+- The canonical rotation ledger **is `blog_posts` (status='published')** — plus `rejected`
+  rows as a negative-signal. `cluster` is the rotation key and already populated.
+- **Brand-split:** auctionbrain history lives in the Auction project, bridgematch in the
+  Bridgematch project. The generator's dedup/rotation query **must hit the brand-correct
+  project** (same misrouting root cause as the drafts). Do not assume one DB.
+- **auctionbrain is the problem child:** only 3 clusters ever, and stalled since 2026-05-21.
+  Narrow topics + stalled queue = the recycled "first-time guide / rate-hold / bridging"
+  angles. bridgematch (10 clusters, current) shows the healthy pattern to match.
+
+**Generator must, before emitting any draft:**
+1. Load published (and rejected) titles/summaries/clusters for that brand from the
+   brand-correct project.
+2. Reject candidates above a similarity threshold vs that history (see §B).
+3. Enforce a cluster-rotation quota (see §E) — no cluster more than once per rolling N drafts;
+   add `regional-spotlight` / `case-study` / `data-deep-dive` / `lot-analysis` to widen the pool.
+4. Prefer net-new clusters when the recent history is concentrated (auctionbrain's 3-cluster rut).
