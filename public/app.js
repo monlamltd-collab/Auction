@@ -3000,7 +3000,7 @@ function renderLots(){
     const searchQ=$('smartQuery')?.value.trim()||'';
     out.innerHTML='<div style="text-align:center;padding:40px 20px;color:var(--text-muted)">'+
       '<div style="font-size:1.5rem;margin-bottom:12px">No lots found</div>'+
-      (searchQ?'<p>No results for \''+searchQ.replace(/'/g,'&#39;')+'\'. Try different search terms.</p>':'<p>Try adjusting your filters or search terms.</p>')+
+      (searchQ?'<p>No results for \''+esc(searchQ)+'\'. Try different search terms.</p>':'<p>Try adjusting your filters or search terms.</p>')+
       '</div>';
     return;
   }
