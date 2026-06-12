@@ -20,8 +20,13 @@ function assert(cond, msg) {
   else { console.error(`  FAIL: ${msg}`); failed++; }
 }
 
+// Content must clear MIN_EXTRACTION_CONTENT_CHARS (the hallucination-guard
+// floor, default 600) or the batch is skipped before the provider is ever
+// called — which is correct behaviour, but this test needs the provider to be
+// REACHED so it can throw. Space-padding doesn't survive stripHtml; use text.
+const FILLER = ' Viewing strictly by appointment with the auctioneer. Buyer administration fees apply, see the legal pack for full conditions of sale.'.repeat(6);
 const PAGES = [
-  { page: 1, html: `<div>Lot 1 — 1 High Street, Testtown TT1 1AA — Guide £100,000</div>`.padEnd(400, ' ') },
+  { page: 1, html: `<div>Lot 1 — 1 High Street, Testtown TT1 1AA — Guide £100,000.${FILLER}</div>` },
 ];
 
 console.log('Test 1: un-wired callAI (the production bug) → [] + ai_extraction_failure alert');
