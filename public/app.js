@@ -2831,8 +2831,9 @@ function renderLots(){
     }
     // House filter
     if(selectedHouses.length&&!selectedHouses.includes(l._house)) return false;
-    // Exclude POA
-    if(fExcludePOA&&!(l.price>0)) return false;
+    // Exclude POA — but never hide Nil Reserve lots: no reserve is a positive
+    // signal (sells to the highest bid), not a withheld price.
+    if(fExcludePOA&&!(l.price>0)&&!isNilReserveLot(l)) return false;
     // Lookahead
     if(houseAllowed&&l._auctionDate&&l._house){
       if(!houseAllowed[l._house]?.has(l._auctionDate)) return false;
@@ -3296,6 +3297,17 @@ function formatAuctionDateShort(iso) {
   return d + ' ' + months[m];
 }
 
+// Nil Reserve detector — drives the badge and the exclude-POA exemption.
+// Structured priceStatus when the feed carries it; priceText fallback for
+// cached blobs scraped before price_status was populated. Literal twin of
+// NIL_RESERVE_RE in lib/quality/lot-quality.js — keep them aligned.
+var NIL_RESERVE_RE = /\b(?:nil|no|without|zero)[\s-]*reserve|unreserved\b/i;
+function isNilReserveLot(l) {
+  if (!l) return false;
+  if (l.priceStatus === 'nil_reserve') return true;
+  return !l.price && NIL_RESERVE_RE.test(l.priceText || '');
+}
+
 function statusForStrip(l) {
   // Map lot.status to the editorial strip's dot colour + label.
   const s = (l.status || 'live').toLowerCase();
@@ -3349,10 +3361,8 @@ function card(l){
   else if (l.price) guideText = '£' + l.price.toLocaleString();
 
   // Nil Reserve — a positive signal (sells to the highest bid). Show it as a
-  // badge, not as a "no price" gap. Drives off the structured priceStatus,
-  // falling back to the priceText for lots scraped before it was populated.
-  const isNilReserve = (l.priceStatus === 'nil_reserve') ||
-    (!l.price && /\b(?:nil|no|without|zero)\s*reserve|unreserved\b/i.test(l.priceText || ''));
+  // badge, not as a "no price" gap.
+  const isNilReserve = isNilReserveLot(l);
   if (isNilReserve) guideText = 'Nil Reserve';
 
   // Yield
@@ -4677,10 +4687,7 @@ function buildExpV2Header(lot, dealStackHtmlRef) {
   let guideText = 'TBA';
   if (lot.priceText && !lot.price) guideText = lot.priceText;
   else if (lot.price) guideText = '£' + lot.price.toLocaleString();
-  if ((lot.priceStatus === 'nil_reserve') ||
-      (!lot.price && /\b(?:nil|no|without|zero)\s*reserve|unreserved\b/i.test(lot.priceText || ''))) {
-    guideText = 'Nil Reserve';
-  }
+  if (isNilReserveLot(lot)) guideText = 'Nil Reserve';
 
   let belowMktHtml = '';
   if (lot.belowMarket != null && lot.price) {

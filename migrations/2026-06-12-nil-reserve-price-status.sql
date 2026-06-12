@@ -44,7 +44,9 @@ UPDATE lots SET price_status = 'nil_reserve'
   WHERE price_status IS NULL
     AND (price IS NULL OR price = 0)
     AND price_text IS NOT NULL
-    AND price_text ~* '\m(nil|no|without|zero)\s*reserve\M|\munreserved\M';
+    -- [\s-]* admits "No-Reserve"; no trailing \M so "no reserves" matches too.
+    -- Mirrors NIL_RESERVE_RE in lib/quality/lot-quality.js — keep aligned.
+    AND price_text ~* '\m(nil|no|without|zero)[\s-]*reserve|\munreserved';
 
 UPDATE lots SET price_status = 'poa'
   WHERE price_status IS NULL

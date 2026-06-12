@@ -388,12 +388,18 @@ console.log('\nappendCoverageHistory: ringbuffer of last 5');
 
 console.log('\nderivePriceStatus: priority order + edge cases');
 {
-  // sold: status='sold' AND soldPrice present.
+  // sold: STATUS-ONLY keying. The old `soldPrice` gate made this branch
+  // unreachable at runtime (nothing in the codebase produces lot.soldPrice;
+  // prod has no sold_price column) and re-upserts of sold lots contradicted
+  // the migration backfill (Fable review 2026-06-12 #2).
   assert(derivePriceStatus({ status: 'sold', soldPrice: 285000 }) === 'sold',
     'sold + soldPrice → sold');
-  // sold without soldPrice: not enough signal — falls through.
-  assert(derivePriceStatus({ status: 'sold' }) === 'unknown',
-    'sold WITHOUT soldPrice falls through to unknown (no price signal at all)');
+  assert(derivePriceStatus({ status: 'sold' }) === 'sold',
+    'sold WITHOUT soldPrice → sold (status-only keying)');
+  assert(derivePriceStatus({ status: 'unsold' }) === 'sold',
+    'unsold → sold (auction concluded; the guide is gone)');
+  assert(derivePriceStatus({ status: 'sold', priceText: 'SOLD - unreserved' }) === 'sold',
+    'sold beats the nil-reserve text ("SOLD - unreserved" is a sold lot)');
 
   // withdrawn: status only — sold_price irrelevant.
   assert(derivePriceStatus({ status: 'withdrawn' }) === 'withdrawn',

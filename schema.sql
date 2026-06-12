@@ -252,8 +252,11 @@ CREATE POLICY "Service role full access" ON manager_cycles FOR ALL USING (true) 
 -- floor_plan_url→floor_plans; added auctioneer + created_at.
 -- The unique key is UNIQUE(url) (was (house,url) — changed by the 2026-05-07
 -- cross-house dedup migration).
--- NOTE: sold_price + price_status are pending removal in the lot_events
--- migration-completion work (lot_history/lot_status_history → *_archive).
+-- NOTE: sold_price was removed in the lot_events migration-completion work
+-- (lot_history/lot_status_history → *_archive). price_status was REINSTATED
+-- 2026-06-12 as a live price-intent column (guide/poa/tba/starting_bid/
+-- nil_reserve/sold/withdrawn/unknown — see migrations/2026-06-12-nil-reserve-
+-- price-status.sql and contract 3.1.0); it is populated on every upsert.
 CREATE TABLE IF NOT EXISTS lots (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   house TEXT NOT NULL,
