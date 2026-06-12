@@ -11,6 +11,7 @@ import {
   decideExtractionTier,
   recordExtractionRecall,
   getExtractionTier,
+  shouldFlagForRecogniser,
   _thresholds,
 } from '../lib/scraper/extraction-tier.js';
 
@@ -77,6 +78,30 @@ console.log('\nTest 8: getExtractionTier resolution');
   assert(getExtractionTier(null, 'astleys') === 'fast', 'no skill → fast default');
   assert(getExtractionTier({ engine_stats: { _extraction: { tier: 'capable' } } }, 'astleys') === 'capable', 'stored capable honoured');
   assert(getExtractionTier({ engine_stats: { _extraction: { tier: 'fast' } } }, 'astleys') === 'fast', 'stored fast honoured');
+}
+
+console.log('\nTest 9: needs-recogniser flag — fires once after sustained capable-tier use');
+{
+  let ext = null;
+  // Promote the house (3 weak runs), then keep it weak on capable.
+  for (let i = 0; i < 3; i++) ext = recordExtractionRecall(ext, 0.4, { at: `w${i}` });
+  assert(ext.tier === 'capable' && ext.capableRuns === 1, `promoted with capableRuns=1 (got ${ext.capableRuns})`);
+  assert(!shouldFlagForRecogniser(ext), 'not flagged immediately on promotion');
+  while ((ext.capableRuns || 0) < _thresholds.RECOGNISER_FLAG_RUNS) ext = recordExtractionRecall(ext, 0.5, { at: 'x' });
+  assert(shouldFlagForRecogniser(ext), `flagged at ${_thresholds.RECOGNISER_FLAG_RUNS} capable runs`);
+  // Caller stamps recogniserFlaggedAt → never re-flags.
+  ext = { ...ext, recogniserFlaggedAt: 'stamped' };
+  ext = recordExtractionRecall(ext, 0.5, { at: 'y' });
+  assert(!shouldFlagForRecogniser(ext), 'stamp survives further runs — fires once');
+  assert(ext.recogniserFlaggedAt === 'stamped', 'recogniserFlaggedAt preserved through folds');
+}
+
+console.log('\nTest 10: fast-tier houses never flag for a recogniser');
+{
+  let ext = null;
+  for (let i = 0; i < 10; i++) ext = recordExtractionRecall(ext, 0.95, { at: `h${i}` });
+  assert(!shouldFlagForRecogniser(ext), 'healthy fast house never flags');
+  assert(ext.capableRuns === 0, 'capableRuns stays 0 on the fast tier');
 }
 
 console.log(`\n${'═'.repeat(50)}`);

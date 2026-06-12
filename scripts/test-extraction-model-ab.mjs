@@ -26,6 +26,7 @@
 
 import { HOUSE_ROOTS } from '../lib/houses.js';
 import { houseRecogniser } from '../lib/scraper/house-recognisers.js';
+import { resolveRecallSentinel } from '../lib/scraper/recall-sentinels.js';
 import { scrapeAllPagesWithCrawlee } from '../lib/scraper/crawlee-render.js';
 import { extractLotsWithAI } from '../lib/scraper/extraction.js';
 import { recallRatio } from '../lib/scraper/engine-router.js';
@@ -48,19 +49,10 @@ const DEFAULT_MODELS = [
   'nvidia/llama-3.1-nemotron-ultra-253b-v1:free', // Nemotron Ultra (free)
 ];
 
-// ── Sentinel resolution. Mirrors lib/analysis.js::detectPlatformSentinel +
-// houseRecogniser so the harness can score absolute recall without exporting
-// internals from the big analysis.js. No sentinel → recall is reported as n/a
-// and models are ranked on lot count (still a valid head-to-head).
+// ── Sentinel resolution — the shared map + ladder (universal coverage as of
+// 2026-06-12, so every house scores absolute recall here).
 function resolveSentinel(slug) {
-  const rec = houseRecogniser(slug);
-  if (rec?.recallSentinelPattern) return rec.recallSentinelPattern;
-  const root = HOUSE_ROOTS[slug] || '';
-  if (root.includes('eigonlineauctions.com') || root.includes('eigpropertyauctions.co.uk') || root.includes('auctionhouse.co.uk')) {
-    return /\/lot\/(?:details|redirect)\/(\d+)/g;
-  }
-  if (root.includes('bambooauctions.com')) return /\/property\/([a-z0-9_-]{6,})/gi;
-  return null;
+  return resolveRecallSentinel(slug, houseRecogniser(slug)?.recallSentinelPattern);
 }
 
 function countSentinelIds(pages, pattern) {

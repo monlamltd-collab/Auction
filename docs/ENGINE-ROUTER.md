@@ -324,3 +324,65 @@ Needs only `OPENROUTER_API_KEY` + Chromium. Use it to pick the right
 | `EXTRACTION_RECALL_EWMA_ALPHA` | `0.4` | Weight on the latest recall in the EWMA. |
 | `EXTRACTION_TIER_ALLOW_DEMOTE` | `false` | Allow auto-demotion back to `fast` (off = sticky-up). |
 | `OPENROUTER_CAPABLE_MODEL` | `google/gemini-2.5-pro` | The model the `capable` tier routes to (can be free). |
+
+---
+
+## Deterministic resilience layer (2026-06-12)
+
+Three mechanisms that reduce reliance on model strength and make presentation
+changes loud instead of silent — built deterministic-first on the owner's
+direction ("I would rather a deterministic fix on each house which enables
+weaker models to perform better").
+
+### Universal recall sentinels — `lib/scraper/recall-sentinels.js`
+The sentinel map moved out of `lib/analysis.js` into its own module, and
+coverage is now **universal: all 212 houses resolve to a sentinel** (explicit
+entry, platform auto-detection — EIG / AH UK / Bamboo / iamSold — or recogniser
+pattern). The 19 former blind spots were closed with patterns verified against
+production `lots.url` samples where lots exist, and domain-scoped keyword
+fallbacks otherwise. `tests/test-sentinel-coverage.js` fails the build if a new
+house ships without a sentinel or a documented `KNOWN_SENTINEL_GAPS` reason —
+a partial recall loss can no longer be silent anywhere.
+
+### Structure fingerprint — `lib/scraper/structure-fingerprint.js`
+Proactive presentation-change detection. Every successful Crawlee page-1
+render is reduced to a structural fingerprint (top-40 CSS class vocabulary +
+counts of links/images/£-tokens/postcodes/sentinel ids) stored in
+`engine_stats._fingerprint`. A step-change vs the previous run — vocabulary
+Jaccard < `STRUCTURE_VOCAB_DRIFT` (0.40) or a signal collapsing to zero on a
+still-substantial page — fires a `structure_drift` alert naming what moved
+(template rebuilt / prices vanished / lot-URL shape changed), BEFORE an
+extraction run quietly under-recalls. Routine lot churn on the same template
+scores ~1.0 similarity and never alerts. The new shape becomes the baseline
+after one alert.
+
+### Free-model capable tier + the needs_recogniser backlog
+`OPENROUTER_FAST_MODEL` / `OPENROUTER_CAPABLE_MODEL` now accept a
+**comma-separated chain** — OpenRouter tries each in order inside one request,
+so a free strong model can sit first with a proven paid model as the
+in-request fallback:
+
+```
+OPENROUTER_CAPABLE_MODEL="nvidia/llama-3.1-nemotron-ultra-253b-v1:free,google/gemini-2.5-pro"
+```
+
+(confirm the exact `:free` slug at openrouter.ai/models — the A/B harness
+reports a bad slug as a per-model error). Cost rows in `ai_usage` attribute to
+the model that actually **served** the call. The default stays pure
+`google/gemini-2.5-pro` until the operator opts in.
+
+The capable tier remains a **stopgap, not the fix**: when a house has needed it
+for `EXTRACTION_RECOGNISER_FLAG_RUNS` (5) consecutive runs, a one-shot
+`needs_recogniser` alert fires — that house has earned a deterministic
+per-house markdown recogniser (the Pattinson/John Pye pattern) so the cheap
+model hits full recall on merit. The flag is stamped in
+`engine_stats._extraction.recogniserFlaggedAt` and never re-fires for the same
+promotion episode.
+
+### Placeholder-URL fabrication guard — `lib/scraper/validation.js`
+`isPlaceholderUrl()` rejects any lot whose detail URL sits on an RFC 2606
+reserved domain (`example.com` etc.) at BOTH extraction time and persist time,
+and nulls placeholder image URLs. Deterministic tell — 174 fabricated lots
+with realistic addresses (which defeated the address-grounding guard) were
+quarantined from production on 2026-06-12, plus 138 fake `image_url`s nulled
+on otherwise-real lots.
