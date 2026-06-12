@@ -424,6 +424,14 @@ console.log('\nderivePriceStatus: priority order + edge cases');
   // guide: the common case.
   assert(derivePriceStatus({ price: 195000 }) === 'guide', 'price only → guide');
 
+  // Nil Reserve — a real, positive state (sells to highest bid), only when
+  // there's no numeric guide. The pugh false-alarm class (2026-06-12).
+  assert(derivePriceStatus({ priceText: 'Nil Reserve' }) === 'nil_reserve', 'Nil Reserve → nil_reserve');
+  assert(derivePriceStatus({ priceText: 'No Reserve' }) === 'nil_reserve', 'No Reserve → nil_reserve');
+  assert(derivePriceStatus({ priceText: 'Unreserved' }) === 'nil_reserve', 'Unreserved → nil_reserve');
+  assert(derivePriceStatus({ price: 80000, priceText: 'Guide £80,000, Nil Reserve' }) === 'guide',
+    'a guide price with Nil Reserve keeps guide (number wins; badge derived separately)');
+
   // unknown: genuinely missing.
   assert(derivePriceStatus({}) === 'unknown', 'empty lot → unknown');
   assert(derivePriceStatus(null) === 'unknown', 'null lot → unknown (defensive)');
@@ -450,6 +458,19 @@ console.log('\ncomputeLotQuality: priceStatus-aware scoring');
   assert(soldQ.score === guideQ.score,
     'priceStatus=sold scores same as guide (status, not failure)');
 
+  // Nil Reserve — full credit (a complete, correct, positive state), tagged
+  // 'nil_reserve', NEVER 'no_price'. This is the scanner fix for the pugh
+  // false-alarm class.
+  const nilQ = computeLotQuality({ priceStatus: 'nil_reserve', address: '12 High St', postcode: 'SW1A 1AA' });
+  assert(nilQ.issues.includes('nil_reserve'), 'priceStatus=nil_reserve → nil_reserve code');
+  assert(!nilQ.issues.includes('no_price'), 'priceStatus=nil_reserve NEVER also gets no_price');
+  assert(nilQ.score === computeLotQuality({ price: 250000, address: '12 High St', postcode: 'SW1A 1AA' }).score,
+    'nil_reserve scores same as a real guide (full price credit)');
+  // And via the priceText fallback for lots scraped before price_status existed.
+  const nilFallback = computeLotQuality({ priceText: 'Nil Reserve', address: '12 High St' });
+  assert(nilFallback.issues.includes('nil_reserve') && !nilFallback.issues.includes('no_price'),
+    'fallback: priceText="Nil Reserve" → nil_reserve, not no_price');
+
   // Fallback: a lot without priceStatus still gets POA half-credit via the
   // priceText regex — backwards-compatible for old lots.
   const legacy = computeLotQuality({ priceText: 'POA', address: '12 High St' });
@@ -459,8 +480,10 @@ console.log('\ncomputeLotQuality: priceStatus-aware scoring');
   // ISSUE_CODES extended with the new vocabulary.
   assert(ISSUE_CODES.includes('tba_price') &&
          ISSUE_CODES.includes('sold_price') &&
-         ISSUE_CODES.includes('withdrawn_price'),
-    'ISSUE_CODES extended with status-class price codes');
+         ISSUE_CODES.includes('withdrawn_price') &&
+         ISSUE_CODES.includes('nil_reserve') &&
+         ISSUE_CODES.includes('starting_bid'),
+    'ISSUE_CODES extended with status-class price codes (incl. nil_reserve, starting_bid)');
 }
 
 console.log('\ncomputeBatchCoverage: price denominator excludes intentional withholds');
@@ -477,16 +500,18 @@ console.log('\ncomputeBatchCoverage: price denominator excludes intentional with
   assert(cov.price_pct === 100, `POA-only gap → price_pct=100% (got ${cov.price_pct})`);
   assert(cov.total_lots === 4, 'total_lots still counts everything (POA included in batch size)');
 
-  // sold/withdrawn also denominator-out.
+  // sold/withdrawn/nil_reserve/starting_bid also denominator-out.
   const mixed = [
     { price: 100000, priceStatus: 'guide' },
     { priceStatus: 'sold', soldPrice: 99000 },
     { priceStatus: 'withdrawn' },
     { priceStatus: 'tba' },
+    { priceStatus: 'nil_reserve' },
+    { priceStatus: 'starting_bid' },
   ];
   const mixedCov = computeBatchCoverage(mixed);
   assert(mixedCov.price_pct === 100,
-    'all non-guide statuses denominator-out → price_pct=100%');
+    'all non-guide statuses (incl. nil_reserve, starting_bid) denominator-out → price_pct=100%');
 
   // A real gap (priceStatus='unknown' or null) DOES count.
   const realGap = [

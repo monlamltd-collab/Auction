@@ -3348,6 +3348,13 @@ function card(l){
   if (l.priceText && !l.price) guideText = l.priceText;
   else if (l.price) guideText = '£' + l.price.toLocaleString();
 
+  // Nil Reserve — a positive signal (sells to the highest bid). Show it as a
+  // badge, not as a "no price" gap. Drives off the structured priceStatus,
+  // falling back to the priceText for lots scraped before it was populated.
+  const isNilReserve = (l.priceStatus === 'nil_reserve') ||
+    (!l.price && /\b(?:nil|no|without|zero)\s*reserve|unreserved\b/i.test(l.priceText || ''));
+  if (isNilReserve) guideText = 'Nil Reserve';
+
   // Yield
   const showYield = l.estGrossYield && !l.blurred && !l.anonGated && !l._yieldEstimateWarning;
   const yieldText = showYield ? l.estGrossYield.toFixed(1) : null;
@@ -3451,8 +3458,10 @@ function card(l){
         : '<div class="cell yield"><span class="eyebrow">GROSS YIELD</span><span class="num tabular" style="color:var(--muted-2)">—</span></div>');
   const statsHtml = '<div class="lcv2-stats">' +
     '<div class="cell guide">' +
-      '<span class="eyebrow">GUIDE</span>' +
-      '<span class="num tabular">' + esc(guideText) + '</span>' +
+      '<span class="eyebrow">' + (isNilReserve ? 'RESERVE' : 'GUIDE') + '</span>' +
+      (isNilReserve
+        ? '<span class="lcv2-nil-reserve" title="No reserve — sells to the highest bid">Nil Reserve</span>'
+        : '<span class="num tabular">' + esc(guideText) + '</span>') +
     '</div>' +
     yieldCellHtml +
     (scoreNum != null
@@ -4668,6 +4677,10 @@ function buildExpV2Header(lot, dealStackHtmlRef) {
   let guideText = 'TBA';
   if (lot.priceText && !lot.price) guideText = lot.priceText;
   else if (lot.price) guideText = '£' + lot.price.toLocaleString();
+  if ((lot.priceStatus === 'nil_reserve') ||
+      (!lot.price && /\b(?:nil|no|without|zero)\s*reserve|unreserved\b/i.test(lot.priceText || ''))) {
+    guideText = 'Nil Reserve';
+  }
 
   let belowMktHtml = '';
   if (lot.belowMarket != null && lot.price) {
