@@ -5,6 +5,7 @@ import { log } from '../lib/logging.js';
 import { HOUSE_ROOTS, HOUSE_DISPLAY_NAMES } from '../lib/houses.js';
 import { HEADERS } from '../lib/config.js';
 import { normaliseUrl } from '../lib/utils.js';
+import { safeFetch } from '../lib/security.js';
 import { FALLBACK_CALENDAR, getAuctionCalendar } from '../lib/calendar.js';
 import { callAI } from '../lib/ai-provider.js';
 import { healBrokenHouse, getHealingState, clearHealingCooldown } from '../lib/analysis.js';
@@ -184,7 +185,10 @@ router.post('/api/admin/discover-catalogues', requireAdmin, async (req, res) => 
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 15000);
-      const resp = await fetch(rootUrl, { headers: HEADERS, signal: controller.signal });
+      // safeFetch validates the host + every redirect hop. rootUrl is normally
+      // from the HOUSE_ROOTS registry, but self-healing can rewrite it from a
+      // web-search result, so treat it as untrusted here (SSRF defence-in-depth).
+      const resp = await safeFetch(rootUrl, { headers: HEADERS, signal: controller.signal });
       clearTimeout(timeout);
       if (!resp.ok) { results.push({ house: slug, error: `HTTP ${resp.status}` }); continue; }
       const html = await resp.text();

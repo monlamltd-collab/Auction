@@ -17,14 +17,21 @@
 // 3.0.0 — lot_events migration completion (2026-06-04): dropped sold_price +
 // price_status from lots (archived lot_history/lot_status_history → *_archive;
 // historical sold/price-status data lives in lot_events + the archives).
-export const LOT_SCHEMA_VERSION = '3.0.0';
+// 3.1.0 — price_status reinstated as a LIVE price-intent column (2026-06-12).
+// Distinct from the historical sold-price-status dropped in 3.0.0: this is the
+// current listing's pricing intent (guide / poa / tba / starting_bid /
+// nil_reserve / unknown), populated on every upsert by derivePriceStatus. It
+// drives price-coverage gap accounting (nil_reserve & co. are NOT gaps) and the
+// Nil Reserve badge, and lets the anomaly scanner read intent instead of
+// guessing from a null price. Additive.
+export const LOT_SCHEMA_VERSION = '3.1.0';
 
 // Snake-case DB columns the app's standard lot SELECT pulls.
 // Mirrors LOT_COLUMNS in lib/types/lot.js. Additive changes (new columns)
 // require a version bump; removals/renames fail the CI gate outright.
 export const LOT_COLUMNS_PINNED = Object.freeze([
   'house', 'auctioneer', 'lot_number', 'url', 'catalogue_url', 'address',
-  'postcode', 'lat', 'lng', 'price', 'price_text', 'prop_type',
+  'postcode', 'lat', 'lng', 'price', 'price_text', 'price_status', 'prop_type',
   'beds', 'tenure', 'lease_length', 'sqft', 'condition', 'image_url', 'images',
   'floor_plans', 'bullets', 'units', 'auction_date', 'status',
   'epc_rating', 'epc_score', 'floor_area_sqm', 'flood_zone', 'flood_risk',
@@ -41,7 +48,7 @@ export const LOT_COLUMNS_PINNED = Object.freeze([
 // back-compat aliases over the renamed/derived columns.
 export const LOT_APP_FIELDS_PINNED = Object.freeze([
   'lot', 'address', 'postcode', 'url',
-  'price', 'priceText',
+  'price', 'priceText', 'priceStatus',
   'propType', 'beds', 'tenure', 'leaseLength', 'sqft', 'condition',
   'imageUrl', 'images', 'floorPlans', 'floorPlanUrl', 'bullets', 'units',
   'status',

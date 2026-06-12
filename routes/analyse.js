@@ -2,7 +2,7 @@
 import { Router } from 'express';
 import { supabase } from '../lib/supabase.js';
 import { validateUserFromReq, safeCompare, getClientIP } from '../lib/auth.js';
-import { validateUrl } from '../lib/security.js';
+import { validateUrl, safeFetch } from '../lib/security.js';
 import { log, sseWrite } from '../lib/logging.js';
 import { resolveEffectiveTier, getCacheTTL, RATE_LIMIT_PER_DAY, FREE_SCAN_LIMIT, stripAIFields, HEADERS } from '../lib/config.js';
 import { getAuctionDateForUrl } from '../lib/calendar.js';
@@ -20,6 +20,7 @@ import { extractCatalogueListing, extractLotDetailFirecrawl } from '../lib/pipel
 import { resolveEngineForHouse } from '../lib/pipeline/engine-decision.js';
 import { ENGINES } from '../lib/scraper/engine-router.js';
 import { renderAndExtractWithCrawlee } from '../lib/pipeline/crawlee-extract.js';
+import { getExtractionTier } from '../lib/scraper/extraction-tier.js';
 import { houseRecogniser } from '../lib/scraper/house-recognisers.js';
 import { enrichLots } from '../lib/enrichment.js';
 import { enrichLotsWithFundability } from '../lib/fundability.js';
@@ -167,7 +168,10 @@ router.post('/api/analyse', async (req, res) => {
       try {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 10000);
-        const testResp = await fetch(url, { headers: HEADERS, signal: controller.signal });
+        // safeFetch re-validates every redirect hop — the initial validateUrl
+        // (above) only checked the first host, so a 302 to an internal address
+        // would otherwise slip through native fetch's redirect-following.
+        const testResp = await safeFetch(url, { headers: HEADERS, signal: controller.signal });
         clearTimeout(timeout);
         if (!testResp.ok) {
           sseWrite(res, 'error', { message: `That URL returned an error (${testResp.status}). It may not be a catalogue page, or the catalogue hasn't been published yet.` });
@@ -211,7 +215,7 @@ router.post('/api/analyse', async (req, res) => {
       try {
         const { data } = await supabase
           .from('house_skills')
-          .select('preferred_engine, engine_locked')
+          .select('preferred_engine, engine_locked, engine_stats')
           .eq('slug', house)
           .maybeSingle();
         engineSkill = data || null;
@@ -231,6 +235,7 @@ router.post('/api/analyse', async (req, res) => {
             maxPages: Math.min(rec?.maxPages || 25, 25),
             recogniseFromMarkdown: rec?.recogniseFromMarkdown,
             recallSentinelPattern: rec?.recallSentinelPattern,
+            tier: getExtractionTier(engineSkill, house),
             onExtract,
           });
           rawLots = cr.lots || [];

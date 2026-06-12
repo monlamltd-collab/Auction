@@ -2831,8 +2831,9 @@ function renderLots(){
     }
     // House filter
     if(selectedHouses.length&&!selectedHouses.includes(l._house)) return false;
-    // Exclude POA
-    if(fExcludePOA&&!(l.price>0)) return false;
+    // Exclude POA — but never hide Nil Reserve lots: no reserve is a positive
+    // signal (sells to the highest bid), not a withheld price.
+    if(fExcludePOA&&!(l.price>0)&&!isNilReserveLot(l)) return false;
     // Lookahead
     if(houseAllowed&&l._auctionDate&&l._house){
       if(!houseAllowed[l._house]?.has(l._auctionDate)) return false;
@@ -2999,7 +3000,7 @@ function renderLots(){
     const searchQ=$('smartQuery')?.value.trim()||'';
     out.innerHTML='<div style="text-align:center;padding:40px 20px;color:var(--text-muted)">'+
       '<div style="font-size:1.5rem;margin-bottom:12px">No lots found</div>'+
-      (searchQ?'<p>No results for \''+searchQ.replace(/'/g,'&#39;')+'\'. Try different search terms.</p>':'<p>Try adjusting your filters or search terms.</p>')+
+      (searchQ?'<p>No results for \''+esc(searchQ)+'\'. Try different search terms.</p>':'<p>Try adjusting your filters or search terms.</p>')+
       '</div>';
     return;
   }
@@ -3296,6 +3297,17 @@ function formatAuctionDateShort(iso) {
   return d + ' ' + months[m];
 }
 
+// Nil Reserve detector — drives the badge and the exclude-POA exemption.
+// Structured priceStatus when the feed carries it; priceText fallback for
+// cached blobs scraped before price_status was populated. Literal twin of
+// NIL_RESERVE_RE in lib/quality/lot-quality.js — keep them aligned.
+var NIL_RESERVE_RE = /\b(?:nil|no|without|zero)[\s-]*reserve|unreserved\b/i;
+function isNilReserveLot(l) {
+  if (!l) return false;
+  if (l.priceStatus === 'nil_reserve') return true;
+  return !l.price && NIL_RESERVE_RE.test(l.priceText || '');
+}
+
 function statusForStrip(l) {
   // Map lot.status to the editorial strip's dot colour + label.
   const s = (l.status || 'live').toLowerCase();
@@ -3347,6 +3359,11 @@ function card(l){
   let guideText = 'POA';
   if (l.priceText && !l.price) guideText = l.priceText;
   else if (l.price) guideText = '£' + l.price.toLocaleString();
+
+  // Nil Reserve — a positive signal (sells to the highest bid). Show it as a
+  // badge, not as a "no price" gap.
+  const isNilReserve = isNilReserveLot(l);
+  if (isNilReserve) guideText = 'Nil Reserve';
 
   // Yield
   const showYield = l.estGrossYield && !l.blurred && !l.anonGated && !l._yieldEstimateWarning;
@@ -3451,8 +3468,10 @@ function card(l){
         : '<div class="cell yield"><span class="eyebrow">GROSS YIELD</span><span class="num tabular" style="color:var(--muted-2)">—</span></div>');
   const statsHtml = '<div class="lcv2-stats">' +
     '<div class="cell guide">' +
-      '<span class="eyebrow">GUIDE</span>' +
-      '<span class="num tabular">' + esc(guideText) + '</span>' +
+      '<span class="eyebrow">' + (isNilReserve ? 'RESERVE' : 'GUIDE') + '</span>' +
+      (isNilReserve
+        ? '<span class="lcv2-nil-reserve" title="No reserve — sells to the highest bid">Nil Reserve</span>'
+        : '<span class="num tabular">' + esc(guideText) + '</span>') +
     '</div>' +
     yieldCellHtml +
     (scoreNum != null
@@ -4668,6 +4687,7 @@ function buildExpV2Header(lot, dealStackHtmlRef) {
   let guideText = 'TBA';
   if (lot.priceText && !lot.price) guideText = lot.priceText;
   else if (lot.price) guideText = '£' + lot.price.toLocaleString();
+  if (isNilReserveLot(lot)) guideText = 'Nil Reserve';
 
   let belowMktHtml = '';
   if (lot.belowMarket != null && lot.price) {

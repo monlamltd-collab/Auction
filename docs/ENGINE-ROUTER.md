@@ -276,3 +276,113 @@ it runs anywhere with open egress (it does NOT run in the Claude dev container,
 whose network policy blocks auction domains — `x-deny-reason: host_not_allowed`).
 `CRAWLEE_IGNORE_CERT_ERRORS=true` is a dev-only knob for TLS-intercepting
 proxies; never set it in production.
+
+---
+
+## Extraction-model tier auto-promotion (2026-06-12)
+
+Engine choice picks *how the page is fetched*; this picks *which model reads
+it*. The Crawlee+Gemini path runs Flash-Lite (`fast` tier) for known houses —
+the right default for cooperative, card-structured platforms. But the
+`recall_diagnostic` history showed a long tail of dense houses where Flash-Lite
+loses 30–40% of lots. Cost is a non-issue (extraction spend is single-digit
+dollars/month, and free strong models exist on OpenRouter), so the product
+ethos — recall is sacred — says route the weak houses to a stronger model,
+automatically.
+
+**The policy** (`lib/scraper/extraction-tier.js`, pure + tested) keeps a rolling
+EWMA of each house's extraction recall in `house_skills.engine_stats._extraction`
+— folded in alongside the engine-router stats by the same `foldCrawleeStats`
+path, so there's no new column and no parallel system. When a `fast` house's
+EWMA settles below `EXTRACTION_WEAK_RECALL` (0.70) over at least
+`EXTRACTION_TIER_MIN_RUNS` (3) runs, it's promoted to the `capable` tier; the
+next Crawlee/on-demand run reads `getExtractionTier()` and passes `tier:'capable'`
+into `extractLotsWithAI`, which routes to the stronger model. Promotion is
+**sticky-up** (a high recall measured *at* `capable` doesn't prove `fast` would
+hold, so we don't auto-demote and re-drop lots); set
+`EXTRACTION_TIER_ALLOW_DEMOTE=true` to enable hysteresis demotion above
+`EXTRACTION_STRONG_RECALL` (0.90). `engine_locked` and a fresh A/B always win.
+
+**Which model is `capable`?** Whatever `OPENROUTER_CAPABLE_MODEL` points at
+(default `google/gemini-2.5-pro`). Because OpenRouter bills the underlying model,
+this can be a *free* strong model (e.g. Nemotron Ultra) — a recall uplift at zero
+marginal cost.
+
+**Measure before you switch.** `scripts/test-extraction-model-ab.mjs
+<house|url> [--models a,b,c]` renders the catalogue once, runs the real
+extraction prompt against each model (Flash-Lite vs Flash vs Pro vs the free
+models), and reports lots, recall, per-field completeness, hallucination blocks,
+latency and tokens — then recommends the best by recall → completeness → cost.
+Needs only `OPENROUTER_API_KEY` + Chromium. Use it to pick the right
+`OPENROUTER_CAPABLE_MODEL` rather than guessing.
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `EXTRACTION_WEAK_RECALL` | `0.70` | Below this rolling recall, promote `fast`→`capable`. |
+| `EXTRACTION_STRONG_RECALL` | `0.90` | Demote threshold (only when demotion is enabled). |
+| `EXTRACTION_TIER_MIN_RUNS` | `3` | Min recorded runs before the policy moves a house. |
+| `EXTRACTION_RECALL_EWMA_ALPHA` | `0.4` | Weight on the latest recall in the EWMA. |
+| `EXTRACTION_TIER_ALLOW_DEMOTE` | `false` | Allow auto-demotion back to `fast` (off = sticky-up). |
+| `OPENROUTER_CAPABLE_MODEL` | `google/gemini-2.5-pro` | The model the `capable` tier routes to (can be free). |
+
+---
+
+## Deterministic resilience layer (2026-06-12)
+
+Three mechanisms that reduce reliance on model strength and make presentation
+changes loud instead of silent — built deterministic-first on the owner's
+direction ("I would rather a deterministic fix on each house which enables
+weaker models to perform better").
+
+### Universal recall sentinels — `lib/scraper/recall-sentinels.js`
+The sentinel map moved out of `lib/analysis.js` into its own module, and
+coverage is now **universal: all 212 houses resolve to a sentinel** (explicit
+entry, platform auto-detection — EIG / AH UK / Bamboo / iamSold — or recogniser
+pattern). The 19 former blind spots were closed with patterns verified against
+production `lots.url` samples where lots exist, and domain-scoped keyword
+fallbacks otherwise. `tests/test-sentinel-coverage.js` fails the build if a new
+house ships without a sentinel or a documented `KNOWN_SENTINEL_GAPS` reason —
+a partial recall loss can no longer be silent anywhere.
+
+### Structure fingerprint — `lib/scraper/structure-fingerprint.js`
+Proactive presentation-change detection. Every successful Crawlee page-1
+render is reduced to a structural fingerprint (top-40 CSS class vocabulary +
+counts of links/images/£-tokens/postcodes/sentinel ids) stored in
+`engine_stats._fingerprint`. A step-change vs the previous run — vocabulary
+Jaccard < `STRUCTURE_VOCAB_DRIFT` (0.40) or a signal collapsing to zero on a
+still-substantial page — fires a `structure_drift` alert naming what moved
+(template rebuilt / prices vanished / lot-URL shape changed), BEFORE an
+extraction run quietly under-recalls. Routine lot churn on the same template
+scores ~1.0 similarity and never alerts. The new shape becomes the baseline
+after one alert.
+
+### Free-model capable tier + the needs_recogniser backlog
+`OPENROUTER_FAST_MODEL` / `OPENROUTER_CAPABLE_MODEL` now accept a
+**comma-separated chain** — OpenRouter tries each in order inside one request,
+so a free strong model can sit first with a proven paid model as the
+in-request fallback:
+
+```
+OPENROUTER_CAPABLE_MODEL="nvidia/llama-3.1-nemotron-ultra-253b-v1:free,google/gemini-2.5-pro"
+```
+
+(confirm the exact `:free` slug at openrouter.ai/models — the A/B harness
+reports a bad slug as a per-model error). Cost rows in `ai_usage` attribute to
+the model that actually **served** the call. The default stays pure
+`google/gemini-2.5-pro` until the operator opts in.
+
+The capable tier remains a **stopgap, not the fix**: when a house has needed it
+for `EXTRACTION_RECOGNISER_FLAG_RUNS` (5) consecutive runs, a one-shot
+`needs_recogniser` alert fires — that house has earned a deterministic
+per-house markdown recogniser (the Pattinson/John Pye pattern) so the cheap
+model hits full recall on merit. The flag is stamped in
+`engine_stats._extraction.recogniserFlaggedAt` and never re-fires for the same
+promotion episode.
+
+### Placeholder-URL fabrication guard — `lib/scraper/validation.js`
+`isPlaceholderUrl()` rejects any lot whose detail URL sits on an RFC 2606
+reserved domain (`example.com` etc.) at BOTH extraction time and persist time,
+and nulls placeholder image URLs. Deterministic tell — 174 fabricated lots
+with realistic addresses (which defeated the address-grounding guard) were
+quarantined from production on 2026-06-12, plus 138 fake `image_url`s nulled
+on otherwise-real lots.

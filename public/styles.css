@@ -3531,3 +3531,5 @@ footer p a {
 .lcv2-fresh{font-size:.68rem;letter-spacing:.02em;white-space:nowrap}
 .lcv2-fresh.ok{color:var(--text3)}
 .lcv2-fresh.warn{color:var(--accent-warn)}
+/* Nil Reserve — a positive signal (sells to the highest bid), not a price gap */
+.lcv2-nil-reserve{display:inline-block;font-family:'Sora',sans-serif;font-weight:600;font-size:.82rem;line-height:1.2;color:var(--green);background:var(--green-light);border:1px solid var(--green);border-radius:6px;padding:1px 7px;white-space:nowrap}

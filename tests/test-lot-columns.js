@@ -45,6 +45,7 @@ const GATE = {
   address: 'displayed',
   postcode: 'displayed',
   price_text: 'displayed',
+  price_status: 'displayed', // drives the Nil Reserve badge + price-coverage gap accounting
   lease_length: 'displayed',
   image_url: 'displayed',
   images: 'displayed',
@@ -89,7 +90,9 @@ const BANNED = new Set([
   'epc_floor_area_sqft', 'epc_floor_area_sqm', 'epc_works_cost_mid',
   'epc_works_summary', 'os_classification', 'extracted_with', 'scraped_with',
   'quality_score', 'quality_issues', 'street_sales', 'street_avg',
-  'floor_plan_url', 'sold_price', 'price_status',
+  'floor_plan_url', 'sold_price',
+  // price_status was dropped in the 3.0.0 lean rebuild but REINSTATED in 3.1.0
+  // as a live price-intent column (2026-06-12) — see contracts/lot.contract.js.
 ]);
 
 const VALID_REASONS = new Set(['displayed', 'scoring', 'system']);
