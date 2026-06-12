@@ -350,6 +350,7 @@ const _scheduleState = {
   lastCuratorCycle: 0,
   // Tier 17 (daily curator digest — daily, sends approved picks to subscribers):
   lastDailyDigest: 0,
+  lastFreshnessDigest: 0,
   // Tier 18 (same-day status sweep — daily 20:00 UK, today's auctions only):
   lastSameDaySweep: 0,
   // Tier 19 (unsold-lot alerts — daily 08:10 UK; endpoint existed since April
@@ -534,6 +535,19 @@ function scheduleTick() {
     sweepPostAuctionStatuses()
       .then(r => console.log(`SCHEDULE post-auction sweep: eligible=${r.eligible} fetched=${r.fetched} updated=${r.statusUpdated} unchanged=${r.noChange} dead=${r.urlDead} failed=${r.fetchFailed}`))
       .catch(e => console.error('SCHEDULE post-auction sweep failed:', e.message));
+  }
+
+  // Tier 7b: daily catalogue-freshness digest — 08:00 UK, after the overnight
+  // full pass (~02:00) and post-auction sweep (05:00) so it reports on them.
+  // Replaces the operator's manual morning SQL: freshness buckets, engine
+  // vitals (extraction calls / failures / hallucinations blocked / crawler
+  // restarts) and the post-auction backlog, to Telegram.
+  if (hour === 8 && minute < 5 && now - _scheduleState.lastFreshnessDigest > 6 * 60 * 60 * 1000) {
+    _scheduleState.lastFreshnessDigest = now;
+    console.log('SCHEDULE: 08:00 UK — sending freshness digest');
+    import('./lib/pipeline/freshness-digest.js')
+      .then(({ runFreshnessDigest }) => runFreshnessDigest(supabase))
+      .catch(e => console.error('SCHEDULE freshness digest failed:', e.message));
   }
 
   // Tier 8: HMLR bulk-dataset refresh — once a month on the 7th at 02:00 UK.

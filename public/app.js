@@ -3500,6 +3500,20 @@ function card(l){
   const blurredClass = l.blurred ? ' blurred' : '';
   const blurTextAttr = l.blurred ? ' data-blur-text="Sign in free for full details"' : '';
 
+  // Freshness badge — user-visible evidence the data is live. last_seen_at is
+  // stamped on every successful re-scrape, so "Updated today" means this lot
+  // was re-verified against the auction house within 24h; an amber "Checked
+  // Nd ago" is honest about staleness instead of hiding it.
+  let freshHtml = '';
+  if (l._lastSeenAt) {
+    const ageDays = (Date.now() - Date.parse(l._lastSeenAt)) / 86400000;
+    if (isFinite(ageDays) && ageDays >= 0) {
+      if (ageDays < 1) freshHtml = '<span class="lcv2-fresh ok" title="Re-verified within the last 24 hours">· Updated today</span>';
+      else if (ageDays < 7) freshHtml = '<span class="lcv2-fresh ok" title="Re-verified ' + Math.round(ageDays) + ' day(s) ago">· Updated ' + Math.round(ageDays) + 'd ago</span>';
+      else freshHtml = '<span class="lcv2-fresh warn" title="Awaiting re-verification">· Checked ' + Math.round(ageDays) + 'd ago</span>';
+    }
+  }
+
   return '<article class="lot-card-v2' + blurredClass + '"' + blurTextAttr +
     ' id="lot-' + idx + '" tabindex="0" role="article"' +
     ' aria-label="Lot ' + esc(l.lot || '') + ' — ' + esc(addr) + '"' +
@@ -3512,6 +3526,7 @@ function card(l){
         '<span class="dot ' + status.dot + '"></span>' +
         '<span>' + status.label + '</span>' +
         (dateShort ? '<span class="date">· ' + dateShort + '</span>' : '') +
+        freshHtml +
       '</span>' +
     '</div>' +
     heroHtml +
