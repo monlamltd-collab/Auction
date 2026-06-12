@@ -111,6 +111,29 @@ console.log('\nTest 5: turndown reproduces the Firecrawl idioms');
   assert(/\(https:\/\/h\.test\/lot\/5\)/.test(md), 'relative href absolutised');
 }
 
+// ── The fleet image-coverage fix (2026-06-12) ──
+// stripHtml (the old fallback for non-recogniser Crawlee houses) DELETES every
+// <img>, so Gemini never saw an image → fleet coverage fell to ~54% after the
+// Firecrawl→Crawlee switch. Fix: build markdown for EVERY Crawlee page so images
+// (![](src)) reach the extractor, matching what Firecrawl fed Gemini.
+console.log('\nTest 6: non-recogniser house — per-lot images survive into the Gemini input');
+{
+  let capturedPages = null;
+  const renderWithImg = async () => ([{
+    page: 1,
+    html: '<div class="lot-search-result"><img src="https://cdn.test/lot/77.jpg" alt="photo"><p class="grid-address">7 Elm Road, Bristol, BS1 4AA</p><div class="grid-view-guide">£120,000</div><a href="/lot/77">view</a></div>',
+  }]);
+  const captureExtract = async (pages) => { capturedPages = pages; return []; };
+  await renderAndExtractWithCrawlee('https://x.test/cat', 'auctionhouselondon', {
+    recallSentinelPattern: SENTINEL,
+  }, { scrapeAllPagesWithCrawlee: renderWithImg, extractLotsWithAI: captureExtract });
+
+  assert(capturedPages && capturedPages[0].markdown,
+    'a non-recogniser house now gets markdown built (was undefined → stripHtml dropped <img>)');
+  assert(/!\[[^\]]*\]\(https:\/\/cdn\.test\/lot\/77\.jpg\)/.test(capturedPages[0].markdown || ''),
+    'the per-lot image URL is present in the markdown the extractor receives');
+}
+
 console.log(`\n${'═'.repeat(50)}`);
 console.log(`Crawlee recognition tests: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
