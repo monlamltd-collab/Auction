@@ -3526,3 +3526,8 @@ footer p a {
   .exp-lightbox-prev { left: 8px; }
   .exp-lightbox-next { right: 8px; }
 }
+
+/* Freshness badge (lot card strip) — user-visible evidence of live data */
+.lcv2-fresh{font-size:.68rem;letter-spacing:.02em;white-space:nowrap}
+.lcv2-fresh.ok{color:var(--text3)}
+.lcv2-fresh.warn{color:var(--accent-warn)}
