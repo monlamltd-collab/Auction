@@ -26,7 +26,7 @@
 
 import { HOUSE_ROOTS } from '../lib/houses.js';
 import { houseRecogniser } from '../lib/scraper/house-recognisers.js';
-import { resolveRecallSentinel } from '../lib/scraper/recall-sentinels.js';
+import { resolveRecallSentinel, countSentinelIds } from '../lib/scraper/recall-sentinels.js';
 import { scrapeAllPagesWithCrawlee } from '../lib/scraper/crawlee-render.js';
 import { extractLotsWithAI } from '../lib/scraper/extraction.js';
 import { recallRatio } from '../lib/scraper/engine-router.js';
@@ -55,17 +55,6 @@ function resolveSentinel(slug) {
   return resolveRecallSentinel(slug, houseRecogniser(slug)?.recallSentinelPattern);
 }
 
-function countSentinelIds(pages, pattern) {
-  if (!pattern) return 0;
-  const ids = new Set();
-  for (const p of pages) {
-    const src = String(p.markdown || p.html || '')
-      .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
-      .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ');
-    for (const m of src.matchAll(pattern)) { if (m[1]) ids.add(m[1]); }
-  }
-  return ids.size;
-}
 
 function coverage(lots) {
   const n = lots.length || 1;
@@ -163,7 +152,7 @@ async function main() {
   }
 
   const sentinel = resolveSentinel(house);
-  const sentinelIds = countSentinelIds(pages, sentinel);
+  const sentinelIds = countSentinelIds(pages, sentinel, { preferMarkdown: true });
   const totalChars = pages.reduce((s, p) => s + (p.markdown || p.html || '').length, 0);
   console.log(`Rendered ${pages.length} page(s), ${totalChars.toLocaleString()} chars. Sentinel advertises ${sentinelIds || 'n/a'} lot(s).\n`);
 
