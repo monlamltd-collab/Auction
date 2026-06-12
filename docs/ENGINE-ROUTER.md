@@ -276,3 +276,51 @@ it runs anywhere with open egress (it does NOT run in the Claude dev container,
 whose network policy blocks auction domains — `x-deny-reason: host_not_allowed`).
 `CRAWLEE_IGNORE_CERT_ERRORS=true` is a dev-only knob for TLS-intercepting
 proxies; never set it in production.
+
+---
+
+## Extraction-model tier auto-promotion (2026-06-12)
+
+Engine choice picks *how the page is fetched*; this picks *which model reads
+it*. The Crawlee+Gemini path runs Flash-Lite (`fast` tier) for known houses —
+the right default for cooperative, card-structured platforms. But the
+`recall_diagnostic` history showed a long tail of dense houses where Flash-Lite
+loses 30–40% of lots. Cost is a non-issue (extraction spend is single-digit
+dollars/month, and free strong models exist on OpenRouter), so the product
+ethos — recall is sacred — says route the weak houses to a stronger model,
+automatically.
+
+**The policy** (`lib/scraper/extraction-tier.js`, pure + tested) keeps a rolling
+EWMA of each house's extraction recall in `house_skills.engine_stats._extraction`
+— folded in alongside the engine-router stats by the same `foldCrawleeStats`
+path, so there's no new column and no parallel system. When a `fast` house's
+EWMA settles below `EXTRACTION_WEAK_RECALL` (0.70) over at least
+`EXTRACTION_TIER_MIN_RUNS` (3) runs, it's promoted to the `capable` tier; the
+next Crawlee/on-demand run reads `getExtractionTier()` and passes `tier:'capable'`
+into `extractLotsWithAI`, which routes to the stronger model. Promotion is
+**sticky-up** (a high recall measured *at* `capable` doesn't prove `fast` would
+hold, so we don't auto-demote and re-drop lots); set
+`EXTRACTION_TIER_ALLOW_DEMOTE=true` to enable hysteresis demotion above
+`EXTRACTION_STRONG_RECALL` (0.90). `engine_locked` and a fresh A/B always win.
+
+**Which model is `capable`?** Whatever `OPENROUTER_CAPABLE_MODEL` points at
+(default `google/gemini-2.5-pro`). Because OpenRouter bills the underlying model,
+this can be a *free* strong model (e.g. Nemotron Ultra) — a recall uplift at zero
+marginal cost.
+
+**Measure before you switch.** `scripts/test-extraction-model-ab.mjs
+<house|url> [--models a,b,c]` renders the catalogue once, runs the real
+extraction prompt against each model (Flash-Lite vs Flash vs Pro vs the free
+models), and reports lots, recall, per-field completeness, hallucination blocks,
+latency and tokens — then recommends the best by recall → completeness → cost.
+Needs only `OPENROUTER_API_KEY` + Chromium. Use it to pick the right
+`OPENROUTER_CAPABLE_MODEL` rather than guessing.
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `EXTRACTION_WEAK_RECALL` | `0.70` | Below this rolling recall, promote `fast`→`capable`. |
+| `EXTRACTION_STRONG_RECALL` | `0.90` | Demote threshold (only when demotion is enabled). |
+| `EXTRACTION_TIER_MIN_RUNS` | `3` | Min recorded runs before the policy moves a house. |
+| `EXTRACTION_RECALL_EWMA_ALPHA` | `0.4` | Weight on the latest recall in the EWMA. |
+| `EXTRACTION_TIER_ALLOW_DEMOTE` | `false` | Allow auto-demotion back to `fast` (off = sticky-up). |
+| `OPENROUTER_CAPABLE_MODEL` | `google/gemini-2.5-pro` | The model the `capable` tier routes to (can be free). |

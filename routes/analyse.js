@@ -20,6 +20,7 @@ import { extractCatalogueListing, extractLotDetailFirecrawl } from '../lib/pipel
 import { resolveEngineForHouse } from '../lib/pipeline/engine-decision.js';
 import { ENGINES } from '../lib/scraper/engine-router.js';
 import { renderAndExtractWithCrawlee } from '../lib/pipeline/crawlee-extract.js';
+import { getExtractionTier } from '../lib/scraper/extraction-tier.js';
 import { houseRecogniser } from '../lib/scraper/house-recognisers.js';
 import { enrichLots } from '../lib/enrichment.js';
 import { enrichLotsWithFundability } from '../lib/fundability.js';
@@ -211,7 +212,7 @@ router.post('/api/analyse', async (req, res) => {
       try {
         const { data } = await supabase
           .from('house_skills')
-          .select('preferred_engine, engine_locked')
+          .select('preferred_engine, engine_locked, engine_stats')
           .eq('slug', house)
           .maybeSingle();
         engineSkill = data || null;
@@ -231,6 +232,7 @@ router.post('/api/analyse', async (req, res) => {
             maxPages: Math.min(rec?.maxPages || 25, 25),
             recogniseFromMarkdown: rec?.recogniseFromMarkdown,
             recallSentinelPattern: rec?.recallSentinelPattern,
+            tier: getExtractionTier(engineSkill, house),
             onExtract,
           });
           rawLots = cr.lots || [];
