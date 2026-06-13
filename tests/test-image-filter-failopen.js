@@ -15,7 +15,7 @@
 process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'http://localhost.invalid';
 process.env.SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || 'test-key';
 
-const { filterImages, filterMainImage } = await import('../lib/pipeline/image-quality-filter.js');
+const { filterImages, filterMainImage, classifyImage, __resetImageFilterBreakerForTest } = await import('../lib/pipeline/image-quality-filter.js');
 
 let passed = 0;
 let failed = 0;
@@ -38,6 +38,30 @@ console.log('\nTest 2: filterMainImage keeps an unfetchable main image');
 {
   const kept = await filterMainImage(UNFETCHABLE);
   assert(kept === UNFETCHABLE, `main image survives classification failure (got ${kept})`);
+}
+
+console.log('\nTest 3: quota circuit-breaker — one 429 stops the herd');
+{
+  // A 33-house × hundreds-of-images sweep against a dead free-tier quota fired
+  // thousands of doomed Gemini calls, each round-tripping before failing open,
+  // stalling persist 15-20 min (AuctionHouse, 2026-06-13). The breaker trips on
+  // the first quota error so the rest skip the network entirely.
+  __resetImageFilterBreakerForTest();
+  const realFetch = global.fetch;
+  let fetchCalls = 0;
+  global.fetch = async () => { fetchCalls++; throw new Error('[429 Too Many Requests] You exceeded your current quota'); };
+  try {
+    const r1 = await classifyImage('https://x.invalid/a.jpg'); // fetch throws 429 → trips breaker, fails open
+    const r2 = await classifyImage('https://x.invalid/b.jpg'); // breaker open → skipped, no fetch
+    const r3 = await classifyImage('https://x.invalid/c.jpg');
+    assert(fetchCalls === 1, `only the first image hit the network; rest skipped (got ${fetchCalls} fetches)`);
+    assert(r1.verdict === 'unknown' && r1.is_primary === true, 'first image fails open (kept)');
+    assert(r2.reason.includes('cooldown') && r2.is_primary === true, 'subsequent images skip via breaker, still kept');
+    assert(r3.reason.includes('cooldown'), 'breaker stays open for the run');
+  } finally {
+    global.fetch = realFetch;
+    __resetImageFilterBreakerForTest();
+  }
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
