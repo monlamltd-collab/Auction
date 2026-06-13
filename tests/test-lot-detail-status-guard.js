@@ -90,5 +90,33 @@ console.log('\nTest 3: always-deep keeps the detail-page image when one is found
     `detail image wins when found (got ${lot.imageUrl})`);
 }
 
+console.log('\nTest 4: per-run detail-fetch cap — big discovery persists, excess deferred');
+{
+  // A platform recogniser can surface hundreds of first-contact lots in one
+  // scrape (AuctionHouse: 844). Detail-fetching them all before persist stalled
+  // the whole scrape so NONE landed (2026-06-13). The cap bounds the fetches;
+  // every lot still flows through (returned intact) to persist with catalogue data.
+  const lots = [];
+  for (let i = 0; i < 10; i++) {
+    lots.push({
+      house: 'auctionhouseuklondon',
+      url: `https://auctionhouse.co.uk/london/auction/lot/${1000 + i}`,
+      address: `${i} Test Road, London, E1 ${i}AA`,
+      status: 'available',
+      imageUrl: `https://auctionhouse.co.uk/lot-image/${i}`,
+      _isFirstContact: true,
+      bullets: [],
+    });
+  }
+  let fetches = 0;
+  await enrichLotsFromLotPages(lots, {
+    maxDetailFetches: 3,
+    fetchLotPage: async () => { fetches++; return { html: '<html><body><h1>x</h1></body></html>', url: 'x', source: 'http' }; },
+  });
+  assert(fetches === 3, `detail fetches capped at 3 (got ${fetches})`);
+  assert(lots.length === 10, `all 10 lots still present for persist (got ${lots.length})`);
+  assert(lots.every(l => l.address && l.imageUrl), 'every lot keeps its catalogue data (address + image)');
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);
