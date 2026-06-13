@@ -14,7 +14,7 @@
 process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'http://localhost.invalid';
 process.env.SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || 'test-key';
 
-const { resolveCalendarEntry } = await import('../lib/pipeline/persist-lots.js');
+const { resolveCalendarEntry, pickCalendarEntryForUrl } = await import('../lib/pipeline/persist-lots.js');
 
 let passed = 0;
 let failed = 0;
@@ -200,6 +200,67 @@ console.log('\nTest 15: always_on fallback — single-cal-row rule still wins wh
   ]);
   const e = resolveCalendarEntry(m, 'landwood', 'https://landwood.com/bare');
   assert(e && e.id === 'l-1', 'single-cal rule fires regardless of status');
+}
+
+// ─────────────────────────────────────────────────────────────
+// Rolling catalogue-URL selection: pickCalendarEntryForUrl
+//
+// A house that reuses ONE catalogue URL (e.g. "/current-auction") across
+// monthly sales accumulates several calendar rows on that URL. The OLD rule
+// in getCalendarDateMap was "earliest date wins", which bound the URL to the
+// STALEST past auction. mchughandco 2026-06-13: 271 live lots stamped with a
+// month-old 2026-05-13 date (the real upcoming sale was 2026-06-30) →
+// auction_date < today → hidden from the live view. The live catalogue at a
+// rolling URL is always the SOONEST UPCOMING auction.
+// ─────────────────────────────────────────────────────────────
+
+const TODAY = '2026-06-13';
+
+console.log('\nTest 16: rolling URL — soonest UPCOMING wins over a stale past row (mchughandco)');
+{
+  // Calendar rows arrive date-ASC, so the stale past row is first — the bug.
+  const e = pickCalendarEntryForUrl(
+    [{ id: 'may', date: '2026-05-13' }, { id: 'jun', date: '2026-06-30' }],
+    TODAY,
+  );
+  assert(e && e.id === 'jun', `picks the future auction, not the month-old one (got ${e && e.id})`);
+}
+
+console.log('\nTest 17: rolling URL — soonest of MULTIPLE upcoming rows wins');
+{
+  const e = pickCalendarEntryForUrl(
+    [{ id: 'jul', date: '2026-07-28' }, { id: 'jun', date: '2026-06-30' }],
+    TODAY,
+  );
+  assert(e && e.id === 'jun', `nearest upcoming auction (got ${e && e.id})`);
+}
+
+console.log('\nTest 18: rolling URL — all rows past → MOST RECENT (least stale) wins, not earliest');
+{
+  const e = pickCalendarEntryForUrl(
+    [{ id: 'apr', date: '2026-04-15' }, { id: 'may', date: '2026-05-13' }],
+    TODAY,
+  );
+  assert(e && e.id === 'may', `most recent past auction when none upcoming (got ${e && e.id})`);
+}
+
+console.log('\nTest 19: rolling URL — today counts as upcoming (>=)');
+{
+  const e = pickCalendarEntryForUrl(
+    [{ id: 'today', date: TODAY }, { id: 'jul', date: '2026-07-28' }],
+    TODAY,
+  );
+  assert(e && e.id === 'today', `an auction dated today is live, not past (got ${e && e.id})`);
+}
+
+console.log('\nTest 20: rolling URL — single row / empty / null-date edge cases');
+{
+  assert(pickCalendarEntryForUrl([{ id: 'only', date: '2026-06-30' }], TODAY)?.id === 'only', 'single row returned as-is');
+  assert(pickCalendarEntryForUrl([], TODAY) === null, 'empty → null');
+  assert(pickCalendarEntryForUrl(null, TODAY) === null, 'null → null');
+  // A row with no date can't be ranked; a dated row beside it wins.
+  const e = pickCalendarEntryForUrl([{ id: 'nodate', date: null }, { id: 'jun', date: '2026-06-30' }], TODAY);
+  assert(e && e.id === 'jun', 'dated row preferred over a null-date row');
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
