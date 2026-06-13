@@ -1194,7 +1194,7 @@ router.post('/api/admin/drain-epc-backlog', requireAdmin, async (req, res) => {
   _epcDrainRunning = true;
   res.json({ ok: true, message: `EPC backlog drain started in background (cap ${cap}, batch ${batchSize})` });
   (async () => {
-    let processed = 0, filled = 0, rounds = 0;
+    let processed = 0, filled = 0, rounds = 0, consecutiveEmpty = 0;
     try {
       while (processed < cap) {
         rounds++;
@@ -1256,13 +1256,23 @@ router.post('/api/admin/drain-epc-backlog', requireAdmin, async (req, res) => {
             } catch (e) { console.warn(`EPC-DRAIN: update ${row.id} failed: ${e.message}`); }
           }
         }
-        processed += lots.length;
-        console.log(`EPC-DRAIN: round ${rounds} — processed ${processed}, ~${filled} bands, ${resolvedThisRound}/${lots.length} left circuit_open`);
-        // Safety: if a whole round resolved nothing (e.g. EPC breaker re-opened),
-        // pause to let the 10-min breaker reset rather than spin the cap away.
+        console.log(`EPC-DRAIN: round ${rounds} — processed ${processed}, ~${filled} bands, ${resolvedThisRound}/${lots.length} resolved`);
+        // A round that resolves NOTHING means the EPC API is rate-limiting us
+        // (429) and the SHARED breaker is open — which also degrades the
+        // scheduled wave + live scrapes' EPC. Don't spin: stop after a few empty
+        // rounds so the breaker resets and normal EPC enrichment recovers, and
+        // don't burn the cap on empty rounds (only real work counts). Re-trigger
+        // when the EPC quota window has rolled.
         if (resolvedThisRound === 0) {
-          console.warn('EPC-DRAIN: round resolved 0 — breaker likely open; pausing 60s');
+          consecutiveEmpty++;
+          if (consecutiveEmpty >= 3) {
+            console.warn('EPC-DRAIN: 3 empty rounds — EPC API rate-limited; stopping so the shared breaker resets. Re-trigger when quota recovers.');
+            break;
+          }
           await new Promise(r => setTimeout(r, 60000));
+        } else {
+          consecutiveEmpty = 0;
+          processed += lots.length;
         }
       }
     } catch (e) {
