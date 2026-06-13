@@ -1,7 +1,7 @@
 ---
 name: auction-conventions
-description: Use this skill when writing or modifying code in the Auction (Bridgematch AuctionBrain) project. Enforces project conventions for architecture, naming, file structure, API patterns, lot extraction (Firecrawl-first), styling, database queries, the enrichment manifest, the self-healing harness, and testing. Activates when the user adds features, fixes bugs, modifies the frontend, or touches server/pipeline code.
-version: 3.0.0
+description: Use this skill when writing or modifying code in the Auction (Bridgematch AuctionBrain) project. Enforces project conventions for architecture, naming, file structure, API patterns, lot extraction (Firecrawl-first), AI providers (OpenRouter-first), styling, database queries, the enrichment manifest, the self-healing harness, and testing. Activates when the user adds features, fixes bugs, modifies the frontend, or touches server/pipeline code.
+version: 3.1.0
 ---
 
 # Auction Project Conventions
@@ -35,7 +35,7 @@ The codebase was historically a monolithic `server.js` but has been **decomposed
 │   ├── scraper.js                # Façade re-exporting lib/scraper/* — keep imports stable
 │   ├── houses.js                 # HOUSE_ROOTS catalogue URL registry + HOUSE_DISPLAY_NAMES + URL rewriting
 │   ├── config.js                 # CACHE_DAYS, MAX_PAGES, TIMEOUT, rate-limit gaps
-│   ├── ai-provider.js            # Gemini Flash-Lite + Pro model selection + rate limiter
+│   ├── ai-provider.js            # Multi-provider AI (OpenRouter-first; Gemini/Claude/Grok) + vision (callVisionAI) + rate limiter + ai_usage cost log
 │   ├── resource-budget.js        # Firecrawl credit + Gemini RPD budget tracking
 │   ├── calendar.js               # Auction calendar helpers
 │   ├── email.js                  # Transactional email (auth, alerts)
@@ -146,7 +146,7 @@ The codebase was historically a monolithic `server.js` but has been **decomposed
 - **Runtime:** Node.js 20, ES modules (`"type": "module"`)
 - **Server:** Express 4
 - **Database:** Supabase PostgreSQL (direct client, no ORM)
-- **AI:** Google Gemini (Flash-Lite for known houses, Pro for unknown/PDF) via `lib/ai-provider.js`
+- **AI:** Multi-provider via `lib/ai-provider.js` — **OpenRouter in production** (the direct Gemini free-tier key is quota-dead), default model `gemini-2.5-flash-lite` (fast) / `gemini-2.5-pro` (capable); image recognition always via OpenRouter. See *AI Providers* below.
 - **Scraping:** Firecrawl primary (managed), Puppeteer fallback, plain HTTP last resort — **never reverse this order**
 - **Auth:** Supabase JWT (Jose library) with 30s in-memory user cache (see `lib/auth.js`)
 - **Payments:** Stripe — webhooks must call `invalidateUserCache(supabase_auth_id)` on tier changes
@@ -415,19 +415,43 @@ Yield is scored **once** — either by `scoring.js` or `enrichment.js`, never bo
 - Harness: `tests/test-harness.js` (alert-router dedup, house-health circuit, regression-detector)
 - For new lot-extraction work, validate end-to-end via `node scripts/test-firecrawl-extract.mjs <url>` rather than DOM snapshots (those scripts and `tests/snapshots/` were retired 2026-05-08)
 
-## Gemini Model Selection (`lib/ai-provider.js`)
+## AI Providers (`lib/ai-provider.js`)
 
-```javascript
-MODELS.fast    = 'gemini-2.5-flash-lite'   // Known houses (fast tier)
-MODELS.capable = 'gemini-2.5-pro'          // Unknown houses & PDF extraction
-```
+**Multi-provider chain, OpenRouter-first in production.** The direct Google
+Gemini free-tier key is quota-dead (`limit:0` → every call 429s), so production
+runs on **OpenRouter** (its own paid billing). Confirmed live via the `ai_usage`
+table: ~100% of AI calls (extraction, image-classify, discovery) are served by
+OpenRouter; direct Gemini is effectively unused. **Do NOT "simplify" this back to
+a single-provider Gemini stack** — that's the #1 stale assumption about this repo.
 
-Single-provider stack — no OpenRouter cascade in this repo (the sister Mortgage-Style repo runs Gemini → Kimi → Claude Haiku via OpenRouter for resilience; auction tool deliberately stays simpler).
+### Provider chain — `buildProviderChain({ tier, pdfBase64 })`
+- **Primary** = `AI_PROVIDER` env (default `gemini`); **reasoning** tier → `claude`; **inline PDF** → `gemini` only (inline PDF isn't portable across providers).
+- **Fallbacks** = `AI_FALLBACK_PROVIDERS` (defaults to `openrouter` when `OPENROUTER_API_KEY` is set, plus `gemini` when its key is present). A primary 429 transparently rolls over — this removes the single-provider SPOF.
+- `callAI()` walks the chain in order; `callSpecificModel()` pins exactly one model (A/B harness only).
 
-- Known houses → Flash-Lite + extraction hints
-- Unknown houses → Pro (higher capability)
-- Rate limiter via `GEMINI_MIN_GAP_MS` env var (default 100ms paid tier; 4100ms for free-tier 15 RPM safety)
-- `creditExhausted` flag stops all calls on 429/quota errors
+### Model tiers (per provider)
+| Provider | fast | capable |
+|---|---|---|
+| gemini | `gemini-2.5-flash-lite` | `gemini-2.5-pro` |
+| openrouter | `google/gemini-2.5-flash-lite` | `google/gemini-2.5-pro` |
+| claude | `claude-sonnet-4-6` | reasoning: `claude-opus-4-6` |
+
+- Known houses → fast tier; unknown houses / PDF → capable tier.
+- OpenRouter model IDs are env-overridable (`OPENROUTER_FAST_MODEL`, `OPENROUTER_CAPABLE_MODEL`) and accept a **comma-separated chain** tried within one request (free-strong model first, proven paid model behind it — e.g. a free Nemotron for *text* extraction with Gemini Pro as in-request fallback). `OPENROUTER_FALLBACK_MODELS` adds global backups (e.g. DeepSeek).
+
+### Vision / image recognition — `callVisionAI()` (ALWAYS OpenRouter)
+All image classification/recognition routes through `callVisionAI` → OpenRouter,
+default `OPENROUTER_VISION_MODEL='google/gemini-2.5-flash-lite'` — the cheap,
+vision-capable choice (~$0.35 per ~2,100 images).
+- **CRITICAL: the vision model MUST be multimodal.** Text-only models — **DeepSeek, most Nemotron variants** — cannot accept images; pointing `OPENROUTER_VISION_MODEL` at one silently breaks image filtering. DeepSeek/Nemotron belong on the *text* extraction chain above, **never** on vision.
+- `image-quality-filter.js` uses OpenRouter when `OPENROUTER_API_KEY` is set; direct Gemini is a legacy fallback only. A quota error trips a 10-min cooldown and images fail **open** (kept unfiltered), never discarded.
+
+### Rate limiting & cost
+- Per-provider min-gap env vars: `GEMINI_MIN_GAP_MS`, `OPENROUTER_MIN_GAP_MS`, `GROK_MIN_GAP_MS`, `CLAUDE_MIN_GAP_MS` (default 100ms; 4100ms for direct-Gemini free-tier 15 RPM safety).
+- Soft daily budget `AI_DAILY_BUDGET` (default $0.50) — logs a warning but proceeds. Cost rows go to `ai_usage`, attributed to the model that actually served the call (OpenRouter free-first chains may roll over to a paid backup mid-request).
+
+### Key env vars
+`OPENROUTER_API_KEY` (enables the whole OpenRouter path), `AI_PROVIDER`, `AI_FALLBACK_PROVIDERS`, `OPENROUTER_FAST_MODEL`, `OPENROUTER_CAPABLE_MODEL`, `OPENROUTER_VISION_MODEL`, `OPENROUTER_FALLBACK_MODELS`, `GEMINI_API_KEY` (legacy fallback), `GROK_API_KEY`, `CLAUDE_API_KEY` (reasoning tier).
 
 ## Resource Limits (`lib/config.js`)
 
