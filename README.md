@@ -113,7 +113,8 @@ After lot extraction, each lot is enriched with:
 | Source | Data | API |
 |---|---|---|
 | OS Data Hub | UPRN, canonical address, lat/lng | `OS_DATA_HUB_KEY` (free 100k/mo) |
-| EPC Register | Energy performance rating | `EPC_API_EMAIL` / `EPC_API_KEY` |
+| EPC (Get energy performance of buildings data) | Energy rating band + score + floor area | `EPC_API_TOKEN` (Bearer; new API since the old one retired 30 May 2026) |
+| EPC — on-page fallback | Band scraped from the listing/detail page ("EPC rating: D") when the address→API match can't run (number withheld) | `lib/scraper/lot-detail.js:extractEpcBand` |
 | OpenRent | Rental comparables for yield | HTTP fetch |
 | BridgeMatch | Bridging finance fundability badge | `BRIDGEMATCH_API_URL` |
 | Value estimator | Estimated market value | `lib/pipeline/value-estimator.js` |
