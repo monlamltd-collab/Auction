@@ -27,7 +27,7 @@ import {
 } from '../lib/analysis.js';
 import { LOTS_SELECT, dbRowToLot } from '../lib/types/lot.js';
 import { getAICostSummary } from '../lib/ai-provider.js';
-import { enrichLots, getCircuitBreakers } from '../lib/enrichment.js';
+import { enrichLots, getCircuitBreakers, fetchEPCByPostcode, matchEPCToLot, fetchEPCCertificate } from '../lib/enrichment.js';
 import { normaliseUrl, applyUmamiInjection } from '../lib/utils.js';
 import { getAuctionCalendar, getCalendarAuctions } from '../lib/calendar.js';
 import { validateBatch } from '../lib/harness/data-contract.js';
@@ -1207,25 +1207,53 @@ router.post('/api/admin/drain-epc-backlog', requireAdmin, async (req, res) => {
         if (error) { console.warn(`EPC-DRAIN: query error: ${error.message}`); break; }
         if (!lots || lots.length === 0) { console.log('EPC-DRAIN: backlog empty — done'); break; }
 
-        // Group by house + catalogue_url so enrichLots gets a coherent batch.
-        const groups = {};
+        // EPC-ONLY fast path: search per UNIQUE postcode, match each lot, fetch
+        // the certificate for score/floor-area, then a TARGETED update so the
+        // lot leaves circuit_open. ~10x faster than full enrichLots (which also
+        // re-runs LR/flood/OS/value per lot at ~6-15s each). Other enrichment
+        // for these lots is handled by the scheduled wave; this pass only fixes
+        // the EPC outage backlog.
+        const byPc = {};
         for (const row of lots) {
-          const key = `${row.house}|${row.catalogue_url}`;
-          if (!groups[key]) groups[key] = { house: row.house, catalogueUrl: row.catalogue_url, rows: [] };
-          groups[key].rows.push(row);
+          if (!byPc[row.postcode]) byPc[row.postcode] = [];
+          byPc[row.postcode].push(row);
         }
         let resolvedThisRound = 0;
-        for (const g of Object.values(groups)) {
-          const lotObjs = g.rows.map(dbRowToLot);
-          try {
-            await enrichLots(lotObjs, g.house, g.catalogueUrl);
-            normaliseLotStatuses(lotObjs);
-            await upsertToLotsTable(lotObjs, g.house, g.catalogueUrl, { scrapedWith: 'epc-drain' });
-            filled += lotObjs.filter(l => l.epcRating).length;
-            // A lot "resolved" if its EPC status is no longer circuit_open.
-            resolvedThisRound += lotObjs.filter(l => l._enrichment?.epc?.status && l._enrichment.epc.status !== 'circuit_open').length;
-          } catch (e) {
-            console.warn(`EPC-DRAIN: group ${g.house} failed (non-fatal): ${e.message}`);
+        for (const [pc, pcLots] of Object.entries(byPc)) {
+          let epcRes;
+          try { epcRes = await fetchEPCByPostcode(pc); }
+          catch (e) { epcRes = { status: 'api_error', records: null }; }
+          if (epcRes.status === 'circuit_open') continue; // breaker open — leave for the pause/next round
+          for (const row of pcLots) {
+            let band = null, score = null, floor = null, status = 'no_match_with_address';
+            if (Array.isArray(epcRes.records) && epcRes.records.length) {
+              const m = matchEPCToLot(epcRes.records, row.address);
+              if (m) {
+                band = m.epcRating; score = m.epcScore; floor = m.epcFloorAreaSqm; status = 'ok';
+                if (m.epcLmkKey && (score == null || floor == null)) {
+                  try {
+                    const c = await fetchEPCCertificate(m.epcLmkKey);
+                    if (c.status === 'ok') { if (score == null) score = c.epcScore; if (floor == null) floor = c.epcFloorAreaSqm; }
+                  } catch { /* cert fetch is best-effort */ }
+                }
+              }
+            } else if (epcRes.status === 'api_empty_for_postcode') {
+              status = 'api_empty_for_postcode';
+            }
+            // Targeted update — flip the manifest epc status off circuit_open
+            // (monotonic) and fill the band/score/floor when matched. Preserves
+            // every other manifest key.
+            const manifest = row.enrichment_manifest && typeof row.enrichment_manifest === 'object' ? row.enrichment_manifest : {};
+            manifest.epc = { ...(manifest.epc || {}), status, rating: band || null, score: score ?? null };
+            const update = { enrichment_manifest: manifest };
+            if (band) update.epc_rating = band;
+            if (score != null) update.epc_score = score;
+            if (floor != null) update.floor_area_sqm = floor;
+            try {
+              await supabase.from('lots').update(update).eq('id', row.id);
+              resolvedThisRound++;
+              if (band) filled++;
+            } catch (e) { console.warn(`EPC-DRAIN: update ${row.id} failed: ${e.message}`); }
           }
         }
         processed += lots.length;
