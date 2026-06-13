@@ -1175,6 +1175,77 @@ router.post('/api/admin/re-enrich', requireAdmin, async (req, res) => {
   }
 });
 
+// ── Targeted EPC-backlog drain ──
+// The EPC API was dead 30 May–13 Jun 2026; every lookup in that window failed
+// and latched the shared breaker, leaving ~4.3k live lots with epc status
+// 'circuit_open' (never successfully searched). The scheduled enrichment wave
+// can't drain them — its Pass 3 selects `epc_rating IS NULL` ordered by
+// last_seen, so it churns on recently-seen / no-match lots and rarely reaches
+// the backlog. This drain targets `epc status = circuit_open` SPECIFICALLY:
+// once a lot is re-enriched it becomes 'ok'/'no_match' and LEAVES the bucket, so
+// progress is monotonic (no re-selection, no churn). Verified recoverable
+// 2026-06-13: a sample of numbered circuit_open lots matched the live API
+// (bands E/C/C/F). Runs in the background to dodge the 60s HTTP-proxy timeout.
+let _epcDrainRunning = false;
+router.post('/api/admin/drain-epc-backlog', requireAdmin, async (req, res) => {
+  if (_epcDrainRunning) return res.json({ ok: false, message: 'EPC backlog drain already running' });
+  const cap = Math.min(req.body?.cap || 5000, 8000);
+  const batchSize = Math.min(req.body?.batchSize || 40, 100);
+  _epcDrainRunning = true;
+  res.json({ ok: true, message: `EPC backlog drain started in background (cap ${cap}, batch ${batchSize})` });
+  (async () => {
+    let processed = 0, filled = 0, rounds = 0;
+    try {
+      while (processed < cap) {
+        rounds++;
+        const { data: lots, error } = await supabase
+          .from('lots')
+          .select('*')
+          .eq('enrichment_manifest->epc->>status', 'circuit_open')
+          .not('postcode', 'is', null)
+          .limit(batchSize);
+        if (error) { console.warn(`EPC-DRAIN: query error: ${error.message}`); break; }
+        if (!lots || lots.length === 0) { console.log('EPC-DRAIN: backlog empty — done'); break; }
+
+        // Group by house + catalogue_url so enrichLots gets a coherent batch.
+        const groups = {};
+        for (const row of lots) {
+          const key = `${row.house}|${row.catalogue_url}`;
+          if (!groups[key]) groups[key] = { house: row.house, catalogueUrl: row.catalogue_url, rows: [] };
+          groups[key].rows.push(row);
+        }
+        let resolvedThisRound = 0;
+        for (const g of Object.values(groups)) {
+          const lotObjs = g.rows.map(dbRowToLot);
+          try {
+            await enrichLots(lotObjs, g.house, g.catalogueUrl);
+            normaliseLotStatuses(lotObjs);
+            await upsertToLotsTable(lotObjs, g.house, g.catalogueUrl, { scrapedWith: 'epc-drain' });
+            filled += lotObjs.filter(l => l.epcRating).length;
+            // A lot "resolved" if its EPC status is no longer circuit_open.
+            resolvedThisRound += lotObjs.filter(l => l._enrichment?.epc?.status && l._enrichment.epc.status !== 'circuit_open').length;
+          } catch (e) {
+            console.warn(`EPC-DRAIN: group ${g.house} failed (non-fatal): ${e.message}`);
+          }
+        }
+        processed += lots.length;
+        console.log(`EPC-DRAIN: round ${rounds} — processed ${processed}, ~${filled} bands, ${resolvedThisRound}/${lots.length} left circuit_open`);
+        // Safety: if a whole round resolved nothing (e.g. EPC breaker re-opened),
+        // pause to let the 10-min breaker reset rather than spin the cap away.
+        if (resolvedThisRound === 0) {
+          console.warn('EPC-DRAIN: round resolved 0 — breaker likely open; pausing 60s');
+          await new Promise(r => setTimeout(r, 60000));
+        }
+      }
+    } catch (e) {
+      console.error(`EPC-DRAIN: fatal: ${e.message}`);
+    } finally {
+      _epcDrainRunning = false;
+      console.log(`EPC-DRAIN: complete — processed ${processed}, ~${filled} bands, ${rounds} rounds`);
+    }
+  })();
+});
+
 // ── Manual trigger for enrichment waves ──
 router.post('/api/admin/enrich-waves', requireAdmin, async (req, res) => {
   if (isEnrichmentWaveRunning()) return res.json({ ok: false, message: 'Enrichment wave already running' });
