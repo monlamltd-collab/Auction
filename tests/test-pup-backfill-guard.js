@@ -11,6 +11,9 @@
 
 process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'http://localhost.invalid';
 process.env.SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || 'test-key';
+// Short lot-page enrichment budget so the hang→timeout test runs fast. Read at
+// module load, so it must be set before the enrich-stage import below.
+process.env.LOT_PAGE_ENRICH_BUDGET_MS = '300';
 
 const { enrichStage } = await import('../lib/pipeline/enrich-stage.js');
 const { cacheEnrichStage } = await import('../lib/pipeline/cache-enrich-stage.js');
@@ -107,6 +110,28 @@ console.log('\nenrichStage: enrichment throw is non-fatal — lots still returne
     out2 = await enrichStage({ rawLots: [rawLot()], house: 'mchughandco', url: 'https://example.invalid/cat' }, lotsThrowPrimary);
   } catch (e) { threw2 = e; }
   assert(!threw2 && out2?.lots?.length === 1, 'primary enrichment throw is also non-fatal, lots returned');
+}
+
+console.log('\nenrichStage: a HANGING lot-page enrichment times out — persist still proceeds');
+{
+  // mchughandco 2026-06-13: detail-site hung the deep-fetch past its per-fetch
+  // timeout, blocking persist forever (271 lots @ 100% recall persisted 0). The
+  // wall-clock budget must let enrichStage return its lots even if the phase
+  // never resolves.
+  const hangDeps = {
+    ...baseEnrichDeps(),
+    enrichLotsFromLotPages: () => new Promise(() => {}), // never resolves
+  };
+  // The proof is that enrichStage RESOLVES at all — without the budget the
+  // never-resolving promise would hang it forever and these assertions would
+  // never run (the test would time out). (Other unstubbed phases like
+  // fundability may add their own network latency; that's not what we measure.)
+  let threw = null; let out = null;
+  try {
+    out = await enrichStage({ rawLots: [rawLot()], house: 'mchughandco', url: 'https://example.invalid/cat' }, hangDeps);
+  } catch (e) { threw = e; }
+  assert(!threw, `hanging enrichment does not throw out of enrichStage (got: ${threw ? threw.message : 'no throw'})`);
+  assert(out?.lots?.length === 1, `lots still returned for persist despite the hang (budget fired; got ${out ? out.lots.length : 'none'})`);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
