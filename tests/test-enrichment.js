@@ -34,7 +34,7 @@ function assert(condition, msg) {
 }
 
 // ─── Import matchEPCToLot + read enrichment source for cache-pattern checks ───
-import { matchEPCToLot, normaliseEpcSearchRecord } from '../lib/enrichment.js';
+import { matchEPCToLot, normaliseEpcSearchRecord, parseEpcCertificate } from '../lib/enrichment.js';
 
 // Cache-pattern assertions below want to sanity-check that enrichment_cache is
 // still queried/deleted/TTL'd. Enrichment logic now lives in lib/enrichment.js
@@ -147,6 +147,22 @@ if (runEPC) {
     '7 Junk St, Town, AB1 2CD',
   );
   assert(junkBand === null, 'score > 100 still rejected (Test 3 contract preserved)');
+
+  // Test 10: parseEpcCertificate extracts score/floor-area/beds from the full
+  // certificate (GET /api/certificate) — the band-only search can't supply these.
+  const certData = {
+    energy_rating_current: 70, total_floor_area: 54, heated_room_count: 2,
+    current_energy_efficiency_band: 'C',
+  };
+  const cert = parseEpcCertificate(certData);
+  assert(cert.epcScore === 70, 'cert: energy_rating_current → epcScore 70');
+  assert(cert.epcFloorAreaSqm === 54, 'cert: total_floor_area → epcFloorAreaSqm 54');
+  assert(cert.epcFloorAreaSqft === Math.round(54 * 10.7639), 'cert: sqm → sqft converted');
+  assert(cert.epcBeds === 2, 'cert: heated_room_count → epcBeds 2');
+  assert(cert.band === 'C', 'cert: band carried through');
+  const certBad = parseEpcCertificate({ energy_rating_current: 0, total_floor_area: 0 });
+  assert(certBad.epcScore === null && certBad.epcFloorAreaSqm === null, 'cert: zero/absent → null (not fabricated)');
+  assert(parseEpcCertificate(null).epcScore === null, 'cert: null input safe');
   assert(matchEPCToLot(mockEPC, '') === null, 'Empty address returns null');
 }
 
