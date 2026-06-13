@@ -78,7 +78,7 @@ The pipeline is strictly ordered. Never reverse it.
 AI-driven extraction with no per-house DOM code. Handles single-page and paginated catalogues. `changeTracking` short-circuits unchanged pages at ~1 credit. Lives in `lib/pipeline/firecrawl-extract.js`. Called via HTTP fetch — no SDK.
 
 **2. Markdown recogniser** (optional per-house override)
-In `HOUSE_OVERRIDES` — currently Pattinson, John Pye, McHugh & Co, Mark Jenkinson, Maggs & Allen, and Hollis Morgan. Reads the same markdown (Firecrawl's, or the turndown bridge's when Crawlee renders) to recover lots the JSON extractor missed. Recogniser URL regexes are host-tolerant (`(?:www\.)?`) because Crawlee renders on whichever host the calendar URL uses.
+In `HOUSE_OVERRIDES` — currently Pattinson, John Pye, McHugh & Co, Mark Jenkinson, Maggs & Allen, and Hollis Morgan. Reads the same markdown (Firecrawl's, or the turndown bridge's when Crawlee renders) to recover lots the JSON extractor missed. Recogniser URL regexes are host-tolerant (`(?:www\.)?`) because Crawlee renders on whichever host the calendar URL uses. On the Crawlee path the recogniser also corroborates the AI extractor: for lot ids both saw, the recogniser's deterministically-parsed status (and hero image, when the extractor has none) wins — AI status inference smears SOLD/STC across overlay-heavy pages.
 
 **3. Gemini fallback** (fires when Firecrawl returns 0 lots)
 Flash model for known houses, Pro for unknown houses or PDF catalogues. SDK: `@google/generative-ai`.
