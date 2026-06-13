@@ -118,7 +118,7 @@ From `package.json`:
 | `FIRECRAWL_MONTHLY_BUDGET` | Credit cap (see `lib/resource-budget.js`) |
 | `FIRECRAWL_SKIP_HOUSES` | Comma-separated slugs to bypass Firecrawl |
 | `OS_DATA_HUB_KEY` | UPRN + canonical address (free 100k/mo) |
-| `EPC_API_EMAIL` / `EPC_API_KEY` | EPC register API |
+| `EPC_API_TOKEN` | EPC register API — Bearer token for get-energy-performance-data.communities.gov.uk (old `EPC_API_EMAIL`/`EPC_API_KEY` Basic-auth API retired 30 May 2026) |
 | `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_KEY` | Database |
 | `BRIDGEMATCH_API_URL` | BridgeMatch API base for fundability badge |
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | Self-healing alert destination |
