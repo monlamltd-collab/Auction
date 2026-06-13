@@ -15,6 +15,11 @@
 process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'http://localhost.invalid';
 process.env.SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || 'test-key';
 
+// Tests 1-3 exercise the legacy direct-Gemini path deterministically (no
+// OpenRouter key). Test 4 sets its own key for the OpenRouter vision path.
+const _origOpenRouterKey = process.env.OPENROUTER_API_KEY;
+delete process.env.OPENROUTER_API_KEY;
+
 const { filterImages, filterMainImage, classifyImage, __resetImageFilterBreakerForTest } = await import('../lib/pipeline/image-quality-filter.js');
 
 let passed = 0;
@@ -60,6 +65,36 @@ console.log('\nTest 3: quota circuit-breaker — one 429 stops the herd');
     assert(r3.reason.includes('cooldown'), 'breaker stays open for the run');
   } finally {
     global.fetch = realFetch;
+    __resetImageFilterBreakerForTest();
+  }
+}
+
+console.log('\nTest 4: OpenRouter vision path parses a verdict (paid path replaces dead Gemini free tier)');
+{
+  __resetImageFilterBreakerForTest();
+  const realFetch = global.fetch;
+  process.env.OPENROUTER_API_KEY = 'test-key';
+  let sawOpenRouter = false;
+  global.fetch = async (url) => {
+    if (String(url).includes('openrouter.ai')) {
+      sawOpenRouter = true;
+      return { ok: true, json: async () => ({
+        choices: [{ message: { content: '{"verdict":"property_photo","confidence":"high","reason":"house exterior","is_primary":true}' } }],
+        model: 'google/gemini-2.5-flash-lite',
+        usage: { prompt_tokens: 120, completion_tokens: 18 },
+      }) };
+    }
+    // image fetch → fake bytes
+    return { ok: true, headers: { get: () => 'image/jpeg' }, arrayBuffer: async () => new ArrayBuffer(16) };
+  };
+  try {
+    const r = await classifyImage('https://cdn.test/house.jpg');
+    assert(sawOpenRouter, 'routed image classification through OpenRouter (not direct Gemini)');
+    assert(r.verdict === 'property_photo' && r.is_primary === true, `parsed the vision verdict (got ${JSON.stringify(r)})`);
+  } finally {
+    global.fetch = realFetch;
+    if (_origOpenRouterKey === undefined) delete process.env.OPENROUTER_API_KEY;
+    else process.env.OPENROUTER_API_KEY = _origOpenRouterKey;
     __resetImageFilterBreakerForTest();
   }
 }
