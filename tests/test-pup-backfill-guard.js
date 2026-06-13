@@ -82,5 +82,32 @@ console.log('\ncacheEnrichStage: retired Puppeteer backfill dep');
   assert(called === 1, 'provided dep is still invoked for imageless lots');
 }
 
+console.log('\nenrichStage: enrichment throw is non-fatal — lots still returned for persist');
+{
+  // mchughandco 2026-06-13: a throw in lot-page enrichment aborted the whole
+  // scrape before persist, silently dropping all 271 recogniser-extracted lots.
+  // enrichStage must swallow enrichment failures and still return the lots.
+  const lotsThrowFetch = {
+    ...baseEnrichDeps(),
+    enrichLotsFromLotPages: async () => { throw new Error('detail-site exploded'); },
+  };
+  let threw = null; let out = null;
+  try {
+    out = await enrichStage({ rawLots: [rawLot()], house: 'mchughandco', url: 'https://example.invalid/cat' }, lotsThrowFetch);
+  } catch (e) { threw = e; }
+  assert(!threw, `lot-page enrichment throw is swallowed (got: ${threw ? threw.message : 'no throw'})`);
+  assert(out && Array.isArray(out.lots) && out.lots.length === 1, `lots still returned for persist (got ${out ? out.lots.length : 'none'})`);
+
+  const lotsThrowPrimary = {
+    ...baseEnrichDeps(),
+    enrichLots: async () => { throw new Error('EPC API exploded'); },
+  };
+  let threw2 = null; let out2 = null;
+  try {
+    out2 = await enrichStage({ rawLots: [rawLot()], house: 'mchughandco', url: 'https://example.invalid/cat' }, lotsThrowPrimary);
+  } catch (e) { threw2 = e; }
+  assert(!threw2 && out2?.lots?.length === 1, 'primary enrichment throw is also non-fatal, lots returned');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);
