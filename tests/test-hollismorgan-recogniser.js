@@ -212,5 +212,38 @@ console.log('\nTest 10: duplicate lot id (same property-details/<id>/ in two car
   assert(out.get('33935468').address.startsWith('Parrys Close'), 'first occurrence wins');
 }
 
+console.log('\nTest 11: no-www host variant (Crawlee-rendered DOM, 2026-06-13 incident)');
+{
+  // Crawlee renders the June-24 catalogue URL on the bare host, and the DOM's
+  // SHOW ME MORE hrefs come out as https://hollismorgan.co.uk/... (no www.) —
+  // the recogniser must match both hosts or recovery silently returns 0
+  // while the host-less sentinel still counts every lot (recall 49%, +0
+  // recognised, production 2026-06-13).
+  const noWwwMd = `
+![BS30](https://hollismorgan.co.uk/resize/34641077/0/480.pagespeed.ce.aREffy08bS.jpg)
+
+#### Lot 1
+
+### Bath Road, Willsbridge, BS30 6EP
+
+#### **Auction Guide Price £350,000 +++**
+
+- JUNE LIVE ONLINE AUCTION
+- FREEHOLD DEVELOPMENT OPPORTUNITY
+
+[SHOW ME MORE](https://hollismorgan.co.uk/property-details/34641077/south-gloucestershire/bristol/and-92a?page=1&bid=11&showstc=on&orderby=lot_no+asc)
+`;
+  const out = recogniseHollisMorganLotsFromMarkdown(noWwwMd);
+  assert(out.size === 1, `no-www markdown recognised, size === 1, got ${out.size}`);
+  const l = out.get('34641077');
+  assert(!!l, 'has key 34641077');
+  if (l) {
+    assert(l.lot_number === 1, `lot_number === 1, got ${l.lot_number}`);
+    assert(l.guide_price === '£350,000 +++', `guide_price: ${l.guide_price}`);
+    assert(l.detail_url === 'https://hollismorgan.co.uk/property-details/34641077/south-gloucestershire/bristol/and-92a', `EIG params stripped: ${l.detail_url}`);
+    assert(l.image_url === 'https://hollismorgan.co.uk/resize/34641077/0/480.pagespeed.ce.aREffy08bS.jpg', `hero image joined by /resize/<id>/: ${l.image_url}`);
+  }
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);
