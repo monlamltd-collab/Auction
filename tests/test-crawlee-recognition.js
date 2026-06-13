@@ -134,6 +134,54 @@ console.log('\nTest 6: non-recogniser house — per-lot images survive into the 
     'the per-lot image URL is present in the markdown the extractor receives');
 }
 
+// ── Status/image corroboration (2026-06-13 incident) ──
+// The AI extractor INFERS lot status and, on overlay-heavy pages, smears
+// SOLD/STC onto available lots (Maggs: page showed 31 available / 6 sold,
+// extractor persisted 0 available → get_active_lots hid the whole house).
+// For ids the recogniser also parsed, its deterministic status/image win.
+console.log('\nTest 7: recogniser corroboration corrects fabricated statuses + fills images');
+{
+  const extractWithFabricatedStatus = async () => ([
+    { lot: 1, address: '1 First Street, Townsville, AB1 2CD', url: 'https://x.test/lot/1', price: 100000, status: 'stc' },
+    { lot: 2, address: '2 Second Street, Townsville, AB1 2CD', url: 'https://x.test/lot/2', price: 200000, status: 'sold', imageUrl: 'https://cdn.test/gemini2.jpg' },
+  ]);
+  const corroboratingRecogniser = () => new Map([
+    // Page shows lot 1 with no SOLD badge → available; hero image parsed.
+    ['1', { lot_number: 1, address: '1 First Street, Townsville, AB1 2CD', lot_status: 'available', image_url: 'https://cdn.test/rec1.jpg', detail_url: 'https://x.test/lot/1' }],
+    // Lot 2 genuinely shows a SOLD overlay → extractor's status confirmed.
+    ['2', { lot_number: 2, address: '2 Second Street, Townsville, AB1 2CD', lot_status: 'sold', image_url: 'https://cdn.test/rec2.jpg', detail_url: 'https://x.test/lot/2' }],
+    // Lot 3 missed by the extractor → recovered, as in Test 1.
+    ['3', { lot_number: 3, address: '3 Third Street, Townsville, AB1 2CD', lot_status: 'available', detail_url: 'https://x.test/lot/3' }],
+  ]);
+  const r = await renderAndExtractWithCrawlee('https://x.test/cat', 'maggsandallen', {
+    recallSentinelPattern: SENTINEL,
+    recogniseFromMarkdown: corroboratingRecogniser,
+  }, { scrapeAllPagesWithCrawlee: fakeRender, extractLotsWithAI: extractWithFabricatedStatus });
+
+  const l1 = r.lots.find(l => l.lot === 1);
+  const l2 = r.lots.find(l => l.lot === 2);
+  assert(l1.status === 'available', `fabricated stc corrected to available (got ${l1.status})`);
+  assert(l1.imageUrl === 'https://cdn.test/rec1.jpg', `missing image filled from recogniser (got ${l1.imageUrl})`);
+  assert(l2.status === 'sold', `corroborated sold stays sold (got ${l2.status})`);
+  assert(l2.imageUrl === 'https://cdn.test/gemini2.jpg', `extractor image NOT overwritten (got ${l2.imageUrl})`);
+  assert(r.recognised === 1, `lot 3 still recovered as before (got ${r.recognised})`);
+}
+
+console.log('\nTest 8: recogniser entry without lot_status leaves extractor status alone');
+{
+  const extractStc = async () => ([
+    { lot: 1, address: '1 First Street, Townsville, AB1 2CD', url: 'https://x.test/lot/1', price: 100000, status: 'stc' },
+  ]);
+  const noStatusRecogniser = () => new Map([
+    ['1', { lot_number: 1, address: '1 First Street, Townsville, AB1 2CD', detail_url: 'https://x.test/lot/1' }],
+  ]);
+  const r = await renderAndExtractWithCrawlee('https://x.test/cat', 'johnpye', {
+    recallSentinelPattern: SENTINEL,
+    recogniseFromMarkdown: noStatusRecogniser,
+  }, { scrapeAllPagesWithCrawlee: fakeRender, extractLotsWithAI: extractStc });
+  assert(r.lots[0].status === 'stc', `status untouched when recogniser has no lot_status (got ${r.lots[0].status})`);
+}
+
 console.log(`\n${'═'.repeat(50)}`);
 console.log(`Crawlee recognition tests: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
