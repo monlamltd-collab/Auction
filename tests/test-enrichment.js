@@ -34,7 +34,7 @@ function assert(condition, msg) {
 }
 
 // ─── Import matchEPCToLot + read enrichment source for cache-pattern checks ───
-import { matchEPCToLot } from '../lib/enrichment.js';
+import { matchEPCToLot, normaliseEpcSearchRecord } from '../lib/enrichment.js';
 
 // Cache-pattern assertions below want to sanity-check that enrichment_cache is
 // still queried/deleted/TTL'd. Enrichment logic now lives in lib/enrichment.js
@@ -117,6 +117,36 @@ if (runEPC) {
   assert(matchEPCToLot(null, '42 High St') === null, 'Null records returns null');
   assert(matchEPCToLot([], '42 High St') === null, 'Empty records returns null');
   assert(matchEPCToLot(mockEPC, null) === null, 'Null address returns null');
+
+  // ── New EPC API (Get energy performance of buildings data, 2026-06-13) ──
+  // The search endpoint returns the rating BAND but no numeric score. Records
+  // are normalised by normaliseEpcSearchRecord, then matched band-only.
+  // Test 7: normaliseEpcSearchRecord maps the new camelCase shape
+  const newApiRec = {
+    certificateNumber: '9423-3957-2202-4655-4204',
+    addressLine1: '13 Villiers Road', addressLine2: 'Southsea', addressLine3: '', addressLine4: '',
+    postcode: 'PO5 2HG', postTown: 'Southsea',
+    currentEnergyEfficiencyBand: 'D', registrationDate: '2021-04-12', uprn: '1775082094',
+  };
+  const norm = normaliseEpcSearchRecord(newApiRec);
+  assert(norm.currentEnergyRating === 'D', 'normalise: band → currentEnergyRating');
+  assert(norm.address1 === '13 Villiers Road', 'normalise: addressLine1 → address1');
+  assert(norm.lmkKey === '9423-3957-2202-4655-4204', 'normalise: certificateNumber → lmkKey');
+  assert(norm.uprn === '1775082094', 'normalise: uprn carried through');
+  assert(normaliseEpcSearchRecord(null) === null, 'normalise: null → null');
+
+  // Test 8: a band-only record (no score) still matches, with epcScore=null
+  const bandOnly = matchEPCToLot([norm], '13 Villiers Road, Southsea, PO5 2HG');
+  assert(bandOnly !== null, 'band-only record matches (new API has no score)');
+  assert(bandOnly?.epcRating === 'D', 'band-only: rating D returned');
+  assert(bandOnly?.epcScore === null, 'band-only: epcScore is null (not fabricated)');
+
+  // Test 9: junk score >100 STILL rejected even via the band fallback
+  const junkBand = matchEPCToLot(
+    [{ address1: '7 Junk St', currentEnergyEfficiencyBand: 'C', 'current-energy-efficiency': '150' }],
+    '7 Junk St, Town, AB1 2CD',
+  );
+  assert(junkBand === null, 'score > 100 still rejected (Test 3 contract preserved)');
   assert(matchEPCToLot(mockEPC, '') === null, 'Empty address returns null');
 }
 
