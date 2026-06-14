@@ -89,6 +89,9 @@ Flash model for known houses, Pro for unknown houses or PDF catalogues. SDK: `@g
 **5. Puppeteer** (browser fallback for JS-heavy pages)
 Full headless Chrome. Heavier than Firecrawl. Used for pages that require a real browser session. SDK: `puppeteer`.
 
+**6. Symonds & Sampson CF-stealth exception**
+`lib/scraper/symondsandsampson.js` — `auctions.symondsandsampson.co.uk` is behind Cloudflare, which 403s every engine except Firecrawl's residential `proxy:'stealth'`. A bespoke two-tier scraper resolves the soonest upcoming event from the stable events page, then parses its `/property/{id}/{postcode}/{town}/{slug}` lots. Dispatched on `paginateAs:'symondsandsampson_stealth'` (mirrors the Allsop exception). Stealth costs ~5 credits/scrape, so it scrapes only the soonest event — the events page lists lots ~6 weeks pre-auction, so later events are empty.
+
 > **DOM extractors were retired 2026-05-08.** `lib/extractors/` was deleted. References to `USE_FIRECRAWL_EXTRACT`, `FORCE_EXTRACT_HOUSES`, `BROKEN_EXTRACTORS`, or DOM→Gemini merge code are stale — flag them.
 
 ---
@@ -216,7 +219,7 @@ npm run dev        # runs with --watch, opens at http://localhost:3000
 ### Running tests
 
 ```bash
-npm test           # runs all 71 test files
+npm test           # runs all 76 test files
 ```
 
 Key test files: `test-scoring.js`, `test-harness.js`, `test-enrichment.js`, `test-healing-agent.js`, `test-recall.js`, `test-fundability.js`, `test-manifest.js`.

@@ -245,6 +245,7 @@ app.post('/api/endpoint', async (req, res) => {
 2. **Per-house markdown recogniser** (optional) — `HOUSE_OVERRIDES[slug]` in `lib/analysis.js` may point at a function that reads the same Firecrawl markdown response to recover lots the JSON extractor missed. Currently used by **Pattinson, John Pye, McHugh & Co, and Mark Jenkinson**. This is *recognition*, not new extraction — Firecrawl-at-the-heart by definition. The recogniser key is **`recogniseFromMarkdown`** (not `markdownRecogniser`); other supported override keys: `maxPages`, `paginateAs`, `changeTracking`, `recallSentinelPattern`, `validatePage1`. The pattern is a useful fix for any larger house where the JSON extractor under-counts a dense catalogue.
 3. **AI fallback** — `lib/pipeline/extractor.js` runs Gemini Flash-Lite (known houses) or Pro (unknown / PDF) only when the Firecrawl JSON path returns 0 lots. Stamps `_extractStrategy` and `_extractFieldCoverage` provenance.
 4. **Allsop JSON-API exception** — `lib/scraper/allsop.js` consumes Allsop's private JSON endpoint directly (zero credits, ~50ms/page). It's a structured-API consumer, not a layout scraper.
+5. **Cloudflare-stealth exception** (`lib/scraper/symondsandsampson.js`) — for a house behind Cloudflare that 403s every engine from our datacenter IP, the *only* thing that passes is Firecrawl's residential `proxy:'stealth'` (pass `{ proxy: 'stealth' }` to `scrapeWithFirecrawl`; ~5 credits/scrape against the 1,000/mo budget — use **sparingly**). The pattern mirrors Allsop: `rewriteUrl` returns `paginateAs:'<house>_stealth'`; `scrape-stage.js` dispatches to a bespoke scraper that returns **already-normalised** lots (run raws through `normaliseScrapedLot`); `analysis.js` skips Crawlee + Firecrawl-extract for that `paginateAs` (mirror the three `!== 'allsop_api'` guards); wire the scraper into `_deps` via `server.js` + the `lib/scraper.js` barrel; add a `RECALL_SENTINELS` entry. symondsandsampson is **two-tier** (stable events page → soonest `/event/{slug}` → `/property/{id}/{postcode}/{town}/{slug}` lots) and parses the event-page markdown by anchoring on the lot URL (dedup by id; address from text-link → heading → URL-derived). Don't fan out across events — scrape only the soonest (the page lists lots ~6 weeks pre-auction, so later events are empty).
 
 ### Returned lot fields
 - `lot` (Number) — lot number (required; `0` is valid)
@@ -262,6 +263,7 @@ app.post('/api/endpoint', async (req, res) => {
 - Hero-bleed guard at upsert (`lib/pipeline/persist-lots.js::HERO_BLEED_THRESHOLD = 3`) auto-strips a single image URL shared across ≥3 distinct addresses
 - Slug-case dedup at upsert: `house = (house || '').toLowerCase()` — avoid mixed-case duplicates
 - For non-EIG / non-AH-UK / non-Bamboo houses, add a `RECALL_SENTINELS[slug]` regex in `lib/analysis.js` so the harness can measure recall against Firecrawl markdown
+- Cloudflare-blocked house (datacenter IP 403s every engine) → Firecrawl `proxy:'stealth'` two-tier bespoke scraper; see the CF-stealth exception above + `lib/scraper/symondsandsampson.js` for the template
 
 ## Enrichment Manifest (Observability Layer)
 
