@@ -1225,11 +1225,11 @@ router.post('/api/admin/drain-epc-backlog', requireAdmin, async (req, res) => {
           catch (e) { epcRes = { status: 'api_error', records: null }; }
           if (epcRes.status === 'circuit_open') continue; // breaker open — leave for the pause/next round
           for (const row of pcLots) {
-            let band = null, score = null, floor = null, status = 'no_match_with_address';
+            let band = null, score = null, floor = null, uprn = null, status = 'no_match_with_address';
             if (Array.isArray(epcRes.records) && epcRes.records.length) {
               const m = matchEPCToLot(epcRes.records, row.address);
               if (m) {
-                band = m.epcRating; score = m.epcScore; floor = m.epcFloorAreaSqm; status = 'ok';
+                band = m.epcRating; score = m.epcScore; floor = m.epcFloorAreaSqm; uprn = m.uprn || null; status = 'ok';
                 if (m.epcLmkKey && (score == null || floor == null)) {
                   try {
                     const c = await fetchEPCCertificate(m.epcLmkKey);
@@ -1249,6 +1249,9 @@ router.post('/api/admin/drain-epc-backlog', requireAdmin, async (req, res) => {
             if (band) update.epc_rating = band;
             if (score != null) update.epc_score = score;
             if (floor != null) update.floor_area_sqm = floor;
+            // Free UPRN harvest — the EPC record carries the property's UPRN
+            // (OS Places is paid/trial-capped). Fill it when this lot lacks one.
+            if (uprn && /^\d{6,}$/.test(String(uprn)) && !row.uprn) update.uprn = String(uprn);
             try {
               await supabase.from('lots').update(update).eq('id', row.id);
               resolvedThisRound++;

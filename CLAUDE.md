@@ -34,7 +34,7 @@ Phased roadmap and status: `WORKSTREAMS.md`.
    - **Allsop JSON-API exception** — `lib/scraper/allsop.js` consumes Allsop's private JSON endpoint directly (zero credits, ~50ms/page). Structured API consumer, not a scraper.
 4. `analyseLot()` (`lib/pipeline/scoring.js`) scores each lot 0–10.
 5. Results written to `lots`; events written to `lot_events` (source of truth — see Database section).
-6. Enrichment pipeline runs: UPRN (OS Places), EPC, OpenRent rental comps, BridgeMatch fundability, value estimator.
+6. Enrichment pipeline runs: UPRN (OS Places, plus a free fallback that harvests UPRN from matched EPC certificates), EPC, OpenRent rental comps, BridgeMatch fundability, value estimator.
 7. Frontend (`public/app.js`) renders with filters.
 
 > **DOM extractors retired 2026-05-08.** `lib/extractors/` was deleted along with `tests/snapshots/`, `tests/test-extractors.js`, `tests/test-detail-extractors.js`, and `scripts/audit*.mjs`. The `USE_FIRECRAWL_EXTRACT` env var, `FORCE_EXTRACT_HOUSES` safelist, `BROKEN_EXTRACTORS` set, and DOM→Gemini merge code are all gone. If you find references to any of these, they are stale — flag them.
@@ -117,7 +117,7 @@ From `package.json`:
 | `FIRECRAWL_API_KEY` | Primary scraper |
 | `FIRECRAWL_MONTHLY_BUDGET` | Credit cap (see `lib/resource-budget.js`) |
 | `FIRECRAWL_SKIP_HOUSES` | Comma-separated slugs to bypass Firecrawl |
-| `OS_DATA_HUB_KEY` | UPRN + canonical address (free 100k/mo) |
+| `OS_DATA_HUB_KEY` | UPRN + canonical address via OS Places API. **NB OS Places is EXCLUDED from the Premium plan's £1k/mo free allowance** (Royal Mail PAF data) — £0.01/lookup after a 60-day / 2,000-txn trial (trial exhausted 2026-06-14). UPRN is ALSO harvested **free** from matched EPC certificates (`enrichment.js`), so paid OS Places is only needed for non-EPC lots. |
 | `EPC_API_TOKEN` | EPC register API — Bearer token for get-energy-performance-data.communities.gov.uk (old `EPC_API_EMAIL`/`EPC_API_KEY` Basic-auth API retired 30 May 2026) |
 | `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_KEY` | Database |
 | `BRIDGEMATCH_API_URL` | BridgeMatch API base for fundability badge |
