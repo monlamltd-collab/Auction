@@ -31,7 +31,7 @@ Phased roadmap and status: `WORKSTREAMS.md`.
    - **Firecrawl JSON extract** — primary, AI-driven, no per-house code (`lib/pipeline/firecrawl-extract.js:extractCatalogueListing`). Handles single-page and paginated catalogues. `changeTracking` short-circuits unchanged pages at ~1 credit.
    - **Markdown recogniser** — optional per-house function in `HOUSE_OVERRIDES` (currently Pattinson + John Pye) reads the same Firecrawl markdown response to recover lots the JSON extractor missed. Firecrawl-at-heart by definition.
    - **Gemini fallback** — fires only when Firecrawl JSON returns 0 lots (Flash for known houses, Pro for unknown / PDF).
-   - **Allsop JSON-API exception** — `lib/scraper/allsop.js` consumes Allsop's private JSON endpoint directly (zero credits, ~50ms/page). Structured API consumer, not a scraper.
+   - **Allsop JSON-API exception** — `lib/scraper/allsop.js` consumes Allsop's `/api/property-search` JSON endpoint directly (zero credits, ~50ms/page). Structured API consumer, not a scraper. `rewriteUrl('allsop', …)` **defaults any allsop URL to the residential property-search API** — a stale calendar row (`/auctions/future-auction-dates`) otherwise fell through and was scraped as raw HTML → 0 lots → `probe=error` stall.
 4. `analyseLot()` (`lib/pipeline/scoring.js`) scores each lot 0–10.
 5. Results written to `lots`; events written to `lot_events` (source of truth — see Database section).
 6. Enrichment pipeline runs: UPRN (OS Places, plus a free fallback that harvests UPRN from matched EPC certificates), EPC, OpenRent rental comps, BridgeMatch fundability, value estimator.
