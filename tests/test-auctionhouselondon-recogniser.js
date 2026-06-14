@@ -64,7 +64,10 @@ FlatLeasehold
 A Vacant First Floor Three Room Flat`;
 
 console.log('Test 1: parses all three lots, keyed by trailing numeric id');
-const map = recogniseAuctionHouseLondonLotsFromMarkdown([CARD1, CARD2, CARD3].join('\n\n'));
+// Page header carries the sale date ("All Lots for 24th-25th June 2026") — the
+// recogniser must stamp it on every lot (the /current-auction calendar is stale).
+const PAGE = 'All Lots for 24th-25th June 2026 | Auction House London\n\n' + [CARD1, CARD2, CARD3].join('\n\n');
+const map = recogniseAuctionHouseLondonLotsFromMarkdown(PAGE);
 assert(map instanceof Map && map.size === 3, `Map of 3 (got ${map.size})`);
 
 console.log('\nTest 2: lot 1 fields (Terraced/Freehold house, guide, eig image, status)');
@@ -77,6 +80,7 @@ assert(a && a.property_type === 'house', `Terraced → house (got "${a?.property
 assert(a && a.tenure === 'Freehold', `tenure (got "${a?.tenure}")`);
 assert(a && a.image_url.includes('/ams/images/20/'), `EIG image (got "${a?.image_url}")`);
 assert(a && a.detail_url.endsWith('-349500'), 'detail_url captured');
+assert(a && a.auction_date === '2026-06-25', `auction_date = last day of the header range (got "${a?.auction_date}")`);
 assert(a && a.lot_status === 'available', `available (got "${a?.lot_status}")`);
 
 console.log('\nTest 3: lot 2 — Semi-Detached house, beds from description');
