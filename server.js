@@ -21,7 +21,7 @@ import { ResourceBudget } from './lib/resource-budget.js';
 import {
   initScraper,
   FIRECRAWL_API_KEY, FIRECRAWL_SKIP, scrapeWithFirecrawl, scrapeRenderedPage,
-  scrapeAllPages, scrapeAllsopApi, extractAllsopLotsFromJson, enrichAllsopLots,
+  scrapeAllPages, scrapeAllsopApi, extractAllsopLotsFromJson, enrichAllsopLots, scrapeSymondsAndSampson,
   detectTotalPages, buildPageUrl, fetchPage, extractLotsWithAI,
   backfillImages, backfillImagesWithFirecrawl,
   backfillImagesFromLotPages, fetchLotPage, normaliseLotStatuses, puppeteer,
@@ -263,7 +263,7 @@ initAnalysis({
   budget,
   // Scraper (legacy deps — will migrate to budget incrementally)
   FIRECRAWL_API_KEY, FIRECRAWL_SKIP, scrapeWithFirecrawl, scrapeRenderedPage,
-  scrapeAllPages, scrapeAllsopApi, extractAllsopLotsFromJson, enrichAllsopLots,
+  scrapeAllPages, scrapeAllsopApi, extractAllsopLotsFromJson, enrichAllsopLots, scrapeSymondsAndSampson,
   detectTotalPages, buildPageUrl, fetchPage, extractLotsWithAI,
   backfillImages, backfillImagesWithFirecrawl,
   backfillImagesFromLotPages, fetchLotPage, normaliseLotStatuses, puppeteer,
