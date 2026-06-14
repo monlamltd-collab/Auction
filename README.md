@@ -103,6 +103,7 @@ Full headless Chrome. Heavier than Firecrawl. Used for pages that require a real
 - **`healBrokenHouse()`** — when a house returns 0 lots, searches for the new catalogue URL via Firecrawl + Gemini with exponential cooldown (24h → 7d backoff).
 - **Circuit breakers** (`house-health.js`) — 3 consecutive failures → auto-skip with backoff.
 - **Recall sentinels** — every house should have a recall pattern. EIG / AH UK / Bamboo platforms are auto-detected by `detectPlatformSentinel()` in `lib/analysis.js`. Non-platform houses need a `RECALL_SENTINELS[slug]` regex.
+- **Auction-date precedence** (`persist-lots.js`) — a lot's date resolves as **bullets → recogniser/scraper-parsed `_auctionDate` → catalogue/calendar**. A recogniser that parses the date itself (BTG Eddisons from the lot id's `-DDMMYY`, Auction House London from the "All Lots for …" header, symondsandsampson from the event) beats a stale/past calendar row or a `2099` `always_on` placeholder — the rolling-URL fix that keeps freshly-scraped catalogues live.
 - **Telegram alerts** — self-healing reports delivered via `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID`.
 
 Invoke the `auction-self-healing` skill for the full diagnose-classify-fix-verify-report playbook.
