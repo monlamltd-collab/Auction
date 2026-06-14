@@ -140,6 +140,9 @@ if (runEPC) {
   assert(bandOnly !== null, 'band-only record matches (new API has no score)');
   assert(bandOnly?.epcRating === 'D', 'band-only: rating D returned');
   assert(bandOnly?.epcScore === null, 'band-only: epcScore is null (not fabricated)');
+  // Free UPRN harvest: the matched EPC cert exposes the property's UPRN so we
+  // can fill lots.uprn without a paid OS Places lookup (trial-capped 2026-06-14).
+  assert(bandOnly?.uprn === '1775082094', 'match exposes uprn for free harvest');
 
   // Test 9: junk score >100 STILL rejected even via the band fallback
   const junkBand = matchEPCToLot(
