@@ -241,6 +241,9 @@ app.post('/api/endpoint', async (req, res) => {
 **Single unified path**, no per-house DOM extractors. The previous DOM extractor system was retired 2026-05-08. New houses do NOT need any per-house JS code beyond a `HOUSE_ROOTS` entry.
 
 ### Pipeline
+
+> ⚠️ **Firecrawl is Cloudflare-bypass-only** (`FIRECRAWL_CF_BYPASS_ONLY`, default on, 2026-06-15). Crawlee is the primary engine for every house; the FC JSON-extract path below (steps 1–3) is **gated off** (throws `FC_CF_BYPASS_ONLY`) and runs only if the flag is set `=false`. Firecrawl is reached now only via the CF-stealth exception (step 5). Per-page render/healing falls back to Puppeteer/Gemini. See the Rules below + `lib/scraper/firecrawl.js::assertFirecrawlAllowed`.
+
 1. **`lib/pipeline/firecrawl-extract.js::extractCatalogueListing()`** — primary path. Calls Firecrawl's structured `jsonOptions` extract against the catalogue URL with the schema in `lib/scraper/lot-schema.js`. Handles single-page and paginated catalogues. `changeTracking` short-circuits unchanged pages at ~1 credit.
 2. **Per-house markdown recogniser** (optional) — `HOUSE_OVERRIDES[slug]` in `lib/analysis.js` may point at a function that reads the same Firecrawl markdown response to recover lots the JSON extractor missed. Currently used by **Pattinson, John Pye, McHugh & Co, and Mark Jenkinson**. This is *recognition*, not new extraction — Firecrawl-at-the-heart by definition. The recogniser key is **`recogniseFromMarkdown`** (not `markdownRecogniser`); other supported override keys: `maxPages`, `paginateAs`, `changeTracking`, `recallSentinelPattern`, `validatePage1`. The pattern is a useful fix for any larger house where the JSON extractor under-counts a dense catalogue.
 3. **AI fallback** — `lib/pipeline/extractor.js` runs Gemini Flash-Lite (known houses) or Pro (unknown / PDF) only when the Firecrawl JSON path returns 0 lots. Stamps `_extractStrategy` and `_extractFieldCoverage` provenance.
@@ -264,6 +267,7 @@ app.post('/api/endpoint', async (req, res) => {
 - Slug-case dedup at upsert: `house = (house || '').toLowerCase()` — avoid mixed-case duplicates
 - For non-EIG / non-AH-UK / non-Bamboo houses, add a `RECALL_SENTINELS[slug]` regex in `lib/analysis.js` so the harness can measure recall against Firecrawl markdown
 - Cloudflare-blocked house (datacenter IP 403s every engine) → Firecrawl `proxy:'stealth'` two-tier bespoke scraper; see the CF-stealth exception above + `lib/scraper/symondsandsampson.js` for the template
+- **Firecrawl is Cloudflare-bypass ONLY** (`FIRECRAWL_CF_BYPASS_ONLY`, default on) — every FC entry point (`extractCatalogue`/`extractDetail`/`extractHomepage`/`batchExtractCatalogues`/`agentExtract`/`mapSiteUrls`) throws `FC_CF_BYPASS_ONLY` unless it's `scrapeWithFirecrawl({proxy:'stealth'})`. Per-page extraction/render/healing runs on Crawlee→Puppeteer→Gemini. **Never add a new FC call for extraction — only for CF-bypass.** (The FIRE-1 agent burned 6,209 credits homepage-probing before this gate; `lib/scraper/firecrawl.js::assertFirecrawlAllowed`.)
 
 ## Enrichment Manifest (Observability Layer)
 
