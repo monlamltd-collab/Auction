@@ -195,6 +195,7 @@ Manifest gating prevents double-counting: `canScoreYield` and `canScoreBelowMark
 | `FIRECRAWL_API_KEY` | Primary scraper |
 | `FIRECRAWL_MONTHLY_BUDGET` | Credit cap (see `lib/resource-budget.js`) |
 | `FIRECRAWL_SKIP_HOUSES` | Comma-separated slugs to bypass Firecrawl |
+| `FIRECRAWL_CF_BYPASS_ONLY` | Default **on**. Restricts Firecrawl to Cloudflare-bypass (`scrapeWithFirecrawl({proxy:'stealth'})`) only — every other FC entry point throws `FC_CF_BYPASS_ONLY` so per-page scraping/extraction/healing can't burn the budget. Set `=false` to restore legacy Firecrawl-everywhere behaviour. |
 | `OS_DATA_HUB_KEY` | UPRN enrichment (free 100k/mo) |
 | `EPC_API_EMAIL` / `EPC_API_KEY` | EPC register |
 | `SUPABASE_URL` | Supabase project URL |
