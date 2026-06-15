@@ -105,5 +105,15 @@ assert(extractSymondsLotsFromMarkdown('', '2026-06-19').size === 0, 'empty → 0
 assert(extractSymondsLotsFromMarkdown(null, '2026-06-19').size === 0, 'null → 0');
 assert(extractSymondsLotsFromMarkdown('### [Nope](https://example.com/x)', '2026-06-19').size === 0, 'non-S&S link → 0');
 
+console.log('\nTest 8: bare "Properties" section heading is NOT used as an address');
+const LOT_HEADING = `## Properties
+
+[![image](https://media.example.com/img.jpg)](https://auctions.symondsandsampson.co.uk/property/dwr000712/dt9/sherborne/nether-compton/land)`;
+const mH = extractSymondsLotsFromMarkdown(LOT_HEADING, '2026-06-19');
+const h = mH.get('dwr000712');
+assert(mH.size === 1, `1 lot (got ${mH.size})`);
+assert(h && !/^properties$/i.test(h.address || ''), `generic heading rejected (got "${h?.address}")`);
+assert(h && /nether compton/i.test(h.address || '') && /sherborne/i.test(h.address || ''), `URL-derived address used (got "${h?.address}")`);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);
