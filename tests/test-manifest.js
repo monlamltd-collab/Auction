@@ -145,6 +145,15 @@ console.log('\n── flood / LR / geocode / fundability ──');
   recordGeocode(m, { status: 'ok', lat: 51.5, lng: -0.1 });
   assert(m.geocode.lat === 51.5, 'geocode lat stored');
 
+  // Regression (2026-06-16): 'timeout' was missing from FLOOD/LR/GEOCODE allowlists
+  // → recordFlood threw "unknown status" and aborted the enrichment wave's flood
+  // batch. Iterate each allowlist so the const stays in sync with the recorder.
+  recordFlood(m, { status: 'timeout' });
+  assert(m.flood.status === 'timeout', 'recordFlood accepts timeout (regression)');
+  for (const s of FLOOD_STATUSES) { recordFlood(m, { status: s }); assert(m.flood.status === s, `flood accepts: ${s}`); }
+  for (const s of LR_STATUSES) { recordLandRegistry(m, { status: s }); assert(m.land_registry.status === s, `LR accepts: ${s}`); }
+  for (const s of GEOCODE_STATUSES) { recordGeocode(m, { status: s }); assert(m.geocode.status === s, `geocode accepts: ${s}`); }
+
   recordFundability(m, {
     status: 'api_ok',
     lender_count: 12,
