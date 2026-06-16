@@ -186,7 +186,9 @@ Manifest gating prevents double-counting: `canScoreYield` and `canScoreBelowMark
 
 | Variable | Purpose |
 |---|---|
-| `GEMINI_API_KEY` | Gemini API |
+| `GEMINI_API_KEY` | Gemini API (text extraction fallback; legacy image-filter fallback) |
+| `OPENROUTER_API_KEY` | OpenRouter — cheap flash-vision cascade for the image-quality filter (`lib/vision-provider.js`) |
+| `OPENROUTER_VISION_MODELS` | Optional — comma-separated vision model cascade override, priority order (default: gemini-2.5-flash-lite → qwen3-vl-8b → seed-1.6-flash) |
 | `FIRECRAWL_API_KEY` | Primary scraper |
 | `FIRECRAWL_MONTHLY_BUDGET` | Credit cap (see `lib/resource-budget.js`) |
 | `FIRECRAWL_SKIP_HOUSES` | Comma-separated slugs to bypass Firecrawl |
