@@ -13,6 +13,7 @@ import {
   markEnriched,
   recordExtract,
   recordEpc,
+  recordEpcRecommendations,
   recordFlood,
   recordLandRegistry,
   recordGeocode,
@@ -23,6 +24,7 @@ import {
   summariseBatch,
   deriveAlerts,
   EPC_STATUSES,
+  EPC_RECOMMENDATIONS_STATUSES,
   FLOOD_STATUSES,
   LR_STATUSES,
   GEOCODE_STATUSES,
@@ -104,6 +106,29 @@ console.log('\n── recordEpc ──');
   for (const s of EPC_STATUSES) {
     recordEpc(m, { status: s });
     assert(m.epc.status === s, `accepts documented status: ${s}`);
+  }
+}
+
+// ─── EPC recommendations recorder (regression: skipped_no_creds) ───
+console.log('\n── recordEpcRecommendations ──');
+{
+  const m = createManifest();
+  recordEpcRecommendations(m, { status: 'ok', count: 3 });
+  assert(m.epc_recommendations.status === 'ok', 'status=ok stored');
+
+  assertThrows(() => recordEpcRecommendations(m, {}), /status is required/, 'rejects missing status');
+  assertThrows(() => recordEpcRecommendations(m, { status: 'bogus' }), /unknown status/, 'rejects unknown status');
+
+  // Regression (2026-06-16): the producer returns 'skipped_no_creds' when
+  // EPC_API_TOKEN is unset; it was missing from EPC_RECOMMENDATIONS_STATUSES so the
+  // recorder threw "unknown status" and aborted the entire EPC/Flood hygiene wave.
+  recordEpcRecommendations(m, { status: 'skipped_no_creds' });
+  assert(m.epc_recommendations.status === 'skipped_no_creds', 'accepts skipped_no_creds (regression)');
+
+  // Every documented status must be accepted (keeps the allowlist + producer in sync).
+  for (const s of EPC_RECOMMENDATIONS_STATUSES) {
+    recordEpcRecommendations(m, { status: s });
+    assert(m.epc_recommendations.status === s, `accepts documented status: ${s}`);
   }
 }
 
