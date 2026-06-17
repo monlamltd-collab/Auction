@@ -852,7 +852,7 @@ router.get('/api/quality-report', requireAdmin, async (req, res) => {
     const [{ data: cached }, { data: lotRows }, { data: skillRows }] = await Promise.all([
       supabase.from('cached_analyses').select('house, url, expires_at, created_at, content_hash'),
       supabase.from('lots').select(LOTS_SELECT),
-      supabase.from('house_skills').select('slug, status, average_lot_count, last_lot_count, last_extracted_count, last_probe_result, last_probe_at, last_full_extract_at'),
+      supabase.from('house_skills').select('slug, status, average_lot_count, last_lot_count, last_extracted_count, last_probe_result, last_probe_at, last_full_extract_at, dormant'),
     ]);
 
     const skillByHouse = {};
@@ -860,7 +860,7 @@ router.get('/api/quality-report', requireAdmin, async (req, res) => {
 
     const now = new Date();
     const report = { houses: [], issues: [], summary: {} };
-    let totalLots = 0, housesWithZero = 0, staleHouses = 0, silentFailures = 0;
+    let totalLots = 0, housesWithZero = 0, staleHouses = 0, silentFailures = 0, dormantHouses = 0;
 
     // Group cache metadata by house
     const cacheByHouse = {};
@@ -909,8 +909,10 @@ router.get('/api/quality-report', requireAdmin, async (req, res) => {
       // extracted nothing is a silent scraper failure — invisible to a DB lot
       // count (the lots persist), so flag it explicitly off house_skills.
       const skill = skillByHouse[house];
+      const dormant = skill?.dormant === true;
       const silentFail = lots.length > 0 && isSilentScraperFailure(skill);
       if (silentFail) silentFailures++;
+      if (dormant) dormantHouses++;
 
       const entry = {
         house, lots: lots.length, images: withImage, imgCoverage, ageHours,
@@ -919,6 +921,7 @@ router.get('/api/quality-report', requireAdmin, async (req, res) => {
         lastRunResult: skill?.last_probe_result ?? null,
         lastFullExtractAt: skill?.last_full_extract_at ?? null,
         silentFailure: silentFail,
+        dormant,
       };
       report.houses.push(entry);
 
@@ -928,7 +931,7 @@ router.get('/api/quality-report', requireAdmin, async (req, res) => {
       if (isStale) report.issues.push({ severity: 'info', house, msg: `Cache stale (${ageHours}h old)` });
     }
 
-    report.summary = { totalHouses: allHouses.size, totalLots, housesWithZero, staleHouses, silentFailures };
+    report.summary = { totalHouses: allHouses.size, totalLots, housesWithZero, staleHouses, silentFailures, dormantHouses };
     res.json(report);
   } catch (e) {
     log.error('Quality report error', { error: e.message });

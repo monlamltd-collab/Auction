@@ -206,6 +206,11 @@ ALTER TABLE house_skills ADD COLUMN IF NOT EXISTS catalogue_page1_hash TEXT;
 -- total-lots-in-DB. 0 + a feed (average_lot_count>0) = silent scraper failure.
 -- (last_probe_at / last_probe_result / last_full_extract_at: adaptive-scheduling migration.)
 ALTER TABLE house_skills ADD COLUMN IF NOT EXISTS last_extracted_count INTEGER;
+-- Dormant flag: house is known between-auctions/defunct (catalogue all-terminal).
+-- Downgrades breakage alerts to info + skips the liveness health-degrade. Auto-
+-- clears when a live (available/unsold) lot is next extracted. Defaults false.
+ALTER TABLE house_skills ADD COLUMN IF NOT EXISTS dormant BOOLEAN DEFAULT false;
+ALTER TABLE house_skills ADD COLUMN IF NOT EXISTS dormant_since TIMESTAMPTZ;
 
 -- 15. HARNESS: discovery_candidates table
 CREATE TABLE IF NOT EXISTS discovery_candidates (

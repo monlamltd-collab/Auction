@@ -90,6 +90,12 @@ console.log('\nTest 6: silent-failure detection (the ghost-lot blind spot)');
   assert(isSilentScraperFailure({ average_lot_count: 120, last_probe_result: null }) === false,
     'never run since migration (null) → not flagged');
   assert(isSilentScraperFailure(null) === false, 'null skill → false');
+  // Dormant houses (known between-auctions/defunct) legitimately extract 0 / all
+  // terminal — they must NOT show up as silent failures even with a feed + error.
+  assert(isSilentScraperFailure({ average_lot_count: 19, last_probe_result: 'error', dormant: true }) === false,
+    'dormant house with feed + error → not a silent failure');
+  assert(isSilentScraperFailure({ average_lot_count: 19, last_probe_result: 'error', dormant: false }) === true,
+    'same house NOT dormant → still a silent failure (flag is the only difference)');
 }
 
 console.log('\nTest 7: freshness digest formatter lists silent failures');
