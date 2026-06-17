@@ -9,6 +9,7 @@
 
 import { parseLotArray } from '../lib/scraper/extraction.js';
 import { formatFreshnessDigestForTelegram } from '../lib/pipeline/freshness-digest.js';
+import { isSilentScraperFailure } from '../lib/pipeline/liveness.js';
 
 let passed = 0, failed = 0;
 function assert(cond, msg) {
@@ -68,6 +69,46 @@ console.log('\nTest 5: freshness digest formatter');
   assert(!/extraction failures/.test(text), 'zero counts omitted');
   assert(/242 awaiting sweep/.test(text), 'backlog line');
   assert(!/older than the 30d sweep window/.test(text), 'escaped-backlog warning omitted at zero');
+  assert(/no silent scraper failures/.test(text), 'all-clear liveness line when none');
+}
+
+console.log('\nTest 6: silent-failure detection (the ghost-lot blind spot)');
+{
+  // Feed present (lots persist from prior runs) but the last run extracted 0 →
+  // silent failure. This is what the DB-lot-count health check missed.
+  assert(isSilentScraperFailure({ average_lot_count: 120, last_probe_result: 'error', last_extracted_count: 0 }) === true,
+    'feed + last run errored → silent failure');
+  assert(isSilentScraperFailure({ last_lot_count: 80, last_probe_result: 'error' }) === true,
+    'last_lot_count feed + error → silent failure');
+  // Healthy / non-failure cases.
+  assert(isSilentScraperFailure({ average_lot_count: 120, last_probe_result: 'changed', last_extracted_count: 120 }) === false,
+    'last run extracted lots → not a failure');
+  assert(isSilentScraperFailure({ average_lot_count: 120, last_probe_result: 'same' }) === false,
+    'changeTracking skip (unchanged) → not a failure');
+  assert(isSilentScraperFailure({ average_lot_count: 0, last_probe_result: 'error' }) === false,
+    'no feed (genuinely empty/new house) → not a silent failure');
+  assert(isSilentScraperFailure({ average_lot_count: 120, last_probe_result: null }) === false,
+    'never run since migration (null) → not flagged');
+  assert(isSilentScraperFailure(null) === false, 'null skill → false');
+}
+
+console.log('\nTest 7: freshness digest formatter lists silent failures');
+{
+  const text = formatFreshnessDigestForTelegram({
+    date: '2026-06-17',
+    total: 12000,
+    buckets: { fresh1d: 100, d1to7: 0, d7to14: 0, stale14plus: 11900 },
+    newToday: 0, backlogInWindow: 0, backlogEscaped: 0,
+    extractionCalls: 50, hallucinationsBlocked: 0, extractionFailures: 6, crawlerRestarts: 0,
+    silentFailures: [
+      { slug: 'halls', name: 'Halls', lastGood: '2026-06-14T08:00:00Z' },
+      { slug: 'tcpa', name: 'Town & Country', lastGood: null },
+    ],
+  });
+  assert(/🛑 Silent scraper failures \(2\)/.test(text), 'silent-failure header with count');
+  assert(/Halls \(last good extract 2026-06-14\)/.test(text), 'names a failing house with last-good date');
+  assert(/Town & Country/.test(text), 'lists second failing house');
+  assert(!/no silent scraper failures/.test(text), 'all-clear line suppressed when failures exist');
 }
 
 console.log(`\n${'═'.repeat(50)}`);

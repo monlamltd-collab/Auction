@@ -202,6 +202,10 @@ ALTER TABLE house_skills ADD COLUMN IF NOT EXISTS healing_attempts INTEGER DEFAU
 ALTER TABLE house_skills ADD COLUMN IF NOT EXISTS circuit_opened_at TIMESTAMPTZ;
 -- Page-1 content-hash gate (changeTracking-incompatible paginated houses, e.g. Pattinson)
 ALTER TABLE house_skills ADD COLUMN IF NOT EXISTS catalogue_page1_hash TEXT;
+-- Liveness: lots extracted in the most recent scheduled run, distinct from
+-- total-lots-in-DB. 0 + a feed (average_lot_count>0) = silent scraper failure.
+-- (last_probe_at / last_probe_result / last_full_extract_at: adaptive-scheduling migration.)
+ALTER TABLE house_skills ADD COLUMN IF NOT EXISTS last_extracted_count INTEGER;
 
 -- 15. HARNESS: discovery_candidates table
 CREATE TABLE IF NOT EXISTS discovery_candidates (
