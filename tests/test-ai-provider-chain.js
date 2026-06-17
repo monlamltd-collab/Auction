@@ -6,7 +6,7 @@
  * Run: node tests/test-ai-provider-chain.js
  */
 
-import { buildProviderChain, hasAIFallback } from '../lib/ai-provider.js';
+import { buildProviderChain, hasAIFallback, openRouterGlobalBackups } from '../lib/ai-provider.js';
 
 let passed = 0, failed = 0;
 function assert(cond, msg) {
@@ -14,7 +14,7 @@ function assert(cond, msg) {
   else { console.error(`  FAIL: ${msg}`); failed++; }
 }
 
-const KEYS = ['AI_PROVIDER', 'AI_FALLBACK_PROVIDERS', 'OPENROUTER_API_KEY', 'GEMINI_API_KEY'];
+const KEYS = ['AI_PROVIDER', 'AI_FALLBACK_PROVIDERS', 'OPENROUTER_API_KEY', 'GEMINI_API_KEY', 'OPENROUTER_FALLBACK_MODELS'];
 const saved = {};
 for (const k of KEYS) saved[k] = process.env[k];
 function reset() { for (const k of KEYS) delete process.env[k]; }
@@ -89,6 +89,28 @@ console.log('\nTest 7: AI_FALLBACK_PROVIDERS="" explicitly disables fallback');
   process.env.AI_FALLBACK_PROVIDERS = '';
   assert(eq(buildProviderChain({ tier: 'fast' }), ['gemini']), 'empty fallback list → gemini only');
   assert(hasAIFallback() === false, 'hasAIFallback false when explicitly emptied');
+}
+
+console.log('\nTest 8: OpenRouter global backups default to a free NON-Gemini model');
+{
+  reset();
+  // 2026-06-17 incident: OpenRouter's default fast/capable models are BOTH
+  // Gemini, so a Gemini-wide 429 had no non-Gemini rung and extraction cascaded.
+  // The default backup must be non-Gemini so the chain actually survives.
+  const backups = openRouterGlobalBackups();
+  assert(backups.length === 1, `one default backup (got ${backups.length}: ${backups})`);
+  assert(/llama|nemotron|deepseek|mistral|qwen/i.test(backups[0]) && !/gemini|google/i.test(backups[0]),
+    `default backup is non-Gemini (got "${backups[0]}")`);
+}
+
+console.log('\nTest 9: OPENROUTER_FALLBACK_MODELS overrides + "" disables');
+{
+  reset();
+  process.env.OPENROUTER_FALLBACK_MODELS = 'deepseek/deepseek-chat, mistralai/mistral-large';
+  assert(eq(openRouterGlobalBackups(), ['deepseek/deepseek-chat', 'mistralai/mistral-large']),
+    'custom comma-list is parsed in order');
+  process.env.OPENROUTER_FALLBACK_MODELS = '';
+  assert(eq(openRouterGlobalBackups(), []), 'empty string disables the default backup');
 }
 
 for (const k of KEYS) { if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k]; }

@@ -33,6 +33,7 @@ import { getAuctionCalendar, getCalendarAuctions } from '../lib/calendar.js';
 import { validateBatch } from '../lib/harness/data-contract.js';
 import { getAllHealth } from '../lib/harness/house-health.js';
 import { getDiscoveryQueue, approveCandidate, getDiscoveryBudget } from '../lib/harness/house-discovery.js';
+import { isSilentScraperFailure } from '../lib/pipeline/liveness.js';
 import { getEnrichmentReport } from '../lib/harness/enrichment-engine.js';
 import { runManagerCycle, getManagerReport, setManagerConfig, getManagerConfig } from '../lib/harness/manager.js';
 import { watchAuctionCalendar, watchOne } from '../lib/pipeline/auction-watcher.js';
@@ -844,15 +845,22 @@ router.post('/api/admin/run-watcher', rateLimit(60000, 20), requireAdmin, async 
 
 router.get('/api/quality-report', requireAdmin, async (req, res) => {
   try {
-    // Get cache metadata (no lots JSONB) and lots from lots table
-    const [{ data: cached }, { data: lotRows }] = await Promise.all([
+    // Get cache metadata (no lots JSONB) and lots from lots table.
+    // house_skills carries the per-RUN liveness signal (last_probe_result +
+    // last_extracted_count) that distinguishes a dead crawler from a live feed —
+    // the DB lot count alone can't, because lots persist from prior good runs.
+    const [{ data: cached }, { data: lotRows }, { data: skillRows }] = await Promise.all([
       supabase.from('cached_analyses').select('house, url, expires_at, created_at, content_hash'),
       supabase.from('lots').select(LOTS_SELECT),
+      supabase.from('house_skills').select('slug, status, average_lot_count, last_lot_count, last_extracted_count, last_probe_result, last_probe_at, last_full_extract_at'),
     ]);
+
+    const skillByHouse = {};
+    for (const s of (skillRows || [])) skillByHouse[s.slug] = s;
 
     const now = new Date();
     const report = { houses: [], issues: [], summary: {} };
-    let totalLots = 0, housesWithZero = 0, staleHouses = 0;
+    let totalLots = 0, housesWithZero = 0, staleHouses = 0, silentFailures = 0;
 
     // Group cache metadata by house
     const cacheByHouse = {};
@@ -897,15 +905,30 @@ router.get('/api/quality-report', requireAdmin, async (req, res) => {
         ({ fieldCoverage } = validateBatch(lots, house));
       } catch (_e) { /* non-fatal */ }
 
-      const entry = { house, lots: lots.length, images: withImage, imgCoverage, ageHours, stale: !!isStale, fieldCoverage };
+      // Liveness: a house with lots in the feed whose MOST RECENT scheduled run
+      // extracted nothing is a silent scraper failure — invisible to a DB lot
+      // count (the lots persist), so flag it explicitly off house_skills.
+      const skill = skillByHouse[house];
+      const silentFail = lots.length > 0 && isSilentScraperFailure(skill);
+      if (silentFail) silentFailures++;
+
+      const entry = {
+        house, lots: lots.length, images: withImage, imgCoverage, ageHours,
+        stale: !!isStale, fieldCoverage,
+        lastExtractedCount: skill?.last_extracted_count ?? null,
+        lastRunResult: skill?.last_probe_result ?? null,
+        lastFullExtractAt: skill?.last_full_extract_at ?? null,
+        silentFailure: silentFail,
+      };
       report.houses.push(entry);
 
       if (lots.length === 0) report.issues.push({ severity: 'critical', house, msg: 'Zero lots — extractor may be broken' });
+      if (silentFail) report.issues.push({ severity: 'critical', house, msg: `Silent scraper failure — ${lots.length} lots in feed but most recent run extracted 0 (last good extract: ${skill?.last_full_extract_at || 'unknown'})` });
       if (imgCoverage < 30 && lots.length > 0) report.issues.push({ severity: 'warn', house, msg: `Low image coverage: ${imgCoverage}%` });
       if (isStale) report.issues.push({ severity: 'info', house, msg: `Cache stale (${ageHours}h old)` });
     }
 
-    report.summary = { totalHouses: allHouses.size, totalLots, housesWithZero, staleHouses };
+    report.summary = { totalHouses: allHouses.size, totalLots, housesWithZero, staleHouses, silentFailures };
     res.json(report);
   } catch (e) {
     log.error('Quality report error', { error: e.message });

@@ -38,6 +38,25 @@ Guide Price: £395,000+
 
 View Listing`;
 
+// CARD3 — price rendered with markdown emphasis ("Guide Price* **£X+**"), the
+// turndown bold variant. The old `Guide Price:? £` regex missed this entirely,
+// dropping the guide price even though it was on the card.
+const CARD3 = `[The Old Bakery, Mill Street, Ludlow, Shropshire SY8 1AB](https://www.btgeddisonspropertyauctions.com/properties/202604011200sq_zzzz-200626/for-auction-ludlow)
+
+![](https://asta.btgeddisonspropertyauctions.com/skyco13/XIII-HUB-SDL-3/sdl_data/address/pkm_sdl/artnr_202604011200sq_zzzz/_pictures/1_t.jpeg)
+
+Guide Price\\* **£250,000+**
+
+View Listing`;
+
+console.log('Test 0: markdown-emphasised "Guide Price* **£X+**" is captured');
+{
+  const m3 = recogniseBtgEddisonsLotsFromMarkdown(CARD3);
+  const c = m3.get('202604011200sq_zzzz-200626');
+  assert(!!c, 'bold-price card parsed');
+  assert(c && c.guide_price === '£250,000', `guide_price from bold markdown (got "${c?.guide_price}")`);
+}
+
 console.log('Test 1: parses both lots, keyed by id');
 const map = recogniseBtgEddisonsLotsFromMarkdown(CARD1 + '\n\n' + CARD2);
 assert(map instanceof Map && map.size === 2, `Map of 2 (got ${map.size})`);
