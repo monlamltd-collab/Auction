@@ -121,6 +121,8 @@ Out-of-scope: `public/*`, `lib/scraper/*`, `lib/types/*`.
 
 - **`l.streetAvg`** — zero-byte stray at repo root. Deleted 2026-06-10 but recreated once by an unidentified local background process (not the test suite — a per-file bisect ran clean; the machine runs ~39 long-lived node daemons). Now gitignored so it can't pollute the tree; root cause open.
 
+- **Image-classification cache (`image_classifications` table, 2026-06-19)** — `lib/pipeline/image-quality-filter.js::classifyImage` now reads a permanent per-URL vision-verdict cache before any OpenRouter vision call, so the same image isn't re-classified across scrape cycles / lot churn / cross-lot reuse (image-classify is the top LLM call-volume surface, ~32k calls/30d). Fail-open `unknown` verdicts are never cached (no CDN-403 poisoning). **Operator action:** apply `migrations/2026-06-19-image-classifications-cache.sql` via the Supabase MCP — until then classification degrades to a live (uncached) call, so it's safe but un-cached.
+
 ---
 
 ## Resolved (historical reference)

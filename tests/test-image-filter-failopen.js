@@ -20,6 +20,15 @@ process.env.SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || 'test-key
 const _origOpenRouterKey = process.env.OPENROUTER_API_KEY;
 delete process.env.OPENROUTER_API_KEY;
 
+// classifyImage now reads the image_classifications cache before any vision
+// call. Stub it to a miss with no network so these tests still measure only
+// the vision/Gemini fetches (the breaker assertions count those).
+const { supabase } = await import('../lib/supabase.js');
+supabase.from = () => ({
+  select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }),
+  upsert: () => Promise.resolve({ error: null }),
+});
+
 const { filterImages, filterMainImage, classifyImage, __resetImageFilterBreakerForTest } = await import('../lib/pipeline/image-quality-filter.js');
 
 let passed = 0;
