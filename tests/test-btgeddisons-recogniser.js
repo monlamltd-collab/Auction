@@ -82,5 +82,30 @@ assert(recogniseBtgEddisonsLotsFromMarkdown('').size === 0, 'empty → 0');
 assert(recogniseBtgEddisonsLotsFromMarkdown(null).size === 0, 'null → 0');
 assert(recogniseBtgEddisonsLotsFromMarkdown('[Some House, Town](https://example.com/properties/x/for-auction-y)').size === 0, 'non-BTG host → 0');
 
+console.log('\nTest 5: lot link appears TWICE per card — guide price (2nd window) is merged');
+{
+  // The REAL post-rebuild layout: each lot's link renders twice (image/title
+  // link, then the address text link), and "Guide Price: £X" sits only in the
+  // SECOND window. The old dedup-skip kept the first (price-less) occurrence, so
+  // every lot persisted with no guide price (catalogue coverage 92%→16%). The
+  // recogniser must merge the price (and image) across the two occurrences.
+  const CARD_DOUBLE = `[Mulberry Brook, Manchester Road, Marsden, Huddersfield HD7 6LU](https://www.btgeddisonspropertyauctions.com/properties/202604221320sq_flm9-220626/for-auction-marsden)
+
+![](https://asta.btgeddisonspropertyauctions.com/skyco13/XIII-HUB-SDL-3/sdl_data/address/pkm_sdl/artnr_202604221320sq_flm9/_pictures/1.jpeg)
+
+Single-Lot Timed Auction
+
+[Mulberry Brook, Manchester Road, Marsden, Huddersfield HD7 6LU](https://www.btgeddisonspropertyauctions.com/properties/202604221320sq_flm9-220626/for-auction-marsden)
+
+Guide Price: £875,000+
+
+View Listing`;
+  const md = recogniseBtgEddisonsLotsFromMarkdown(CARD_DOUBLE);
+  const c = md.get('202604221320sq_flm9-220626');
+  assert(md.size === 1, `double-link card → 1 lot (got ${md.size})`);
+  assert(c && c.guide_price === '£875,000', `guide price merged from 2nd window (got "${c?.guide_price}")`);
+  assert(c && c.image_url.includes('artnr_202604221320sq_flm9/_pictures'), `image bound from 1st window (got "${c?.image_url?.slice(-40)}")`);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

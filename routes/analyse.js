@@ -20,12 +20,13 @@ import { extractCatalogueListing, extractLotDetailFirecrawl } from '../lib/pipel
 import { resolveEngineForHouse } from '../lib/pipeline/engine-decision.js';
 import { ENGINES } from '../lib/scraper/engine-router.js';
 import { renderAndExtractWithCrawlee } from '../lib/pipeline/crawlee-extract.js';
+import { htmlToRecognitionMarkdown } from '../lib/scraper/html-to-markdown.js';
 import { getExtractionTier } from '../lib/scraper/extraction-tier.js';
 import { houseRecogniser } from '../lib/scraper/house-recognisers.js';
 import { enrichLots } from '../lib/enrichment.js';
 import { enrichLotsWithFundability } from '../lib/fundability.js';
 import { qualityGate, analyseLot, upsertToLotsTable, logActivityEvent } from '../lib/analysis.js';
-import { LOTS_SELECT, dbRowToLot } from '../lib/types/lot.js';
+import { LOTS_SELECT, dbRowToLot, normaliseScrapedLot } from '../lib/types/lot.js';
 import { getLotsForCatalogue } from '../lib/pipeline/lot-lookup.js';
 import { enrichBatch } from '../lib/harness/enrichment-engine.js';
 
@@ -204,6 +205,23 @@ router.post('/api/analyse', async (req, res) => {
         sseWrite(res, 'phase', { step: 'extracting' });
         rawLots = extractAllsopLotsFromJson(pages);
       }
+    } else if (houseRecogniser(house)?.staticCatalogue) {
+      // ── Static-HTTP catalogue (SSR houses, e.g. BTG/sdl) ──
+      // Plain HTTP keeps the inline "Guide Price: £X" a browser render would
+      // hydrate away (see lib/analysis.js for the cron-side rationale). Same
+      // turndown→recogniser path, mirrored here so the on-demand path doesn't
+      // drift from cron (house-recognisers.js header).
+      sseWrite(res, 'phase', { step: 'extracting' });
+      const rec = houseRecogniser(house);
+      const resp = await safeFetch(scrapeUrl, { headers: HEADERS });
+      const html = await resp.text();
+      const md = htmlToRecognitionMarkdown(html, scrapeUrl);
+      const map = rec.recogniseFromMarkdown(md);
+      rawLots = [...(map?.values?.() || [])]
+        .map(l => normaliseScrapedLot(l, { house, catalogueUrl: scrapeUrl, extractionSource: 'static-recognition' }))
+        .filter(Boolean);
+      sseWrite(res, 'scrape', { pages: 1, lots: rawLots.length });
+      console.log(`Static HTTP catalogue for ${house}: ${rawLots.length} lots`);
     } else {
       // ── Engine router (conservative on the latency-sensitive user path) ──
       // Crawlee runs here only for a house already PROMOTED to it, or as the

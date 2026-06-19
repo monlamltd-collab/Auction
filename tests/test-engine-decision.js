@@ -65,16 +65,16 @@ console.log('\nTest 3: markdown-recogniser house CAN route to Crawlee (Phase 3)'
   resetEnv();
 }
 
-console.log('\nTest 3b: zero-credit failover — any house → Crawlee when Firecrawl exhausted');
+console.log('\nTest 3b: every house → Crawlee (firecrawl is off the router)');
 {
   resetEnv();
-  // House NOT in CRAWLEE_HOUSES, no policy, but crawlee installed + firecrawl down.
+  // House NOT in CRAWLEE_HOUSES, no policy — crawlee installed is enough now.
   const v = resolveEngineForHouse({
     house: 'somehouse',
     rewritten: {},
   }, { hasCrawlee: () => true, canUseFirecrawl: () => false, isPdfUrl: () => false });
-  assert(v.engine === ENGINES.CRAWLEE && /firecrawl-exhausted/.test(v.reason),
-    'firecrawl exhausted → crawlee failover even for non-allowlisted house');
+  assert(v.engine === ENGINES.CRAWLEE,
+    'crawlee serves every house — firecrawl is CF-bypass-only, not selectable');
   resetEnv();
 }
 
@@ -91,17 +91,18 @@ console.log('\nTest 4: allowlisted platform house with crawlee policy → crawle
   resetEnv();
 }
 
-console.log('\nTest 5: crawlee policy but house NOT allowlisted → degrade to firecrawl');
+console.log('\nTest 5: crawlee policy but house NOT allowlisted → still crawlee (only managed engine)');
 {
   resetEnv();
-  // astleys not in allowlist → isCrawleeEnabled false → crawleeAvailable false
+  // astleys not in allowlist → crawleeAvailable false, but crawlee IS installed
+  // and it's the only managed scraping engine now (no firecrawl fallback).
   const v = resolveEngineForHouse({
     house: 'astleys',
     rewritten: {},
     engineSkill: { preferred_engine: 'crawlee' },
   }, upDeps);
-  assert(v.engine === ENGINES.FIRECRAWL && /crawlee-unavailable/.test(v.reason),
-    'not allowlisted → crawlee unavailable → firecrawl, reason annotated');
+  assert(v.engine === ENGINES.CRAWLEE && /not-allowlisted/.test(v.reason),
+    'not allowlisted but installed → crawlee, reason annotated');
   resetEnv();
 }
 

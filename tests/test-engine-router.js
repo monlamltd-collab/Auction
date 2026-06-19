@@ -51,57 +51,62 @@ console.log('Test 1: chooseEngine — deterministic overrides win in priority or
   assert(v.engine === ENGINES.CRAWLEE && v.reason === 'learned-policy',
     'markdown-recogniser flag no longer pins to firecrawl');
 
-  v = chooseEngine({ botProtected: true, preferredEngine: ENGINES.CRAWLEE, crawleeAvailable: true });
-  assert(v.engine === ENGINES.FIRECRAWL && v.reason === 'bot-protected',
-    'bot-protected pins to firecrawl even when policy says crawlee');
+  v = chooseEngine({ botProtected: true, crawleeAvailable: true });
+  assert(v.engine === ENGINES.CRAWLEE && v.reason === 'bot-protected',
+    'bot-protected routes to crawlee (firecrawl is CF-bypass-only, off the router)');
 }
 
-console.log('\nTest 2: chooseEngine — learned policy and default');
+console.log('\nTest 2: chooseEngine — learned policy and default (crawlee-only)');
 {
   let v = chooseEngine({ preferredEngine: ENGINES.CRAWLEE, crawleeAvailable: true });
   assert(v.engine === ENGINES.CRAWLEE && v.reason === 'learned-policy', 'preferred crawlee honoured when available');
 
-  v = chooseEngine({ preferredEngine: ENGINES.FIRECRAWL, firecrawlAvailable: true });
-  assert(v.engine === ENGINES.FIRECRAWL && v.reason === 'learned-policy', 'preferred firecrawl honoured');
+  // Firecrawl is no longer a selectable engine — a firecrawl policy is ignored
+  // and the house falls through to the crawlee default.
+  v = chooseEngine({ preferredEngine: ENGINES.FIRECRAWL, crawleeAvailable: true });
+  assert(v.engine === ENGINES.CRAWLEE && v.reason === 'default', 'firecrawl policy ignored → crawlee default');
 
+  v = chooseEngine({ crawleeAvailable: true });
+  assert(v.engine === ENGINES.CRAWLEE && v.reason === 'default', 'no policy → crawlee default');
+
+  // Nothing installed at all → local puppeteer tier is the last resort.
   v = chooseEngine({});
-  assert(v.engine === ENGINES.FIRECRAWL && v.reason === 'default', 'no policy → firecrawl default');
+  assert(v.engine === 'puppeteer', 'no policy + crawlee not installed → puppeteer last resort');
 
-  // CRAWLEE_DEFAULT semantics: crawlee becomes the MAIN engine for plain houses…
+  // CRAWLEE_DEFAULT keeps its explicit reason string…
   v = chooseEngine({ crawleeIsDefault: true, crawleeAvailable: true });
-  assert(v.engine === ENGINES.CRAWLEE && v.reason === 'config-default', 'crawleeIsDefault → crawlee main engine');
-  // …but never overrides structural/learned/locked policy.
+  assert(v.engine === ENGINES.CRAWLEE && v.reason === 'config-default', 'crawleeIsDefault → crawlee (config-default)');
+  // …but never overrides structural/locked policy.
   v = chooseEngine({ crawleeIsDefault: true, crawleeAvailable: true, isApi: true });
   assert(v.engine === ENGINES.API, 'config-default does not override api');
-  v = chooseEngine({ crawleeIsDefault: true, crawleeAvailable: true, botProtected: true, firecrawlAvailable: true });
-  assert(v.engine === ENGINES.FIRECRAWL, 'config-default does not override bot-protected');
+  v = chooseEngine({ crawleeIsDefault: true, crawleeAvailable: true, botProtected: true });
+  assert(v.engine === ENGINES.CRAWLEE && v.reason === 'bot-protected', 'bot-protected resolves before config-default (to crawlee)');
   v = chooseEngine({ crawleeIsDefault: true, crawleeAvailable: true, manualEngine: ENGINES.FIRECRAWL, firecrawlAvailable: true });
-  assert(v.engine === ENGINES.FIRECRAWL && v.reason === 'manual-lock', 'config-default does not override engine_locked');
+  assert(v.engine === ENGINES.FIRECRAWL && v.reason === 'manual-lock', 'config-default does not override engine_locked (operator escape hatch)');
 
-  // a junk/unknown preferred_engine is ignored, falls through to default
-  v = chooseEngine({ preferredEngine: 'bogus' });
-  assert(v.engine === ENGINES.FIRECRAWL && v.reason === 'default', 'unknown preferred engine ignored → default');
+  // a junk/unknown preferred_engine is ignored, falls through to crawlee default
+  v = chooseEngine({ preferredEngine: 'bogus', crawleeAvailable: true });
+  assert(v.engine === ENGINES.CRAWLEE && v.reason === 'default', 'unknown preferred engine ignored → crawlee default');
 }
 
 console.log('\nTest 3: chooseEngine — availability degradation never silently no-ops');
 {
-  // policy says crawlee but it isn't installed → degrade to firecrawl, reason annotated
-  let v = chooseEngine({ preferredEngine: ENGINES.CRAWLEE, crawleeAvailable: false, firecrawlAvailable: true });
-  assert(v.engine === ENGINES.FIRECRAWL && /crawlee-unavailable/.test(v.reason), 'crawlee down → firecrawl, reason notes it');
+  // policy says crawlee but it isn't installed at all → local puppeteer tier
+  let v = chooseEngine({ preferredEngine: ENGINES.CRAWLEE, crawleeAvailable: false, crawleeInstalled: false });
+  assert(v.engine === 'puppeteer' && /crawlee-unavailable/.test(v.reason), 'crawlee desired, not installed → puppeteer');
 
-  // default firecrawl but budget exhausted, crawlee available → use crawlee
-  v = chooseEngine({ firecrawlAvailable: false, crawleeAvailable: true });
-  assert(v.engine === ENGINES.CRAWLEE && /firecrawl-exhausted/.test(v.reason), 'firecrawl exhausted → crawlee');
+  // crawlee installed but the house isn't allowlisted → still crawlee (it's the
+  // only managed scraping engine now — no firecrawl fallback).
+  v = chooseEngine({ preferredEngine: ENGINES.CRAWLEE, crawleeAvailable: false, crawleeInstalled: true });
+  assert(v.engine === ENGINES.CRAWLEE && /not-allowlisted/.test(v.reason), 'crawlee installed but not allowlisted → still crawlee');
 
-  // Phase 3 zero-credit failover: house NOT allowlisted (crawleeAvailable=false)
-  // but crawlee installed + firecrawl exhausted → still fail over to crawlee.
-  v = chooseEngine({ firecrawlAvailable: false, crawleeAvailable: false, crawleeInstalled: true });
-  assert(v.engine === ENGINES.CRAWLEE && /firecrawl-exhausted/.test(v.reason),
-    'firecrawl exhausted + crawlee installed (not allowlisted) → crawlee failover');
+  // default routes to crawlee whenever it's available
+  v = chooseEngine({ crawleeAvailable: true });
+  assert(v.engine === ENGINES.CRAWLEE, 'default → crawlee when available');
 
-  // both down AND crawlee not installed → puppeteer last resort
-  v = chooseEngine({ firecrawlAvailable: false, crawleeAvailable: false, crawleeInstalled: false });
-  assert(v.engine === 'puppeteer' && /unavailable/.test(v.reason), 'no firecrawl, no crawlee → puppeteer fallback');
+  // nothing available AND crawlee not installed → puppeteer last resort
+  v = chooseEngine({ crawleeAvailable: false, crawleeInstalled: false });
+  assert(v.engine === 'puppeteer' && /unavailable/.test(v.reason), 'no crawlee installed → puppeteer fallback');
 }
 
 // ── recallRatio ────────────────────────────────────────────────────────────
@@ -153,8 +158,7 @@ console.log('\nTest 6: shouldEscalate + escalationTarget');
   v = shouldEscalate({ recall: null });
   assert(v.escalate === false && /no-recall-signal/.test(v.reason), 'no signal → do not escalate');
 
-  assert(escalationTarget(ENGINES.CRAWLEE) === ENGINES.FIRECRAWL, 'crawlee escalates to firecrawl');
-  assert(escalationTarget(ENGINES.FIRECRAWL) === null, 'firecrawl is top of ladder');
+  assert(escalationTarget(ENGINES.CRAWLEE) === null, 'crawlee has no escalation target (firecrawl is off the router)');
 }
 
 // ── stats reducers ──────────────────────────────────────────────────────────
