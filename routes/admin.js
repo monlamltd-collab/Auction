@@ -612,7 +612,7 @@ router.get('/api/admin/system-health', requireAdmin, async (req, res) => {
     const [{ data: cachedMeta }, { data: lotRows }, { data: skills }] = await Promise.all([
       supabase.from('cached_analyses').select('house, expires_at, created_at'),
       supabase.from('lots').select('house, image_url, beds'),
-      supabase.from('house_skills').select('slug, status, last_scraped'),
+      supabase.from('house_skills').select('slug, status, last_scraped, last_extracted_count, last_lot_count, last_success_at, last_full_extract_at, last_probe_at, last_probe_result, extractor, preferred_engine, consecutive_failures, circuit_state, health_score, dormant, next_scrape_at'),
     ]);
 
     const skillMap = {};
@@ -671,6 +671,26 @@ router.get('/api/admin/system-health', requireAdmin, async (req, res) => {
       if (skill && skill.last_scraped) h.lastScraped = skill.last_scraped;
       h.imageCoverage = h._lotCount > 0 ? Math.round(h._imgCount / h._lotCount * 100) : 0;
       h.bedCoverage = h._lotCount > 0 ? Math.round(h._bedCount / h._lotCount * 100) : 0;
+      // ── Per-house extraction liveness (for Hermes) ──
+      // lastProbeResult discriminates: 'changed'/'same' = site reachable this run
+      // (so 0 extracted ⇒ extractor broke), 'error' = unreachable (likely
+      // relocated/dead). lotsExtractedThisRun = THIS run (null = didn't extract
+      // this run); lotsInDb = current stored count. `extractor` is the recorded
+      // field (currently legacy 'firecrawl-json' — use aiCosts.byModel for live
+      // model usage).
+      h.lotsExtractedThisRun = skill?.last_extracted_count ?? null;
+      h.lotsInDb = skill?.last_lot_count ?? null;
+      h.lastSuccessfulExtraction = skill?.last_success_at ?? null;
+      h.lastFullExtractAt = skill?.last_full_extract_at ?? null;
+      h.lastProbeAt = skill?.last_probe_at ?? null;
+      h.lastProbeResult = skill?.last_probe_result ?? null;
+      h.extractor = skill?.extractor ?? null;
+      h.preferredEngine = skill?.preferred_engine ?? null;
+      h.consecutiveFailures = skill?.consecutive_failures ?? 0;
+      h.circuitState = skill?.circuit_state ?? null;
+      h.healthScore = skill?.health_score ?? null;
+      h.dormant = !!skill?.dormant;
+      h.nextScrapeAt = skill?.next_scrape_at ?? null;
       delete h._imgCount;
       delete h._bedCount;
       delete h._lotCount;
@@ -719,6 +739,63 @@ router.get('/api/admin/system-health', requireAdmin, async (req, res) => {
     res.json({ brokenExtractors, aiCosts, coverage, pipeline });
   } catch (err) {
     console.error('System health endpoint error:', err.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ── Extraction liveness (for Hermes) ──────────────────────────────────────────
+// Per-house signals to tell a broken extractor on a LIVE site apart from a
+// relocated/dead house. One house_skills query — far lighter than /system-health
+// (which scans all lots) — so the daily Health Monitor can poll it cheaply.
+// lastProbeResult is the key discriminator: 'changed'/'same' = the URL was
+// reachable this run (so 0 extracted ⇒ the extractor broke, not the site);
+// 'error' = unreachable (likely relocated → the relocation_needed / Dead House
+// Recovery path). The response pre-buckets the houses for convenience.
+router.get('/api/admin/extraction-liveness', requireAdmin, async (req, res) => {
+  try {
+    const { data: skills, error } = await supabase
+      .from('house_skills')
+      .select('slug, status, last_extracted_count, last_lot_count, last_success_at, last_full_extract_at, last_probe_at, last_probe_result, extractor, preferred_engine, consecutive_failures, circuit_state, health_score, dormant, next_scrape_at');
+    if (error) throw error;
+
+    const houses = (skills || []).map(s => ({
+      slug: s.slug,
+      displayName: HOUSE_DISPLAY_NAMES[s.slug] || s.slug,
+      status: s.status ?? null,
+      lotsExtractedThisRun: s.last_extracted_count ?? null,
+      lotsInDb: s.last_lot_count ?? null,
+      lastSuccessfulExtraction: s.last_success_at ?? null,
+      lastFullExtractAt: s.last_full_extract_at ?? null,
+      lastProbeAt: s.last_probe_at ?? null,
+      lastProbeResult: s.last_probe_result ?? null,
+      extractor: s.extractor ?? null,
+      preferredEngine: s.preferred_engine ?? null,
+      consecutiveFailures: s.consecutive_failures ?? 0,
+      circuitState: s.circuit_state ?? null,
+      healthScore: s.health_score ?? null,
+      dormant: !!s.dormant,
+      nextScrapeAt: s.next_scrape_at ?? null,
+    }));
+
+    // last_probe_result vocab: 'changed'|'same' = reachable, 'error' = unreachable
+    // (see lib/pipeline/scheduling.js + liveness.js).
+    const reachable = (r) => r === 'changed' || r === 'same';
+    const zeroExtraction = houses.filter(h => !h.dormant && (h.lotsExtractedThisRun === 0 || h.lotsExtractedThisRun === null));
+    const likelyRelocated = zeroExtraction.filter(h => h.lastProbeResult === 'error');
+    const extractorBrokeSiteAlive = zeroExtraction.filter(h => reachable(h.lastProbeResult));
+
+    res.json({
+      generatedAt: new Date().toISOString(),
+      totalHouses: houses.length,
+      buckets: {
+        zeroExtraction: zeroExtraction.map(h => h.slug),
+        likelyRelocated: likelyRelocated.map(h => h.slug),                  // → relocation_needed / Dead House Recovery
+        extractorBrokeSiteAlive: extractorBrokeSiteAlive.map(h => h.slug),  // → extractor/code fix
+      },
+      houses,
+    });
+  } catch (err) {
+    console.error('Extraction-liveness endpoint error:', err.message);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
