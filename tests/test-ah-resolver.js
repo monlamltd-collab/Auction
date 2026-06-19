@@ -109,10 +109,8 @@ console.log('\nTest 7: parseAhFutureDates — first match wins per slug');
 // ── Test 8: fetchAhFutureDates — success returns parsed map ──
 console.log('\nTest 8: fetchAhFutureDates — success');
 {
-  const fakeExtract = async () => ({
-    markdown: '[Birmingham](/birmingham/auction/lots/9328)',
-  });
-  const out = await fetchAhFutureDates({ extract: fakeExtract });
+  const fakeFetchMarkdown = async () => '[Birmingham](/birmingham/auction/lots/9328)';
+  const out = await fetchAhFutureDates({ fetchMarkdown: fakeFetchMarkdown });
   assert(out instanceof Map, 'returns Map on success');
   assert(out.get('auctionhousebirmingham').endsWith('/lots/9328'), 'parsed correctly');
 }
@@ -120,25 +118,25 @@ console.log('\nTest 8: fetchAhFutureDates — success');
 // ── Test 9: fetchAhFutureDates — empty markdown → null ──
 console.log('\nTest 9: fetchAhFutureDates — empty markdown');
 {
-  const fakeExtract = async () => ({ markdown: '' });
-  const out = await fetchAhFutureDates({ extract: fakeExtract });
+  const fakeFetchMarkdown = async () => '';
+  const out = await fetchAhFutureDates({ fetchMarkdown: fakeFetchMarkdown });
   assert(out === null, 'returns null when markdown empty');
 }
 
 // ── Test 10: fetchAhFutureDates — no parseable links → null ──
 console.log('\nTest 10: fetchAhFutureDates — no parseable links');
 {
-  const fakeExtract = async () => ({ markdown: 'no auction links here' });
-  const out = await fetchAhFutureDates({ extract: fakeExtract });
+  const fakeFetchMarkdown = async () => 'no auction links here';
+  const out = await fetchAhFutureDates({ fetchMarkdown: fakeFetchMarkdown });
   assert(out === null, 'returns null when nothing parses');
 }
 
-// ── Test 11: fetchAhFutureDates — extract throws → null ──
-console.log('\nTest 11: fetchAhFutureDates — extract throws');
+// ── Test 11: fetchAhFutureDates — fetch throws → null ──
+console.log('\nTest 11: fetchAhFutureDates — fetch throws');
 {
-  const fakeExtract = async () => { throw new Error('Firecrawl down'); };
-  const out = await fetchAhFutureDates({ extract: fakeExtract });
-  assert(out === null, 'returns null when extract throws');
+  const fakeFetchMarkdown = async () => { throw new Error('fetch down'); };
+  const out = await fetchAhFutureDates({ fetchMarkdown: fakeFetchMarkdown });
+  assert(out === null, 'returns null when fetch throws');
 }
 
 // ── Test 12: auditHouseHomepage AH short-circuit — map hit, URLs match ──
