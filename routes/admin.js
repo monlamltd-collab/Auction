@@ -18,6 +18,7 @@ import {
   FIRECRAWL_API_KEY, FIRECRAWL_SKIP, puppeteer, normaliseLotStatuses,
   scrapeWithFirecrawl,
 } from '../lib/scraper.js';
+import { scrapeWithCrawlee, hasCrawlee } from '../lib/scraper/crawlee.js';
 import {
   autoAnalyseAll, autoAnalyseOne, analyseLot,
   upsertToLotsTable, saveDailySnapshot,
@@ -188,24 +189,26 @@ router.post('/api/admin/firecrawl-probe', rateLimit(60000, 10), requireAdmin, as
   const urlCheck = await validateUrl(url);
   if (!urlCheck.ok) return res.status(400).json({ error: urlCheck.error });
   try {
-    const formats = ['rawHtml'];
-    if (withImages) formats.push('images');
-    if (withMarkdown) formats.push('markdown');
-    const result = await scrapeWithFirecrawl(url, {
-      formats,
-      waitFor: typeof waitFor === 'number' ? waitFor : 2000,
+    if (!hasCrawlee()) {
+      return res.status(503).json({ error: 'Crawlee render tier unavailable' });
+    }
+    const result = await scrapeWithCrawlee(url, {
+      ...(typeof waitFor === 'number' ? { timeoutMs: waitFor } : {}),
     });
+    // The Crawlee render tier returns { html, sourceURL } only — no images /
+    // markdown extraction (those were Firecrawl formats), so those fields are
+    // always empty now. Admin diagnostic only; endpoint name kept for callers.
     res.json({
       url: result.sourceURL || url,
       htmlLength: (result.html || '').length,
       html: result.html || '',
-      markdown: withMarkdown ? (result.markdown || '') : undefined,
-      images: withImages ? (result.images || []) : undefined,
-      imageCount: (result.images || []).length,
+      markdown: undefined,
+      images: undefined,
+      imageCount: 0,
     });
   } catch (err) {
-    log.warn('Firecrawl probe failed', { url, err: err.message });
-    res.status(502).json({ error: `Firecrawl probe failed: ${err.message}` });
+    log.warn('Render probe failed', { url, err: err.message });
+    res.status(502).json({ error: `Render probe failed: ${err.message}` });
   }
 });
 
