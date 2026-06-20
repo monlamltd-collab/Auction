@@ -121,6 +121,10 @@ Out-of-scope: `public/*`, `lib/scraper/*`, `lib/types/*`.
 
 - **`l.streetAvg`** — zero-byte stray at repo root. Deleted 2026-06-10 but recreated once by an unidentified local background process (not the test suite — a per-file bisect ran clean; the machine runs ~39 long-lived node daemons). Now gitignored so it can't pollute the tree; root cause open.
 
+### Extraction / recall
+
+- **lot9 EIG `/search` under-extraction (tracked follow-up, 2026-06-17)** — `lot9.eigonlineauctions.com/search` lists 33 lots, **2 of them live/biddable** (Ty Newydd £112k, Havelock House — both "View/Bid", auction ends 02/07/2026). Our Crawlee scrape extracts only ~4/33 (recall ~12%) and misses the live ones: **Ty Newydd is absent from `lots` entirely; Havelock House is stored `stc`, last_seen 2026-05-11** (frozen/mis-statused — should be live). Root cause is a genuine recall shortfall on the EIG `/search` layout for config-default houses (no per-house recogniser, `maxPages=1`, generic Gemini under-extracts a long single-page list). Proper fix = a deterministic EIG `/lot/details/` markdown recogniser wired as a `HOUSE_OVERRIDES` recogniser for these EIG subdomains (mirror the existing EIG recogniser in `firecrawl-extract.js`), validated against the live rendered markdown — which is **egress-blocked in CI** (the EIG hosts 403 plain fetches; only the production headless browser gets through), so it needs either the auction hosts on the env allowlist or the rendered page pasted in to build + verify. NB this affects ANY EIG house when it has a real auction; most named EIG houses are currently dormant so lot9 is the live exemplar. Dormant-flag work (2026-06-17) deliberately does **not** mask this — dormant classification is recall-gated and lot9 is not flagged.
+
 ---
 
 ## Resolved (historical reference)
