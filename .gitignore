@@ -3,11 +3,16 @@ node_modules/
 .env.*
 .vercel/
 
-# Claude Code / internal — ignore everything except shared skills.
+# Claude Code / internal — ignore everything except shared skills, the
+# session-start hook, and its settings.
 # The self-healing skill is the canonical playbook for the auction pipeline
 # and must propagate across worktrees / sessions, so it is tracked in git.
+# The session-start hook (deps + Railway CLI install) must likewise persist
+# across Claude Code web sessions, so settings.json + hooks/ are tracked too.
 .claude/*
 !.claude/skills/
+!.claude/settings.json
+!.claude/hooks/
 
 # Ruflo / claude-flow local state (auto-generated)
 .claude-flow/
