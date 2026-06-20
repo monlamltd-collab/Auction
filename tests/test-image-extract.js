@@ -135,5 +135,34 @@ console.log('\ndechromeGallery (per-lot clean + thumbnail promotion)');
   assert(r6.imageUrl === 'https://x/upload/a.jpg' && r6.changed === true, 'null thumbnail promoted from gallery');
 }
 
+console.log('\ndechromeGallery — never blank via the repetition heuristic (safety guard)');
+{
+  const bleed = new Set(['https://c/shared.jpg', 'https://c/shared2.jpg']);
+
+  // A single bleed-only image (could be a real photo shared across a development)
+  // is KEPT, not blanked.
+  const g1 = dechromeGallery(['https://c/shared.jpg'], 'https://c/shared.jpg', bleed);
+  assert(eq(g1.images, ['https://c/shared.jpg']) && g1.imageUrl === 'https://c/shared.jpg' && g1.changed === false,
+    'bleed-only single image kept (guard) — a real shared photo is never destroyed');
+
+  // An all-bleed multi-image gallery is kept entirely (no real survivor to keep).
+  const g2 = dechromeGallery(['https://c/shared.jpg', 'https://c/shared2.jpg'], 'https://c/shared.jpg', bleed);
+  assert(g2.images.length === 2, 'all-bleed multi-image gallery kept (guard) — no blanking');
+
+  // Token-chrome IS removed even when bleed must be kept; thumbnail promoted to the kept image.
+  const g3 = dechromeGallery(['https://x/logo.svg', 'https://c/shared.jpg'], 'https://x/logo.svg', bleed);
+  assert(eq(g3.images, ['https://c/shared.jpg']) && g3.imageUrl === 'https://c/shared.jpg',
+    'token-chrome stripped, bleed kept as last image, thumbnail promoted to it');
+
+  // Bleed IS removed once a non-bleed real image survives.
+  const g4 = dechromeGallery(['https://c/shared.jpg', 'https://x/upload/real.jpg'], 'https://c/shared.jpg', bleed);
+  assert(eq(g4.images, ['https://x/upload/real.jpg']) && g4.imageUrl === 'https://x/upload/real.jpg',
+    'bleed removed + thumbnail re-pointed when a real survivor exists');
+
+  // Token-chrome MAY blank (lot then becomes under-target → sweep refetches).
+  const g5 = dechromeGallery(['https://x/a.svg', 'https://x/loader.gif'], 'https://x/a.svg', bleed);
+  assert(eq(g5.images, []) && g5.imageUrl === null, 'all-token-chrome still blanks (sweep will refill)');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

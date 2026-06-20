@@ -213,16 +213,25 @@ router.post('/api/admin/dechrome-images', rateLimit(60000, 10), requireAdmin, as
 
     const perHouse = {};
     const changes = [];
+    let blankedTotal = 0;
     for (const l of lots) {
       const bleed = bleedByHouse.get(l.house || '') || new Set();
       const before = Array.isArray(l.images) ? l.images : [];
       const r = dechromeGallery(before, l.image_url, bleed);
       if (!r.changed) continue;
       changes.push({ id: l.id, images: r.images, image_url: r.imageUrl });
-      const h = perHouse[l.house || ''] || (perHouse[l.house || ''] = { lots: 0, imagesRemoved: 0, thumbsFixed: 0 });
+      const h = perHouse[l.house || ''] || (perHouse[l.house || ''] = { lots: 0, imagesRemoved: 0, thumbsFixed: 0, blanked: 0, sampleRemoved: [] });
       h.lots++;
       h.imagesRemoved += before.length - r.images.length;
       if (r.imageUrl !== (l.image_url ?? null)) h.thumbsFixed++;
+      // Blanking only happens via token-chrome (the guard never blanks via
+      // bleed); a blanked lot becomes under-target → the sweep refetches photos.
+      if (before.length > 0 && r.images.length === 0) { h.blanked++; blankedTotal++; }
+      // Sample removed URLs so a human can eyeball chrome-vs-real before applying.
+      for (const u of before) {
+        if (h.sampleRemoved.length >= 5) break;
+        if (!r.images.includes(u) && !h.sampleRemoved.includes(u)) h.sampleRemoved.push(u);
+      }
     }
 
     let written = 0;
@@ -240,12 +249,13 @@ router.post('/api/admin/dechrome-images', rateLimit(60000, 10), requireAdmin, as
       .map(([house, s]) => ({ house, ...s }))
       .sort((a, b) => b.lots - a.lots);
 
-    log.info('dechrome-images', { apply, scanned: lots.length, lotsChanged: changes.length, written });
+    log.info('dechrome-images', { apply, scanned: lots.length, lotsChanged: changes.length, blanked: blankedTotal, written });
     res.json({
       dryRun: !apply,
       threshold,
       scanned: lots.length,
       lotsToChange: changes.length,
+      lotsBlanked: blankedTotal,   // emptied galleries (token-chrome only); sweep refetches real photos
       written,
       housesAffected: perHouseSummary.length,
       perHouse: perHouseSummary.slice(0, 60),

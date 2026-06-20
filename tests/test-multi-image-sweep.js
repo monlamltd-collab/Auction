@@ -28,7 +28,7 @@ console.log('multi-image-sweep — two-pass flow, guards, generic strip');
   const src = readFileSync(join(here, '..', 'lib', 'pipeline', 'multi-image-sweep.js'), 'utf8');
 
   // Shared, house-agnostic primitives (no inline duplicate regex/junk logic).
-  assert(/import\s*\{\s*extractImagesFromHtml,\s*stripBleedImages\s*\}\s*from\s*['"]\.\/image-extract\.js['"]/.test(src),
+  assert(/import\s*\{\s*extractImagesFromHtml,\s*computeBleedByHouse,\s*dechromeGallery\s*\}\s*from\s*['"]\.\/image-extract\.js['"]/.test(src),
     'image primitives imported from the shared pure module (DRY, no per-file copy)');
 
   // PASS 1 — cooldown-free cache reconciliation (the fix for the locked
@@ -44,9 +44,10 @@ console.log('multi-image-sweep — two-pass flow, guards, generic strip');
   assert(/skipCache:\s*true/.test(src),
     'live fetch uses skipCache:true so a stale imageless cache cannot drive a false no_images_found');
 
-  // Generic shared-image guard (gallery hero-bleed analogue).
-  assert(/stripBleedImages\(/.test(src),
-    'shared-chrome images stripped generically before persist (no per-house code)');
+  // Generic shared-image guard (gallery hero-bleed analogue) — unified cleaner
+  // with the never-blank-via-bleed guard, shared with the retroactive endpoint.
+  assert(/computeBleedByHouse\(/.test(src) && /dechromeGallery\(/.test(src),
+    'per-lot dechromeGallery + per-house bleed applied before persist (no per-house code)');
 
   // Throughput: cap raised now Firecrawl is out of this fetch path.
   assert(/SWEEP_BATCH_LIMIT\s*=\s*500/.test(src),
