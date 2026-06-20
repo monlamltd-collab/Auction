@@ -27,6 +27,7 @@ import {
   getCreditExhausted, getApiCallCount, getHashHitCount, getServerStartTime,
 } from '../lib/analysis.js';
 import { LOTS_SELECT, dbRowToLot } from '../lib/types/lot.js';
+import { computeBleedByHouse, dechromeGallery } from '../lib/pipeline/image-extract.js';
 import { getAICostSummary } from '../lib/ai-provider.js';
 import { enrichLots, getCircuitBreakers, fetchEPCByPostcode, matchEPCToLot, fetchEPCCertificate } from '../lib/enrichment.js';
 import { normaliseUrl, applyUmamiInjection } from '../lib/utils.js';
@@ -170,6 +171,98 @@ router.post('/api/admin/backfill-images', rateLimit(60000, 20), requireAdmin, as
   } catch (err) {
     log.error('Image backfill error', { error: err.message });
     res.status(500).json({ error: 'Image backfill failed. Check server logs.' });
+  }
+});
+
+// Admin: retroactively de-chrome existing lot galleries + thumbnails, fleet-wide.
+// Removes non-property "chrome" (logos/badges/loaders/.svg/.gif via isChromeUrl)
+// and per-house shared placeholders (an image repeated across >= threshold lots)
+// from images[] and image_url, promoting the first surviving real photo to the
+// thumbnail. House-agnostic — same pure helpers the multi-image sweep uses.
+// DRY-RUN by default; pass { apply: true } to write. Optional { house, threshold }.
+router.post('/api/admin/dechrome-images', rateLimit(60000, 10), requireAdmin, async (req, res) => {
+  const apply = req.body?.apply === true;
+  const houseFilter = typeof req.body?.house === 'string' ? req.body.house.toLowerCase() : null;
+  const threshold = Number.isInteger(req.body?.threshold) ? req.body.threshold : 3;
+  try {
+    // Load active lots (Supabase caps at 1000 rows/request — paginate).
+    const lots = [];
+    const PAGE = 1000;
+    for (let from = 0; ; from += PAGE) {
+      let q = supabase.from('lots')
+        .select('id, house, image_url, images')
+        .in('status', ['available', 'unsold'])
+        .order('id', { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (houseFilter) q = q.eq('house', houseFilter);
+      const { data, error } = await q;
+      if (error) return res.status(500).json({ error: error.message });
+      if (!data || data.length === 0) break;
+      lots.push(...data);
+      if (data.length < PAGE) break;
+    }
+
+    // Per-house bleed set across BOTH thumbnail + gallery URLs.
+    const bleedByHouse = computeBleedByHouse(
+      lots.map(l => ({
+        house: l.house, lotKey: l.id,
+        urls: [l.image_url, ...(Array.isArray(l.images) ? l.images : [])].filter(Boolean),
+      })),
+      threshold,
+    );
+
+    const perHouse = {};
+    const changes = [];
+    let blankedTotal = 0;
+    for (const l of lots) {
+      const bleed = bleedByHouse.get(l.house || '') || new Set();
+      const before = Array.isArray(l.images) ? l.images : [];
+      const r = dechromeGallery(before, l.image_url, bleed);
+      if (!r.changed) continue;
+      changes.push({ id: l.id, images: r.images, image_url: r.imageUrl });
+      const h = perHouse[l.house || ''] || (perHouse[l.house || ''] = { lots: 0, imagesRemoved: 0, thumbsFixed: 0, blanked: 0, sampleRemoved: [] });
+      h.lots++;
+      h.imagesRemoved += before.length - r.images.length;
+      if (r.imageUrl !== (l.image_url ?? null)) h.thumbsFixed++;
+      // Blanking only happens via token-chrome (the guard never blanks via
+      // bleed); a blanked lot becomes under-target → the sweep refetches photos.
+      if (before.length > 0 && r.images.length === 0) { h.blanked++; blankedTotal++; }
+      // Sample removed URLs so a human can eyeball chrome-vs-real before applying.
+      for (const u of before) {
+        if (h.sampleRemoved.length >= 5) break;
+        if (!r.images.includes(u) && !h.sampleRemoved.includes(u)) h.sampleRemoved.push(u);
+      }
+    }
+
+    let written = 0;
+    if (apply && changes.length) {
+      const CONC = 12;
+      for (let i = 0; i < changes.length; i += CONC) {
+        const batch = changes.slice(i, i + CONC);
+        const settled = await Promise.allSettled(batch.map(c =>
+          supabase.from('lots').update({ images: c.images, image_url: c.image_url }).eq('id', c.id)));
+        written += settled.filter(s => s.status === 'fulfilled' && !s.value?.error).length;
+      }
+    }
+
+    const perHouseSummary = Object.entries(perHouse)
+      .map(([house, s]) => ({ house, ...s }))
+      .sort((a, b) => b.lots - a.lots);
+
+    log.info('dechrome-images', { apply, scanned: lots.length, lotsChanged: changes.length, blanked: blankedTotal, written });
+    res.json({
+      dryRun: !apply,
+      threshold,
+      scanned: lots.length,
+      lotsToChange: changes.length,
+      lotsBlanked: blankedTotal,   // emptied galleries (token-chrome only); sweep refetches real photos
+      written,
+      housesAffected: perHouseSummary.length,
+      perHouse: perHouseSummary.slice(0, 60),
+    });
+  } catch (err) {
+    log.error('dechrome-images failed', { error: err.message });
+    res.status(500).json({ error: 'dechrome-images failed. Check server logs.' });
   }
 });
 
