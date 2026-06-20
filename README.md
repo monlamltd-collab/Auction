@@ -92,6 +92,9 @@ Full headless Chrome. Heavier than Firecrawl. Used for pages that require a real
 **6. Symonds & Sampson CF-stealth exception**
 `lib/scraper/symondsandsampson.js` — `auctions.symondsandsampson.co.uk` is behind Cloudflare, which 403s every engine except Firecrawl's residential `proxy:'stealth'`. A bespoke two-tier scraper resolves the soonest upcoming event from the stable events page, then parses its `/property/{id}/{postcode}/{town}/{slug}` lots. Dispatched on `paginateAs:'symondsandsampson_stealth'` (mirrors the Allsop exception). Stealth costs ~5 credits/scrape, so it scrapes only the soonest event — the events page lists lots ~6 weeks pre-auction, so later events are empty.
 
+**Image hygiene — galleries + thumbnails**
+A daily multi-image sweep (`lib/pipeline/multi-image-sweep.js`) fills each lot's `images[]` carousel from its detail page; the single `image_url` card thumbnail is promoted from the first real photo. Non-property "chrome" — logos, trade-body badges (Propertymark/NAEA/RICS/TPO), map loaders, `.svg`/`.gif` assets, and per-house placeholder slides repeated across many lots — is stripped house-agnostically via `lib/pipeline/image-extract.js` (`isChromeUrl` + cross-lot `computeBleedByHouse`/`dechromeGallery`), so a branded slide never leads a carousel or becomes a thumbnail. Existing data can be cleaned retroactively with `POST /api/admin/dechrome-images` (dry-run by default; `{ apply: true }` to write).
+
 > **DOM extractors were retired 2026-05-08.** `lib/extractors/` was deleted. References to `USE_FIRECRAWL_EXTRACT`, `FORCE_EXTRACT_HOUSES`, `BROKEN_EXTRACTORS`, or DOM→Gemini merge code are stale — flag them.
 
 ---
