@@ -2,14 +2,12 @@
  * Multi-image-sweep — structural tests.
  *
  * The fair-share function itself is exercised in test-post-auction-sweep.js
- * (single source of truth, imported here). This file locks the wiring —
- * cap sized to bound Firecrawl spend (the dial is empirical — too low and
- * the gallery backlog never clears, too high and the Firecrawl-fallback
- * rate on JS-rendered houses blows through the daily budget), wall-clock
- * budget present, fair-share imported and applied, plus the integration
- * checks that the `images` field is now exposed end-to-end (LOTS_SELECT,
- * mappers, RPC not checked here — that's a live-DB query we ran during
- * diagnosis).
+ * (single source of truth, imported here). The pure image primitives
+ * (extractImagesFromHtml, stripBleedImages) are exercised behaviourally in
+ * test-image-extract.js. This file locks the SWEEP WIRING: the two-pass flow
+ * (cooldown-free cache reconcile + skipCache live fetch), the generic
+ * shared-image strip, fair-share + wall-clock guards, and the end-to-end
+ * exposure of the `images` field.
  */
 
 import { readFileSync } from 'node:fs';
@@ -25,30 +23,51 @@ function assert(cond, msg) {
   else { console.error(`  FAIL: ${msg}`); fail++; }
 }
 
-console.log('multi-image-sweep — batch cap + wall-clock + fairness');
+console.log('multi-image-sweep — two-pass flow, guards, generic strip');
 {
   const src = readFileSync(join(here, '..', 'lib', 'pipeline', 'multi-image-sweep.js'), 'utf8');
-  assert(/SWEEP_BATCH_LIMIT\s*=\s*200/.test(src),
-    'batch limit pulled back to 200 (Firecrawl-spend cap; 1000 burned ~600 credits/day on JS-rendered houses)');
+
+  // Shared, house-agnostic primitives (no inline duplicate regex/junk logic).
+  assert(/import\s*\{\s*extractImagesFromHtml,\s*stripBleedImages\s*\}\s*from\s*['"]\.\/image-extract\.js['"]/.test(src),
+    'image primitives imported from the shared pure module (DRY, no per-file copy)');
+
+  // PASS 1 — cooldown-free cache reconciliation (the fix for the locked
+  // no_images_found backlog).
+  assert(/loadFreshCache\(/.test(src),
+    'PASS 1 batch-reads fresh lot_details cache (loadFreshCache)');
+  assert(/cooled\.push\(lot\)/.test(src) && /fresh\.push\(lot\)/.test(src),
+    'candidates split into cooled (cache-only) vs fresh (live fetch) by cooldown');
+  assert(/reconciledFromCache/.test(src),
+    'cache reconciliation is counted in stats (observability)');
+
+  // PASS 2 — live fetch never trusts a possibly-stale cache.
+  assert(/skipCache:\s*true/.test(src),
+    'live fetch uses skipCache:true so a stale imageless cache cannot drive a false no_images_found');
+
+  // Generic shared-image guard (gallery hero-bleed analogue).
+  assert(/stripBleedImages\(/.test(src),
+    'shared-chrome images stripped generically before persist (no per-house code)');
+
+  // Throughput: cap raised now Firecrawl is out of this fetch path.
+  assert(/SWEEP_BATCH_LIMIT\s*=\s*500/.test(src),
+    'live-fetch cap raised to 500 (FC spend no longer in this path; wall-clock is the real guard)');
   assert(/SWEEP_WALL_CLOCK_MS\s*=\s*30 \* 60_000/.test(src),
     'wall-clock budget = 30 minutes (the actual safety, not row count)');
   assert(/SWEEP_FETCH_POOL\s*=\s*1500/.test(src),
-    'DB fetch pool keeps headroom for fair-share round-robin without over-fetching');
+    'DB fetch pool keeps headroom for fair-share round-robin');
   assert(/import\s*\{\s*fairShareByHouse\s*\}\s*from\s*['"]\.\/post-auction-sweep\.js['"]/.test(src),
     'fairShareByHouse imported from post-auction-sweep — single source of truth');
-  assert(/eligible\s*=\s*fairShareByHouse\(eligibleAll,\s*SWEEP_BATCH_LIMIT\)/.test(src),
-    'fair-share applied AFTER cooldown filter, BEFORE the fetch loop');
+  assert(/fairShareByHouse\(fresh,\s*SWEEP_BATCH_LIMIT\)/.test(src),
+    'fair-share applied to the fresh (not-cooled) fetch set');
   assert(/wallClockBailed/.test(src),
     'stats expose wallClockBailed flag for dashboards');
 }
 
 console.log('\nimages field exposed end-to-end');
 {
-  // Canonical Lot contract lives in lib/types/lot.js since the
-  // lot-mappers.js → lib/types/lot.js consolidation. We check the new file.
   const lotTypes = readFileSync(join(here, '..', 'lib', 'types', 'lot.js'), 'utf8');
   assert(/'image_url',\s*'images',/.test(lotTypes),
-    'LOT_COLUMNS includes images column adjacent to image_url (was deliberately held out historically)');
+    'LOT_COLUMNS includes images column adjacent to image_url');
   assert(/images:\s*Array\.isArray\(row\.images\)\s*\?\s*row\.images\s*:\s*\[\]/.test(lotTypes),
     'dbRowToLot maps images with safe array fallback');
 
