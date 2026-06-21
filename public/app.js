@@ -3140,14 +3140,15 @@ function renderLots(){
   // /api/all-lots refreshes. Match by stable (house, lot#, address) key
   // so navigation, refresh, and filter changes all preserve the open lot.
   var _wantKey = _getOpenLotKey();
-  if (_wantKey && expandedLotId === null) {
+  var _urlLotId = _isMobileDrawer() ? new URLSearchParams(window.location.search).get('lot') : null;
+  if (_urlLotId && !_drawerOpen) {
+    var _um = pageItems.find(function (i) { return i.lot && i.lot._dbId === _urlLotId; });
+    if (_um && _um.lot) { requestAnimationFrame(function () { openLotDrawer(_um.lot); }); }
+  } else if (_wantKey && expandedLotId === null && !_drawerOpen) {
     var _pageMatch = pageItems.find(function(i){ return i.lot && _lotKey(i.lot) === _wantKey; });
     if (_pageMatch && _pageMatch.lot) {
-      // Defer one frame so DOM is fully attached before expand
       requestAnimationFrame(function(){ expandCard(_pageMatch.lot); });
     } else {
-      // Lot isn't on the current page — drop the key so we don't keep retrying
-      // (e.g. user changed filters such that the lot is no longer in results)
       var _stillInResults = lots.some(function(l){ return _lotKey(l) === _wantKey; });
       if (!_stillInResults) _setOpenLotKey(null);
     }
@@ -5632,6 +5633,13 @@ function expandCard(lot) {
       }).catch(function(){});
     }
   } catch {}
+  // Mobile: present the lot as a full-screen drawer. Desktop keeps the inline
+  // path below. Uses _drawerLotKey (not expandedLotId) for the re-tap guard.
+  if (_isMobileDrawer()) {
+    if (_drawerOpen && _drawerLotKey === _lotKey(lot)) { closeLotDrawer(); return; }
+    openLotDrawer(lot);
+    return;
+  }
   // Hide any existing expanded panel (cached — not removed)
   const existing = document.querySelector('.expanded-panel-visible');
   if (existing) {
@@ -6044,6 +6052,8 @@ function restoreFiltersFromURL(){
 function syncFiltersToURL(){
   const p=new URLSearchParams();
   for(const id of FILTER_PARAMS){const el=$(id);if(el&&el.value&&el.value!==el.querySelector('option')?.value)p.set(id,el.value)}
+  const curLot=new URLSearchParams(window.location.search).get('lot');
+  if(curLot) p.set('lot', curLot);
   const qs=p.toString();
   const url=qs?window.location.pathname+'?'+qs:window.location.pathname;
   if(url!==window.location.pathname+window.location.search) history.replaceState(null,'',url);
