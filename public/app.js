@@ -5712,7 +5712,7 @@ function _isMobileDrawer() {
 }
 
 var _lotDrawerEl = null, _lotDrawerScrim = null, _lotDrawerBody = null, _lotDrawerTitle = null;
-var _drawerOpen = false, _drawerLotKey = null, _drawerFocusReturn = null, _drawerPushedState = false;
+var _drawerOpen = false, _drawerLotKey = null, _drawerFocusReturn = null, _drawerPushedState = false; // _drawerLotKey: read by the expandCard mobile fork (re-tap-to-close guard), added in the activation task
 
 function _ensureLotDrawerEl() {
   if (_lotDrawerEl) return;
@@ -5750,7 +5750,7 @@ function _ensureLotDrawerEl() {
   _lotDrawerEl.addEventListener('touchstart', _ldTouchStart, { passive: true });
   _lotDrawerEl.addEventListener('touchmove', _ldTouchMove, { passive: false });
   _lotDrawerEl.addEventListener('touchend', _ldTouchEnd);
-  _lotDrawerEl.addEventListener('touchcancel', _ldTouchEnd);
+  _lotDrawerEl.addEventListener('touchcancel', _ldTouchCancel);
 
   document.body.appendChild(_lotDrawerScrim);
   document.body.appendChild(_lotDrawerEl);
@@ -5760,7 +5760,7 @@ function _drawerFocusables() {
   if (!_lotDrawerEl) return [];
   return Array.prototype.slice.call(_lotDrawerEl.querySelectorAll(
     'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
-  )).filter(function (el) { return el.offsetParent !== null || el === document.activeElement; });
+  )).filter(function (el) { return el.getClientRects().length > 0 || el === document.activeElement; });
 }
 
 function _lotDrawerKeydown(e) {
@@ -5817,10 +5817,12 @@ function closeLotDrawer(opts) {
   else { _drawerPushedState = false; _drawerStripLotParam(); }
 
   var ret = _drawerFocusReturn; _drawerFocusReturn = null;
+  // if the originating card was detached by a background re-render, .focus() is a harmless no-op (focus falls to body) — acceptable for v1
   if (ret && typeof ret.focus === 'function') { try { ret.focus(); } catch (e) {} }
 }
 
 function _drawerPushUrl(lot) {
+  // lot._dbId is the UUID, populated server-side by dbRowToLot (lib/types/lot.js:295) and serialized to the client (only _searchText is stripped in routes/search.js); the activation task adds the fork that calls this.
   var id = lot._dbId || null;   // UUID; null → skip URL integration gracefully
   if (!id) { _drawerPushedState = false; return; }
   var existing = new URLSearchParams(window.location.search).get('lot');
@@ -5880,6 +5882,15 @@ function _ldTouchEnd() {
   if (_lotDrawerScrim) _lotDrawerScrim.style.opacity = '';
   if (_ldDX > _ldW * 0.33) { _lotDrawerEl.style.transform = 'translateX(100%)'; closeLotDrawer(); }
   else { _lotDrawerEl.style.transform = ''; }
+  _ldDX = 0;
+}
+// touchcancel is an ABORT (OS interrupt: incoming call/notification) — snap back, never commit a close.
+function _ldTouchCancel() {
+  if (!_ldDragging) return;
+  _ldDragging = false;
+  _lotDrawerEl.style.transition = '';
+  _lotDrawerEl.style.transform = '';
+  if (_lotDrawerScrim) _lotDrawerScrim.style.opacity = '';
   _ldDX = 0;
 }
 
