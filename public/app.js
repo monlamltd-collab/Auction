@@ -5448,6 +5448,151 @@ async function submitBridgingQuote(e) {
   }
 }
 
+function buildExpandedPanelHTML(lot) {
+  // Build deal stacking calculator HTML
+  var dealStackHtml = (isPremium() ? (function() {
+        var sug = suggestWorksAndGdv(lot);
+        var worksAttr = sug.worksCost ? ' value="' + sug.worksCost + '"' : '';
+        var gdvAttr = sug.gdv ? ' value="' + sug.gdv + '"' : '';
+        var worksHint = sug.worksCost
+          ? '<div class="ds-hint">Auto-suggested from condition \u2014 override any time</div>'
+          : '';
+        var gdvHint = sug.gdv
+          ? '<div class="ds-hint">Estimated as price + works + 15% \u2014 override with a real comp</div>'
+          : '';
+        return '<div class="deal-stack-widget" id="deal-stack-' + lot._idx + '">' +
+          // ── Scenario picker ──
+          '<div class="ds-scenarios" style="display:flex; gap:6px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">' +
+            '<select id="ds-scenario-select-' + lot._idx + '" class="ds-input" style="flex:1; min-width:180px; padding:6px 8px;" onchange="selectScenario(' + lot._idx + ', this.value)">' +
+              '<option value="">\u2014 New scenario \u2014</option>' +
+            '</select>' +
+            '<button type="button" class="ds-btn" onclick="saveScenario(' + lot._idx + ')" title="Save this scenario">Save</button>' +
+            '<button type="button" class="ds-btn" onclick="saveScenario(' + lot._idx + ', { saveAs: true })" title="Save as new scenario">Save as\u2026</button>' +
+            '<button type="button" id="ds-scenario-delete-' + lot._idx + '" class="ds-btn ds-btn-danger" disabled onclick="deleteScenario(' + lot._idx + ')" title="Delete scenario">Delete</button>' +
+          '</div>' +
+          '<div class="ds-grid">' +
+            '<div>' +
+              '<label class="ds-label">Purchase Price</label>' +
+              '<input type="number" id="ds-price-' + lot._idx + '" value="' + (lot.price || '') + '" placeholder="e.g. 150000" class="ds-input" oninput="debounceDealStack(' + lot._idx + ')">' +
+            '</div>' +
+            '<div>' +
+              '<label class="ds-label">Works Cost</label>' +
+              '<input type="number" id="ds-works-' + lot._idx + '"' + worksAttr + ' placeholder="e.g. 30000" class="ds-input" oninput="debounceDealStack(' + lot._idx + ')">' +
+              worksHint +
+            '</div>' +
+            '<div>' +
+              '<label class="ds-label">GDV (after works)</label>' +
+              '<input type="number" id="ds-gdv-' + lot._idx + '"' + gdvAttr + ' placeholder="e.g. 350000" class="ds-input" oninput="debounceDealStack(' + lot._idx + ')">' +
+              gdvHint +
+            '</div>' +
+            '<div>' +
+              '<label class="ds-label">Monthly Rent <span class="ds-label-note">(hold scenario)</span></label>' +
+              '<input type="number" id="ds-rental-' + lot._idx + '" placeholder="e.g. 1200" class="ds-input" oninput="debounceDealStack(' + lot._idx + ')">' +
+            '</div>' +
+          '</div>' +
+          '<div class="ds-options">' +
+            '<label class="ds-check"><input type="checkbox" id="ds-needs-finance-' + lot._idx + '" checked onchange="debounceDealStack(' + lot._idx + ')"> Needs bridging finance</label>' +
+            '<label class="ds-check"><input type="checkbox" id="ds-surcharge-' + lot._idx + '" checked onchange="debounceDealStack(' + lot._idx + ')"> Additional property SDLT</label>' +
+            '<label class="ds-check"><input type="checkbox" id="ds-commercial-' + lot._idx + '"' + ((lot.propType === 'commercial' || (lot.units && lot.units >= 6)) ? ' checked' : '') + ' onchange="debounceDealStack(' + lot._idx + ')"> Commercial / 6+ units</label>' +
+          '</div>' +
+          // Hidden inputs to keep debounceDealStack() working (uses fixed defaults)
+          '<input type="hidden" id="ds-sdlt-' + lot._idx + '">' +
+          '<input type="hidden" id="ds-buyerprem-' + lot._idx + '" value="0">' +
+          '<input type="hidden" id="ds-contingency-' + lot._idx + '" value="10">' +
+          '<input type="hidden" id="ds-legalpack-' + lot._idx + '" value="300">' +
+          '<input type="hidden" id="ds-insurance-' + lot._idx + '" value="500">' +
+          '<div id="ds-results-' + lot._idx + '"></div>' +
+        '</div>';
+      })() :
+        '<div class="deal-stack-widget" style="padding:20px; background:var(--bg-card); border-radius:12px; border:1px solid rgba(0,0,0,0.08); text-align:center;">' +
+          '<h4 style="margin:0 0 8px; font-family:var(--font-main); font-size:15px; font-weight:600; color:var(--text);">' +
+            'Deal Stacking Calculator' +
+          '</h4>' +
+          '<p style="color:var(--text-muted); font-size:13px; margin:0 0 12px;">' +
+            'Analyse Flip vs Hold scenarios with live lender data' +
+          '</p>' +
+          '<button onclick="showPaywall(\'deal_stacking\')" ' +
+            'style="padding:10px 24px; background:var(--accent); color:#fff; border:none; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer;">' +
+            'Sign in free' +
+          '</button>' +
+        '</div>');
+
+  const premiumNow = (typeof isPremium === 'function') ? isPremium() : false;
+
+  // The deal-stack widget (input form + scenario picker) only renders
+  // for premium users. Wrap it in the editorial chrome regardless.
+  const dealStackPanelHtml = buildExpV2DealStackChrome(
+    dealStackHtml +
+    (lot.price ? '<div id="finance-summary-' + lot._idx + '" style="margin-top:10px"></div>' : '')
+  );
+
+  // Number visible left-column sections sequentially. Previously the
+  // builders emitted hard-coded "1" / "2" / "3" — fine when all three
+  // rendered, but buildExpV2Scores returns '' when a lot has no opps
+  // and no risks, leaving 1 → 3 with a missing badge in between.
+  // Each builder now emits __SEC_NUM__ and we substitute as we walk
+  // the surviving non-empty fragments.
+  const _leftSectionsRaw = [
+    buildExpV2DD(lot),
+    buildExpV2Scores(lot),
+    buildExpV2Comparables(lot, premiumNow),
+  ];
+  let _secCounter = 0;
+  const _leftSections = _leftSectionsRaw
+    .filter(Boolean)
+    .map(function (html) {
+      return html.indexOf('__SEC_NUM__') >= 0
+        ? html.replace(/__SEC_NUM__/, function () { return String(++_secCounter); })
+        : html;
+    })
+    .join('');
+
+  return (
+    '<button class="exp-close-btn" onclick="closeExpandedPanel()" aria-label="Close panel" title="Close">&times;</button>' +
+    buildExpV2Header(lot) +
+    // Gallery sits above the analysis grid and spans both columns —
+    // photos are the primary "stay on platform" anchor. Returns '' when
+    // the lot has no extra photos and no floor plan.
+    buildExpV2Gallery(lot) +
+    '<div class="exp-v2-left">' +
+      _leftSections +
+    '</div>' +
+    '<div class="exp-v2-right">' +
+      dealStackPanelHtml +
+      buildExpV2Fundability(lot) +
+    '</div>' +
+    // The "what happens next" buyer's guide stays as an opt-in details
+    // disclosure below the magazine grid.
+    '<details class="whn-section" style="grid-column:1 / -1;margin-top:24px;border:1px solid var(--border-strong);border-radius:0;background:var(--paper)">' +
+      '<summary style="padding:12px 18px;font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;color:var(--ink);list-style:none;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border-strong)">' +
+        'What happens next — auction buying guide' +
+        '<span style="margin-left:auto;font-family:var(--font-mono);font-size:14px;color:var(--muted)">+</span>' +
+      '</summary>' +
+      '<div style="padding:18px;font-family:var(--font-display);font-size:15px;color:var(--ink-2);line-height:1.6">' +
+        '<div style="display:grid;gap:12px">' +
+          '<div><strong style="font-family:var(--font-main);font-weight:600;color:var(--ink)">1. Get the legal pack.</strong> Download from the auction house website (usually free). Have a solicitor review it before you bid — budget ~£500–£1,000.</div>' +
+          '<div><strong style="font-family:var(--font-main);font-weight:600;color:var(--ink)">2. Arrange a survey.</strong> Building survey or HomeBuyer report before auction day. Budget ~£400–£700, more for distressed properties.</div>' +
+          '<div><strong style="font-family:var(--font-main);font-weight:600;color:var(--ink)">3. Arrange finance.</strong> Get a Decision in Principle for bridging before bidding. Most bridging lenders complete in 5–10 working days.</div>' +
+          '<div><strong style="font-family:var(--font-main);font-weight:600;color:var(--ink)">4. Register to bid.</strong> Photo ID, proof of address, proof of funds, solicitor details. Allow 24–48 hours for verification.</div>' +
+          '<div><strong style="font-family:var(--font-main);font-weight:600;color:var(--ink)">5. Set your maximum bid.</strong> Use the deal stack above. Set a firm cap and do not exceed it. Factor SDLT, legals, survey, bridging, refurb.</div>' +
+          '<div><strong style="font-family:var(--font-main);font-weight:600;color:var(--ink)">6. After the hammer falls.</strong> 10% deposit immediately + buyer’s premium. Exchange at the fall of the hammer is legally binding. Completion typically 28 days.</div>' +
+        '</div>' +
+        '<div style="margin-top:14px;padding:8px 12px;background:var(--bg-2);border-left:2px solid var(--red);font-family:var(--font-display);font-size:13px;line-height:1.4;color:var(--ink-2)">' +
+          'At auction, the fall of the hammer creates a binding contract. Do your due diligence before bidding, not after.' +
+        '</div>' +
+      '</div>' +
+    '</details>'
+  );
+}
+
+function wireExpandedPanel(lot) {
+  loadScenariosForLot(lot, lot._idx);
+  if (lot.price) {
+    setTimeout(function () { triggerFinanceCheck(lot._idx); }, 200);
+    fetchLenderSummary(lot);
+  }
+}
+
 function expandCard(lot) {
   // Anonymous users can OPEN any lot card — address, price, image, house,
   // status, auction date, bullets are all visible. Sensitive AI fields
@@ -5534,167 +5679,14 @@ function expandCard(lot) {
   // Build expanded panel — image, AI prose, EPC/flood badges, and the property
   // strip have been moved off the panel; the card already shows them.
   const panel = document.createElement('div');
-  panel.className = 'expanded-panel expanded-panel-visible';
-  panel.id = 'expanded-' + lot._idx;
-
-  // Build deal stacking calculator HTML
-  var dealStackHtml = (isPremium() ? (function() {
-        var sug = suggestWorksAndGdv(lot);
-        var worksAttr = sug.worksCost ? ' value="' + sug.worksCost + '"' : '';
-        var gdvAttr = sug.gdv ? ' value="' + sug.gdv + '"' : '';
-        var worksHint = sug.worksCost
-          ? '<div class="ds-hint">Auto-suggested from condition \u2014 override any time</div>'
-          : '';
-        var gdvHint = sug.gdv
-          ? '<div class="ds-hint">Estimated as price + works + 15% \u2014 override with a real comp</div>'
-          : '';
-        return '<div class="deal-stack-widget" id="deal-stack-' + lot._idx + '">' +
-          // ── Scenario picker ──
-          '<div class="ds-scenarios" style="display:flex; gap:6px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">' +
-            '<select id="ds-scenario-select-' + lot._idx + '" class="ds-input" style="flex:1; min-width:180px; padding:6px 8px;" onchange="selectScenario(' + lot._idx + ', this.value)">' +
-              '<option value="">\u2014 New scenario \u2014</option>' +
-            '</select>' +
-            '<button type="button" class="ds-btn" onclick="saveScenario(' + lot._idx + ')" title="Save this scenario">Save</button>' +
-            '<button type="button" class="ds-btn" onclick="saveScenario(' + lot._idx + ', { saveAs: true })" title="Save as new scenario">Save as\u2026</button>' +
-            '<button type="button" id="ds-scenario-delete-' + lot._idx + '" class="ds-btn ds-btn-danger" disabled onclick="deleteScenario(' + lot._idx + ')" title="Delete scenario">Delete</button>' +
-          '</div>' +
-          '<div class="ds-grid">' +
-            '<div>' +
-              '<label class="ds-label">Purchase Price</label>' +
-              '<input type="number" id="ds-price-' + lot._idx + '" value="' + (lot.price || '') + '" placeholder="e.g. 150000" class="ds-input" oninput="debounceDealStack(' + lot._idx + ')">' +
-            '</div>' +
-            '<div>' +
-              '<label class="ds-label">Works Cost</label>' +
-              '<input type="number" id="ds-works-' + lot._idx + '"' + worksAttr + ' placeholder="e.g. 30000" class="ds-input" oninput="debounceDealStack(' + lot._idx + ')">' +
-              worksHint +
-            '</div>' +
-            '<div>' +
-              '<label class="ds-label">GDV (after works)</label>' +
-              '<input type="number" id="ds-gdv-' + lot._idx + '"' + gdvAttr + ' placeholder="e.g. 350000" class="ds-input" oninput="debounceDealStack(' + lot._idx + ')">' +
-              gdvHint +
-            '</div>' +
-            '<div>' +
-              '<label class="ds-label">Monthly Rent <span class="ds-label-note">(hold scenario)</span></label>' +
-              '<input type="number" id="ds-rental-' + lot._idx + '" placeholder="e.g. 1200" class="ds-input" oninput="debounceDealStack(' + lot._idx + ')">' +
-            '</div>' +
-          '</div>' +
-          '<div class="ds-options">' +
-            '<label class="ds-check"><input type="checkbox" id="ds-needs-finance-' + lot._idx + '" checked onchange="debounceDealStack(' + lot._idx + ')"> Needs bridging finance</label>' +
-            '<label class="ds-check"><input type="checkbox" id="ds-surcharge-' + lot._idx + '" checked onchange="debounceDealStack(' + lot._idx + ')"> Additional property SDLT</label>' +
-            '<label class="ds-check"><input type="checkbox" id="ds-commercial-' + lot._idx + '"' + ((lot.propType === 'commercial' || (lot.units && lot.units >= 6)) ? ' checked' : '') + ' onchange="debounceDealStack(' + lot._idx + ')"> Commercial / 6+ units</label>' +
-          '</div>' +
-          // Hidden inputs to keep debounceDealStack() working (uses fixed defaults)
-          '<input type="hidden" id="ds-sdlt-' + lot._idx + '">' +
-          '<input type="hidden" id="ds-buyerprem-' + lot._idx + '" value="0">' +
-          '<input type="hidden" id="ds-contingency-' + lot._idx + '" value="10">' +
-          '<input type="hidden" id="ds-legalpack-' + lot._idx + '" value="300">' +
-          '<input type="hidden" id="ds-insurance-' + lot._idx + '" value="500">' +
-          '<div id="ds-results-' + lot._idx + '"></div>' +
-        '</div>';
-      })() :
-        '<div class="deal-stack-widget" style="padding:20px; background:var(--bg-card); border-radius:12px; border:1px solid rgba(0,0,0,0.08); text-align:center;">' +
-          '<h4 style="margin:0 0 8px; font-family:var(--font-main); font-size:15px; font-weight:600; color:var(--text);">' +
-            'Deal Stacking Calculator' +
-          '</h4>' +
-          '<p style="color:var(--text-muted); font-size:13px; margin:0 0 12px;">' +
-            'Analyse Flip vs Hold scenarios with live lender data' +
-          '</p>' +
-          '<button onclick="showPaywall(\'deal_stacking\')" ' +
-            'style="padding:10px 24px; background:var(--accent); color:#fff; border:none; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer;">' +
-            'Sign in free' +
-          '</button>' +
-        '</div>');
-
-  // ─── Magazine-style panel assembly (handoff: lot-detail.jsx) ───
-  // Wraps the existing functional sections (yield analysis, deal stack
-  // widget, comparables, lender summary) in the new editorial chrome:
-  // ink-bordered header card + 2-col body with sticky right column.
   panel.className = 'expanded-panel expanded-panel-visible exp-v2';
+  panel.id = 'expanded-' + lot._idx;
+  panel.innerHTML = buildExpandedPanelHTML(lot);
 
-  const premiumNow = (typeof isPremium === 'function') ? isPremium() : false;
-
-  // The deal-stack widget (input form + scenario picker) only renders
-  // for premium users. Wrap it in the editorial chrome regardless.
-  const dealStackPanelHtml = buildExpV2DealStackChrome(
-    dealStackHtml +
-    (lot.price ? '<div id="finance-summary-' + lot._idx + '" style="margin-top:10px"></div>' : '')
-  );
-
-  // Number visible left-column sections sequentially. Previously the
-  // builders emitted hard-coded "1" / "2" / "3" — fine when all three
-  // rendered, but buildExpV2Scores returns '' when a lot has no opps
-  // and no risks, leaving 1 → 3 with a missing badge in between.
-  // Each builder now emits __SEC_NUM__ and we substitute as we walk
-  // the surviving non-empty fragments.
-  const _leftSectionsRaw = [
-    buildExpV2DD(lot),
-    buildExpV2Scores(lot),
-    buildExpV2Comparables(lot, premiumNow),
-  ];
-  let _secCounter = 0;
-  const _leftSections = _leftSectionsRaw
-    .filter(Boolean)
-    .map(function (html) {
-      return html.indexOf('__SEC_NUM__') >= 0
-        ? html.replace(/__SEC_NUM__/, function () { return String(++_secCounter); })
-        : html;
-    })
-    .join('');
-
-  panel.innerHTML = (
-    '<button class="exp-close-btn" onclick="closeExpandedPanel()" aria-label="Close panel" title="Close">&times;</button>' +
-    buildExpV2Header(lot) +
-    // Gallery sits above the analysis grid and spans both columns —
-    // photos are the primary "stay on platform" anchor. Returns '' when
-    // the lot has no extra photos and no floor plan.
-    buildExpV2Gallery(lot) +
-    '<div class="exp-v2-left">' +
-      _leftSections +
-    '</div>' +
-    '<div class="exp-v2-right">' +
-      dealStackPanelHtml +
-      buildExpV2Fundability(lot) +
-    '</div>' +
-    // The "what happens next" buyer's guide stays as an opt-in details
-    // disclosure below the magazine grid.
-    '<details class="whn-section" style="grid-column:1 / -1;margin-top:24px;border:1px solid var(--border-strong);border-radius:0;background:var(--paper)">' +
-      '<summary style="padding:12px 18px;font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;color:var(--ink);list-style:none;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border-strong)">' +
-        'What happens next — auction buying guide' +
-        '<span style="margin-left:auto;font-family:var(--font-mono);font-size:14px;color:var(--muted)">+</span>' +
-      '</summary>' +
-      '<div style="padding:18px;font-family:var(--font-display);font-size:15px;color:var(--ink-2);line-height:1.6">' +
-        '<div style="display:grid;gap:12px">' +
-          '<div><strong style="font-family:var(--font-main);font-weight:600;color:var(--ink)">1. Get the legal pack.</strong> Download from the auction house website (usually free). Have a solicitor review it before you bid — budget ~£500–£1,000.</div>' +
-          '<div><strong style="font-family:var(--font-main);font-weight:600;color:var(--ink)">2. Arrange a survey.</strong> Building survey or HomeBuyer report before auction day. Budget ~£400–£700, more for distressed properties.</div>' +
-          '<div><strong style="font-family:var(--font-main);font-weight:600;color:var(--ink)">3. Arrange finance.</strong> Get a Decision in Principle for bridging before bidding. Most bridging lenders complete in 5–10 working days.</div>' +
-          '<div><strong style="font-family:var(--font-main);font-weight:600;color:var(--ink)">4. Register to bid.</strong> Photo ID, proof of address, proof of funds, solicitor details. Allow 24–48 hours for verification.</div>' +
-          '<div><strong style="font-family:var(--font-main);font-weight:600;color:var(--ink)">5. Set your maximum bid.</strong> Use the deal stack above. Set a firm cap and do not exceed it. Factor SDLT, legals, survey, bridging, refurb.</div>' +
-          '<div><strong style="font-family:var(--font-main);font-weight:600;color:var(--ink)">6. After the hammer falls.</strong> 10% deposit immediately + buyer’s premium. Exchange at the fall of the hammer is legally binding. Completion typically 28 days.</div>' +
-        '</div>' +
-        '<div style="margin-top:14px;padding:8px 12px;background:var(--bg-2);border-left:2px solid var(--red);font-family:var(--font-display);font-size:13px;line-height:1.4;color:var(--ink-2)">' +
-          'At auction, the fall of the hammer creates a binding contract. Do your due diligence before bidding, not after.' +
-        '</div>' +
-      '</div>' +
-    '</details>'
-  );
-
-  // Insert after the card and cache
   cardEl.after(panel);
   _expandedPanelCache.set(lot._idx, panel);
   panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-
-  // Load saved deal-stacking scenarios for this lot (signed-in only)
-  loadScenariosForLot(lot, lot._idx);
-
-  // Auto-run finance check if lot has a price
-  if (lot.price) {
-    setTimeout(() => triggerFinanceCheck(lot._idx), 200);
-  }
-
-  // Auto-fetch lender summary for the header strip
-  if (lot.price) {
-    fetchLenderSummary(lot);
-  }
+  wireExpandedPanel(lot);
 }
 
 function closeExpandedPanel() {
