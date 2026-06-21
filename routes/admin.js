@@ -28,6 +28,7 @@ import {
 } from '../lib/analysis.js';
 import { LOTS_SELECT, dbRowToLot } from '../lib/types/lot.js';
 import { computeBleedByHouse, dechromeGallery } from '../lib/pipeline/image-extract.js';
+import { sweepMultiImages } from '../lib/pipeline/multi-image-sweep.js';
 import { getAICostSummary } from '../lib/ai-provider.js';
 import { enrichLots, getCircuitBreakers, fetchEPCByPostcode, matchEPCToLot, fetchEPCCertificate } from '../lib/enrichment.js';
 import { normaliseUrl, applyUmamiInjection } from '../lib/utils.js';
@@ -96,6 +97,15 @@ router.post('/api/refresh-cache', rateLimit(60000, 5), requireAdmin, async (req,
   res.json({ message: 'Auto-analysis triggered. Check server logs for progress.' });
   // Run async — don't block the response
   autoAnalyseAll().catch(e => console.error('Manual refresh failed:', e));
+});
+
+// Admin: run the multi-image gallery sweep on demand (drains the empty-gallery
+// backlog now instead of waiting for the daily 06:00 run). Async like
+// /api/refresh-cache — the sweep can run up to its 30-min wall-clock guard, far
+// longer than an HTTP request, so respond immediately and run in the background.
+router.post('/api/admin/sweep-images', rateLimit(60000, 5), requireAdmin, async (req, res) => {
+  res.json({ message: 'Multi-image sweep triggered. Check server logs for progress.' });
+  sweepMultiImages().catch(e => log.error('Manual sweep-images failed', { error: e.message }));
 });
 
 // Admin: backfill images for all cached catalogues (no AI tokens used)
