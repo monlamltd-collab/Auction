@@ -24,12 +24,16 @@
 // drives price-coverage gap accounting (nil_reserve & co. are NOT gaps) and the
 // Nil Reserve badge, and lets the anomaly scanner read intent instead of
 // guessing from a null price. Additive.
-export const LOT_SCHEMA_VERSION = '3.1.0';
+// 3.2.0 — id (lots.id UUID) added to the select set (2026-06-21). Populates
+// lot._dbId (already mapped in dbRowToLot), which backs the shareable
+// /lot/:id page + ?lot=<uuid> drawer deep-link. System column. Additive.
+export const LOT_SCHEMA_VERSION = '3.2.0';
 
 // Snake-case DB columns the app's standard lot SELECT pulls.
 // Mirrors LOT_COLUMNS in lib/types/lot.js. Additive changes (new columns)
 // require a version bump; removals/renames fail the CI gate outright.
 export const LOT_COLUMNS_PINNED = Object.freeze([
+  'id',
   'house', 'auctioneer', 'lot_number', 'url', 'catalogue_url', 'address',
   'postcode', 'lat', 'lng', 'price', 'price_text', 'price_status', 'prop_type',
   'beds', 'tenure', 'lease_length', 'sqft', 'condition', 'image_url', 'images',
