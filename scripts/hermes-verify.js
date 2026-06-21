@@ -64,6 +64,12 @@ const ADAPTER = {
   eventsTypeCol:  'event_type',        // ✅ correct
   eventsDataCol:  'event_data',        // CORRECTED: was 'message'. It's jsonb.
   eventsTimeCol:  'created_at',        // ✅ correct
+
+  // House-health gate inputs (Phase 1). Join key CONFIRMED live, not guessed:
+  // house_skills.slug = lots.house. (lots.house stores the SLUG; house_skills.house
+  // stores the DISPLAY name, so joining on .house matches almost nothing.)
+  healthTable:    'house_skills',
+  healthJoinCol:  'slug',              // = lots.house. CONFIRMED 2026-06-21 (153/155).
 };
 
 async function getHouseLotState(db, house) {
@@ -108,10 +114,6 @@ async function getHouseLotState(db, house) {
  *  ~94%. We gate primarily on circuit_state + dormant (the populated, meaningful
  *  signals) and use last_full_extract_at for scrape-recency.
  * ========================================================================= */
-const HEALTH = {
-  table:   'house_skills',
-  joinCol: 'slug',                 // = lots.house (the slug). CONFIRMED 2026-06-21.
-};
 // "last_full_extract_at recent" threshold for the not-yet-due branch. 7 days
 // mirrors the pipeline's freshness floor (no house should go a week unscraped).
 const RECENT_EXTRACT_HOURS = 24 * 7;
@@ -120,11 +122,12 @@ const fmtAge = (h) => (h == null ? '?h' : `${h}h`);
 const fmtTs  = (t) => { try { return new Date(t).toISOString(); } catch { return String(t); } };
 
 async function getHouseHealth(db, house) {
+  const a = ADAPTER;
   const { rows } = await db.query(
     `select slug, circuit_state, circuit_opened_at, dormant, dormant_since,
             next_scrape_at, last_full_extract_at, last_success_at,
             consecutive_failures, healing_cooldown_until, status
-       from ${HEALTH.table} where ${HEALTH.joinCol} = $1`, [house]);
+       from ${a.healthTable} where ${a.healthJoinCol} = $1`, [house]);
   return rows[0] || null;
 }
 
