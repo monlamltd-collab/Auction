@@ -1,29 +1,37 @@
 // tests/test-fabrication-guard.js — detectFabricatedBatch (anti-hallucination guard).
-const { detectFabricatedBatch } = await import('../lib/scraper/validation.js');
+const { detectFabricatedBatch, PLACEHOLDER_ADDRESS_RE } = await import('../lib/scraper/validation.js');
 
 let pass = 0, fail = 0;
 const assert = (c, m) => { if (c) { pass++; console.log(`  ✓ ${m}`); } else { fail++; console.error(`  ✗ ${m}`); } };
 
-// Fabricated batch: synthetic template addresses (the real SDL hallucination shape).
+// Fabricated batch: blatant placeholder town names + the impossible AT1 demo
+// postcode (the SDL Auctions 2026-06 hallucination shape). Every lot is unambiguous.
 const fake = [
-  { address: '456 Elm Street, Manchester, M1 2AB', url: 'https://www.sdlauctions.co.uk/auction/lot2/' },
-  { address: '4 Willow Close, Anytown, AT1 1AD', url: 'https://www.sdlauctions.co.uk/auction/4' },
-  { address: '321 Oak Road, Bristol, BS1 4AA', url: 'https://www.sdlauctions.co.uk/property-detail/5' },
-  { address: '202 Maple Close, Leeds, LS1 5GH', url: 'https://www.sdlauctions.co.uk/auction/lot5/' },
-  { address: '707 Poplar Drive, Newcastle, NE2 3RT', url: 'https://www.sdlauctions.co.uk/auction/lot10/' },
+  { address: '1 High Street, Anytown, AT1 1AD', url: 'https://www.sdlauctions.co.uk/auction/lot1/' },
+  { address: '2 Market Square, Sometown, AT1 1AB', url: 'https://www.sdlauctions.co.uk/auction/2' },
+  { address: '3 Church Lane, Exampletown, EX1 1AA', url: 'https://www.sdlauctions.co.uk/property-detail/3' },
+  { address: '4 The Green, Sampletown, S1 1AA', url: 'https://www.sdlauctions.co.uk/auction/lot4/' },
+  { address: '5 Mill Road, Placeholdertown, P1 1AA', url: 'https://www.sdlauctions.co.uk/auction/lot5/' },
 ];
-assert(detectFabricatedBatch(fake).flagged === true, 'fabricated template batch is flagged');
+assert(detectFabricatedBatch(fake).flagged === true, 'fabricated placeholder-town batch is flagged');
 
-// Real batch: genuine varied addresses (must NOT be flagged) — real lots also use
-// /property/{id}/ URLs, proving the guard does not key on URL shape.
+// Real batch: genuine varied addresses (must NOT be flagged). INCLUDES real
+// tree-named streets ("Elm Road", "Willow Close", "Oak Drive") to lock the
+// false-positive fix — the guard must never key on street name. Real lots also
+// use /property/{id}/ URLs, proving the guard does not key on URL shape either.
 const real = [
-  { address: 'Land east of Bolton Road, Wigan, Greater Manchester WN2 5LB', url: 'https://www.btgeddisonspropertyauctions.com/properties/202603121017sq_9hc9-220626/for-auction-wigan' },
-  { address: 'Former Trinity Methodist Church, Chapel Street, Woodhouse, Sheffield S13 7JL', url: 'https://x/property/50979/land-for-auction-sheffield/' },
-  { address: '34-40 Bridge Street, Bury, Lancashire BL9 6HH', url: 'https://x/property/50931/' },
-  { address: 'Flat 12, 53-55 Lancaster Gate, London W2 3NA', url: 'https://x/property/50863/' },
-  { address: 'Bungalow & Land, Kelvin, 1 Backmoor Road, Sheffield S8 8LB', url: 'https://x/property/50980/' },
+  { address: '12 Elm Road, Streatham, London SW16 6NX', url: 'https://x/property/50979/' },
+  { address: '2 Willow Close, Nottingham NG5 4JA', url: 'https://x/property/50931/' },
+  { address: '5 Oak Drive, Huddersfield HD4 6XF', url: 'https://x/property/50863/' },
+  { address: '34-40 Bridge Street, Bury BL9 6HH', url: 'https://x/property/50980/' },
+  { address: 'Flat 12, 53-55 Lancaster Gate, London W2 3NA', url: 'https://x/property/50864/' },
 ];
-assert(detectFabricatedBatch(real).flagged === false, 'real varied batch is NOT flagged');
+assert(detectFabricatedBatch(real).flagged === false, 'real varied batch (incl. tree-named streets) is NOT flagged');
+
+// Direct regex assertions: a placeholder town/postcode matches, a real tree-named
+// street does NOT — this is the false-positive fix locked at the regex level.
+assert(PLACEHOLDER_ADDRESS_RE.test('4 Willow Close, Anytown, AT1 1AD') === true, 'regex matches placeholder town/postcode');
+assert(PLACEHOLDER_ADDRESS_RE.test('12 Elm Road, Streatham, London SW16 6NX') === false, 'regex does NOT match a real tree-named street');
 
 // Safety: too-small batch is never flagged (insufficient confidence).
 assert(detectFabricatedBatch(fake.slice(0, 2)).flagged === false, 'batch < 5 lots never flagged');
