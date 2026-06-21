@@ -58,8 +58,8 @@ console.log('multi-image-sweep — two-pass flow, guards, generic strip');
     'DB fetch pool keeps headroom for fair-share round-robin');
   assert(/import\s*\{\s*fairShareByHouse\s*\}\s*from\s*['"]\.\/post-auction-sweep\.js['"]/.test(src),
     'fairShareByHouse imported from post-auction-sweep — single source of truth');
-  assert(/fairShareByHouse\(fresh,\s*SWEEP_BATCH_LIMIT\)/.test(src),
-    'fair-share applied to the fresh (not-cooled) fetch set');
+  assert(/fairShareByHouse\(rest,\s*SWEEP_BATCH_LIMIT\)/.test(src),
+    'fair-share applied to the non-urgent fresh lots (urgent lots bypass cap via splitFreshByUrgency)');
   assert(/wallClockBailed/.test(src),
     'stats expose wallClockBailed flag for dashboards');
 }
