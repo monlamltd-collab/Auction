@@ -5703,6 +5703,186 @@ function closeExpandedPanel() {
   }
 }
 
+// ═══════════════════════════════
+// MOBILE LOT DRAWER (≤640px) — own state, decoupled from expandedLotId so a
+// background re-render can't orphan it. Dormant until expandCard forks to it.
+// ═══════════════════════════════
+function _isMobileDrawer() {
+  try { return window.matchMedia('(max-width: 640px)').matches; } catch (e) { return false; }
+}
+
+var _lotDrawerEl = null, _lotDrawerScrim = null, _lotDrawerBody = null, _lotDrawerTitle = null;
+var _drawerOpen = false, _drawerLotKey = null, _drawerFocusReturn = null, _drawerPushedState = false;
+
+function _ensureLotDrawerEl() {
+  if (_lotDrawerEl) return;
+  _lotDrawerScrim = document.createElement('div');
+  _lotDrawerScrim.id = 'lotDrawerScrim';
+  _lotDrawerScrim.addEventListener('click', function () { closeLotDrawer(); });
+
+  _lotDrawerEl = document.createElement('div');
+  _lotDrawerEl.id = 'lotDrawer';
+  _lotDrawerEl.setAttribute('role', 'dialog');
+  _lotDrawerEl.setAttribute('aria-modal', 'true');
+  _lotDrawerEl.setAttribute('aria-labelledby', 'lotDrawerTitle');
+  _lotDrawerEl.setAttribute('aria-hidden', 'true');
+  try { _lotDrawerEl.setAttribute('inert', ''); } catch (e) {}
+  _lotDrawerEl.innerHTML =
+    '<div class="ld-head">' +
+      '<span class="ld-title" id="lotDrawerTitle"></span>' +
+      '<button type="button" class="ld-close" aria-label="Close lot">CLOSE <span aria-hidden="true">&times;</span></button>' +
+    '</div>' +
+    '<div class="ld-body"></div>';
+  _lotDrawerBody = _lotDrawerEl.querySelector('.ld-body');
+  _lotDrawerTitle = _lotDrawerEl.querySelector('.ld-title');
+  _lotDrawerEl.querySelector('.ld-close').addEventListener('click', function () { closeLotDrawer(); });
+  _lotDrawerEl.addEventListener('keydown', _lotDrawerKeydown);
+
+  // Keyboard-aware: scroll a focused input clear of the on-screen keyboard.
+  _lotDrawerBody.addEventListener('focusin', function (e) {
+    var t = e.target;
+    if (t && /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName)) {
+      setTimeout(function () { try { t.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_) {} }, 300);
+    }
+  });
+
+  // Left-edge swipe-to-dismiss (handlers defined below).
+  _lotDrawerEl.addEventListener('touchstart', _ldTouchStart, { passive: true });
+  _lotDrawerEl.addEventListener('touchmove', _ldTouchMove, { passive: false });
+  _lotDrawerEl.addEventListener('touchend', _ldTouchEnd);
+  _lotDrawerEl.addEventListener('touchcancel', _ldTouchEnd);
+
+  document.body.appendChild(_lotDrawerScrim);
+  document.body.appendChild(_lotDrawerEl);
+}
+
+function _drawerFocusables() {
+  if (!_lotDrawerEl) return [];
+  return Array.prototype.slice.call(_lotDrawerEl.querySelectorAll(
+    'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
+  )).filter(function (el) { return el.offsetParent !== null || el === document.activeElement; });
+}
+
+function _lotDrawerKeydown(e) {
+  if (e.key === 'Escape') { e.preventDefault(); closeLotDrawer(); return; }
+  if (e.key !== 'Tab') return;
+  var f = _drawerFocusables(); if (!f.length) return;
+  var first = f[0], last = f[f.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+}
+
+function openLotDrawer(lot) {
+  _ensureLotDrawerEl();
+  _drawerLotKey = _lotKey(lot);
+  _setOpenLotKey(_drawerLotKey);
+
+  var houseLabel = (typeof getHouseDisplay === 'function' ? getHouseDisplay(lot._house || lot.house || '') : (lot._house || '')) || 'Auction house';
+  var lotNum = lot.lot != null ? String(lot.lot).padStart(2, '0') : '—';
+  _lotDrawerTitle.textContent = (houseLabel + ' · LOT ' + lotNum).toUpperCase();
+
+  _lotDrawerBody.scrollTop = 0;
+  _lotDrawerBody.innerHTML =
+    '<div class="expanded-panel expanded-panel-visible exp-v2" id="expanded-' + lot._idx + '">' +
+    buildExpandedPanelHTML(lot) + '</div>';
+
+  _drawerFocusReturn = document.activeElement;
+  try { _lotDrawerEl.removeAttribute('inert'); } catch (e) {}
+  var _mw = document.querySelector('main.wrap'); if (_mw) { try { _mw.setAttribute('inert', ''); } catch (e) {} }
+  _lotDrawerEl.setAttribute('aria-hidden', 'false');
+  _lotDrawerEl.style.transform = '';
+  document.body.classList.add('drawer-open');
+  _drawerOpen = true;
+  var closeBtn = _lotDrawerEl.querySelector('.ld-close');
+  if (closeBtn) closeBtn.focus();
+
+  if (window.umami) { try { umami.track('lot_drawer_open', { lot: lot.lot || '', house: lot._house || '' }); } catch (e) {} }
+
+  _drawerPushUrl(lot);
+  wireExpandedPanel(lot);
+}
+
+// opts.fromPopstate=true → invoked by Back; do NOT call history.back.
+function closeLotDrawer(opts) {
+  opts = opts || {};
+  if (!_drawerOpen) return;
+  _drawerOpen = false;
+  _drawerLotKey = null;
+  document.body.classList.remove('drawer-open');
+  if (_lotDrawerEl) { _lotDrawerEl.setAttribute('aria-hidden', 'true'); try { _lotDrawerEl.setAttribute('inert', ''); } catch (e) {} }
+  var _mw = document.querySelector('main.wrap'); if (_mw) { try { _mw.removeAttribute('inert'); } catch (e) {} }
+  _setOpenLotKey(null);
+
+  if (!opts.fromPopstate && _drawerPushedState) { _drawerPushedState = false; history.back(); }
+  else { _drawerPushedState = false; _drawerStripLotParam(); }
+
+  var ret = _drawerFocusReturn; _drawerFocusReturn = null;
+  if (ret && typeof ret.focus === 'function') { try { ret.focus(); } catch (e) {} }
+}
+
+function _drawerPushUrl(lot) {
+  var id = lot._dbId || null;   // UUID; null → skip URL integration gracefully
+  if (!id) { _drawerPushedState = false; return; }
+  var existing = new URLSearchParams(window.location.search).get('lot');
+  if (existing === id) { _drawerPushedState = false; return; }
+  try {
+    var p = new URLSearchParams(window.location.search);
+    p.set('lot', id);
+    history.pushState({ lotDrawer: id }, '', window.location.pathname + '?' + p.toString());
+    _drawerPushedState = true;
+  } catch (e) { _drawerPushedState = false; }
+}
+
+function _drawerStripLotParam() {
+  try {
+    var p = new URLSearchParams(window.location.search);
+    if (!p.has('lot')) return;
+    p.delete('lot');
+    var qs = p.toString();
+    history.replaceState(null, '', window.location.pathname + (qs ? '?' + qs : ''));
+  } catch (e) {}
+}
+
+window.addEventListener('popstate', function () {
+  var hasLot = new URLSearchParams(window.location.search).has('lot');
+  if (_drawerOpen && !hasLot) { closeLotDrawer({ fromPopstate: true }); }
+});
+
+// Left-edge swipe-to-dismiss (iOS-style interactive back). Only starts within
+// _ldEdge px of the left edge, so it doesn't conflict with the image gallery's
+// horizontal swipe or the deal-stack inputs. On Android the OS edge-back fires
+// popstate → closeLotDrawer already, so this is primarily the iOS complement.
+var _ldEdge = 24, _ldDragging = false, _ldStartX = 0, _ldStartY = 0, _ldDX = 0, _ldW = 0;
+
+function _ldTouchStart(e) {
+  if (!_drawerOpen || !e.touches || e.touches.length !== 1) return;
+  var t = e.touches[0];
+  if (t.clientX > _ldEdge) return;
+  _ldDragging = true; _ldStartX = t.clientX; _ldStartY = t.clientY; _ldDX = 0;
+  _ldW = (_lotDrawerEl.getBoundingClientRect().width) || window.innerWidth || 1;
+  _lotDrawerEl.style.transition = 'none';
+}
+function _ldTouchMove(e) {
+  if (!_ldDragging) return;
+  var t = e.touches[0];
+  var dx = t.clientX - _ldStartX, dy = t.clientY - _ldStartY;
+  if (_ldDX === 0 && Math.abs(dy) > Math.abs(dx)) { _ldDragging = false; _lotDrawerEl.style.transition = ''; return; }
+  if (dx < 0) dx = 0;
+  _ldDX = dx;
+  e.preventDefault();
+  _lotDrawerEl.style.transform = 'translateX(' + dx + 'px)';
+  if (_lotDrawerScrim) _lotDrawerScrim.style.opacity = String(Math.max(0, 1 - dx / _ldW));
+}
+function _ldTouchEnd() {
+  if (!_ldDragging) return;
+  _ldDragging = false;
+  _lotDrawerEl.style.transition = '';
+  if (_lotDrawerScrim) _lotDrawerScrim.style.opacity = '';
+  if (_ldDX > _ldW * 0.33) { _lotDrawerEl.style.transform = 'translateX(100%)'; closeLotDrawer(); }
+  else { _lotDrawerEl.style.transform = ''; }
+  _ldDX = 0;
+}
+
 function updateLTV(idx, val) {
   const el = document.getElementById('ltv-val-' + idx);
   if (el) el.textContent = val + '%';
