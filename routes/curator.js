@@ -94,7 +94,7 @@ router.get('/api/curator/share/:pickId', rateLimit(60_000, 60), async (req, res)
 
   const { data, error } = await supabase
     .from('curator_picks')
-    .select('id, headline, prose, hook, status, lots:lot_id ( id, house, address, price, price_text, prop_type, score, image_url )')
+    .select('id, headline, prose, hook, status, lots:lot_id ( id, house:house_slug, address, price, price_text, prop_type, score, image_url )')
     .eq('id', pickId)
     .maybeSingle();
 

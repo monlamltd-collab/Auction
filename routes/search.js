@@ -358,7 +358,7 @@ async function getActiveCataloguesWithFallback() {
   // so the smart-search dual-read can hit the FK path.
   const { data: lotsRows, error: lotsErr } = await supabase
     .from('lots')
-    .select('catalogue_url, house, last_seen_at, auction_id')
+    .select('catalogue_url, house:house_slug, last_seen_at, auction_id')
     .gte('last_seen_at', fbCutoff)
     .not('catalogue_url', 'is', null)
     .limit(10000);
@@ -1458,7 +1458,7 @@ async function buildAllLotsResponse({ isSignedIn, includePast }) {
         const minDate = unsoldAddrs.reduce((min, x) => x.date < min ? x.date : min, '9999-12-31');
         const { data: newerLots } = await supabase
           .from('lots')
-          .select('house, address, auction_date, status')
+          .select('house:house_slug, address, auction_date, status')
           .in('house', houses)
           .in('status', ['sold', 'stc', 'available'])
           .gte('auction_date', minDate);
