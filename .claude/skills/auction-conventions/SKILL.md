@@ -508,4 +508,5 @@ See `references/new-house-playbook.md` for the full checklist. Summary (Firecraw
 4. **Optional: pagination / Puppeteer hint** — if the catalogue uses an unusual pagination pattern or strictly needs a JS-rendered page, set the relevant flag on the `rewriteUrl(slug, url)` return in `lib/houses.js`.
 5. **Mirror in `admin.html`** if the slug needs a friendly name in the admin UI.
 6. **Run `npm test`** — must stay green.
-7. **Commit:** `feat: add {slug} auction house (N lots)`
+7. **Per-house dossier** — create `docs/houses/<slug>.md` + a row in `docs/houses/README.md` (platform, catalogue URL + `lib/houses.js` line, lot-URL pattern, recall sentinel, image source, render needs, incidents, last-verified). See playbook Step 6.5.
+8. **Commit:** `feat: add {slug} auction house (N lots)`

@@ -2034,7 +2034,7 @@ const KNOWN_HOUSES = {
 };
 // Auto-detect rules: URL substring → slug
 const HOUSE_DETECT = [
-  ['savills.co.uk','savills'],['allsop.co.uk','allsop'],['btgeddisons','sdl'],
+  ['savills.co.uk','savills'],['allsop.co.uk','allsop'],['btgeddisons','btgeddisons'],['btgeddisonspropertyauctions','btgeddisons'],
   ['bondwolfe','bondwolfe'],['barnardmarcus','barnardmarcus'],
   ['auctionhouselondon','auctionhouselondon'],['auctionhouse.co.uk','auctionhouse'],
   ['cliveemson','cliveemson'],['strettons','strettons'],['acuitus','acuitus'],
@@ -2125,14 +2125,15 @@ const HOUSE_DETECT = [
   ['luscombemaye','luscombemaye'],['lodgeandthomas','lodgeandthomas'],
   ['bondoxboroughphillips','bondoxboroughphillips'],
   // charlesdarrow → sdl: acquired by BTG Eddisons; lots flow through SDL extractor
-  ['charlesdarrow','sdl'],['charlesdarrowauctions.com','sdl'],
+  // charlesdarrow: own slug (plan 3 onboarding); canonicalise rejects until then
+  ['charlesdarrow','charlesdarrow'],['charlesdarrowauctions.com','charlesdarrow'],
   ['aldreds.co.uk','aldreds'],['humberts.com','humberts'],
   ['allwalesauction','allwalesauction'],['evansbros','evansbros'],
   ['herbertrthomasandco','herbertrthomasandco'],['johnfrancis.co.uk','johnfrancis'],
   ['morrismarshall','morrismarshall'],
   ['andrewgrant.com','andrewgrant'],['gherbertbanks','gherbertbanks'],
   ['hawkesford.co.uk','hawkesford'],['howkinsandharrison','howkinsandharrison'],
-  ['scargillmann','scargillmann'],
+  // scargillmann removed 2026-06-21 — house retired (was mis-wired to sdlauctions.co.uk)
   ['mellerbraggins','mellerbraggins'],['smithandsons.net','smithandsons'],
   ['wrightmarshall','wrightmarshall'],
   ['hackneyandleigh','hackneyandleigh'],

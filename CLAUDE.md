@@ -29,13 +29,15 @@ Phased roadmap and status: `WORKSTREAMS.md`.
 2. **Firecrawl** renders the page when needed (Puppeteer fallback, plain HTTP last resort) — `lib/scraper/rendering.js:scrapeRenderedPage`.
 3. Lot extraction — every house goes through the same unified path:
    - **Firecrawl JSON extract** — primary, AI-driven, no per-house code (`lib/pipeline/firecrawl-extract.js:extractCatalogueListing`). Handles single-page and paginated catalogues. `changeTracking` short-circuits unchanged pages at ~1 credit.
-   - **Markdown recogniser** — optional per-house function in `HOUSE_OVERRIDES` (currently Pattinson + John Pye) reads the same Firecrawl markdown response to recover lots the JSON extractor missed. Firecrawl-at-heart by definition.
+   - **Markdown recogniser** — optional per-house function (registered in `lib/scraper/house-recognisers.js`) reads the same rendered markdown to recover lots the JSON extractor missed. ~14 houses use one (Pattinson, John Pye, McHugh & Co, Mark Jenkinson, Maggs & Allen, Hollis Morgan, Nesbits, Bondwolfe, Propertysolvers, Auction House London, the Auction House UK platform, BTG Eddisons, Charles Darrow, SDL Auctions). Firecrawl-at-heart by definition.
    - **Gemini fallback** — fires only when Firecrawl JSON returns 0 lots (Flash for known houses, Pro for unknown / PDF).
    - **Allsop JSON-API exception** — `lib/scraper/allsop.js` consumes Allsop's `/api/property-search` JSON endpoint directly (zero credits, ~50ms/page). Structured API consumer, not a scraper. `rewriteUrl('allsop', …)` **defaults any allsop URL to the residential property-search API** — a stale calendar row (`/auctions/future-auction-dates`) otherwise fell through and was scraped as raw HTML → 0 lots → `probe=error` stall.
 4. `analyseLot()` (`lib/pipeline/scoring.js`) scores each lot 0–10.
 5. Results written to `lots`; events written to `lot_events` (source of truth — see Database section).
 6. Enrichment pipeline runs: UPRN (OS Places, plus a free fallback that harvests UPRN from matched EPC certificates), EPC, OpenRent rental comps, BridgeMatch fundability, value estimator.
 7. Frontend (`public/app.js`) renders with filters.
+
+> **Per-house knowledge** lives in `docs/houses/<slug>.md` (index: `docs/houses/README.md`) — the slug-keyed home for each house's config pointers, quirks, and incident history. Consult it first when touching a house; create/update it when onboarding (`auction-conventions` Step 6.5) or healing (`auction-self-healing` LEARN loop).
 
 > **DOM extractors retired 2026-05-08.** `lib/extractors/` was deleted along with `tests/snapshots/`, `tests/test-extractors.js`, `tests/test-detail-extractors.js`, and `scripts/audit*.mjs`. The `USE_FIRECRAWL_EXTRACT` env var, `FORCE_EXTRACT_HOUSES` safelist, `BROKEN_EXTRACTORS` set, and DOM→Gemini merge code are all gone. If you find references to any of these, they are stale — flag them.
 

@@ -24,7 +24,10 @@ check('Venmore Auctions',             canonicaliseHouseSlug('Venmore Auctions'),
 check('Maggs & Allen',                canonicaliseHouseSlug('maggs & allen'),               'maggsandallen');
 check('Knight Frank',                 canonicaliseHouseSlug('knight frank'),                'knightfrank');
 check('John Francis',                 canonicaliseHouseSlug('john francis'),                'johnfrancis');
-check('SDL Auctions',                 canonicaliseHouseSlug('SDL Auctions'),                'sdl');
+// 'SDL Auctions' is a SEPARATE house (slug 'sdlauctions') — registered by plan 4
+// (onboarded 2026-06-22). Its display name now canonicalises to its own slug, NOT
+// btgeddisons (the de-conflation guard against re-conflation).
+check('SDL Auctions',                 canonicaliseHouseSlug('SDL Auctions'),                'sdlauctions');
 check('Greenslade Taylor Hunt',       canonicaliseHouseSlug('greenslade taylor hunt'),      'gth');
 check('Auction House West Midlands',  canonicaliseHouseSlug('Auction House West Midlands'), 'auctionhousewestmidlands');
 check('Auction House East Midlands',  canonicaliseHouseSlug('Auction House East Midlands'), 'auctionhouseeastmidlands');

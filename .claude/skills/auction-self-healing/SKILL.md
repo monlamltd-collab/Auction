@@ -195,6 +195,7 @@ Every time you fix a new failure mode, before closing the session:
 2. If the lesson is a "never do this", add it to **§ Hard rules** below.
 3. If the fix added or changed a heuristic in `lib/pipeline/healing.js`, mention the function name in §1 DIAGNOSE.
 4. Commit the SKILL.md update in the same push as the fix (`chore: feed {slug} lesson into auction-self-healing skill`).
+5. **Append the incident to `docs/houses/<slug>.md`** (date → root cause → fix PR) so the per-house dossier stays current. If the house has no dossier yet, create one from the format in `docs/houses/README.md`.
 
 This is non-negotiable. The skill must compound — each incident makes the next faster.
 
