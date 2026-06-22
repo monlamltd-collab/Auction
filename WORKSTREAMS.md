@@ -1,7 +1,13 @@
 # WORKSTREAMS.md — AuctionBrain
 
 Current open work, resolved items, and the goal-aligned roadmap.
-*Last updated: 2026-06-10*
+*Last updated: 2026-06-22*
+
+---
+
+## Schema migrations in flight
+
+- **`lots.house` → `house_slug`** (Phase 2a, started 2026-06-22). `lots.house` stores a *slug* but is named like the *display* columns elsewhere (`house_skills.house`, `auction_calendar.house`); it's being renamed to `house_slug`. **Gate 1 is live in prod**: `house_slug` exists, is backfilled, and a `before insert/update` mirror trigger keeps it equal to `house`, so **both columns are valid during the transition**. New/changed code should **read `house_slug`** — app reads use the `house:house_slug` PostgREST alias to keep the returned JSON key `house` unchanged; filters use `house_slug` directly. The old `house` column is dropped only at the final gate (after a soak). Plan + runbook live on branch `infra/hermes-verifier` (`HOUSE_KEY_PLAN.md` / `HOUSE_KEY_2A_RUNBOOK.md`).
 
 ---
 

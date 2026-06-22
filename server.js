@@ -369,7 +369,7 @@ async function statusDriftTick() {
     const plus7 = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
     const { data: lots } = await supabase
       .from('lots')
-      .select('id,house,url,status,address,lot_number,auction_date')
+      .select('id,house:house_slug,url,status,address,lot_number,auction_date')
       .not('url', 'like', '__synthetic__%')
       .not('auction_date', 'is', null)
       .gte('auction_date', today)

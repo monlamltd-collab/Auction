@@ -156,7 +156,7 @@ async function verifyHealedUrl({ slug, url }) {
     const { count: c } = await supabase
       .from('lots')
       .select('id', { count: 'exact', head: true })
-      .ilike('house', slug);
+      .ilike('house_slug', slug);
     if (Number.isInteger(c)) count = c;
   } catch { /* silent — the re-scrape itself succeeded */ }
 
