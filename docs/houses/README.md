@@ -26,6 +26,7 @@ files. Consult the relevant dossier **first** when touching a house.
 | `btgeddisons` | BTG Eddisons | property-world / EIG widget (static HTML) | [btgeddisons.md](btgeddisons.md) |
 | `charlesdarrow` | Charles Darrow | own ASP.NET site (independent) | [charlesdarrow.md](charlesdarrow.md) |
 | `sdlauctions` | SDL Auctions | own WordPress site; property-world photos; EIG online mirror | [sdlauctions.md](sdlauctions.md) |
+| `cliveemson` | Clive Emson | own JS-rendered SPA (Crawlee render); land-heavy | [cliveemson.md](cliveemson.md) |
 
 ## Backlog
 The long tail of ~170 houses don't yet have dossiers. They can be backfilled incrementally
