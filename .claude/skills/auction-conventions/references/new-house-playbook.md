@@ -150,6 +150,19 @@ feat: add mynewhouse auction house with markdown recogniser
 
 ---
 
+## Step 6.5 — Create the per-house dossier (`docs/houses/<slug>.md`)
+
+Before committing, create a dossier for the house in the format used by the existing ones
+(`docs/houses/btgeddisons.md`, `charlesdarrow.md`, `sdlauctions.md`) and add a row to
+`docs/houses/README.md`. Capture: slug, display name, platform, catalogue URL + the
+`lib/houses.js` line, lot-URL pattern, recall sentinel + its provenance, image source/quirk,
+render/engine needs, recogniser location, known incidents, status, and a last-verified date.
+This is the durable, slug-keyed home for the house's handling story — the code stays the
+authoritative config; the dossier records the *why*, so a future session reads one page
+instead of grepping the slug across five files.
+
+---
+
 ## Step 7 — Verify in production
 
 After deploy:
