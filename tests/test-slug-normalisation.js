@@ -24,7 +24,10 @@ check('Venmore Auctions',             canonicaliseHouseSlug('Venmore Auctions'),
 check('Maggs & Allen',                canonicaliseHouseSlug('maggs & allen'),               'maggsandallen');
 check('Knight Frank',                 canonicaliseHouseSlug('knight frank'),                'knightfrank');
 check('John Francis',                 canonicaliseHouseSlug('john francis'),                'johnfrancis');
-check('SDL Auctions',                 canonicaliseHouseSlug('SDL Auctions'),                'sdl');
+// 'SDL Auctions' is now a SEPARATE house (slug 'sdlauctions', onboarded in plan 4).
+// Until plan 4 registers it, canonicalise returns null — this is correct behaviour
+// (prevents re-conflation with btgeddisons). Updated 2026-06-21 (sdl de-conflation).
+check('SDL Auctions',                 canonicaliseHouseSlug('SDL Auctions'),                null);
 check('Greenslade Taylor Hunt',       canonicaliseHouseSlug('greenslade taylor hunt'),      'gth');
 check('Auction House West Midlands',  canonicaliseHouseSlug('Auction House West Midlands'), 'auctionhousewestmidlands');
 check('Auction House East Midlands',  canonicaliseHouseSlug('Auction House East Midlands'), 'auctionhouseeastmidlands');
