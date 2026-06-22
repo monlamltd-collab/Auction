@@ -28,7 +28,12 @@ yet exist, sole index is `idx_lots_house`.
 
 ---
 
-## Deploy A — reader changes (with Gate 2). All safe pre-drop (use `??` fallbacks).
+## Deploy A — reader changes (with Gate 2). All safe pre-drop.
+
+> **Shipped as [PR #133](https://github.com/monlamltd-collab/Auction/pull/133) using the cleaner `house:house_slug` PostgREST alias** — keeps the returned JSON key `house`, so **zero consumer-logic changes**, only select strings. The read footprint was larger than first mapped: actual sites are `LOT_COLUMNS` (covers every `LOTS_SELECT` consumer, incl. `routes/lots.js`), `server.js`, `routes/search.js` ×2, the `routes/curator.js` `lots:lot_id (…)` embed, and the `routes/telegram-webhook.js` filter (`.ilike('house_slug', …)` — the alias doesn't apply to filters). The per-edit sketch below is **superseded** by that alias approach.
+>
+> **The gate-5 reader audit must additionally cover:** ops scripts (`scripts/visual-audit.mjs`, `backfill-*.mjs`, `coverage-report.mjs`), the verifier ADAPTER (`scripts/hermes-verify.js`, on this branch), and the `persist-lots.js` writer (Deploy B). These keep working through gate 4 (both columns coexist) but must move before the drop.
+
 
 **1. `lib/types/lot.js:295`** — read new col, fall back to old:
 ```diff
