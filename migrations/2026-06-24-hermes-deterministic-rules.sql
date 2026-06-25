@@ -35,12 +35,15 @@ declare
   v_scored  int;
   v_avail   int;
 begin
-  -- Rule 1: STC must not appear in the active feed (a get_active_lots regression).
-  select count(*) into v_stc from lots
-   where status = 'stc' and last_seen_at > now() - interval '21 days';
+  -- Rule 1: STC must not appear in the ACTIVE FEED. get_active_lots excludes STC
+  -- by design, so a non-zero here means the RPC's status whitelist regressed.
+  -- NB: check the FEED OUTPUT, not the lots table (STC rows legitimately exist
+  -- post-auction; they just must not be served).
+  select count(*) into v_stc
+    from json_array_elements(get_active_lots()) e where e->>'status' = 'stc';
   if v_stc > 0 then
     perform hermes_report_finding('det_rule','feed','stc_in_feed',
-      format('%s STC lots in the 21-day active window (should be 0).', v_stc),
+      format('%s STC lots leaked into the active feed (should be 0).', v_stc),
       jsonb_build_object('stc_count', v_stc), '[]'::jsonb,
       null, 'Check the get_active_lots RPC status whitelist.', 'det:stc_in_feed',
       interval '7 days');
