@@ -9,6 +9,8 @@ Current open work, resolved items, and the goal-aligned roadmap.
 
 - **`lots.house` → `house_slug`** (Phase 2a, started 2026-06-22). `lots.house` stores a *slug* but is named like the *display* columns elsewhere (`house_skills.house`, `auction_calendar.house`); it's being renamed to `house_slug`. **Gate 1 is live in prod**: `house_slug` exists, is backfilled, and a `before insert/update` mirror trigger keeps it equal to `house`, so **both columns are valid during the transition**. New/changed code should **read `house_slug`** — app reads use the `house:house_slug` PostgREST alias to keep the returned JSON key `house` unchanged — the alias lives in the `LOTS_SELECT` string while `LOT_COLUMNS` keeps the logical key `house` (so the column-contract test stays valid); filters use `house_slug` directly. The old `house` column is dropped only at the final gate (after a soak). Plan + runbook live on branch `infra/hermes-verifier` (`HOUSE_KEY_PLAN.md` / `HOUSE_KEY_2A_RUNBOOK.md`).
 
+- **`get_active_lots()` `+ l.id`** (2026-06-25). The active-feed RPC now returns the lot UUID so the frontend carries `_dbId` on active lots (previously only unsold lots had it, via `LOTS_SELECT`). Powers the mobile lot-detail drawer's `?lot=<uuid>` URL state (Back-button close + shareable link) and lines up with the SSR `/lot/:id` page. **Applied to prod** (additive; inert for the deployed frontend until the drawer ships). Migration: `migrations/2026-06-25-get-active-lots-include-id.sql`. Rebuilt from the live Phase-2a definition (`house_slug as house`), not an older migration file.
+
 ---
 
 ## Roadmap to 10k+ users
