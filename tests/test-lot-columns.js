@@ -30,6 +30,7 @@ function check(cond, msg) {
 // gate violation — you must justify it or remove it.
 const GATE = {
   // System infrastructure
+  id: 'system',                   // DB UUID -> lot._dbId; shareable lot URL + ?lot= drawer deep-link
   house: 'system',                // canonical slug / join key
   url: 'system',                  // detail link + upsert conflict key
   catalogue_url: 'system',        // source catalogue

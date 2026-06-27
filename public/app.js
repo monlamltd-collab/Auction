@@ -3140,14 +3140,15 @@ function renderLots(){
   // /api/all-lots refreshes. Match by stable (house, lot#, address) key
   // so navigation, refresh, and filter changes all preserve the open lot.
   var _wantKey = _getOpenLotKey();
-  if (_wantKey && expandedLotId === null) {
+  var _urlLotId = _isMobileDrawer() ? new URLSearchParams(window.location.search).get('lot') : null;
+  if (_urlLotId && !_drawerOpen) {
+    var _um = pageItems.find(function (i) { return i.lot && i.lot._dbId === _urlLotId; });
+    if (_um && _um.lot) { requestAnimationFrame(function () { openLotDrawer(_um.lot); }); }
+  } else if (_wantKey && expandedLotId === null && !_drawerOpen) {
     var _pageMatch = pageItems.find(function(i){ return i.lot && _lotKey(i.lot) === _wantKey; });
     if (_pageMatch && _pageMatch.lot) {
-      // Defer one frame so DOM is fully attached before expand
       requestAnimationFrame(function(){ expandCard(_pageMatch.lot); });
     } else {
-      // Lot isn't on the current page — drop the key so we don't keep retrying
-      // (e.g. user changed filters such that the lot is no longer in results)
       var _stillInResults = lots.some(function(l){ return _lotKey(l) === _wantKey; });
       if (!_stillInResults) _setOpenLotKey(null);
     }
@@ -5448,95 +5449,7 @@ async function submitBridgingQuote(e) {
   }
 }
 
-function expandCard(lot) {
-  // Anonymous users can OPEN any lot card — address, price, image, house,
-  // status, auction date, bullets are all visible. Sensitive AI fields
-  // (score, opps, risks, yield, deal type) are stripped server-side for
-  // anon (routes/search.js:1449) and surface as inline "Sign in for AI"
-  // nudges. Saving a lot, saving a search, running AI analysis, paying —
-  // those still trigger requireSignup(). That's where friction is welcome,
-  // because that's where commitment is. (Was: full sign-in wall on click.)
-  if (window.umami) umami.track('lot_expand', {
-    lot_number: lot.lot || '', house: lot._house || '', guide_price: lot.price || 0
-  });
-  // Anonymous-browsing nudge — counts unique lot views and shows a soft
-  // signup prompt at 10 (toast) and 25 (modal). Skipped for signed-in
-  // users so we don't badger people who have already converted.
-  try { if (typeof trackAnonViewNudge === 'function') trackAnonViewNudge(lot); } catch {}
-  // Server-side activity event for the admin Intel dashboard. De-dupe per
-  // session so a user toggling a lot open/closed doesn't inflate the count.
-  try {
-    window.__viewedLots = window.__viewedLots || new Set();
-    const key = (lot._house || '') + ':' + (lot.lot || '') + ':' + (lot.address || '').slice(0, 40);
-    if (!window.__viewedLots.has(key)) {
-      window.__viewedLots.add(key);
-      fetch('/api/track/event', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json', ...(typeof getAuthHeaders === 'function' ? getAuthHeaders() : {})},
-        body: JSON.stringify({
-          action: 'lot_view',
-          detail: {
-            house: lot._house || '',
-            lot: lot.lot || '',
-            price: lot.price || 0,
-            score: lot.score || null,
-            deal_type: lot.dealType || null,
-            prop_type: lot.propType || null
-          }
-        })
-      }).catch(function(){});
-    }
-  } catch {}
-  // Hide any existing expanded panel (cached — not removed)
-  const existing = document.querySelector('.expanded-panel-visible');
-  if (existing) {
-    existing.style.display = 'none';
-    existing.classList.remove('expanded-panel-visible');
-  }
-  // Bug fix (handoff §): clear stale .expanded class from any previously
-  // expanded card before applying it to the new one. Without this, a
-  // click on card B left card A's red border / outline showing because
-  // the old card never had its class removed.
-  document.querySelectorAll('.lot-card.expanded, .lot-card-v2.expanded').forEach(function(el){
-    el.classList.remove('expanded');
-  });
-
-  const cardEl = document.getElementById('lot-' + lot._idx);
-  if (!cardEl) return;
-
-  if (expandedLotId === lot._idx) {
-    expandedLotId = null;
-    _setOpenLotKey(null);
-    cardEl.classList.remove('expanded');
-    var _cached = _expandedPanelCache.get(lot._idx);
-    if (_cached) { _cached.style.display = 'none'; _cached.classList.remove('expanded-panel-visible'); }
-    return;
-  }
-  expandedLotId = lot._idx;
-  _setOpenLotKey(_lotKey(lot));
-  cardEl.classList.add('expanded');
-  try { sessionStorage.setItem('ab_scroll_y', window.scrollY.toString()); } catch(e) {}
-
-  // Check if we have a cached panel for this lot
-  var cachedPanel = _expandedPanelCache.get(lot._idx);
-  if (cachedPanel) {
-    // Re-use cached panel — just show it
-    cachedPanel.style.display = '';
-    cachedPanel.classList.add('expanded-panel-visible');
-    // Make sure it's positioned after the correct card
-    cardEl.after(cachedPanel);
-    cachedPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    // Refresh saved scenarios in case they changed elsewhere
-    loadScenariosForLot(lot, lot._idx);
-    return;
-  }
-
-  // Build expanded panel — image, AI prose, EPC/flood badges, and the property
-  // strip have been moved off the panel; the card already shows them.
-  const panel = document.createElement('div');
-  panel.className = 'expanded-panel expanded-panel-visible';
-  panel.id = 'expanded-' + lot._idx;
-
+function buildExpandedPanelHTML(lot) {
   // Build deal stacking calculator HTML
   var dealStackHtml = (isPremium() ? (function() {
         var sug = suggestWorksAndGdv(lot);
@@ -5605,12 +5518,6 @@ function expandCard(lot) {
           '</button>' +
         '</div>');
 
-  // ─── Magazine-style panel assembly (handoff: lot-detail.jsx) ───
-  // Wraps the existing functional sections (yield analysis, deal stack
-  // widget, comparables, lender summary) in the new editorial chrome:
-  // ink-bordered header card + 2-col body with sticky right column.
-  panel.className = 'expanded-panel expanded-panel-visible exp-v2';
-
   const premiumNow = (typeof isPremium === 'function') ? isPremium() : false;
 
   // The deal-stack widget (input form + scenario picker) only renders
@@ -5641,7 +5548,7 @@ function expandCard(lot) {
     })
     .join('');
 
-  panel.innerHTML = (
+  return (
     '<button class="exp-close-btn" onclick="closeExpandedPanel()" aria-label="Close panel" title="Close">&times;</button>' +
     buildExpV2Header(lot) +
     // Gallery sits above the analysis grid and spans both columns —
@@ -5677,24 +5584,117 @@ function expandCard(lot) {
       '</div>' +
     '</details>'
   );
+}
 
-  // Insert after the card and cache
+function wireExpandedPanel(lot) {
+  loadScenariosForLot(lot, lot._idx);
+  if (lot.price) {
+    setTimeout(function () { triggerFinanceCheck(lot._idx); }, 200);
+    fetchLenderSummary(lot);
+  }
+}
+
+function expandCard(lot) {
+  // Anonymous users can OPEN any lot card — address, price, image, house,
+  // status, auction date, bullets are all visible. Sensitive AI fields
+  // (score, opps, risks, yield, deal type) are stripped server-side for
+  // anon (routes/search.js:1449) and surface as inline "Sign in for AI"
+  // nudges. Saving a lot, saving a search, running AI analysis, paying —
+  // those still trigger requireSignup(). That's where friction is welcome,
+  // because that's where commitment is. (Was: full sign-in wall on click.)
+  if (window.umami) umami.track('lot_expand', {
+    lot_number: lot.lot || '', house: lot._house || '', guide_price: lot.price || 0
+  });
+  // Anonymous-browsing nudge — counts unique lot views and shows a soft
+  // signup prompt at 10 (toast) and 25 (modal). Skipped for signed-in
+  // users so we don't badger people who have already converted.
+  try { if (typeof trackAnonViewNudge === 'function') trackAnonViewNudge(lot); } catch {}
+  // Server-side activity event for the admin Intel dashboard. De-dupe per
+  // session so a user toggling a lot open/closed doesn't inflate the count.
+  try {
+    window.__viewedLots = window.__viewedLots || new Set();
+    const key = (lot._house || '') + ':' + (lot.lot || '') + ':' + (lot.address || '').slice(0, 40);
+    if (!window.__viewedLots.has(key)) {
+      window.__viewedLots.add(key);
+      fetch('/api/track/event', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json', ...(typeof getAuthHeaders === 'function' ? getAuthHeaders() : {})},
+        body: JSON.stringify({
+          action: 'lot_view',
+          detail: {
+            house: lot._house || '',
+            lot: lot.lot || '',
+            price: lot.price || 0,
+            score: lot.score || null,
+            deal_type: lot.dealType || null,
+            prop_type: lot.propType || null
+          }
+        })
+      }).catch(function(){});
+    }
+  } catch {}
+  // Mobile: present the lot as a full-screen drawer. Desktop keeps the inline
+  // path below. Uses _drawerLotKey (not expandedLotId) for the re-tap guard.
+  if (_isMobileDrawer()) {
+    if (_drawerOpen && _drawerLotKey === _lotKey(lot)) { closeLotDrawer(); return; }
+    openLotDrawer(lot);
+    return;
+  }
+  // Hide any existing expanded panel (cached — not removed)
+  const existing = document.querySelector('.expanded-panel-visible');
+  if (existing) {
+    existing.style.display = 'none';
+    existing.classList.remove('expanded-panel-visible');
+  }
+  // Bug fix (handoff §): clear stale .expanded class from any previously
+  // expanded card before applying it to the new one. Without this, a
+  // click on card B left card A's red border / outline showing because
+  // the old card never had its class removed.
+  document.querySelectorAll('.lot-card.expanded, .lot-card-v2.expanded').forEach(function(el){
+    el.classList.remove('expanded');
+  });
+
+  const cardEl = document.getElementById('lot-' + lot._idx);
+  if (!cardEl) return;
+
+  if (expandedLotId === lot._idx) {
+    expandedLotId = null;
+    _setOpenLotKey(null);
+    cardEl.classList.remove('expanded');
+    var _cached = _expandedPanelCache.get(lot._idx);
+    if (_cached) { _cached.style.display = 'none'; _cached.classList.remove('expanded-panel-visible'); }
+    return;
+  }
+  expandedLotId = lot._idx;
+  _setOpenLotKey(_lotKey(lot));
+  cardEl.classList.add('expanded');
+  try { sessionStorage.setItem('ab_scroll_y', window.scrollY.toString()); } catch(e) {}
+
+  // Check if we have a cached panel for this lot
+  var cachedPanel = _expandedPanelCache.get(lot._idx);
+  if (cachedPanel) {
+    // Re-use cached panel — just show it
+    cachedPanel.style.display = '';
+    cachedPanel.classList.add('expanded-panel-visible');
+    // Make sure it's positioned after the correct card
+    cardEl.after(cachedPanel);
+    cachedPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    // Refresh saved scenarios in case they changed elsewhere
+    loadScenariosForLot(lot, lot._idx);
+    return;
+  }
+
+  // Build expanded panel — image, AI prose, EPC/flood badges, and the property
+  // strip have been moved off the panel; the card already shows them.
+  const panel = document.createElement('div');
+  panel.className = 'expanded-panel expanded-panel-visible exp-v2';
+  panel.id = 'expanded-' + lot._idx;
+  panel.innerHTML = buildExpandedPanelHTML(lot);
+
   cardEl.after(panel);
   _expandedPanelCache.set(lot._idx, panel);
   panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-
-  // Load saved deal-stacking scenarios for this lot (signed-in only)
-  loadScenariosForLot(lot, lot._idx);
-
-  // Auto-run finance check if lot has a price
-  if (lot.price) {
-    setTimeout(() => triggerFinanceCheck(lot._idx), 200);
-  }
-
-  // Auto-fetch lender summary for the header strip
-  if (lot.price) {
-    fetchLenderSummary(lot);
-  }
+  wireExpandedPanel(lot);
 }
 
 function closeExpandedPanel() {
@@ -5709,6 +5709,197 @@ function closeExpandedPanel() {
     expandedLotId = null;
     _setOpenLotKey(null);
   }
+}
+
+// ═══════════════════════════════
+// MOBILE LOT DRAWER (≤640px) — own state, decoupled from expandedLotId so a
+// background re-render can't orphan it. Dormant until expandCard forks to it.
+// ═══════════════════════════════
+function _isMobileDrawer() {
+  try { return window.matchMedia('(max-width: 640px)').matches; } catch (e) { return false; }
+}
+
+var _lotDrawerEl = null, _lotDrawerScrim = null, _lotDrawerBody = null, _lotDrawerTitle = null;
+var _drawerOpen = false, _drawerLotKey = null, _drawerFocusReturn = null, _drawerPushedState = false; // _drawerLotKey: read by the expandCard mobile fork (re-tap-to-close guard), added in the activation task
+
+function _ensureLotDrawerEl() {
+  if (_lotDrawerEl) return;
+  _lotDrawerScrim = document.createElement('div');
+  _lotDrawerScrim.id = 'lotDrawerScrim';
+  _lotDrawerScrim.addEventListener('click', function () { closeLotDrawer(); });
+
+  _lotDrawerEl = document.createElement('div');
+  _lotDrawerEl.id = 'lotDrawer';
+  _lotDrawerEl.setAttribute('role', 'dialog');
+  _lotDrawerEl.setAttribute('aria-modal', 'true');
+  _lotDrawerEl.setAttribute('aria-labelledby', 'lotDrawerTitle');
+  _lotDrawerEl.setAttribute('aria-hidden', 'true');
+  try { _lotDrawerEl.setAttribute('inert', ''); } catch (e) {}
+  _lotDrawerEl.innerHTML =
+    '<div class="ld-head">' +
+      '<span class="ld-title" id="lotDrawerTitle"></span>' +
+      '<button type="button" class="ld-close" aria-label="Close lot">CLOSE <span aria-hidden="true">&times;</span></button>' +
+    '</div>' +
+    '<div class="ld-body"></div>';
+  _lotDrawerBody = _lotDrawerEl.querySelector('.ld-body');
+  _lotDrawerTitle = _lotDrawerEl.querySelector('.ld-title');
+  _lotDrawerEl.querySelector('.ld-close').addEventListener('click', function () { closeLotDrawer(); });
+  _lotDrawerEl.addEventListener('keydown', _lotDrawerKeydown);
+
+  // Keyboard-aware: scroll a focused input clear of the on-screen keyboard.
+  _lotDrawerBody.addEventListener('focusin', function (e) {
+    var t = e.target;
+    if (t && /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName)) {
+      setTimeout(function () { try { t.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_) {} }, 300);
+    }
+  });
+
+  // Left-edge swipe-to-dismiss (handlers defined below).
+  _lotDrawerEl.addEventListener('touchstart', _ldTouchStart, { passive: true });
+  _lotDrawerEl.addEventListener('touchmove', _ldTouchMove, { passive: false });
+  _lotDrawerEl.addEventListener('touchend', _ldTouchEnd);
+  _lotDrawerEl.addEventListener('touchcancel', _ldTouchCancel);
+
+  document.body.appendChild(_lotDrawerScrim);
+  document.body.appendChild(_lotDrawerEl);
+}
+
+function _drawerFocusables() {
+  if (!_lotDrawerEl) return [];
+  return Array.prototype.slice.call(_lotDrawerEl.querySelectorAll(
+    'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
+  )).filter(function (el) { return el.getClientRects().length > 0 || el === document.activeElement; });
+}
+
+function _lotDrawerKeydown(e) {
+  if (e.key === 'Escape') { e.preventDefault(); closeLotDrawer(); return; }
+  if (e.key !== 'Tab') return;
+  var f = _drawerFocusables(); if (!f.length) return;
+  var first = f[0], last = f[f.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+}
+
+function openLotDrawer(lot) {
+  _ensureLotDrawerEl();
+  _drawerLotKey = _lotKey(lot);
+  _setOpenLotKey(_drawerLotKey);
+
+  var houseLabel = (typeof getHouseDisplay === 'function' ? getHouseDisplay(lot._house || lot.house || '') : (lot._house || '')) || 'Auction house';
+  var lotNum = lot.lot != null ? String(lot.lot).padStart(2, '0') : '—';
+  _lotDrawerTitle.textContent = (houseLabel + ' · LOT ' + lotNum).toUpperCase();
+
+  _lotDrawerBody.scrollTop = 0;
+  _lotDrawerBody.innerHTML =
+    '<div class="expanded-panel expanded-panel-visible exp-v2" id="expanded-' + lot._idx + '">' +
+    buildExpandedPanelHTML(lot) + '</div>';
+
+  _drawerFocusReturn = document.activeElement;
+  try { _lotDrawerEl.removeAttribute('inert'); } catch (e) {}
+  var _mw = document.querySelector('main.wrap'); if (_mw) { try { _mw.setAttribute('inert', ''); } catch (e) {} }
+  _lotDrawerEl.setAttribute('aria-hidden', 'false');
+  _lotDrawerEl.style.transform = '';
+  document.body.classList.add('drawer-open');
+  _drawerOpen = true;
+  var closeBtn = _lotDrawerEl.querySelector('.ld-close');
+  if (closeBtn) closeBtn.focus();
+
+  if (window.umami) { try { umami.track('lot_drawer_open', { lot: lot.lot || '', house: lot._house || '' }); } catch (e) {} }
+
+  _drawerPushUrl(lot);
+  wireExpandedPanel(lot);
+}
+
+// opts.fromPopstate=true → invoked by Back; do NOT call history.back.
+function closeLotDrawer(opts) {
+  opts = opts || {};
+  if (!_drawerOpen) return;
+  _drawerOpen = false;
+  _drawerLotKey = null;
+  document.body.classList.remove('drawer-open');
+  if (_lotDrawerEl) { _lotDrawerEl.setAttribute('aria-hidden', 'true'); try { _lotDrawerEl.setAttribute('inert', ''); } catch (e) {} }
+  var _mw = document.querySelector('main.wrap'); if (_mw) { try { _mw.removeAttribute('inert'); } catch (e) {} }
+  _setOpenLotKey(null);
+
+  if (!opts.fromPopstate && _drawerPushedState) { _drawerPushedState = false; history.back(); }
+  else { _drawerPushedState = false; _drawerStripLotParam(); }
+
+  var ret = _drawerFocusReturn; _drawerFocusReturn = null;
+  // if the originating card was detached by a background re-render, .focus() is a harmless no-op (focus falls to body) — acceptable for v1
+  if (ret && typeof ret.focus === 'function') { try { ret.focus(); } catch (e) {} }
+}
+
+function _drawerPushUrl(lot) {
+  // lot._dbId is the UUID, populated server-side by dbRowToLot (lib/types/lot.js:295) and serialized to the client (only _searchText is stripped in routes/search.js); the activation task adds the fork that calls this.
+  var id = lot._dbId || null;   // UUID; null → skip URL integration gracefully
+  if (!id) { _drawerPushedState = false; return; }
+  var existing = new URLSearchParams(window.location.search).get('lot');
+  if (existing === id) { _drawerPushedState = false; return; }
+  try {
+    var p = new URLSearchParams(window.location.search);
+    p.set('lot', id);
+    history.pushState({ lotDrawer: id }, '', window.location.pathname + '?' + p.toString());
+    _drawerPushedState = true;
+  } catch (e) { _drawerPushedState = false; }
+}
+
+function _drawerStripLotParam() {
+  try {
+    var p = new URLSearchParams(window.location.search);
+    if (!p.has('lot')) return;
+    p.delete('lot');
+    var qs = p.toString();
+    history.replaceState(null, '', window.location.pathname + (qs ? '?' + qs : ''));
+  } catch (e) {}
+}
+
+window.addEventListener('popstate', function () {
+  var hasLot = new URLSearchParams(window.location.search).has('lot');
+  if (_drawerOpen && !hasLot) { closeLotDrawer({ fromPopstate: true }); }
+});
+
+// Left-edge swipe-to-dismiss (iOS-style interactive back). Only starts within
+// _ldEdge px of the left edge, so it doesn't conflict with the image gallery's
+// horizontal swipe or the deal-stack inputs. On Android the OS edge-back fires
+// popstate → closeLotDrawer already, so this is primarily the iOS complement.
+var _ldEdge = 24, _ldDragging = false, _ldStartX = 0, _ldStartY = 0, _ldDX = 0, _ldW = 0;
+
+function _ldTouchStart(e) {
+  if (!_drawerOpen || !e.touches || e.touches.length !== 1) return;
+  var t = e.touches[0];
+  if (t.clientX > _ldEdge) return;
+  _ldDragging = true; _ldStartX = t.clientX; _ldStartY = t.clientY; _ldDX = 0;
+  _ldW = (_lotDrawerEl.getBoundingClientRect().width) || window.innerWidth || 1;
+  _lotDrawerEl.style.transition = 'none';
+}
+function _ldTouchMove(e) {
+  if (!_ldDragging) return;
+  var t = e.touches[0];
+  var dx = t.clientX - _ldStartX, dy = t.clientY - _ldStartY;
+  if (_ldDX === 0 && Math.abs(dy) > Math.abs(dx)) { _ldDragging = false; _lotDrawerEl.style.transition = ''; return; }
+  if (dx < 0) dx = 0;
+  _ldDX = dx;
+  e.preventDefault();
+  _lotDrawerEl.style.transform = 'translateX(' + dx + 'px)';
+  if (_lotDrawerScrim) _lotDrawerScrim.style.opacity = String(Math.max(0, 1 - dx / _ldW));
+}
+function _ldTouchEnd() {
+  if (!_ldDragging) return;
+  _ldDragging = false;
+  _lotDrawerEl.style.transition = '';
+  if (_lotDrawerScrim) _lotDrawerScrim.style.opacity = '';
+  if (_ldDX > _ldW * 0.33) { _lotDrawerEl.style.transform = 'translateX(100%)'; closeLotDrawer(); }
+  else { _lotDrawerEl.style.transform = ''; }
+  _ldDX = 0;
+}
+// touchcancel is an ABORT (OS interrupt: incoming call/notification) — snap back, never commit a close.
+function _ldTouchCancel() {
+  if (!_ldDragging) return;
+  _ldDragging = false;
+  _lotDrawerEl.style.transition = '';
+  _lotDrawerEl.style.transform = '';
+  if (_lotDrawerScrim) _lotDrawerScrim.style.opacity = '';
+  _ldDX = 0;
 }
 
 function updateLTV(idx, val) {
@@ -5861,6 +6052,8 @@ function restoreFiltersFromURL(){
 function syncFiltersToURL(){
   const p=new URLSearchParams();
   for(const id of FILTER_PARAMS){const el=$(id);if(el&&el.value&&el.value!==el.querySelector('option')?.value)p.set(id,el.value)}
+  const curLot=new URLSearchParams(window.location.search).get('lot');
+  if(curLot) p.set('lot', curLot);
   const qs=p.toString();
   const url=qs?window.location.pathname+'?'+qs:window.location.pathname;
   if(url!==window.location.pathname+window.location.search) history.replaceState(null,'',url);
