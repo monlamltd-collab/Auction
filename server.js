@@ -51,7 +51,7 @@ import { validateEnv, ALLOWED_ORIGINS } from './lib/config.js';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY, AUTH_ENABLED } from './lib/supabase.js';
 import { securityHeaders, csrfCheck } from './lib/security.js';
 import { getClientIP, setOnNewUser } from './lib/auth.js';
-import { initHouses, HOUSE_ROOTS, rewriteUrl } from './lib/houses.js';
+import { initHouses, reconcileRetiredHousesDormant, HOUSE_ROOTS, rewriteUrl } from './lib/houses.js';
 import { applyUmamiInjection } from './lib/utils.js';
 import { getCalendarAuctions } from './lib/calendar.js';
 
@@ -139,6 +139,13 @@ initHouses({
   getFcCreditExhausted: isFcCreditExhausted,
   scrapeWithFirecrawlFn: scrapeWithFirecrawl,
 });
+
+// Reconcile retired-house dormancy: stamp house_skills.dormant=true for any
+// RETIRED_HOUSES slug the DB still thinks is live, so retired houses stop
+// masquerading as healthy to monitors (extraction-liveness, Hermes rules).
+// One-shot, idempotent, runs every boot so future retirements self-heal.
+reconcileRetiredHousesDormant(supabase)
+  .catch(e => console.warn('Retired-house reconcile failed (non-fatal):', e.message));
 
 // ═══════════════════════════════════════════════════════════════
 // STATIC FILES
