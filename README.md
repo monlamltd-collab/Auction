@@ -224,7 +224,7 @@ npm run dev        # runs with --watch, opens at http://localhost:3000
 ### Running tests
 
 ```bash
-npm test           # runs all 84 test files
+npm test           # runs all 87 test files
 ```
 
 Key test files: `test-scoring.js`, `test-harness.js`, `test-enrichment.js`, `test-healing-agent.js`, `test-recall.js`, `test-fundability.js`, `test-manifest.js`, `test-fabrication-guard.js`, `test-charlesdarrow-recogniser.js`, `test-sdlauctions-recogniser.js`, `test-cliveemson-recogniser.js`.
