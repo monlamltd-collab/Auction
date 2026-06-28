@@ -23,6 +23,6 @@ update house_skills
    'groundrentauctions','auctiontrade','romanway','hammerprice','brggibson',
    'brggibsondublin','nationalpropertyauctions','lodgeandthomas','woolleyandwallis',
    'morrismarshall','clarkegammon','taylerandfletcher','hammertime','network',
-   'scargillmann','johnpye','humberts','lextons'
+   'scargillmann','humberts','lextons'
  )
    and dormant is distinct from true;
