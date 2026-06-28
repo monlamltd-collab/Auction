@@ -70,3 +70,12 @@ Emson lots previously sat on the `2099-12-31` sentinel date.
   as active — including the 152 with the legacy Google-Maps URL. They are **not** in the current
   catalogue, so re-scraping does not touch them; they need a `last_seen_at`-based expiry / post-auction
   reconciliation (Clive Emson has no per-auction calendar row — just the rolling "Current Catalogue").
+- **Circuit deadlock + bare-host cert (recovery, fixed 2026-06-28):** the recogniser (#136) shipped but
+  the house never ran it — `house_skills` was `status=broken` / `circuit_state=open`, and the circuit
+  couldn't be reset (in-memory `_healthMap` only reloads on restart; the manager re-opens it from
+  `health=0`). Fixed by letting `/api/admin/rescrape` bypass the circuit (`ignoreCircuit`, #145). That
+  let it render — surfacing a third blocker: the Crawlee/Puppeteer fetch of the **bare** host
+  `https://cliveemson.co.uk/properties` fails `net::ERR_CERT_COMMON_NAME_INVALID` (CN-invalid cert;
+  only `www.` is valid) because the www-stripping calendar trigger leaves the bare host. Fixed by adding
+  `cliveemson` to `WWW_CANONICAL_HOSTS` + routing `rewriteUrl` through `canonicaliseHouseHost` — the same
+  fix as Charles Darrow / SDL Auctions (2026-06-23).
