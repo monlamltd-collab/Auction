@@ -8,8 +8,8 @@
 | **Region** | National (Midlands-heavy; Nottingham / Derby / Leicester / nationwide) |
 | **Catalogue URL** | `https://www.sdlauctions.co.uk/search/` (`HOUSE_ROOTS.sdlauctions` in `lib/houses.js`) |
 | **Detection** | `detectAuctionHouse()` routes any `sdlauctions` URL → `sdlauctions` (`lib/houses.js`, already present) |
-| **Status** | Live (380 lots in the live catalogue, verified 2026-06-22) |
-| **Last verified** | 2026-06-22 |
+| **Status** | Live — ~186 lots in the catalogue (render-enabled 2026-06-27; awaiting deploy + house_skills row) |
+| **Last verified** | 2026-06-27 |
 
 ## Lot URL pattern
 `https://www.sdlauctions.co.uk/property/{numericId}/{type}-for-auction-{town}/`
@@ -43,9 +43,18 @@ cards. The WordPress theme's `searchProperty()` POSTs to
 `/wp-content/themes/sdl-auctions/library/property-functions.php` (`func=ajaxProp`, with the
 serialized `#prop-search-form` + `&limit=&page={n}&order=&oos=0`) and injects the card HTML
 into `#searchView`. So the catalogue needs a **browser render** (Crawlee → turndown) before
-the recogniser runs. The grid is paginated server-side (`page=` / `pageLimit`); a single
-render yields page 1's ~12 cards, the rest accrue via re-scrape cycles + detail/sweep passes.
-`maxPages: 1` in the recogniser entry. (`propCounter` reported 380 total lots on 2026-06-22.)
+the recogniser runs.
+
+**The default render only surfaces ~12 of ~186 lots** — the grid defaults to a page-size of
+12 (selector `a.pageLimit`, options `12 / 24 / 36 / 48 / All`), and **scrolling does NOT load
+more**. Clicking the **"All"** page-size link re-POSTs `ajaxProp` with no limit and injects the
+**full ~186-lot book** into `#searchView`. The render therefore must click "All" once — wired
+in [`lib/scraper/crawlee.js`](../../lib/scraper/crawlee.js) `CLICK_TO_LOAD_SELECTORS`
+(`{ host: /sdlauctions\.co\.uk$/, selector: 'a.pageLimit', text: 'All', once: true, waitMs: 9000 }`).
+It's a **one-shot** toggle (the link does not vanish, unlike Bond Wolfe's "Load more" button),
+so it clicks exactly once and waits for the AJAX. `maxPages: 1` in the recogniser entry — the
+whole book is on one page after the click, no `?page=N` pagination. Verified live 2026-06-27:
+default render 11 ids → click-All **186** ids, recogniser **186/186**.
 
 ## Recogniser
 `recogniseSdlAuctionsLotsFromMarkdown(markdown) → Map<id, lot>` in
@@ -66,3 +75,15 @@ and `KNOWN_SENTINEL_GAPS.scargillmann`). Those fabricated lots are purged by a s
 migration, and the anti-fabrication guard was added 2026-06-21. This onboarding (de-conflation
 plan 4) registers SDL as its own correctly-wired house so its **real** lots persist under the
 `sdlauctions` slug.
+
+### 2026-06-27 — onboarded in code but never scraped (0 live lots) + 12/186 partial render
+Root cause (two parts): (1) plan 4 added the recogniser/sentinel/HOUSE_ROOTS but **never created a
+`house_skills` row**, and the daily scheduler iterates `house_skills` → SDL was never scraped.
+(2) Even once scraped, the default Crawlee render only surfaced 12 of ~186 lots because the
+`/search/` grid defaults to a 12-row page size and scrolling doesn't load more. Fix:
+`migrations/2026-06-27-onboard-sdlauctions-house-skills.sql` (the row, mirroring the btg_sdl
+sister) + a one-shot "Show: All" click in `lib/scraper/crawlee.js` `CLICK_TO_LOAD_SELECTORS`.
+No restart needed (no tripped circuit). Verified locally via the real handler sequence: 11 → 186,
+recogniser 186/186. The recognisers were never broken — they just never received rendered markdown
+(prior memory wrongly inferred a `requires_puppeteer`/`rewriteUrl` gap; under `CRAWLEE_DEFAULT=true`
+the engine already renders, so the only levers were the missing row + the page-size click).

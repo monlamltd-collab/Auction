@@ -1177,6 +1177,7 @@ async function buildAllLotsResponse({ isSignedIn, includePast }) {
       vacant: r.vacant,
       titleSplit: r.title_split,
       valueEstimate: r.value_estimate || null,
+      _dbId: r.id,  // lots-table UUID → mobile drawer ?lot= URL state + SSR /lot/:id deep-link (active lots need l.id in get_active_lots — see 2026-06-25 migration)
       _lat: r.lat != null ? parseFloat(r.lat) : null,
       _lng: r.lng != null ? parseFloat(r.lng) : null,
       _lastSeenAt: r.last_seen_at || null,

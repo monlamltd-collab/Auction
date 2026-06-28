@@ -517,14 +517,18 @@ function scheduleTick() {
   }
 
   // Tier 4: Rental drain daily at 04:00 UK — runs after the 03:00 full
-  // pass settles and before status-drift starts at 09:00. Limit 50 means
-  // we cycle through ~500 active-auction postcodes × 3 sources every ~30
-  // days — exactly the freshness window in lib/rentals/index.js.
-  // OpenRent is Firecrawl-backed; SpareRoom + OnTheMarket are plain HTTP.
+  // pass settles and before status-drift starts at 09:00. The drain pool is
+  // CURRENT lots only — `available` with an upcoming or undated auction (NOT
+  // sold/stc/unsold or past auctions; those are long gone). This covers the
+  // never-scraped current postcodes (never-scraped sort first) without wasting
+  // the budget on lots no longer shown as biddable. limit=150 tuples/night
+  // (~50 postcodes × 3 sources) drains the backlog over a few weeks while
+  // staying polite. OpenRent is Firecrawl-backed (skips fast when circuit-open);
+  // SpareRoom + OnTheMarket are plain HTTP.
   if (hour === 4 && minute < 5 && now - _scheduleState.lastRentalDrain > 60 * 60 * 1000) {
     _scheduleState.lastRentalDrain = now;
-    console.log('SCHEDULE: 04:00 UK — running drainStaleRentals(limit=50)');
-    drainStaleRentals({ limit: 50 })
+    console.log('SCHEDULE: 04:00 UK — running drainStaleRentals(limit=150)');
+    drainStaleRentals({ limit: 150 })
       .then(r => console.log(`SCHEDULE rental drain: attempted=${r.attempted} ok=${r.ok} errors=${r.errors} skipped=${r.skipped || 0}`))
       .catch(e => console.error('SCHEDULE rental drain failed:', e.message));
   }
@@ -602,7 +606,17 @@ function scheduleTick() {
         await runLoader('HPI',  ['scripts/refresh-hmlr-hpi.mjs']);
         await runLoader('OCOD', ['scripts/refresh-hmlr-companies.mjs', '--dataset=ocod', '--postcodes-only']);
         await runLoader('CCOD', ['scripts/refresh-hmlr-companies.mjs', '--dataset=ccod', '--postcodes-only']);
-        await runLoader('PPD',  ['scripts/refresh-hmlr-ppd.mjs', '--postcodes-only']);
+        // PPD: FULL backfill of the last 3 years (the comparable-price window)
+        // for ALL current lot postcodes — not just the monthly delta. The delta
+        // file only carries last month's sales, so postcodes added since the
+        // last full load never got their sold-price history (the dominant cause
+        // of `land_registry: ok_no_comps` on residential lots). --postcodes-only
+        // keeps the upserted set bounded to our postcodes; --since bounds it to
+        // the comp window and avoids the statement-timeout a full 1995-onwards
+        // load triggers. Idempotent (PK conflict on transaction_id).
+        const ppdSince = new Date(Date.now() - 3 * 365 * 24 * 60 * 60 * 1000)
+          .toISOString().slice(0, 7); // YYYY-MM, ~3 years ago
+        await runLoader('PPD',  ['scripts/refresh-hmlr-ppd.mjs', '--full', '--postcodes-only', `--since=${ppdSince}`]);
       } catch (e) {
         console.error('SCHEDULE HMLR refresh failed:', e.message);
         harnessFireAlert({

@@ -427,7 +427,12 @@ router.post('/api/admin/rescrape', requireAdmin, async (req, res) => {
         // rescrape can be silently short-circuited as "unchanged" even when
         // we have 0 lots persisted (the symptom we hit on markjenkinson +
         // humberts + acuitus on 2026-05-09 after URL fixes).
-        await autoAnalyseOne(url, { forceFresh: true });
+        // ignoreCircuit bypasses the in-memory circuit breaker so an explicit
+        // operator rescrape recovers a fixed-but-still-circuit-broken house
+        // (the circuit only reloads on restart + the manager re-opens it from
+        // health=0) WITHOUT a service restart — the successful scrape then
+        // closes the circuit. cliveemson/charlesdarrow/sdlauctions all hit this.
+        await autoAnalyseOne(url, { forceFresh: true, ignoreCircuit: true });
       } catch (err) {
         log.error('Rescrape autoAnalyseOne error', { house, url, error: err.message });
       }

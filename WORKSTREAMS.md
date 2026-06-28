@@ -1,13 +1,17 @@
 # WORKSTREAMS.md — AuctionBrain
 
 Current open work, resolved items, and the goal-aligned roadmap.
-*Last updated: 2026-06-22*
+*Last updated: 2026-06-27*
 
 ---
 
 ## Schema migrations in flight
 
 - **`lots.house` → `house_slug`** (Phase 2a, started 2026-06-22). `lots.house` stores a *slug* but is named like the *display* columns elsewhere (`house_skills.house`, `auction_calendar.house`); it's being renamed to `house_slug`. **Gate 1 is live in prod**: `house_slug` exists, is backfilled, and a `before insert/update` mirror trigger keeps it equal to `house`, so **both columns are valid during the transition**. New/changed code should **read `house_slug`** — app reads use the `house:house_slug` PostgREST alias to keep the returned JSON key `house` unchanged — the alias lives in the `LOTS_SELECT` string while `LOT_COLUMNS` keeps the logical key `house` (so the column-contract test stays valid); filters use `house_slug` directly. The old `house` column is dropped only at the final gate (after a soak). Plan + runbook live on branch `infra/hermes-verifier` (`HOUSE_KEY_PLAN.md` / `HOUSE_KEY_2A_RUNBOOK.md`).
+
+- **`get_active_lots()` `+ l.id`** (2026-06-25). The active-feed RPC now returns the lot UUID so the frontend carries `_dbId` on active lots (previously only unsold lots had it, via `LOTS_SELECT`). Powers the mobile lot-detail drawer's `?lot=<uuid>` URL state (Back-button close + shareable link) and lines up with the SSR `/lot/:id` page. **Applied to prod** (additive; inert for the deployed frontend until the drawer ships). Migration: `migrations/2026-06-25-get-active-lots-include-id.sql`. Rebuilt from the live Phase-2a definition (`house_slug as house`), not an older migration file.
+
+- **`sdlauctions` house_skills row** (2026-06-27). SDL Auctions was onboarded in code (de-conflation plan 4) but never got a `house_skills` row, so the scheduler — which iterates `house_skills` — never scraped it (0 live lots). Migration `migrations/2026-06-27-onboard-sdlauctions-house-skills.sql` adds the row (mirrors the `btg_sdl` sister, `btgeddisons`). Companion code (same PR): a one-shot "Show: All" click in `lib/scraper/crawlee.js` `CLICK_TO_LOAD_SELECTORS` so the AJAX `/search/` render loads the full ~186-lot book instead of the default 12 (verified live: 11 → 186, recogniser 186/186). **NOT yet applied** — pending PR merge + deploy; **no restart needed** (SDL has no tripped circuit; the scheduler reads `house_skills` fresh). NB the sibling Charles Darrow is blocked separately by the in-memory circuit-reset deadlock (needs a restart/health-reload), coordinated elsewhere.
 
 ---
 
