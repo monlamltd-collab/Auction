@@ -8,6 +8,14 @@
 -- pg_cron job `hermes-deterministic-health-rules` (daily 09:00) already calls
 -- this function, so no new cron / app code is required.
 --
+-- CANONICAL SOURCE (2026-06-27): the live function was found partially patched
+-- out-of-band — it already contained house_went_dark + coverage_degraded but
+-- NOT stale_extract. This file is the single authoritative 3-rule definition and
+-- supersedes that partial state. Apply order: run the dormancy backfill
+-- (2026-06-27-retired-houses-dormant-backfill.sql) FIRST so retired houses are
+-- dormant before these rules next fire, then apply this. Only one window should
+-- own this function — do not re-apply a divergent version elsewhere.
+--
 -- This is a CREATE OR REPLACE that PRESERVES the three pre-existing rules
 -- (stc_in_feed, active_feed_collapse, low_scoring_coverage) verbatim and adds:
 --
