@@ -69,6 +69,7 @@ const getAISearchLimitCode = configCode.substring(gASLStart, gASLEnd);
 // ── Extract constants needed by the functions ──
 const anonLimitMatch = configCode.match(/const ANON_AI_SEARCH_LIMIT\s*=\s*(\d+);/);
 const freeLimitMatch = configCode.match(/const FREE_AI_SEARCH_LIMIT\s*=\s*(\d+);/);
+const premiumLimitMatch = configCode.match(/const PREMIUM_AI_SEARCH_LIMIT\s*=\s*(\d+);/);
 
 // ── Test runner ──
 let passed = 0;
@@ -100,6 +101,7 @@ function buildFunctions(stripeEnabled) {
   const SIGNED_IN_DAILY_LIMIT = parseInt(dailyLimitMatch[1]);
   const ANON_AI_SEARCH_LIMIT = parseInt(anonLimitMatch[1]);
   const FREE_AI_SEARCH_LIMIT = parseInt(freeLimitMatch[1]);
+  const PREMIUM_AI_SEARCH_LIMIT = parseInt(premiumLimitMatch[1]);
 
   // Evaluate resolveEffectiveTier in context
   const resolveEffectiveTier = new Function(
@@ -109,11 +111,11 @@ function buildFunctions(stripeEnabled) {
 
   // Evaluate getAISearchLimit in context
   const getAISearchLimit = new Function(
-    'STRIPE_ENABLED', 'SIGNED_IN_DAILY_LIMIT', 'ANON_AI_SEARCH_LIMIT', 'FREE_AI_SEARCH_LIMIT',
+    'STRIPE_ENABLED', 'SIGNED_IN_DAILY_LIMIT', 'ANON_AI_SEARCH_LIMIT', 'FREE_AI_SEARCH_LIMIT', 'PREMIUM_AI_SEARCH_LIMIT',
     `${getAISearchLimitCode}; return getAISearchLimit;`
-  )(STRIPE_ENABLED, SIGNED_IN_DAILY_LIMIT, ANON_AI_SEARCH_LIMIT, FREE_AI_SEARCH_LIMIT);
+  )(STRIPE_ENABLED, SIGNED_IN_DAILY_LIMIT, ANON_AI_SEARCH_LIMIT, FREE_AI_SEARCH_LIMIT, PREMIUM_AI_SEARCH_LIMIT);
 
-  return { resolveEffectiveTier, getAISearchLimit, SIGNED_IN_DAILY_LIMIT, ANON_AI_SEARCH_LIMIT };
+  return { resolveEffectiveTier, getAISearchLimit, SIGNED_IN_DAILY_LIMIT, ANON_AI_SEARCH_LIMIT, PREMIUM_AI_SEARCH_LIMIT };
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -180,17 +182,17 @@ console.log('\n--- getAISearchLimit tests ---');
 
 // STRIPE_ENABLED=true
 {
-  const { getAISearchLimit, ANON_AI_SEARCH_LIMIT } = buildFunctions(true);
+  const { getAISearchLimit, ANON_AI_SEARCH_LIMIT, PREMIUM_AI_SEARCH_LIMIT } = buildFunctions(true);
 
   assertEqual(getAISearchLimit(null), ANON_AI_SEARCH_LIMIT,
     `getAISearchLimit(null) returns ${ANON_AI_SEARCH_LIMIT} (anon limit) when STRIPE_ENABLED=true`);
 
-  assertEqual(getAISearchLimit({ tier: 'premium' }), Infinity,
-    'getAISearchLimit(premium user) returns Infinity when STRIPE_ENABLED=true');
+  assertEqual(getAISearchLimit({ tier: 'premium' }), PREMIUM_AI_SEARCH_LIMIT,
+    `getAISearchLimit(premium user) returns ${PREMIUM_AI_SEARCH_LIMIT} (capped, not Infinity) when STRIPE_ENABLED=true`);
 
   const futureDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-  assertEqual(getAISearchLimit({ tier: 'free', trial_expires_at: futureDate }), Infinity,
-    'getAISearchLimit(user with valid trial) returns Infinity when STRIPE_ENABLED=true');
+  assertEqual(getAISearchLimit({ tier: 'free', trial_expires_at: futureDate }), PREMIUM_AI_SEARCH_LIMIT,
+    `getAISearchLimit(user with valid trial) returns ${PREMIUM_AI_SEARCH_LIMIT} (capped, not Infinity) when STRIPE_ENABLED=true`);
 
   assertEqual(getAISearchLimit({ tier: 'free' }), 5,
     'getAISearchLimit(free user) returns 5 when STRIPE_ENABLED=true');
