@@ -70,6 +70,14 @@ console.log('multi-image-sweep — two-pass flow, guards, generic strip');
     'sweepMultiImages accepts an optional { house } scope');
   assert((src.match(/if\s*\(houseScope\)\s*tier[12]q\s*=\s*tier[12]q\.eq\('house',\s*houseScope\)/g) || []).length === 2,
     'house scope is applied to BOTH tier-1 and tier-2 candidate queries');
+
+  // Recency gate — never sweep lots a user can't see (get_active_lots hides
+  // 'available' lots unseen for 21 days). Stops the budget being burnt on stale
+  // inventory and starving fresh lots behind it.
+  assert(/recencyCutoff\s*=\s*new Date\(Date\.now\(\)\s*-\s*45\s*\*\s*86400000\)/.test(src),
+    'sweep computes a 45-day last_seen recency cutoff');
+  assert((src.match(/\.gte\('last_seen_at',\s*recencyCutoff\)/g) || []).length === 2,
+    'recency cutoff applied to BOTH tier-1 and tier-2 candidate queries');
 }
 
 console.log('\nimages field exposed end-to-end');
