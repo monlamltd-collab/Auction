@@ -510,14 +510,16 @@ function scheduleTick() {
   }
 
   // Tier 4: Rental drain daily at 04:00 UK — runs after the 03:00 full
-  // pass settles and before status-drift starts at 09:00. Limit 50 means
-  // we cycle through ~500 active-auction postcodes × 3 sources every ~30
-  // days — exactly the freshness window in lib/rentals/index.js.
-  // OpenRent is Firecrawl-backed; SpareRoom + OnTheMarket are plain HTTP.
+  // pass settles and before status-drift starts at 09:00. The drain pool is
+  // now ALL active lots (available/stc/unsold), not just upcoming-auction, so
+  // the ~2,500 never-scraped postcodes get covered (never-scraped sort first).
+  // limit=150 tuples/night (~50 postcodes × 3 sources) drains the backlog over
+  // a few weeks while staying polite. OpenRent is Firecrawl-backed (skips fast
+  // when circuit-open); SpareRoom + OnTheMarket are plain HTTP.
   if (hour === 4 && minute < 5 && now - _scheduleState.lastRentalDrain > 60 * 60 * 1000) {
     _scheduleState.lastRentalDrain = now;
-    console.log('SCHEDULE: 04:00 UK — running drainStaleRentals(limit=50)');
-    drainStaleRentals({ limit: 50 })
+    console.log('SCHEDULE: 04:00 UK — running drainStaleRentals(limit=150)');
+    drainStaleRentals({ limit: 150 })
       .then(r => console.log(`SCHEDULE rental drain: attempted=${r.attempted} ok=${r.ok} errors=${r.errors} skipped=${r.skipped || 0}`))
       .catch(e => console.error('SCHEDULE rental drain failed:', e.message));
   }
