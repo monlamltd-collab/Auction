@@ -62,6 +62,14 @@ console.log('multi-image-sweep — two-pass flow, guards, generic strip');
     'fair-share applied to the non-urgent fresh lots (urgent lots bypass cap via splitFreshByUrgency)');
   assert(/wallClockBailed/.test(src),
     'stats expose wallClockBailed flag for dashboards');
+
+  // Optional { house } scope — lets an operator force a single house's galleries
+  // to fill when the upcoming-first tiers would starve its post-auction lots
+  // (cliveemson). Default (no house) leaves the fleet sweep unchanged.
+  assert(/sweepMultiImages\(opts\s*=\s*\{\}\)/.test(src) && /const houseScope\s*=\s*opts\.house/.test(src),
+    'sweepMultiImages accepts an optional { house } scope');
+  assert((src.match(/if\s*\(houseScope\)\s*tier[12]q\s*=\s*tier[12]q\.eq\('house',\s*houseScope\)/g) || []).length === 2,
+    'house scope is applied to BOTH tier-1 and tier-2 candidate queries');
 }
 
 console.log('\nimages field exposed end-to-end');
