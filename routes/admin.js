@@ -104,8 +104,12 @@ router.post('/api/refresh-cache', rateLimit(60000, 5), requireAdmin, async (req,
 // /api/refresh-cache — the sweep can run up to its 30-min wall-clock guard, far
 // longer than an HTTP request, so respond immediately and run in the background.
 router.post('/api/admin/sweep-images', rateLimit(60000, 5), requireAdmin, async (req, res) => {
-  res.json({ message: 'Multi-image sweep triggered. Check server logs for progress.' });
-  sweepMultiImages().catch(e => log.error('Manual sweep-images failed', { error: e.message }));
+  // Optional { house } scope — force a single house's galleries to fill even
+  // when its live inventory is post-auction-dated and the fleet sweep's
+  // upcoming-first tiers would starve it (e.g. cliveemson).
+  const house = (typeof req.body?.house === 'string' && req.body.house.trim()) || null;
+  res.json({ message: `Multi-image sweep triggered${house ? ` (house=${house})` : ''}. Check server logs for progress.` });
+  sweepMultiImages({ house }).catch(e => log.error('Manual sweep-images failed', { error: e.message, house }));
 });
 
 // Admin: backfill images for all cached catalogues (no AI tokens used)
