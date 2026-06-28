@@ -595,7 +595,17 @@ function scheduleTick() {
         await runLoader('HPI',  ['scripts/refresh-hmlr-hpi.mjs']);
         await runLoader('OCOD', ['scripts/refresh-hmlr-companies.mjs', '--dataset=ocod', '--postcodes-only']);
         await runLoader('CCOD', ['scripts/refresh-hmlr-companies.mjs', '--dataset=ccod', '--postcodes-only']);
-        await runLoader('PPD',  ['scripts/refresh-hmlr-ppd.mjs', '--postcodes-only']);
+        // PPD: FULL backfill of the last 3 years (the comparable-price window)
+        // for ALL current lot postcodes — not just the monthly delta. The delta
+        // file only carries last month's sales, so postcodes added since the
+        // last full load never got their sold-price history (the dominant cause
+        // of `land_registry: ok_no_comps` on residential lots). --postcodes-only
+        // keeps the upserted set bounded to our postcodes; --since bounds it to
+        // the comp window and avoids the statement-timeout a full 1995-onwards
+        // load triggers. Idempotent (PK conflict on transaction_id).
+        const ppdSince = new Date(Date.now() - 3 * 365 * 24 * 60 * 60 * 1000)
+          .toISOString().slice(0, 7); // YYYY-MM, ~3 years ago
+        await runLoader('PPD',  ['scripts/refresh-hmlr-ppd.mjs', '--full', '--postcodes-only', `--since=${ppdSince}`]);
       } catch (e) {
         console.error('SCHEDULE HMLR refresh failed:', e.message);
         harnessFireAlert({
