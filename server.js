@@ -51,14 +51,14 @@ import { validateEnv, ALLOWED_ORIGINS } from './lib/config.js';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY, AUTH_ENABLED } from './lib/supabase.js';
 import { securityHeaders, csrfCheck } from './lib/security.js';
 import { getClientIP, setOnNewUser } from './lib/auth.js';
-import { initHouses, reconcileRetiredHousesDormant, HOUSE_ROOTS, rewriteUrl } from './lib/houses.js';
+import { initHouses, reconcileRetiredHousesDormant, HOUSE_ROOTS, RETIRED_HOUSES, detectAuctionHouse, rewriteUrl } from './lib/houses.js';
 import { applyUmamiInjection } from './lib/utils.js';
 import { getCalendarAuctions } from './lib/calendar.js';
 
 // ── Harness modules (adaptive resilience framework) ──
 import { initAlerts, fireAlert as harnessFireAlert, resolveAlert as harnessResolveAlert } from './lib/harness/alert-router.js';
 import { emitPipelineEvent } from './lib/pipeline/pipeline-events.js';
-import { initHouseHealth, updateHealth as harnessUpdateHealth } from './lib/harness/house-health.js';
+import { initHouseHealth, updateHealth as harnessUpdateHealth, isCircuitOpen } from './lib/harness/house-health.js';
 import { initDiscovery } from './lib/harness/house-discovery.js';
 import { initManager, runManagerCycle, getManagerDirectives } from './lib/harness/manager.js';
 
@@ -253,7 +253,9 @@ process.on('unhandledRejection', (reason) => {
 // ═══════════════════════════════════════════════════════════════
 // DEPENDENCY INJECTION — wire up lib/analysis.js and harness/manager.js
 // ═══════════════════════════════════════════════════════════════
-import { initAnalysis, autoAnalyseAll, healBrokenHouse, runEnrichmentWave, drainHygieneRetries } from './lib/analysis.js';
+import { initAnalysis, autoAnalyseAll, autoAnalyseOne, isAutoAnalysisRunning, healBrokenHouse, runEnrichmentWave, drainHygieneRetries } from './lib/analysis.js';
+import { runFreshnessPulse } from './lib/pipeline/freshness-pulse.js';
+import { isPdfUrl } from './lib/scraper/extraction.js';
 import { auditStatusDrift } from './lib/harness/sub-agents.js';
 import { initWatcher, watchAuctionCalendar } from './lib/pipeline/auction-watcher.js';
 import { syncCalendar } from './lib/pipeline/calendar-sync.js';
@@ -363,6 +365,8 @@ const _scheduleState = {
   // Tier 19 (unsold-lot alerts — daily 08:10 UK; endpoint existed since April
   // but no scheduler ever called it until the 2026-06-10 tidy):
   lastUnsoldAlerts: 0,
+  // Tier 20 (freshness pulse — hourly xx:20 outside the overnight batch window):
+  lastFreshnessPulse: 0,
 };
 
 function getUkHourMinute() {
@@ -904,6 +908,39 @@ function scheduleTick() {
     sweepSameDayStatuses()
       .then(r => console.log(`SCHEDULE same-day sweep: eligible=${r.eligible} fetched=${r.fetched} updated=${r.statusUpdated} unchanged=${r.noChange} dead=${r.urlDead} failed=${r.fetchFailed}`))
       .catch(e => console.error('SCHEDULE same-day sweep failed:', e.message));
+  }
+
+  // Tier 20: Freshness pulse — hourly at xx:20, skipping the 02:00–06:59
+  // overnight batch window (full pass, homepage watch, rental/image sweeps).
+  // Each pulse runs autoAnalyseOne per eligible house; the Crawlee page-1
+  // hash gate makes an unchanged catalogue a cheap render-and-skip ('same',
+  // no AI spend) while a changed one runs the full extract immediately — new
+  // lots reach users within ~an hour of release instead of the next daily
+  // pass. Skips itself while a full pass runs; kill switch:
+  // FRESHNESS_PULSE_DISABLED=true. See lib/pipeline/freshness-pulse.js.
+  if ((hour >= 7 || hour <= 1) && minute >= 20 && minute < 25
+      && now - _scheduleState.lastFreshnessPulse > 50 * 60 * 1000) {
+    _scheduleState.lastFreshnessPulse = now;
+    console.log('SCHEDULE: freshness pulse');
+    withTier('freshness-pulse', () => runFreshnessPulse({
+      getCalendarAuctions,
+      autoAnalyseOne,
+      isAutoAnalysisRunning,
+      isCircuitOpen,
+      isPdfUrl,
+      detectHouse: detectAuctionHouse,
+      retiredSlugs: RETIRED_HOUSES,
+      fetchSkills: async () => {
+        const { data } = await supabase
+          .from('house_skills')
+          .select('slug, dormant, preferred_engine, engine_locked, engine_stats, next_scrape_at, last_probe_at');
+        return data || [];
+      },
+    }))
+      .then(r => {
+        if (!r.skipped) console.log(`SCHEDULE freshness pulse: pulsed=${r.candidates} changed=${r.changed} same=${r.same} errors=${r.errors}`);
+      })
+      .catch(e => console.error('SCHEDULE freshness pulse failed:', e.message));
   }
 }
 
