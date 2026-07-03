@@ -25,12 +25,16 @@ Current open work, resolved items, and the goal-aligned roadmap.
 
 **Division of labour:** outward-reach (social, content distribution, audience acquisition for both AuctionBrain and BridgeMatch) lives in the separate **ContentBrain** repo. This repo's growth remit is the indexable surface (Phases 1–2) and converting the traffic it earns (Phase 3); assets like the market report are produced here, distributed via ContentBrain.
 
-### Phase 1 — Plug in the growth engine (days; highest ROI in the repo)
+### Phase 1 — Plug in the growth engine — **SHIPPED 2026-07-03**
 
-- **Serve the sitemap dynamically.** `scripts/regenerate-sitemap.mjs` can emit ~40k lot URLs, but it runs only on the worker (`server.js:602`) and writes a local file, while the web container serves the 5-URL repo copy via `sendFile` (`routes/admin.js:478`) — Google has never seen the lot URLs. Replace with a dynamic `/sitemap.xml` route querying Supabase (cache ~1h).
-- **Link lot cards to `/lot/:id`.** The server-rendered lot pages (`routes/lots.js`) have full meta/JSON-LD/OG and are production-quality — and zero internal links point at them (`public/app.js` has no `/lot/` hrefs). Real anchors on cards + JS intercept for the inline expand.
-- **True 404s.** The catch-all serves the SPA with HTTP 200 for every unknown path (`server.js:195`) — soft-404s waste crawl budget. Return real 404s; fix the phantom `/auctions` breadcrumb in `index.html`.
-- **Keep sold lots indexable.** Sold lots are dropped from the sitemap and missing lots 302 to `/` — but sold-price pages are compounding SEO content ("what did X sell for at auction"). Keep them live as an archive.
+All four items landed in one PR (`feature/seo-phase1`):
+
+- **Dynamic sitemap** — `lib/sitemap.js` builds `/sitemap.xml` from Supabase on the web process (1h in-process cache; stale-cache fallback on query failure). Live lots at priority 0.6/daily + the **sold archive at 0.4/monthly** (sold-price pages are compounding SEO content). The worker cron (old Tier 11), `scripts/regenerate-sitemap.mjs`, and the static `public/sitemap.xml` stub were deleted — the worker-writes/web-serves split meant Google had never seen a lot URL.
+- **Lot cards link to `/lot/:id`** — the card address is a real `<a href="/lot/<uuid>">` (`_dbId`); plain click keeps the inline expand via `_cardAddrClick`, modified clicks + crawlers follow the href.
+- **True 404s** — the catch-all serves the SPA at `/` only; unknown paths get a branded, `noindex` 404 (`renderNotFoundHtml` in `routes/lots-render.js`), unknown `/api/*` gets JSON 404. `/lot/:id` returns real 404s instead of 302-to-`/` (invalid or unknown id). Phantom `/auctions` breadcrumb removed from `index.html` JSON-LD.
+- **Sold lots indexable** — in the sitemap (above) and their JSON-LD offer availability now reports `SoldOut` instead of `InStock`.
+
+Post-deploy operator step: submit `https://auctions.bridgematch.co.uk/sitemap.xml` in Google Search Console and watch coverage.
 
 ### Phase 2 — Mid-tail SEO surfaces (reuse the `lots-render.js` pattern; data already in the DB)
 

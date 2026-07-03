@@ -3336,6 +3336,16 @@ function scoreBadgeKind(s) {
   return '';
 }
 
+// Card-address click intercept: keep the inline expand on plain click, but
+// let modified clicks (new tab) and crawlers use the real /lot/:id href.
+function _cardAddrClick(ev, idx) {
+  ev.stopPropagation();
+  if (ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey || ev.button === 1) return true;
+  ev.preventDefault();
+  expandCard(LOTS[idx]);
+  return false;
+}
+
 function card(l){
   // Editorial Trading Desk card (v2). The handoff README maps each
   // section explicitly -- preserve that vocabulary so future edits are
@@ -3439,11 +3449,21 @@ function card(l){
     (dateShort ? '<span>· ' + dateShort + '</span>' : '') +
   '</div>';
   const mobileOverlays = '<div class="lcv2-mobile-overlays">' + mobileScoreHtml + mobileStripHtml + '</div>';
+  // Crawlable deep link (SEO Phase 1, 2026-07-03): the server-rendered
+  // /lot/:id pages had ZERO internal links pointing at them, so Google never
+  // discovered them. The address is now a real <a href="/lot/<uuid>"> —
+  // crawlers and middle-click/ctrl-click follow it; a plain click is
+  // intercepted by _cardAddrClick and keeps today's inline-expand UX.
+  const lotHref = l._dbId ? '/lot/' + esc(l._dbId) : null;
+  const addrInner = esc(addr);
+  const addrLinked = lotHref
+    ? '<a class="lcv2-addr-link" href="' + lotHref + '" onclick="return _cardAddrClick(event,' + idx + ')">' + addrInner + '</a>'
+    : addrInner;
   if (l.imageUrl && typeof isValidImageUrl === 'function' && isValidImageUrl(l.imageUrl)) {
     const imgSrc = (typeof optimImg === 'function') ? optimImg(l.imageUrl, 600) : l.imageUrl;
     heroHtml = '<div class="lcv2-hero-img" style="background-image:url(\'' + esc(imgSrc) + '\')">' + saveBtnHtml + mobileOverlays + '</div>';
     addressRowHtml = '<div class="lcv2-addr">' +
-      '<h3>' + esc(addr) + '</h3>' +
+      '<h3>' + addrLinked + '</h3>' +
       (pc ? '<span class="pc">' + esc(pc) + '</span>' : '') +
     '</div>';
   } else {
@@ -3451,7 +3471,7 @@ function card(l){
       saveBtnHtml +
       mobileOverlays +
       '<span class="noimg-label">▢ NO CATALOGUE IMAGE · ADDRESS ONLY</span>' +
-      '<h3 class="addr">' + esc(addr) + '</h3>' +
+      '<h3 class="addr">' + addrLinked + '</h3>' +
       (pc ? '<span class="pc">' + esc(pc) + '</span>' : '') +
     '</div>';
     addressRowHtml = '';

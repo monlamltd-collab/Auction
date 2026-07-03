@@ -32,6 +32,7 @@ import { sweepMultiImages } from '../lib/pipeline/multi-image-sweep.js';
 import { getAICostSummary } from '../lib/ai-provider.js';
 import { enrichLots, getCircuitBreakers, fetchEPCByPostcode, matchEPCToLot, fetchEPCCertificate } from '../lib/enrichment.js';
 import { normaliseUrl, applyUmamiInjection } from '../lib/utils.js';
+import { getSitemapXml } from '../lib/sitemap.js';
 import { getAuctionCalendar, getCalendarAuctions } from '../lib/calendar.js';
 import { validateBatch } from '../lib/harness/data-contract.js';
 import { getAllHealth } from '../lib/harness/house-health.js';
@@ -591,9 +592,15 @@ router.get('/robots.txt', (req, res) => {
   res.type('text/plain');
   res.sendFile(join(__dirname, '..', 'public', 'robots.txt'));
 });
-router.get('/sitemap.xml', (req, res) => {
-  res.type('application/xml');
-  res.sendFile(join(__dirname, '..', 'public', 'sitemap.xml'));
+// Dynamic — built from Supabase (~40k lot URLs, live + sold archive),
+// cached in-process for 1h. The old static public/sitemap.xml was only ever
+// regenerated on the WORKER container, so the web process served a 5-URL
+// stub and Google never saw a lot URL (SEO Phase 1, 2026-07-03).
+router.get('/sitemap.xml', async (req, res) => {
+  const xml = await getSitemapXml(supabase);
+  if (!xml) return res.status(503).type('text/plain').send('sitemap temporarily unavailable');
+  res.set('Cache-Control', 'public, max-age=3600, s-maxage=3600');
+  res.type('application/xml').send(xml);
 });
 
 // ═══════════════════════════════════════════════════════════════

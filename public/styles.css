@@ -1037,6 +1037,10 @@ footer .logo-f span{color:var(--green)}
   color:var(--ink);margin:0
 }
 .lcv2-addr .pc{font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-top:4px;display:block}
+/* Crawlable /lot/:id deep link wrapping the address — visually identical to
+   the plain text it replaced (the whole card is already clickable). */
+.lcv2-addr-link{color:inherit;text-decoration:none}
+.lcv2-addr-link:hover,.lcv2-addr-link:focus-visible{text-decoration:underline;text-underline-offset:3px}
 
 /* Stat block (Guide / Yield / Score) */
 .lcv2-stats{
