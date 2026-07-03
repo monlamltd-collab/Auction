@@ -70,6 +70,12 @@ Emson lots previously sat on the `2099-12-31` sentinel date.
   as active — including the 152 with the legacy Google-Maps URL. They are **not** in the current
   catalogue, so re-scraping does not touch them; they need a `last_seen_at`-based expiry / post-auction
   reconciliation (Clive Emson has no per-auction calendar row — just the rolling "Current Catalogue").
+- **Town-only address walls (fixed 2026-07-03):** the `{Town} - {County}` addresses never upgraded —
+  the detail-fetch address extraction in `lib/scraper/lot-detail.js` only wrote an address when the
+  existing one was missing/short/description-like, so "Sittingbourne - Kent" ×14 rendered as identical
+  cards (flagged by the visual audit's duplicate-address heuristic; they are distinct lots). The
+  town-only shape (`/^[^,\d]+\s+-\s+[^,\d]+$/`) is now a gap-fill trigger AND an upgrade condition,
+  guarded so only a genuinely more specific candidate (comma or postcode present) replaces it.
 - **Circuit deadlock + bare-host cert (recovery, fixed 2026-06-28):** the recogniser (#136) shipped but
   the house never ran it — `house_skills` was `status=broken` / `circuit_state=open`, and the circuit
   couldn't be reset (in-memory `_healthMap` only reloads on restart; the manager re-opens it from
