@@ -52,10 +52,10 @@ Leads pay at hundreds of users; ads need ~50k sessions/month.
 - **Lead form before handoff:** the per-card "BridgeMatch it" button goes straight off-site; the on-site form (name/email/phone → `leads` table + Resend) is buried in the expanded panel.
 - **Mail the consented segment:** `users.consent_partner_marketing=true` is stored with an audit trail and has never been used.
 
-### Phase 4 — Retain
+### Phase 4 — Retain — **SHIPPED 2026-07-04**
 
-- **Free saved-search alerts.** Alerts are Pro-gated server-side (`lib/pipeline/saved-search-alerts.js:197`), so free users' saved searches silently never email — the core return loop should be free; premium buys immediacy/granularity.
-- Close Umami event gaps (saved-search creation untracked; finance CTA events use array index, not lot id).
+- **Saved-search alerts are free** (`feature/free-alerts`): the server-side Pro gate is gone — every tier with `notify_email=true` gets the daily 08:00 alert. Pro's edge is depth: free emails show the top 5 matches + a view-all link (+ upgrade hint on overflow), Pro shows up to 10. Tier flows `runSavedSearchAlertsCycle → renderAlertEmail({tier})`.
+- Umami gaps closed: `saved_search_created` event added; fundability badge + finance-click events now carry the lot UUID (`_dbId`) instead of the render-order array index, so events are joinable across sessions.
 
 ### Phase 5 — Harden for the traffic (2026-06-10 robustness review)
 
