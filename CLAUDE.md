@@ -124,6 +124,8 @@ From `package.json`:
 | `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_KEY` | Database |
 | `BRIDGEMATCH_API_URL` | BridgeMatch API base for fundability badge |
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | Self-healing alert destination |
+| `CRAWLEE_MAX_CONCURRENCY` | Shared render ceiling for BOTH browser engines (Crawlee fleet + puppeteer.js gate) — `renderConcurrency()` in `lib/config.js`. Default 5, clamp 1–8; set 3 to roll back to the pre-Phase-3 ceiling. Crawlee's AutoscaledPool still governs actual concurrency beneath it (memory-aware; pin the budget with Crawlee's native `CRAWLEE_MEMORY_MBYTES` if cgroup detection misreads). `Crawlee: mem after N renders` log lines show live RSS headroom. |
+| `FRESHNESS_PULSE_DISABLED` / `FRESHNESS_PULSE_SKIP` / `FRESHNESS_PULSE_CONCURRENCY` / `FRESHNESS_PULSE_FLAP_HOURS` | Hourly catalogue-change pulse (Tier 20, `lib/pipeline/freshness-pulse.js`) — kill switch / extra skip slugs / probe concurrency (default 2) / flap-damp window (default 3h) |
 | `STRIPE_SECRET_KEY` | Payment processing |
 | `SENTRY_DSN` | Error monitoring |
 | `ROLE` | `web` (HTTP only) / `worker` (HTTP + schedulers) / unset (single process) |
