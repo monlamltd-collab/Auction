@@ -124,13 +124,17 @@ async function slugCaseDuplication() {
 
 async function loadAllLots() {
   // Single fetch — all lots, lightweight columns. Used by the ratio heuristics.
+  // Ordered by id: .range() pagination without an ORDER BY has no stable row
+  // order in Postgres, so pages overlap/skip — rows silently duplicate, which
+  // fabricated duplicate_address_wall findings across nearly every house.
   let allRows = [];
   const PAGE = 1000;
   let from = 0;
   while (true) {
     const { data, error } = await supabase
       .from('lots')
-      .select('house, address, price, price_text, bullets, image_url, url, auction_date, status')
+      .select('house, address, price, price_text, bullets, image_url, url, auction_date, status, last_seen_at')
+      .order('id', { ascending: true })
       .range(from, from + PAGE - 1);
     if (error) throw error;
     if (!data || data.length === 0) break;
@@ -321,8 +325,18 @@ function staleLotWall(rows) {
 }
 
 function duplicateAddressWall(rows) {
+  // Scoped to user-VISIBLE lots (mirrors get_active_lots): the whole-table
+  // version counted historic re-listings of the same property as duplicates.
+  // What this now catches: the same address shown to users more than once —
+  // re-lists under a new lot URL where the stale row never retired, URL
+  // querystring/host variants minting extra rows, or venue/junk extraction.
   const findings = [];
-  for (const [house, lots] of groupByHouse(rows)) {
+  const now = Date.now();
+  const DAY = 86400000;
+  const visible = rows.filter(l =>
+    (l.status === 'available' && l.last_seen_at && (now - new Date(l.last_seen_at).getTime()) < 21 * DAY) ||
+    (l.status === 'unsold' && l.auction_date && (new Date(l.auction_date).getTime()) > now - 30 * DAY));
+  for (const [house, lots] of groupByHouse(visible)) {
     if (lots.length < MIN_HOUSE_LOTS) continue;
     const counts = new Map();
     for (const l of lots) {
@@ -337,7 +351,7 @@ function duplicateAddressWall(rows) {
         heuristic: 'duplicate_address_wall',
         severity: 'error',
         house,
-        message: `Duplicate-address wall: ${dupes.length} addresses appear ≥${DUPLICATE_ADDRESS_MIN} times each (${total} total dupe rows) — pagination may be looping page 1`,
+        message: `Duplicate-address wall: ${dupes.length} visible addresses appear ≥${DUPLICATE_ADDRESS_MIN} times each (${total} rows users can see) — stale re-list rows, URL variants, or venue extraction`,
         meta: { unique_dupes: dupes.length, total_dupe_rows: total, examples: dupes.slice(0, 3).map(([a, c]) => ({ address: a, count: c })) },
       });
     }
