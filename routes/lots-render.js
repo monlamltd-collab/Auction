@@ -141,7 +141,7 @@ export function renderLotHtml({
   title, description, canonical, ogImage, jsonLd,
   shortAddress, priceLabel, scoreLabel, propTypeLabel, displayName,
   address, opps, risks, bullets, heroImg, lotUrl, status,
-  valueEstimate,
+  valueEstimate, financeUrl,
 }) {
   const oppsHtml = opps.length
     ? `<ul class="lot-tags">${opps.map(o => `<li class="tag tag-opp">${escHtml(o)}</li>`).join('')}</ul>`
@@ -215,7 +215,9 @@ export function renderLotHtml({
       ${bulletsHtml ? `<section class="lot-section"><h2>Lot details</h2>${bulletsHtml}</section>` : ''}
       ${valueEstimateHtml}
       <div class="lot-detail-ctas">
-        <a class="cta-primary" href="/check">Check finance options</a>
+        ${financeUrl
+          ? `<a class="cta-primary" href="${escHtml(financeUrl)}" rel="noopener">Check bridging finance for this lot →</a>`
+          : `<a class="cta-primary" href="/check">Check finance options</a>`}
         ${auctionLink}
       </div>
       <p class="lot-detail-disclaimer">Indicative analysis from auction-house listing data. Verify with the legal pack and your broker before bidding.</p>
