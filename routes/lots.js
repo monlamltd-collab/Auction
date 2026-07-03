@@ -20,7 +20,7 @@ import { LOTS_SELECT, dbRowToLot } from '../lib/types/lot.js';
 import { getHouseDisplayName } from '../lib/houses.js';
 import { log } from '../lib/logging.js';
 import {
-  UUID_RE, SITE_ORIGIN, proxiedImage, renderOgSvg, renderLotHtml,
+  UUID_RE, SITE_ORIGIN, proxiedImage, renderOgSvg, renderLotHtml, renderNotFoundHtml,
 } from './lots-render.js';
 
 const router = Router();
@@ -46,13 +46,21 @@ async function fetchLotById(id) {
 // ═══════════════════════════════════════════════════════════════
 router.get('/lot/:id', async (req, res) => {
   const { id } = req.params;
+  // Real 404s (SEO Phase 1): the old 302-to-/ answered "gone" with a
+  // redirect, which dropped sold-lot URLs from the index and read as a
+  // soft-404. Unknown/invalid ids now get an honest 404 page.
   if (!UUID_RE.test(id)) {
-    return res.redirect(302, '/');
+    return res.status(404).type('html').send(renderNotFoundHtml({
+      heading: 'Lot not found',
+      message: 'That link doesn’t match any lot. It may have been mistyped.',
+    }));
   }
   const row = await fetchLotById(id);
   if (!row) {
-    res.status(404);
-    return res.redirect(302, '/');
+    return res.status(404).type('html').send(renderNotFoundHtml({
+      heading: 'Lot not found',
+      message: 'This lot is no longer in our records. Browse the live catalogue instead.',
+    }));
   }
 
   const lot = dbRowToLot(row);
@@ -93,7 +101,14 @@ router.get('/lot/:id', async (req, res) => {
     image: lot.imageUrl || ogImage,
     address: { '@type': 'PostalAddress', streetAddress: lot.address || '', addressCountry: 'GB' },
     ...(lot.price ? {
-      offers: { '@type': 'Offer', price: lot.price, priceCurrency: 'GBP', availability: 'https://schema.org/InStock' }
+      offers: {
+        '@type': 'Offer', price: lot.price, priceCurrency: 'GBP',
+        // Sold lots stay indexable as the price archive — tell search
+        // engines the truth about availability.
+        availability: lot.status === 'sold'
+          ? 'https://schema.org/SoldOut'
+          : 'https://schema.org/InStock',
+      }
     } : {}),
     ...(ve ? {
       priceSpecification: {

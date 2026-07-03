@@ -161,6 +161,7 @@ import leadsRouter from './routes/leads.js';
 import calendarRouter from './routes/calendar.js';
 import analyseRouter from './routes/analyse.js';
 import lotsRouter from './routes/lots.js';
+import { renderNotFoundHtml } from './routes/lots-render.js';
 import pricingRouter from './routes/pricing.js';
 import digestRouter from './routes/digest.js';
 import searchRouter, { invalidateAllLotsCache, warmAllLotsCache } from './routes/search.js';
@@ -217,7 +218,7 @@ const _indexHtmlCache = (() => {
   }
 })();
 
-app.get('*', (req, res) => {
+function serveIndex(req, res) {
   // 'no-store' (rather than just 'no-cache') prevents Edge/Chrome's
   // back-forward cache from restoring a stale HTML+JS snapshot after a
   // deploy. Cost is one ~80KB doc fetch per page visit — negligible.
@@ -228,6 +229,20 @@ app.get('*', (req, res) => {
   } else {
     res.sendFile(join(__dirname, 'index.html'));
   }
+}
+
+// The SPA lives at '/' only. Every named page (/check, /lot/:id, /privacy,
+// /admin, …) is a registered route above, so anything reaching the catch-all
+// is a genuinely unknown path. Answering those with HTTP 200 + index.html
+// created soft-404s that wasted crawl budget and polluted the index (SEO
+// Phase 1, 2026-07-03) — return a real 404 (JSON for /api/*).
+app.get('/', serveIndex);
+app.get('/index.html', serveIndex);
+app.get('*', (req, res) => {
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ error: 'not_found', path: req.path });
+  }
+  res.status(404).type('html').send(renderNotFoundHtml());
 });
 
 // ── Error handling — must come after all routes ──
@@ -345,8 +360,9 @@ const _scheduleState = {
   lastFullPass: 0, lastFreeEnrich: 0, lastStatusDrift: 0,
   lastRentalDrain: 0, lastRetryDrain: 0, lastPostAuctionSweep: 0,
   lastBudgetLog: 0, lastMultiImageSweep: 0, lastHmlrRefresh: 0,
-  // Phase 5 tiers (alert-sweep / coverage-digest / sitemap-regen):
-  lastAlertSweep: 0, lastCoverageDigest: 0, lastSitemapRegen: 0,
+  // Phase 5 tiers (alert-sweep / coverage-digest); sitemap-regen retired
+  // 2026-07-03 — /sitemap.xml is now dynamic (lib/sitemap.js):
+  lastAlertSweep: 0, lastCoverageDigest: 0,
   // Tier 12 (homepage-watch):
   lastHomepageWatch: 0,
   // Tier 13 (saved-search alerts — Pro feature):
@@ -679,17 +695,11 @@ function scheduleTick() {
       .catch(e => console.error('SCHEDULE coverage digest failed:', e.message));
   }
 
-  // Tier 11: Sitemap regeneration, daily 04:30 UK. Rewrites public/sitemap.xml
-  // with the four static URLs plus one entry per upcoming/recent lot — keeps
-  // search engines pointed at the freshest deep links from Phase 4 (/lot/:id).
-  if (hour === 4 && minute >= 30 && minute < 35 && now - _scheduleState.lastSitemapRegen > 60 * 60 * 1000) {
-    _scheduleState.lastSitemapRegen = now;
-    console.log('SCHEDULE: 04:30 UK — regenerating sitemap.xml');
-    import('./scripts/regenerate-sitemap.mjs')
-      .then(({ regenerateSitemap }) => regenerateSitemap({ dry: false }))
-      .then(r => console.log(`SCHEDULE sitemap: wrote=${r.wrote} urls=${r.urlCount} bytes=${r.bytes}`))
-      .catch(e => console.error('SCHEDULE sitemap regen failed:', e.message));
-  }
+  // Tier 11 (sitemap regeneration) RETIRED 2026-07-03 — the nightly regen
+  // wrote public/sitemap.xml on the WORKER container while the web container
+  // served the stale repo copy (containers don't share a filesystem). The
+  // sitemap is now built dynamically by the /sitemap.xml route on the web
+  // process (lib/sitemap.js, 1h in-process cache).
 
   // Tier 12: Homepage watch at 03:30 UK, every other day (epoch-day parity).
   // For every house in HOUSE_ROOTS, ask Firecrawl whether the homepage

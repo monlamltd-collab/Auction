@@ -27,6 +27,44 @@ export function escSvg(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
 }
 
+// ── 404 page ────────────────────────────────────────────────────────
+// Real 404s (SEO Phase 1, 2026-07-03): the SPA catch-all used to answer
+// every unknown path with HTTP 200 + index.html — soft-404s that waste
+// crawl budget and pollute the index. Served by the server.js catch-all
+// and by /lot/:id for unknown/invalid ids (which previously 302'd to /,
+// dropping sold-lot URLs out of the index).
+export function renderNotFoundHtml({ heading = 'Page not found', message = 'The page you’re after doesn’t exist or has moved.' } = {}) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${escHtml(heading)} | Auction Brain</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="/public/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/public/styles.css">
+</head>
+<body class="lot-detail-page">
+<nav class="lot-detail-nav" aria-label="Main navigation">
+  <a href="/" class="logo">Auction <span>Brain</span></a>
+  <a href="/" class="nav-back">← Browse all lots</a>
+</nav>
+<main class="lot-detail-main">
+  <article class="lot-detail-card">
+    <div class="lot-detail-body">
+      <h1 class="lot-detail-address">${escHtml(heading)}</h1>
+      <p>${escHtml(message)}</p>
+      <div class="lot-detail-ctas">
+        <a class="cta-primary" href="/">Browse every UK auction lot</a>
+        <a class="cta-secondary" href="/check">Check bridging finance</a>
+      </div>
+    </div>
+  </article>
+</main>
+</body>
+</html>`;
+}
+
 // ── Value-estimator section ─────────────────────────────────────────
 // Renders the "Estimated value" block on /lot/:id pages. Returns '' when
 // no estimate exists so the rest of the page renders cleanly.
