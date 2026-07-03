@@ -2650,7 +2650,7 @@ function getFundabilityBadgeHtml(lot) {
   if (f.lenderCount > 0) {
     // Track badge shown
     if (typeof umami !== 'undefined') try { umami.track('fundability_badge_shown', { lot_id: lot._idx, lender_count: f.lenderCount }); } catch {}
-    return '<a href="' + esc(f.bridgematchUrl) + '" target="_blank" rel="noopener" class="fundability-badge" onclick="event.stopPropagation();if(typeof umami!==\'undefined\')try{umami.track(\'fundability_badge_clicked\',{lot_id:' + lot._idx + ',lender_count:' + f.lenderCount + '});umami.track(\'bridge_to_bridgematch\');}catch(e){}" title="Check bridging finance options on BridgeMatch">' +
+    return '<a href="' + esc(f.bridgematchUrl) + '" target="_blank" rel="noopener" class="fundability-badge" onclick="event.stopPropagation();this.href=_bmHref(' + lot._idx + ',\'lot_badge\');if(typeof umami!==\'undefined\')try{umami.track(\'fundability_badge_clicked\',{lot_id:' + lot._idx + ',lender_count:' + f.lenderCount + '});umami.track(\'bridge_to_bridgematch\');}catch(e){}" title="Check bridging finance options on BridgeMatch">' +
       f.lenderCount + ' lender' + (f.lenderCount !== 1 ? 's' : '') + ' can fund this</a>';
   }
   if (f.lenderCount === 0) {
@@ -3336,6 +3336,28 @@ function scoreBadgeKind(s) {
   return '';
 }
 
+// BridgeMatch deep-link attribution (Phase 3): the base bridgematchUrl is
+// cached server-side per DEAL SHAPE (lots with the same price/type share
+// one URL), so per-lot attribution is appended here at click time —
+// lot_ref + utm_campaign=lot_<uuid> land in BridgeMatch's lead record, and
+// click_id is minted fresh per click so each handoff is distinguishable.
+// Wired as onclick="this.href=_bmHref(idx)": mutating href inside onclick
+// happens before the browser follows the link, and modified clicks
+// (ctrl/cmd/shift) fire onclick too, so new-tab opens carry attribution.
+function _bmHref(idx, medium) {
+  var l = LOTS[idx] || {};
+  var base = (l.fundability && l.fundability.bridgematchUrl) || ('/check?lot=' + idx);
+  if (!l._dbId || base.indexOf('bridgematch.co.uk') === -1) return base;
+  try {
+    var u = new URL(base);
+    u.searchParams.set('utm_campaign', 'lot_' + l._dbId);
+    u.searchParams.set('utm_medium', medium || 'lot_card');
+    u.searchParams.set('lot_ref', l._dbId);
+    u.searchParams.set('click_id', 'c_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
+    return u.href;
+  } catch (e) { return base; }
+}
+
 // Card-address click intercept: keep the inline expand on plain click, but
 // let modified clicks (new tab) and crawlers use the real /lot/:id href.
 function _cardAddrClick(ev, idx) {
@@ -3530,7 +3552,7 @@ function card(l){
     : '/check?lot=' + esc(idx);
   const footerHtml = '<div class="lcv2-foot">' +
     '<a class="view" href="' + viewHref + '" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">View lot <span class="arr">↗</span></a>' +
-    '<a class="bm card-bm-btn" href="' + bmHref + '" onclick="event.stopPropagation()">BridgeMatch it £ <span class="arr">→</span></a>' +
+    '<a class="bm card-bm-btn" href="' + bmHref + '" onclick="event.stopPropagation();this.href=_bmHref(' + idx + ')">BridgeMatch it £ <span class="arr">→</span></a>' +
   '</div>';
 
   // Stacks tick
@@ -5040,7 +5062,7 @@ function buildExpV2Fundability(lot) {
     '<div class="body" id="lender-summary-' + lot._idx + '">' +
       '<div class="fund-row"><span class="lbl">Bridging matches</span>' + countDisplay + '</div>' +
       (statusHtml ? '<div style="margin:10px 0">' + statusHtml + '</div>' : '') +
-      '<a href="' + bmUrl + '" target="_blank" rel="noopener noreferrer" class="btn-ed" style="width:100%;justify-content:space-between;background:var(--paper);color:var(--ink);border-color:var(--ink)">See all matches on BridgeMatch <span class="arr">→</span></a>' +
+      '<a href="' + bmUrl + '" target="_blank" rel="noopener noreferrer" class="btn-ed" onclick="var h=_bmHref(' + lot._idx + ',\'lot_panel\');if(h.indexOf(\'bridgematch.co.uk\')!==-1)this.href=h" style="width:100%;justify-content:space-between;background:var(--paper);color:var(--ink);border-color:var(--ink)">See all matches on BridgeMatch <span class="arr">→</span></a>' +
     '</div>' +
     quoteCta +
   '</div>';

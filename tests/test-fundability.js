@@ -188,7 +188,8 @@ const deal = {
   geography: 'England',
 };
 const bmUrl = buildBridgematchUrl(deal);
-assert(bmUrl.startsWith('https://www.bridgematch.co.uk/check?'), 'URL starts with BridgeMatch check page');
+// /apply since 2026-07-03 — the /check path 404s live on www.bridgematch.co.uk.
+assert(bmUrl.startsWith('https://www.bridgematch.co.uk/apply?'), 'URL starts with BridgeMatch apply page');
 assert(bmUrl.includes('purchase_price=200000'), 'includes purchase_price');
 assert(bmUrl.includes('property_type=residential'), 'includes property_type');
 assert(bmUrl.includes('loan_amount=140000'), 'includes loan_amount');

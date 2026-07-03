@@ -17,6 +17,7 @@
 import { Router } from 'express';
 import { supabase } from '../lib/supabase.js';
 import { LOTS_SELECT, dbRowToLot } from '../lib/types/lot.js';
+import { mapLotToDeal, buildBridgematchUrl, withLotAttribution } from '../lib/fundability.js';
 import { getHouseDisplayName } from '../lib/houses.js';
 import { log } from '../lib/logging.js';
 import {
@@ -119,13 +120,28 @@ router.get('/lot/:id', async (req, res) => {
     } : {}),
   };
 
+  // Lot-contextual finance CTA (Phase 3): a deep link into BridgeMatch's
+  // /apply form pre-filled with THIS lot's deal shape, attributed via
+  // lot_ref + utm_campaign=lot_<uuid> so the resulting lead is provably
+  // from this lot. Pure URL construction — no API call on the page render.
+  // No click_id here: the page is CDN-cached, so a server-minted id would
+  // be shared across viewers and lie about click identity.
+  let financeUrl = null;
+  if (lot.price) {
+    try {
+      financeUrl = withLotAttribution(buildBridgematchUrl(mapLotToDeal(lot)), {
+        lotRef: id, medium: 'lot_page',
+      });
+    } catch { /* CTA falls back to /check */ }
+  }
+
   res.set('Cache-Control', 'public, max-age=300, s-maxage=900');
   res.type('html').send(renderLotHtml({
     title, description, canonical, ogImage, jsonLd,
     shortAddress, priceLabel, scoreLabel, propTypeLabel, displayName,
     address: lot.address, opps, risks, bullets, heroImg,
     lotUrl: lot.url, status: lot.status,
-    valueEstimate: ve,
+    valueEstimate: ve, financeUrl,
   }));
 });
 
