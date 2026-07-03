@@ -3,11 +3,15 @@ node_modules/
 .env.*
 .vercel/
 
-# Claude Code / internal — ignore everything except shared skills.
-# The self-healing skill is the canonical playbook for the auction pipeline
-# and must propagate across worktrees / sessions, so it is tracked in git.
+# Claude Code / internal — ignore everything except shared automations.
+# Skills, hooks, agents and the shared settings.json are canonical project
+# tooling and must propagate across worktrees / sessions, so they are
+# tracked in git. settings.local.json (personal permissions) stays ignored.
 .claude/*
 !.claude/skills/
+!.claude/hooks/
+!.claude/agents/
+!.claude/settings.json
 
 # Ruflo / claude-flow local state (auto-generated)
 .claude-flow/
