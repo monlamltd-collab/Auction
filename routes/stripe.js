@@ -100,16 +100,21 @@ router.post('/webhook', async (req, res) => {
     return res.status(400).send('Webhook signature verification failed');
   }
 
-  // Idempotency: skip already-processed events
-  const { data: existingEvent } = await supabase
+  // Idempotency: CLAIM the event by inserting first — the unique constraint
+  // is the lock. The old select-then-process left a race window where two
+  // concurrent deliveries of the same event both passed the select and both
+  // processed (double payment rows / tier grants). 23505 = another delivery
+  // already claimed it (Phase 5 review).
+  const { error: claimErr } = await supabase
     .from('processed_webhook_events')
-    .select('event_id')
-    .eq('event_id', event.id)
-    .maybeSingle();
-
-  if (existingEvent) {
-    log.info(`Webhook event ${event.id} already processed, skipping`);
-    return res.json({ received: true, duplicate: true });
+    .insert({ event_id: event.id, processed_at: new Date().toISOString() });
+  if (claimErr) {
+    if (claimErr.code === '23505') {
+      log.info(`Webhook event ${event.id} already processed, skipping`);
+      return res.json({ received: true, duplicate: true });
+    }
+    log.error('Webhook claim insert failed', { error: claimErr.message, eventId: event.id });
+    return res.status(500).json({ error: 'Webhook claim failed' }); // Stripe retries
   }
 
   // When Stripe is hibernated, only process subscription deletions (for cancellation confirmations)
@@ -266,16 +271,11 @@ router.post('/webhook', async (req, res) => {
     }
   } catch (err) {
     log.error('Stripe webhook handler error', { error: err.message, eventType: event.type });
+    // Release the claim so Stripe's retry can reprocess — otherwise the
+    // failed event would be permanently marked processed and lost.
+    await supabase.from('processed_webhook_events').delete().eq('event_id', event.id);
     return res.status(500).json({ error: 'Webhook handler failed' });
   }
-
-  // Record event as processed (upsert handles race conditions)
-  await supabase
-    .from('processed_webhook_events')
-    .upsert(
-      { event_id: event.id, processed_at: new Date().toISOString() },
-      { onConflict: 'event_id', ignoreDuplicates: true }
-    );
 
   // Periodic cleanup: delete processed webhook events older than 7 days (every 100th webhook)
   webhookEventCounter++;

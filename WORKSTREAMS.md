@@ -57,14 +57,14 @@ Leads pay at hundreds of users; ads need ~50k sessions/month.
 - **Saved-search alerts are free** (`feature/free-alerts`): the server-side Pro gate is gone — every tier with `notify_email=true` gets the daily 08:00 alert. Pro's edge is depth: free emails show the top 5 matches + a view-all link (+ upgrade hint on overflow), Pro shows up to 10. Tier flows `runSavedSearchAlertsCycle → renderAlertEmail({tier})`.
 - Umami gaps closed: `saved_search_created` event added; fundability badge + finance-click events now carry the lot UUID (`_dbId`) instead of the render-order array index, so events are joinable across sessions.
 
-### Phase 5 — Harden for the traffic (2026-06-10 robustness review)
+### Phase 5 — Harden for the traffic — **SHIPPED 2026-07-04** (`fix/traffic-hardening`)
 
-- `/api/analyse` cost amplification: abort on client disconnect, key limits on user id not just IP, cap per-call enrichment fan-out (`routes/analyse.js:35`).
-- Smart-search cache key omits `location` → cross-user wrong results (`routes/search.js:547`). One-line fix.
-- Add `Cache-Control` to anonymous `/api/all-lots` (ETag-only today; every visitor hits origin — `routes/search.js:1597`).
-- Express error middleware + Sentry error handler + `unhandledRejection` hook — **done 2026-06-10**; what remains is asyncHandler wrapping so async route rejections return JSON errors instead of hanging the request.
-- Stripe webhook idempotency race: insert `processed_webhook_events` first, bail on `23505` (`routes/stripe.js:104`).
-- Per-instance in-memory caches/rate-limits are fine at one web instance; add shared invalidation before scaling out (`lib/auth.js:113`, `server.js:831` TODO).
+- `/api/analyse` cost amplification: aborts at phase boundaries on client disconnect; rate limit keyed on `u:<user.id>` (IP keeps a 3× backstop ceiling — same `rate_limits` table/RPC); per-lot detail fetch fan-out capped at 30 on the user path (cron keeps 80).
+- Smart-search cache key now includes the UI location filter — the omission served one user's location-scoped results to another user's identical query.
+- Anonymous `/api/all-lots` gets `Cache-Control: public, max-age=120, s-maxage=300, stale-while-revalidate=600` (+`Vary: Authorization`); signed-in stays `private, no-cache`.
+- `lib/async-handler.js` + wrapped the public async routes whose pre-try sections could hang on rejection (`/api/analyse`, `/api/lot`, `/api/smart-search`, `/lot/:id`, `/og/lot/:id.png`). Delete the helper on Express 5.
+- Stripe webhook idempotency: insert-first claim on `processed_webhook_events` (23505 = duplicate delivery), claim released on handler failure so Stripe's retry reprocesses. **Discovered: the table never existed in prod** — the old select/upsert failed silently, so idempotency had never worked. Created via `migrations/2026-07-04-processed-webhook-events.sql` — **APPLIED to prod 2026-07-04**.
+- Still open (pre-scale-out, not launch-blocking): shared cache invalidation across web instances (`lib/auth.js`, `server.js` TODO).
 
 ### Phase 6 — Monetise breadth (after Phases 1–3 prove traffic + lead value)
 
