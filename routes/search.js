@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { asyncHandler } from '../lib/async-handler.js';
 import { supabase } from '../lib/supabase.js';
 import { validateUserFromReq, rateLimit, getClientIP, safeCompare } from '../lib/auth.js';
 import { log } from '../lib/logging.js';
@@ -402,7 +403,10 @@ async function getActiveCataloguesWithFallback() {
   return { rows: [...merged.values()], error: null, fromFallback: usedFallback };
 }
 
-router.post('/api/smart-search', async (req, res) => {
+// asyncHandler: the pre-try section (auth + rate limiting + location parse)
+// runs outside the handler's own try/catch — a rejection there previously
+// hung the request (Phase 5).
+router.post('/api/smart-search', asyncHandler(async (req, res) => {
   const { query, soldFilter, location } = req.body || {};
   if (!query) return res.status(400).json({ error: 'Missing search query' });
 
@@ -544,7 +548,11 @@ router.post('/api/smart-search', async (req, res) => {
   const sf = soldFilter || 'all';
 
   // ── Smart search cache: return cached result for identical queries ──
-  const _smCacheKey = (query.toLowerCase().trim() + '|' + sf).trim();
+  // The key MUST include the UI location filter — it shapes the result set,
+  // and omitting it served one user's Bristol-scoped results to another
+  // user's identical query scoped to Leeds (Phase 5 review, cross-user bug).
+  const _smLocKey = uiLoc ? JSON.stringify(uiLoc) : '';
+  const _smCacheKey = (query.toLowerCase().trim() + '|' + sf + '|' + _smLocKey).trim();
   const _smCached = _smartSearchCache.get(_smCacheKey);
   if (_smCached && (Date.now() - _smCached.timestamp) < SMART_CACHE_TTL) {
     await incrementSearchCounter();
@@ -1003,7 +1011,7 @@ Pick the indices of lots that genuinely match the user's INTENT — quality over
     }
     return res.status(500).json({ error: 'api_error', message: 'Smart search failed.', detail: msg, provider: process.env.AI_PROVIDER || 'gemini', tier: 'fast' });
   }
-});
+}));
 
 // ═══════════════════════════════════════════════════════════════
 // API: ALL LOTS — pre-load every cached lot for frontend filtering
@@ -1603,9 +1611,21 @@ router.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
     const isAdmin = process.env.ADMIN_SECRET && safeCompare(adminToken, process.env.ADMIN_SECRET);
     const isSignedIn = !!user || isAdmin;
 
+    // Anonymous responses are identical for everyone — let browsers/CDN
+    // hold them briefly instead of every visitor hitting origin (ETag alone
+    // still costs a full round-trip per page view; Phase 5 review). Signed-in
+    // responses stay private: the payload varies with tier/gating.
+    const setCacheHeaders = () => {
+      res.set('Cache-Control', isSignedIn
+        ? 'private, no-cache'
+        : 'public, max-age=120, s-maxage=300, stale-while-revalidate=600');
+      res.set('Vary', 'Authorization');
+    };
+
     const cacheKey = (isSignedIn ? 'signed' : 'anon') + ':' + (includePast ? 'past' : 'future');
     const hit = _allLotsCache.get(cacheKey);
     if (hit && (Date.now() - hit.ts) < ALL_LOTS_CACHE_TTL_MS) {
+      setCacheHeaders();
       if (req.headers['if-none-match'] === hit.etag) return res.status(304).end();
       res.set('ETag', hit.etag);
       return res.json(hit.body);
@@ -1614,6 +1634,7 @@ router.get('/api/all-lots', rateLimit(60000, 30), async (req, res) => {
     const { body, etag } = await buildAllLotsResponse({ isSignedIn, includePast });
     if (etag) _allLotsCache.set(cacheKey, { body, etag, ts: Date.now() });
 
+    setCacheHeaders();
     if (etag && req.headers['if-none-match'] === etag) return res.status(304).end();
     if (etag) res.set('ETag', etag);
     res.json(body);

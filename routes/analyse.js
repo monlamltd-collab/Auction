@@ -1,5 +1,6 @@
 // routes/analyse.js — Analyse catalogue route (extracted from server.js)
 import { Router } from 'express';
+import { asyncHandler } from '../lib/async-handler.js';
 import { supabase } from '../lib/supabase.js';
 import { validateUserFromReq, safeCompare, getClientIP } from '../lib/auth.js';
 import { validateUrl, safeFetch } from '../lib/security.js';
@@ -38,7 +39,10 @@ const RATE_LIMIT = RATE_LIMIT_PER_DAY;
 // ═══════════════════════════════════════════════════════════════
 // API: ANALYSE CATALOGUE
 // ═══════════════════════════════════════════════════════════════
-router.post('/api/analyse', async (req, res) => {
+// asyncHandler: the pre-SSE section (auth, rate limits, cache lookup) runs
+// outside the handler's try/catch — a rejection there previously hung the
+// request (Phase 5).
+router.post('/api/analyse', asyncHandler(async (req, res) => {
   const { url, budget, email } = req.body || {};
   if (!url) return res.status(400).json({ error: 'Missing url' });
 
@@ -55,27 +59,35 @@ router.post('/api/analyse', async (req, res) => {
   const scanCount = user.analyses_count || 0;
 
   // ── Rate limiting (admin bypass with ADMIN_SECRET header) ──
+  // Keyed on the USER first (Phase 5): IP alone false-429s offices/CGNAT
+  // sharing an address AND is trivially evaded by rotating IPs. The route
+  // requires sign-in, so the user id is always available; the rate_limits
+  // key column is text, so a `u:<id>` key shares the table + RPC. IP keeps
+  // a looser 3× ceiling as a mass-account backstop.
   const isAdmin = process.env.ADMIN_SECRET && safeCompare(req.headers['x-admin-secret'], process.env.ADMIN_SECRET);
   const ip = getClientIP(req);
   const today = new Date().toISOString().slice(0, 10);
 
-  // Atomic rate limit check: upsert+increment in one call via RPC, fallback to select
-  let currentRequests = 0;
-  try {
-    const { data: rateRow } = await supabase.rpc('increment_rate_limit', { p_ip: ip, p_date: today });
-    currentRequests = rateRow ?? 0;
-  } catch {
-    // Fallback if RPC not yet deployed: read then write (non-atomic)
-    const { data: rateRow } = await supabase
-      .from('rate_limits')
-      .select('requests')
-      .eq('ip', ip)
-      .eq('date', today)
-      .single();
-    currentRequests = rateRow?.requests ?? 0;
-  }
+  const countFor = async (key) => {
+    // Atomic upsert+increment via RPC, fallback to a read if not deployed
+    try {
+      const { data: n } = await supabase.rpc('increment_rate_limit', { p_ip: key, p_date: today });
+      return n ?? 0;
+    } catch {
+      const { data: rateRow } = await supabase
+        .from('rate_limits')
+        .select('requests')
+        .eq('ip', key)
+        .eq('date', today)
+        .single();
+      return rateRow?.requests ?? 0;
+    }
+  };
 
-  if (!isAdmin && currentRequests >= RATE_LIMIT) {
+  const userRequests = await countFor(`u:${user.id}`);
+  const ipRequests = await countFor(ip);
+
+  if (!isAdmin && (userRequests >= RATE_LIMIT || ipRequests >= RATE_LIMIT * 3)) {
     return res.status(429).json({
       error: 'rate_limited',
       message: `Daily limit reached (${RATE_LIMIT} analyses per day). Try again tomorrow.`
@@ -155,7 +167,22 @@ router.post('/api/analyse', async (req, res) => {
     'X-Accel-Buffering': 'no',
   });
 
+  // Cost-amplification guard (Phase 5): without this, N opened-and-dropped
+  // SSE connections each ran the FULL scrape → AI-extract → per-lot-fetch
+  // pipeline to completion for an audience of nobody. Checked at phase
+  // boundaries — mid-library aborts aren't feasible, but the boundaries
+  // bracket the expensive stages.
+  let clientGone = false;
+  res.on('close', () => { clientGone = true; });
+  const abortIfGone = (stage) => {
+    if (!clientGone) return false;
+    log.info('analyse: client disconnected — aborting', { stage, url });
+    try { res.end(); } catch { /* already closed */ }
+    return true;
+  };
+
   try {
+    if (abortIfGone('pre-scrape')) return;
     const house = detectAuctionHouse(url);
     const rewritten = await rewriteUrl(url, house);
     const scrapeUrl = rewritten.baseUrl;
@@ -303,6 +330,8 @@ router.post('/api/analyse', async (req, res) => {
       return res.end();
     }
 
+    if (abortIfGone('post-extraction')) return;
+
     sseWrite(res, 'phase', { step: 'scoring', lots: rawLots.length });
 
     const analysed = rawLots.map(lot => analyseLot(lot)).sort((a, b) => b.score - a.score);
@@ -314,9 +343,16 @@ router.post('/api/analyse', async (req, res) => {
       sseWrite(res, 'enrich', { postcodes: done, total });
     });
 
+    if (abortIfGone('post-enrich')) return;
+
     // ── Unified lot-page enrichment: single fetch per lot extracts all missing data ──
     // (address, image, tenure, leaseLength, condition, beds, propType)
-    await enrichLotsFromLotPages(analysed);
+    // Fan-out capped on this latency-sensitive user path (Phase 5) — the
+    // 80-fetch default belongs to the cron budget. Deferred lots persist
+    // with catalogue data; the overnight cycle gap-fills them.
+    await enrichLotsFromLotPages(analysed, { maxDetailFetches: 30 });
+
+    if (abortIfGone('post-lot-pages')) return;
 
     // ── Harness enrichment: gap-filling, cross-lot inference, cache carry-forward ──
     // Move 2: dual-read helper; no auctionId resolved here, legacy path fires.
@@ -438,7 +474,7 @@ router.post('/api/analyse', async (req, res) => {
     sseWrite(res, 'error', { message: 'Analysis failed' });
     return res.end();
   }
-});
+}));
 
 // ═══════════════════════════════════════════════════════════════
 // POST /api/lot — single-URL on-demand detail-page analysis
@@ -449,7 +485,7 @@ router.post('/api/analyse', async (req, res) => {
 // Uses DETAIL_EXTRACTORS for the detected house, then runs the lot through
 // enrichLots (EPC/flood/Land Registry/yield) before responding. Persists
 // to lot_details cache so subsequent requests for the same URL are free.
-router.post('/api/lot', async (req, res) => {
+router.post('/api/lot', asyncHandler(async (req, res) => {
   return withTier('on-demand', async () => {
   try {
     const { url } = req.body || {};
@@ -529,6 +565,6 @@ router.post('/api/lot', async (req, res) => {
     return res.status(500).json({ error: 'Internal error' });
   }
   }); // end withTier
-});
+}));
 
 export default router;

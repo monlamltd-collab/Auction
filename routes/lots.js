@@ -15,6 +15,7 @@
 // route handlers + the Supabase fetch.
 
 import { Router } from 'express';
+import { asyncHandler } from '../lib/async-handler.js';
 import { supabase } from '../lib/supabase.js';
 import { LOTS_SELECT, dbRowToLot } from '../lib/types/lot.js';
 import { mapLotToDeal, buildBridgematchUrl, withLotAttribution } from '../lib/fundability.js';
@@ -45,7 +46,7 @@ async function fetchLotById(id) {
 // ═══════════════════════════════════════════════════════════════
 // Lot detail page (HTML) — GET /lot/:id
 // ═══════════════════════════════════════════════════════════════
-router.get('/lot/:id', async (req, res) => {
+router.get('/lot/:id', asyncHandler(async (req, res) => {
   const { id } = req.params;
   // Real 404s (SEO Phase 1): the old 302-to-/ answered "gone" with a
   // redirect, which dropped sold-lot URLs from the index and read as a
@@ -143,7 +144,7 @@ router.get('/lot/:id', async (req, res) => {
     lotUrl: lot.url, status: lot.status,
     valueEstimate: ve, financeUrl,
   }));
-});
+}));
 
 // ═══════════════════════════════════════════════════════════════
 // OG image — GET /og/lot/:id.png
@@ -151,7 +152,7 @@ router.get('/lot/:id', async (req, res) => {
 // server boot doesn't pay the ~50ms native-binary load until the first
 // social bot crawls a deep link.
 // ═══════════════════════════════════════════════════════════════
-router.get('/og/lot/:id.png', async (req, res) => {
+router.get('/og/lot/:id.png', asyncHandler(async (req, res) => {
   const { id } = req.params;
   if (!UUID_RE.test(id)) {
     return res.redirect(302, '/public/og-image.png');
@@ -178,6 +179,6 @@ router.get('/og/lot/:id.png', async (req, res) => {
     log.error('og-image generation failed', { id, err: err.message });
     return res.redirect(302, '/public/og-image.png');
   }
-});
+}));
 
 export default router;
