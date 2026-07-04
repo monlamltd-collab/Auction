@@ -34,7 +34,7 @@ function assert(condition, msg) {
 }
 
 // ─── Import matchEPCToLot + read enrichment source for cache-pattern checks ───
-import { matchEPCToLot, normaliseEpcSearchRecord, parseEpcCertificate } from '../lib/enrichment.js';
+import { matchEPCToLot, normaliseEpcSearchRecord, parseEpcCertificate, canonPropertyType } from '../lib/enrichment.js';
 
 // Cache-pattern assertions below want to sanity-check that enrichment_cache is
 // still queried/deleted/TTL'd. Enrichment logic now lives in lib/enrichment.js
@@ -291,6 +291,20 @@ if (runUngated) {
     }
   }
   assert(!tierGated, 'Enrichment display code does not reference tier/premium checks');
+}
+
+// ─── canonPropertyType (postcode_sales vocabulary) ───
+{
+  console.log('\n=== canonPropertyType Tests ===');
+  assert(canonPropertyType('terraced') === 'Terraced', 'legacy lowercase terraced → Terraced');
+  assert(canonPropertyType('Terraced') === 'Terraced', 'canonical Terraced passes through');
+  assert(canonPropertyType('flat-maisonette') === 'Flat/Maisonette', 'legacy flat-maisonette → Flat/Maisonette');
+  assert(canonPropertyType('Flat/Maisonette') === 'Flat/Maisonette', 'canonical Flat/Maisonette passes through');
+  assert(canonPropertyType('semi-detached') === 'Semi-Detached', 'legacy semi-detached → Semi-Detached');
+  assert(canonPropertyType('OTHER') === 'Other', 'case-insensitive lookup');
+  assert(canonPropertyType('Bungalow') === 'Bungalow', 'unknown value passes through untouched');
+  assert(canonPropertyType(null) === null, 'null stays null');
+  assert(canonPropertyType('') === null, 'empty string → null');
 }
 
 // ─── Summary ───
