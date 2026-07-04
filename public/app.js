@@ -544,6 +544,7 @@ async function saveCurrentSearch() {
     const d = await r.json();
     if (d.error) { alert(d.error); return; }
     if (d.search) _savedSearches.unshift(d.search);
+    if (typeof umami !== 'undefined') try { umami.track('saved_search_created', { has_filters: hasFilter }); } catch (e) {}
     renderSavedSearchChips();
   } catch (e) {
     console.warn('Save search failed:', e);
@@ -2649,8 +2650,11 @@ function getFundabilityBadgeHtml(lot) {
   const f = lot.fundability;
   if (f.lenderCount > 0) {
     // Track badge shown
-    if (typeof umami !== 'undefined') try { umami.track('fundability_badge_shown', { lot_id: lot._idx, lender_count: f.lenderCount }); } catch {}
-    return '<a href="' + esc(f.bridgematchUrl) + '" target="_blank" rel="noopener" class="fundability-badge" onclick="event.stopPropagation();this.href=_bmHref(' + lot._idx + ',\'lot_badge\');if(typeof umami!==\'undefined\')try{umami.track(\'fundability_badge_clicked\',{lot_id:' + lot._idx + ',lender_count:' + f.lenderCount + '});umami.track(\'bridge_to_bridgematch\');}catch(e){}" title="Check bridging finance options on BridgeMatch">' +
+    // lot_id is the DB UUID (not the render-order array index, which changes
+    // with every filter/sort and made events unjoinable across sessions).
+    const lotIdForEvents = lot._dbId || String(lot._idx);
+    if (typeof umami !== 'undefined') try { umami.track('fundability_badge_shown', { lot_id: lotIdForEvents, lender_count: f.lenderCount }); } catch {}
+    return '<a href="' + esc(f.bridgematchUrl) + '" target="_blank" rel="noopener" class="fundability-badge" onclick="event.stopPropagation();this.href=_bmHref(' + lot._idx + ',\'lot_badge\');if(typeof umami!==\'undefined\')try{umami.track(\'fundability_badge_clicked\',{lot_id:\'' + esc(lotIdForEvents) + '\',lender_count:' + f.lenderCount + '});umami.track(\'bridge_to_bridgematch\');}catch(e){}" title="Check bridging finance options on BridgeMatch">' +
       f.lenderCount + ' lender' + (f.lenderCount !== 1 ? 's' : '') + ' can fund this</a>';
   }
   if (f.lenderCount === 0) {
@@ -6054,9 +6058,9 @@ function bridgeMatchLot(idx, event) {
   const lot = LOTS.find(l => l._idx === idx);
   if (!lot) return;
   if (window.umami) umami.track('finance_click', {
-    lot_number: lot.lot || '', house: lot._house || '', guide_price: lot.price || 0
+    lot_id: lot._dbId || '', lot_number: lot.lot || '', house: lot._house || '', guide_price: lot.price || 0
   });
-  fetch('/api/track/event', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action:'bridgematch_open', detail:{lot_number: lot.lot||'', house: lot._house||'', guide_price: lot.price||0}})}).catch(function(){});
+  fetch('/api/track/event', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action:'bridgematch_open', detail:{lot_id: lot._dbId||'', lot_number: lot.lot||'', house: lot._house||'', guide_price: lot.price||0}})}).catch(function(){});
 
   const isExpanded = expandedLotId === idx;
   if (!isExpanded) {

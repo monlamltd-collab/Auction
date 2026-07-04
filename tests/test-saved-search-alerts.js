@@ -153,10 +153,17 @@ console.log('\nTest 12: renderAlertEmail');
   const out2 = renderAlertEmail({ searchName: 'X', matches: [baseLot, baseLot, baseLot] });
   assert(out2.subject.startsWith('3 new lots'), 'plural for >1');
 
-  // 11 matches → first 10 cards + an overflow line
+  // Tier-scaled depth (2026-07-04: alerts free for all; Pro = full depth).
+  // 11 matches → free shows 5 cards + overflow + upgrade hint; Pro shows 10.
   const many = Array.from({ length: 11 }, (_, i) => ({ ...baseLot, id: 'b9b0f77e-0001-0000-0000-' + String(i).padStart(12, '0') }));
-  const out3 = renderAlertEmail({ searchName: 'X', matches: many });
-  assert(out3.html.includes('and 1 more matches'), 'overflow indicator at 11+');
+  const freeOut = renderAlertEmail({ searchName: 'X', matches: many });
+  assert(freeOut.html.includes('and 6 more matches'), 'free tier (default) caps at 5 cards');
+  assert(freeOut.html.includes('Pro members get every match'), 'free overflow carries the upgrade hint');
+  const proOut = renderAlertEmail({ searchName: 'X', matches: many, tier: 'premium' });
+  assert(proOut.html.includes('and 1 more matches'), 'premium caps at 10 cards');
+  assert(!proOut.html.includes('Pro members get every match'), 'no upgrade hint for premium');
+  const fewOut = renderAlertEmail({ searchName: 'X', matches: [baseLot, baseLot] });
+  assert(!fewOut.html.includes('more matches'), 'no overflow line under the cap');
 }
 
 // ── Test 13: subject + html escape user-controlled name ──
