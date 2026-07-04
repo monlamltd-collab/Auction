@@ -26,15 +26,17 @@ Earlier noise (May–June 2026): `house_merger_suspected` /
 `house_url_drift_detected` / `url_healed` loops — all artefacts of pointing a
 per-agent slug at a platform domain. 54 alerts bulk-resolved 2026-07-04.
 
-## Open decision (proposed 2026-07-04, awaiting owner)
+## Decision — RETIRED (owner-approved, executed 2026-07-04)
 
-Retire the `wrightmarshall` slug (add to `RETIRED_HOUSES`, delete/reattribute
-its 7 stale lot rows, retire its calendar row) and let its occasional auction
-lots flow through the `iamsold` platform slug like other iamSold partners —
-**provided** iamsold's `/available-properties/` catalogue lists partner-agent
-lots (verify against the live page before deleting anything). Until then the
-daily `house_went_dark` + `house_unscheduled` noise for this slug should be
-read as known-state.
+The slug was retired: added to `RETIRED_HOUSES`, removed from `HOUSE_ROOTS`,
+detection + display name + `FALLBACK_CALENDAR` entry + recall sentinel
+removed; its 7 stale lot rows, calendar row, and cached_analyses purged from
+the DB. The dormancy reconcile stamps `house_skills.dormant=true` on next
+boot. Occasional Wright Marshall auction lots flow via the `iamsold`
+platform slug like other iamSold partners (davidjames, driversnorris).
+The Hermes `house_went_dark` rule was simultaneously tuned to require a
+recent probe (≤7d), so frozen slugs of this class can no longer re-fire
+(migrations/2026-07-04-hermes-hwd-recent-probe.sql).
 
 ## Standing guidance
 
