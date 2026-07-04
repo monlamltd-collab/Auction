@@ -73,11 +73,14 @@ router.get('/lot/:id', asyncHandler(async (req, res) => {
   const propTypeLabel = lot.propType || 'Property';
 
   // Description for meta + OG. Limited to ~155 chars so search engines don't
-  // truncate it.
+  // truncate it. Prefer the source-site narrative (lots.description) — real
+  // prose makes a far better search snippet than the price/type fallback.
   const descParts = [priceLabel, propTypeLabel];
   if (scoreLabel) descParts.push(`Score ${scoreLabel}`);
   descParts.push(displayName);
-  const description = descParts.join(' · ').slice(0, 155);
+  const description = (lot.description
+    ? lot.description.replace(/\s+/g, ' ').trim().slice(0, 155)
+    : descParts.join(' · ').slice(0, 155));
 
   const title = `${shortAddress} — ${priceLabel} | Auction Brain`;
   const canonical = `${SITE_ORIGIN}/lot/${id}`;
@@ -140,7 +143,7 @@ router.get('/lot/:id', asyncHandler(async (req, res) => {
   res.type('html').send(renderLotHtml({
     title, description, canonical, ogImage, jsonLd,
     shortAddress, priceLabel, scoreLabel, propTypeLabel, displayName,
-    address: lot.address, opps, risks, bullets, heroImg,
+    address: lot.address, opps, risks, bullets, narrative: lot.description || null, heroImg,
     lotUrl: lot.url, status: lot.status,
     valueEstimate: ve, financeUrl,
   }));

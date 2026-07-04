@@ -4778,7 +4778,7 @@ function buildExpV2Header(lot, dealStackHtmlRef) {
         '<div class="eyebrow">' + esc(eyebrow) + '</div>' +
         '<h1>' + esc(parsed.addr) + '</h1>' +
         (parsed.pc ? '<div class="pc">' + esc(parsed.pc) + '</div>' : '') +
-        (description ? '<p class="desc">' + esc(description) + '</p>' : '') +
+        buildLotDescHtml(description) +
       '</div>' +
       '<div class="right">' +
         '<div>' +
@@ -4790,6 +4790,32 @@ function buildExpV2Header(lot, dealStackHtmlRef) {
       '</div>' +
     '</div>' +
   '</div>';
+}
+
+// Narrative block for the expanded-panel header. The narrative sweep stores
+// multi-paragraph source-site descriptions (paragraphs separated by blank
+// lines); render them as real <p> elements, clamped to ~6 lines with a
+// Read-more toggle when there's more than a screenful. Short single-line
+// descriptions (legacy bullets fallback) render exactly as before.
+function buildLotDescHtml(description) {
+  if (!description) return '';
+  const paras = String(description).split(/\n\n+/).map(function (p) { return p.trim(); }).filter(Boolean);
+  const inner = paras.map(function (p) { return '<p>' + esc(p) + '</p>'; }).join('');
+  const needsClamp = description.length > 420 || paras.length > 3;
+  if (!needsClamp) return '<div class="desc">' + inner + '</div>';
+  return '<div class="desc desc-clamp">' + inner + '</div>' +
+    '<button class="desc-toggle" type="button" onclick="toggleLotDesc(this)" aria-expanded="false">Read full description</button>';
+}
+
+// Read-more toggle for the narrative block. The clamped div sits immediately
+// before the button; flip the clamp class and the label in place.
+function toggleLotDesc(btn) {
+  const desc = btn.previousElementSibling;
+  if (!desc) return;
+  const expanded = desc.classList.toggle('desc-expanded');
+  desc.classList.toggle('desc-clamp', !expanded);
+  btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+  btn.textContent = expanded ? 'Show less' : 'Read full description';
 }
 
 function buildExpV2DD(lot) {

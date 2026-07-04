@@ -1212,6 +1212,18 @@ footer .logo-f span{color:var(--green)}
   font-family:var(--font-display);font-size:17px;line-height:1.55;color:var(--ink-2);
   max-width:520px;margin-top:18px
 }
+.exp-v2 .exp-v2-header .left .desc p{margin:0 0 10px}
+.exp-v2 .exp-v2-header .left .desc p:last-child{margin-bottom:0}
+/* Narrative clamp: ~6 lines visible, Read-more expands in place */
+.exp-v2 .exp-v2-header .left .desc.desc-clamp{
+  display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden
+}
+.exp-v2 .exp-v2-header .left .desc-toggle{
+  margin-top:8px;padding:0;border:none;background:none;cursor:pointer;
+  font-family:var(--font-mono);font-size:12px;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--accent);transition:all .15s
+}
+.exp-v2 .exp-v2-header .left .desc-toggle:hover{color:var(--accent-hover);text-decoration:underline}
 .exp-v2 .exp-v2-header .right{
   padding:26px;background:var(--bg-2);border-left:1px solid var(--border-strong);
   display:flex;flex-direction:column;justify-content:space-between;gap:18px
@@ -2134,6 +2146,15 @@ footer .logo-f span{color:var(--green)}
   line-height: 1.6;
 }
 .lot-bullets li { margin-bottom: 4px; }
+
+.lot-narrative {
+  font-size: 15px;
+  color: #1a2a3a;
+  line-height: 1.65;
+  max-width: 640px;
+}
+.lot-narrative p { margin: 0 0 12px; }
+.lot-narrative p:last-child { margin-bottom: 0; }
 
 .lot-detail-ctas {
   display: flex;

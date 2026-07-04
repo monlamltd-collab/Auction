@@ -140,9 +140,16 @@ export function renderOgSvg({ priceLabel, scoreLabel, shortAddress, displayName,
 export function renderLotHtml({
   title, description, canonical, ogImage, jsonLd,
   shortAddress, priceLabel, scoreLabel, propTypeLabel, displayName,
-  address, opps, risks, bullets, heroImg, lotUrl, status,
+  address, opps, risks, bullets, narrative, heroImg, lotUrl, status,
   valueEstimate, financeUrl,
 }) {
+  // Source-site narrative (lots.description) as real paragraphs — indexable
+  // prose that makes the page a genuine listing rather than a data stub.
+  const narrativeHtml = narrative
+    ? `<div class="lot-narrative">${String(narrative).split(/\n\n+/)
+        .map(p => p.trim()).filter(Boolean)
+        .map(p => `<p>${escHtml(p)}</p>`).join('')}</div>`
+    : '';
   const oppsHtml = opps.length
     ? `<ul class="lot-tags">${opps.map(o => `<li class="tag tag-opp">${escHtml(o)}</li>`).join('')}</ul>`
     : '';
@@ -210,6 +217,7 @@ export function renderLotHtml({
         <span class="lot-detail-price">${escHtml(priceLabel)}</span>
         ${scoreLabel ? `<span class="lot-detail-score">Score <strong>${escHtml(scoreLabel)}</strong></span>` : ''}
       </div>
+      ${narrativeHtml ? `<section class="lot-section"><h2>Description</h2>${narrativeHtml}</section>` : ''}
       ${oppsHtml ? `<section class="lot-section"><h2>Opportunities</h2>${oppsHtml}</section>` : ''}
       ${risksHtml ? `<section class="lot-section"><h2>Risks</h2>${risksHtml}</section>` : ''}
       ${bulletsHtml ? `<section class="lot-section"><h2>Lot details</h2>${bulletsHtml}</section>` : ''}
