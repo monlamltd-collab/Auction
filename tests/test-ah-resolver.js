@@ -41,7 +41,9 @@ console.log('Test 1: AH_PLATFORM_SLUGS membership matches HOUSE_ROOTS');
     assert(AH_PLATFORM_SLUGS.has(slug), `${slug} present in AH_PLATFORM_SLUGS`);
   }
   // Spot-check a few critical ones
-  assert(AH_PLATFORM_SLUGS.has('auctionhousewestmidlands'), 'westmidlands in set (Simon\'s alert)');
+  // (westmidlands — the original "Simon's alert" case — retired 2026-07-05; its
+  // successor branch /midlands/ carries the spot-check now)
+  assert(AH_PLATFORM_SLUGS.has('auctionhousemidlands'), 'midlands in set (westmidlands successor)');
   assert(AH_PLATFORM_SLUGS.has('auctionhouse'), '/online slug in set');
   assert(AH_PLATFORM_SLUGS.has('auctionhousenational'), '/national slug in set');
   assert(AH_PLATFORM_SLUGS.has('austingray'), 'austingray (sussexandhampshire) in set');
@@ -56,12 +58,12 @@ console.log('\nTest 2: parseAhFutureDates — /<region>/auction/lots/<id> form')
 | Branch | Date | View |
 | Auction House Birmingham | 10/06/2026 | [View Lots](/birmingham/auction/lots/9328) |
 | Auction House South West | 17/06/2026 | [View Lots](/southwest/auction/lots/9064) |
-| Auction House West Midlands | 18/06/2026 | [View Lots](/westmidlands/auction/lots/1234) |
+| Auction House Midlands | 18/06/2026 | [View Lots](/midlands/auction/lots/1234) |
 `;
   const out = parseAhFutureDates(md);
   assert(out.get('auctionhousebirmingham') === 'https://www.auctionhouse.co.uk/birmingham/auction/lots/9328', 'birmingham mapped');
   assert(out.get('auctionhousesouthwest') === 'https://www.auctionhouse.co.uk/southwest/auction/lots/9064', 'southwest mapped');
-  assert(out.get('auctionhousewestmidlands') === 'https://www.auctionhouse.co.uk/westmidlands/auction/lots/1234', 'westmidlands mapped (Simon\'s case)');
+  assert(out.get('auctionhousemidlands') === 'https://www.auctionhouse.co.uk/midlands/auction/lots/1234', 'midlands mapped (westmidlands successor)');
 }
 
 // ── Test 3: parseAhFutureDates handles date form /<region>/auction/yyyy/mm/dd ──
@@ -142,15 +144,17 @@ console.log('\nTest 11: fetchAhFutureDates — fetch throws');
 // ── Test 12: auditHouseHomepage AH short-circuit — map hit, URLs match ──
 console.log('\nTest 12: auditHouseHomepage — AH slug, map hit, no drift');
 {
+  // fixture must be a LIVE AH branch — retired slugs (e.g. westmidlands, retired
+  // 2026-07-05) short-circuit to a null audit before the resolver runs
   const ahMap = new Map([
-    ['auctionhousewestmidlands', 'https://www.auctionhouse.co.uk/westmidlands/auction/search-results'],
+    ['auctionhouseessex', 'https://www.auctionhouse.co.uk/essex/auction/search-results'],
   ]);
   const r = await auditHouseHomepage(
-    'auctionhousewestmidlands',
-    'https://www.auctionhouse.co.uk/westmidlands/auction/search-results',
+    'auctionhouseessex',
+    'https://www.auctionhouse.co.uk/essex/auction/search-results',
     { ahMap, prev: { last_change_status: 'same', consecutive_unchanged: 1 } }
   );
-  assert(r.audit.currentCatalogueUrl.includes('/westmidlands/'), 'uses resolver URL');
+  assert(r.audit.currentCatalogueUrl.includes('/essex/'), 'uses resolver URL');
   assert(r.decision.verdict === VERDICTS.RECORD_ONLY, 'record_only when resolver matches configured');
   assert(r.decision.shouldAlert === false, 'no alert');
   assert(r.homepage === AH_FUTURE_DATES_URL, 'audit attributed to future-auction-dates page');
@@ -179,8 +183,8 @@ console.log('\nTest 14: auditHouseHomepage — AH slug, not in map (no upcoming)
     ['auctionhousebirmingham', 'https://www.auctionhouse.co.uk/birmingham/auction/lots/1'],
   ]);
   const r = await auditHouseHomepage(
-    'auctionhousewestmidlands',
-    'https://www.auctionhouse.co.uk/westmidlands/auction/search-results',
+    'auctionhousemanchester',
+    'https://www.auctionhouse.co.uk/manchester/auction/search-results',
     { ahMap, prev: { last_change_status: 'same' } }
   );
   // Configured URL treated as authoritative when no upcoming → no drift fires
@@ -192,8 +196,8 @@ console.log('\nTest 14: auditHouseHomepage — AH slug, not in map (no upcoming)
 console.log('\nTest 15: auditHouseHomepage — AH slug, resolver null (skip cycle)');
 {
   const r = await auditHouseHomepage(
-    'auctionhousewestmidlands',
-    'https://www.auctionhouse.co.uk/westmidlands/auction/search-results',
+    'auctionhousemanchester',
+    'https://www.auctionhouse.co.uk/manchester/auction/search-results',
     { ahMap: null, prev: { last_change_status: 'same' } }
   );
   assert(r.decision.verdict === VERDICTS.AH_RESOLVER_UNAVAILABLE, 'AH_RESOLVER_UNAVAILABLE verdict');
