@@ -281,6 +281,7 @@ import { initCompanies } from './lib/land-registry-companies.js';
 import { sweepPostAuctionStatuses } from './lib/pipeline/post-auction-sweep.js';
 import { sweepSameDayStatuses } from './lib/pipeline/same-day-sweep.js';
 import { sweepMultiImages } from './lib/pipeline/multi-image-sweep.js';
+import { sweepNarratives } from './lib/pipeline/narrative-sweep.js';
 
 initAnalysis({
   // Resource budget (new: centralised resource state)
@@ -359,7 +360,7 @@ initCompanies({ supabase });
 const _scheduleState = {
   lastFullPass: 0, lastFreeEnrich: 0, lastStatusDrift: 0,
   lastRentalDrain: 0, lastRetryDrain: 0, lastPostAuctionSweep: 0,
-  lastBudgetLog: 0, lastMultiImageSweep: 0, lastHmlrRefresh: 0,
+  lastBudgetLog: 0, lastMultiImageSweep: 0, lastNarrativeSweep: 0, lastHmlrRefresh: 0,
   // Phase 5 tiers (alert-sweep / coverage-digest); sitemap-regen retired
   // 2026-07-03 — /sitemap.xml is now dynamic (lib/sitemap.js):
   lastAlertSweep: 0, lastCoverageDigest: 0,
@@ -661,6 +662,19 @@ function scheduleTick() {
     sweepMultiImages()
       .then(r => console.log(`SCHEDULE multi-image sweep: eligible=${r.eligible} fetched=${r.fetched} galleries=${r.galleryAdded} partial=${r.galleryPartial} noimgs=${r.noImagesFound} dead=${r.urlDead} failed=${r.fetchFailed} +${r.totalImagesAdded}imgs`))
       .catch(e => console.error('SCHEDULE multi-image sweep failed:', e.message));
+  }
+
+  // Tier 7b: Narrative sweep daily at 07:00 UK (offset from the image sweep so
+  // the two detail-page passes never overlap). Visible lots with little or no
+  // description get the source site's narrative extracted — cache-first (~79%
+  // of visible lots already hold fresh detail HTML in lot_details), live
+  // HTTP→Crawlee fetch for the rest. No Firecrawl credits in this path.
+  if (hour === 7 && minute < 5 && now - _scheduleState.lastNarrativeSweep > 60 * 60 * 1000) {
+    _scheduleState.lastNarrativeSweep = now;
+    console.log('SCHEDULE: 07:00 UK — running sweepNarratives');
+    sweepNarratives()
+      .then(r => console.log(`SCHEDULE narrative sweep: cache=${r.reconciledFromCache} fetched=${r.fetched}/${r.eligible} added=${r.descriptionAdded} none=${r.noDescriptionFound} dead=${r.urlDead} failed=${r.fetchFailed}`))
+      .catch(e => console.error('SCHEDULE narrative sweep failed:', e.message));
   }
 
   // Tier 9: Alert sweeper, daily 02:30 UK. Resolves pipeline_alerts older

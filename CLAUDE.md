@@ -84,6 +84,7 @@ Other key tables:
 
 **Known data model notes (from WORKSTREAMS.md):**
 - `bullets` field has two semantic shapes upstream. Needs reconciliation in `normaliseScrapedLot` — flag if behaviour changes.
+- `description` (added 2026-07-04) is the source site's narrative — canonical home for lot prose. Captured at extraction (`normaliseScrapedLot` passthrough + detail pass) and backfilled by the daily 07:00 narrative sweep (`lib/pipeline/narrative-sweep.js`, house-agnostic extraction in `lib/pipeline/description-extract.js`). The bullets fold of `raw.description` remains for display/signal back-compat — don't remove it.
 - `auction_date` has no timezone handling. Europe/London is assumed implicitly throughout.
 - `dbRowToLot` emits `enrichedAt` and `rawText` but canonical `LOTS_SELECT` doesn't fetch those columns — they resolve to `undefined` unless the caller expands their select.
 

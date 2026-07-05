@@ -51,6 +51,7 @@ const GATE = {
   image_url: 'displayed',
   images: 'displayed',
   floor_plans: 'displayed',
+  description: 'displayed', // source-site narrative — expanded-panel description block
   auction_date: 'displayed',
   status: 'displayed',
   epc_rating: 'displayed',

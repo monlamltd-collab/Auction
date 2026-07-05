@@ -27,7 +27,11 @@
 // 3.2.0 — id (lots.id UUID) added to the select set (2026-06-21). Populates
 // lot._dbId (already mapped in dbRowToLot), which backs the shareable
 // /lot/:id page + ?lot=<uuid> drawer deep-link. System column. Additive.
-export const LOT_SCHEMA_VERSION = '3.2.0';
+// 3.3.0 — description (lots.description text) added (2026-07-04). The source
+// auction house's own narrative, captured by the catalogue/detail extraction
+// passthrough and the daily narrative sweep (lib/pipeline/narrative-sweep.js).
+// Displayed in the expanded lot panel; feeds search_text. Additive.
+export const LOT_SCHEMA_VERSION = '3.3.0';
 
 // Snake-case DB columns the app's standard lot SELECT pulls.
 // Mirrors LOT_COLUMNS in lib/types/lot.js. Additive changes (new columns)
@@ -37,7 +41,7 @@ export const LOT_COLUMNS_PINNED = Object.freeze([
   'house', 'auctioneer', 'lot_number', 'url', 'catalogue_url', 'address',
   'postcode', 'lat', 'lng', 'price', 'price_text', 'price_status', 'prop_type',
   'beds', 'tenure', 'lease_length', 'sqft', 'condition', 'image_url', 'images',
-  'floor_plans', 'bullets', 'units', 'auction_date', 'status',
+  'floor_plans', 'bullets', 'description', 'units', 'auction_date', 'status',
   'epc_rating', 'epc_score', 'floor_area_sqm', 'flood_zone', 'flood_risk',
   'comparable_price', 'street_sales_count', 'below_market', 'est_monthly_rent',
   'est_gross_yield', 'score', 'score_breakdown', 'opps', 'risks', 'deal_type',
@@ -54,7 +58,7 @@ export const LOT_APP_FIELDS_PINNED = Object.freeze([
   'lot', 'address', 'postcode', 'url',
   'price', 'priceText', 'priceStatus',
   'propType', 'beds', 'tenure', 'leaseLength', 'sqft', 'condition',
-  'imageUrl', 'images', 'floorPlans', 'floorPlanUrl', 'bullets', 'units',
+  'imageUrl', 'images', 'floorPlans', 'floorPlanUrl', 'bullets', 'description', 'units',
   'status',
   'epcRating', 'epcScore', 'floorAreaSqm', 'epcFloorAreaSqm',
   'floodZone', 'floodRiskLevel',
