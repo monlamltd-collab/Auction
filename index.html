@@ -256,8 +256,19 @@
       </div>
       <!-- Step 4: Location -->
       <div class="ob-step" id="obStep4">
-        <h2 style="font-size:1.3rem;margin-bottom:4px">Where are you looking?</h2>
-        <p style="color:var(--text2);font-size:.85rem">Pick regions you're interested in. Optional — skip if you're open to anywhere.</p>
+        <h2 style="font-size:1.3rem;margin-bottom:4px">Where do you invest?</h2>
+        <p style="color:var(--text2);font-size:.85rem">Tell us your preferred area and we'll open the catalogue focused on lots near you — you can change or clear it any time from the filters.</p>
+        <div style="display:flex;gap:8px;margin-bottom:10px">
+          <input id="obLocInput" placeholder="Town or postcode — e.g. Bristol or BS1" aria-label="Preferred town or postcode" style="flex:1;min-width:0;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;font-size:.85rem">
+          <select id="obLocRadius" aria-label="Search radius" style="padding:10px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;font-size:.85rem;background:var(--white)">
+            <option value="10" selected>+10 miles</option>
+            <option value="1">+1 mile</option>
+            <option value="5">+5 miles</option>
+            <option value="25">+25 miles</option>
+            <option value="50">+50 miles</option>
+          </select>
+        </div>
+        <p style="color:var(--text3);font-size:.78rem;margin-bottom:6px">Or pick one or more wider regions:</p>
         <div class="ob-interests" id="obRegions">
           <button class="ob-int" data-val="north_west" onclick="obToggleRegion(this)">North West</button>
           <button class="ob-int" data-val="north_east" onclick="obToggleRegion(this)">North East</button>
@@ -373,7 +384,7 @@
       </select>
       <input class="tb-search" type="text" id="fTown" placeholder="Town or city" oninput="onTownInput()" aria-label="Search by town or city" style="max-width:140px">
       <input class="tb-search" type="text" id="fPostcode" placeholder="Postcode" oninput="onPostcodeInput()" aria-label="Search by postcode" style="max-width:110px">
-      <select class="tb-select" id="fRadius" onchange="debouncedRender();updateMoreDot()" aria-label="Distance from town or postcode" title="Distance from the town or postcode above">
+      <select class="tb-select" id="fRadius" onchange="debouncedRender();updateMoreDot();persistLocPref()" aria-label="Distance from town or postcode" title="Distance from the town or postcode above">
         <option value="">Distance from</option><option value="1">Within 1 mile</option><option value="5">Within 5 miles</option><option value="10">Within 10 miles</option><option value="25">Within 25 miles</option><option value="50">Within 50 miles</option>
       </select>
       <select class="tb-select" id="fSoldTop" onchange="debouncedRender()" aria-label="Lot status">
