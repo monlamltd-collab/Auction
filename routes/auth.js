@@ -104,6 +104,7 @@ router.get('/api/auth/me', async (req, res) => {
     'id', 'email', 'name', 'tier', 'analyses_count', 'tier_expires_at',
     'consent_auction_alerts', 'consent_partner_marketing',
     'onboarding_complete', 'experience_level', 'budget_max', 'interests',
+    'preferred_regions', 'preferred_location',
   ];
   function toPublicUser(row) {
     const out = {};
@@ -116,7 +117,7 @@ router.get('/api/auth/me', async (req, res) => {
   try {
     const { data } = await supabase
       .from('users')
-      .select('id, email, name, tier, analyses_count, tier_expires_at, stripe_subscription_id, consent_auction_alerts, consent_partner_marketing, onboarding_complete, experience_level, budget_max, interests')
+      .select('id, email, name, tier, analyses_count, tier_expires_at, stripe_subscription_id, consent_auction_alerts, consent_partner_marketing, onboarding_complete, experience_level, budget_max, interests, preferred_regions, preferred_location')
       .eq('id', user.id)
       .single();
     res.json(toPublicUser(data || user));
@@ -130,13 +131,22 @@ router.post('/api/auth/onboarding', async (req, res) => {
   const user = await validateUserFromReq(req);
   if (!user) return res.status(401).json({ error: 'Authentication required' });
 
-  const { experience_level, budget_max, interests, referral_source, preferred_regions } = req.body || {};
+  const { experience_level, budget_max, interests, referral_source, preferred_regions, preferred_location } = req.body || {};
   const updates = { onboarding_complete: true };
   if (typeof experience_level === 'string') updates.experience_level = experience_level;
   if (typeof budget_max === 'number' && budget_max > 0) updates.budget_max = budget_max;
   if (Array.isArray(interests)) updates.interests = interests.slice(0, 10);
   if (typeof referral_source === 'string') updates.referral_source = referral_source.substring(0, 200);
   if (Array.isArray(preferred_regions)) updates.preferred_regions = preferred_regions.slice(0, 12);
+  // Preferred investment location — { input: 'Bristol' | 'BS1', radius: 10 }.
+  // Applied by the frontend as the default town/postcode + radius filter so
+  // the lot list opens scoped to the user's investment area on every device.
+  if (preferred_location && typeof preferred_location === 'object') {
+    const input = typeof preferred_location.input === 'string' ? preferred_location.input.trim().substring(0, 80) : '';
+    const radius = Number.isFinite(+preferred_location.radius) && +preferred_location.radius > 0
+      ? Math.min(+preferred_location.radius, 200) : null;
+    updates.preferred_location = input ? { input, radius } : null;
+  }
 
   try {
     await supabase.from('users').update(updates).eq('id', user.id);

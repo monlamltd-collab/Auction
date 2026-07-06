@@ -573,6 +573,120 @@ async function deleteSavedSearch(id) {
 // ONBOARDING FLOW (Item 10)
 // ═══════════════════════════════
 let _obData = { referral: '', referral_other: '', experience: '', interests: [], regions: [] };
+// When true the onboarding modal is showing ONLY the location step (step 4) —
+// used to ask anonymous visitors for their preferred investment area without
+// running the full sign-up wizard (which still fires on first sign-in).
+let _obLocationOnly = false;
+
+// ═══════════════════════════════
+// PREFERRED INVESTMENT LOCATION
+// Captured by onboarding step 4 (or the anonymous location prompt), stored in
+// localStorage + users.preferred_location, and applied as the default
+// town/postcode + radius filter on every visit. AI search picks it up
+// automatically because runSmartSearch() reads the same filter inputs.
+// ═══════════════════════════════
+const PREF_LOC_KEY = 'ab_pref_location';
+const OB_REGION_LABELS = { north_west: 'North West', north_east: 'North East', yorkshire: 'Yorkshire', west_midlands: 'West Midlands', east_midlands: 'East Midlands', east: 'East of England', london: 'London', south_east: 'South East', south_west: 'South West', wales: 'Wales', scotland: 'Scotland' };
+
+function getStoredPrefLocation() {
+  try { return JSON.parse(localStorage.getItem(PREF_LOC_KEY) || 'null'); } catch (e) { return null; }
+}
+function storePrefLocation(pref) {
+  try { localStorage.setItem(PREF_LOC_KEY, JSON.stringify(pref)); } catch (e) {}
+}
+
+// Apply a preference {input, radius, regions} to the filter bar. Returns true
+// if anything was applied. Town/postcode wins over regions; a single region
+// maps to the region dropdown; multi-region can't be expressed in the current
+// filter UI so we leave the list unfiltered.
+function applyPreferredLocation(pref) {
+  if (!pref) return false;
+  let applied = false;
+  const input = (pref.input || '').trim();
+  if (input && $('fTown') && $('fPostcode')) {
+    // UK postcode shape (full or prefix): 1-2 letters then a digit
+    const isPostcode = /^[a-z]{1,2}\d/i.test(input.replace(/\s+/g, ''));
+    if (isPostcode) { $('fPostcode').value = input.toUpperCase(); $('fTown').value = ''; }
+    else { $('fTown').value = input; $('fPostcode').value = ''; }
+    if (pref.radius && $('fRadius')) {
+      const opts = Array.from($('fRadius').options).map(o => o.value);
+      if (opts.includes(String(pref.radius))) $('fRadius').value = String(pref.radius);
+    }
+    if (typeof onLocationInput === 'function') onLocationInput();
+    applied = true;
+  } else if (Array.isArray(pref.regions) && pref.regions.length === 1 && pref.regions[0] !== 'anywhere' && $('fLocation')) {
+    const label = OB_REGION_LABELS[pref.regions[0]];
+    const match = label && Array.from($('fLocation').options).find(o => o.textContent.includes(label) || o.value === label);
+    if (match) { $('fLocation').value = match.value; applied = true; }
+  }
+  if (applied) {
+    if (typeof updateMoreDot === 'function') updateMoreDot();
+    if (typeof refreshMobileFilterCount === 'function') refreshMobileFilterCount();
+    renderLots();
+  }
+  return applied;
+}
+
+// Load-time variant: never stomp a deep link or a location the user already
+// set this session (URL-restored filters run before this).
+function applyPreferredLocationIfUnset(pref) {
+  if (!pref) return false;
+  if (($('fTown')?.value || '') || ($('fPostcode')?.value || '') || ($('fLocation')?.value || '')) return false;
+  return applyPreferredLocation(pref);
+}
+
+// Keep the stored preference in sync when the USER edits the location filters
+// (typing town/postcode, changing radius) — so "change or clear it from the
+// filters" sticks across visits. Deliberately not called on URL-restored or
+// saved-search-applied filters: a shared deep link shouldn't rewrite your
+// preference.
+let _prefPersistTimer = null;
+function persistLocPref() {
+  clearTimeout(_prefPersistTimer);
+  _prefPersistTimer = setTimeout(() => {
+    const input = (($('fPostcode')?.value || '').trim()) || (($('fTown')?.value || '').trim());
+    const prev = getStoredPrefLocation() || {};
+    const radius = +($('fRadius')?.value || 0) || null;
+    storePrefLocation({ input, radius, regions: prev.regions || [] });
+  }, 800);
+}
+
+// Cross-device: signed-in users carry their preference in users.preferred_location /
+// preferred_regions. Pull it once when there's no local copy yet.
+async function syncPreferredLocationFromServer() {
+  if (getStoredPrefLocation()) return;
+  try {
+    const r = await fetch('/api/auth/me', { headers: getAuthHeaders() });
+    if (!r.ok) return;
+    const me = await r.json();
+    const pref = {
+      input: (me.preferred_location && me.preferred_location.input) || '',
+      radius: (me.preferred_location && me.preferred_location.radius) || null,
+      regions: Array.isArray(me.preferred_regions) ? me.preferred_regions : [],
+    };
+    if (!pref.input && !(pref.regions.length === 1 && pref.regions[0] !== 'anywhere')) return;
+    storePrefLocation(pref);
+    applyPreferredLocationIfUnset(pref);
+  } catch {}
+}
+
+// Ask anonymous first-time visitors for their preferred area using just the
+// location step of the onboarding modal. Signed-in first-timers get the full
+// wizard instead (maybeShowOnboarding), so this never double-asks.
+function maybeAskLocation() {
+  if (currentSession) return;
+  if (getStoredPrefLocation()) return;
+  if (localStorage.getItem('bm_onboarding_done')) return;
+  if (localStorage.getItem('ab_loc_prompt_done')) return;
+  if ($('onboardingModal')?.classList.contains('show')) return;
+  // Don't stomp deep links (shared filter URLs, ?lot= drawer links)
+  const p = new URLSearchParams(window.location.search);
+  if (p.get('lot') || p.get('fTown') || p.get('fPostcode') || p.get('fLocation') || p.get('fRadius') || p.get('smartQuery')) return;
+  _obLocationOnly = true;
+  if ($('obProgress')) $('obProgress').style.display = 'none';
+  obNext(4);
+  $('onboardingModal').classList.add('show');
+}
 
 function obSelect(type, btn) {
   const parent = btn.parentElement;
@@ -629,45 +743,59 @@ function obNext(step) {
   }
 }
 
-async function obFinish() {
+// Close the modal + reset location-only mode so a later full wizard renders
+// with all steps and progress dots intact.
+function obClose() {
   $('onboardingModal').classList.remove('show');
-  localStorage.setItem('bm_onboarding_done', '1');
+  if (_obLocationOnly) {
+    _obLocationOnly = false;
+    localStorage.setItem('ab_loc_prompt_done', '1');
+    if ($('obProgress')) $('obProgress').style.display = '';
+    obNext(1);
+  } else {
+    localStorage.setItem('bm_onboarding_done', '1');
+  }
+}
+
+async function obFinish() {
+  const wasLocationOnly = _obLocationOnly;
+  obClose();
+
+  // Capture preferred location from step 4 (text input wins over regions)
+  const locInput = ($('obLocInput')?.value || '').trim().substring(0, 80);
+  const locRadius = +($('obLocRadius')?.value || 0) || null;
+  const pref = { input: locInput, radius: locInput ? locRadius : null, regions: _obData.regions };
+  const hasPref = !!(locInput || (pref.regions.length && pref.regions[0] !== 'anywhere'));
+  if (hasPref) storePrefLocation(pref);
 
   // Save to server
   if (currentSession) {
     try {
+      const body = wasLocationOnly
+        ? { preferred_regions: _obData.regions, preferred_location: { input: locInput, radius: locRadius } }
+        : {
+            experience_level: _obData.experience,
+            interests: _obData.interests,
+            referral_source: _obData.referral === 'other' ? ('other: ' + _obData.referral_other) : _obData.referral,
+            preferred_regions: _obData.regions,
+            preferred_location: { input: locInput, radius: locRadius },
+          };
       await fetch('/api/auth/onboarding', {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({
-          experience_level: _obData.experience,
-          interests: _obData.interests,
-          referral_source: _obData.referral === 'other' ? ('other: ' + _obData.referral_other) : _obData.referral,
-          preferred_regions: _obData.regions
-        })
+        body: JSON.stringify(body)
       });
     } catch {}
   }
 
-  // Apply region to location filter if exactly one region selected
-  if (_obData.regions.length === 1 && _obData.regions[0] !== 'anywhere') {
-    const regionMap = { north_west: 'North West', north_east: 'North East', yorkshire: 'Yorkshire', west_midlands: 'West Midlands', east_midlands: 'East Midlands', east: 'East of England', london: 'London', south_east: 'South East', south_west: 'South West', wales: 'Wales', scotland: 'Scotland' };
-    const label = regionMap[_obData.regions[0]];
-    if (label && $('fLocation')) {
-      // Set location filter if the option exists
-      const opts = Array.from($('fLocation').options);
-      const match = opts.find(o => o.textContent.includes(label) || o.value === label);
-      if (match) { $('fLocation').value = match.value; }
-    }
-  }
-
-  renderLots();
+  if (hasPref) applyPreferredLocation(pref);
+  else renderLots();
 }
 
 function obSkip() {
-  $('onboardingModal').classList.remove('show');
-  localStorage.setItem('bm_onboarding_done', '1');
-  if (currentSession) {
+  const wasLocationOnly = _obLocationOnly;
+  obClose();
+  if (currentSession && !wasLocationOnly) {
     fetch('/api/auth/onboarding', {
       method: 'POST',
       headers: getAuthHeaders(),
@@ -680,6 +808,13 @@ function maybeShowOnboarding() {
   // Show onboarding wizard on first sign-in
   if (localStorage.getItem('bm_onboarding_done')) return;
   if (!currentSession) return;
+  // Prefill the location step from any preference captured while anonymous
+  // so finishing the wizard persists it server-side instead of wiping it.
+  const pref = getStoredPrefLocation();
+  if (pref) {
+    if (pref.input && $('obLocInput')) $('obLocInput').value = pref.input;
+    if (pref.radius && $('obLocRadius')) $('obLocRadius').value = String(pref.radius);
+  }
   setTimeout(() => {
     $('onboardingModal').classList.add('show');
   }, 800);
@@ -918,8 +1053,8 @@ function haversine(lat1,lng1,lat2,lng2){
   return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
 }
 
-function onTownInput(){ if(($('fTown')?.value||'').trim() && $('fPostcode')) $('fPostcode').value=''; onLocationInput(); }
-function onPostcodeInput(){ if(($('fPostcode')?.value||'').trim() && $('fTown')) $('fTown').value=''; onLocationInput(); }
+function onTownInput(){ if(($('fTown')?.value||'').trim() && $('fPostcode')) $('fPostcode').value=''; onLocationInput(); persistLocPref(); }
+function onPostcodeInput(){ if(($('fPostcode')?.value||'').trim() && $('fTown')) $('fTown').value=''; onLocationInput(); persistLocPref(); }
 
 function onLocationInput(){
   clearTimeout(_searchLocationTimer);
@@ -1478,6 +1613,9 @@ function onSignIn(session) {
     // in pagination whenever they tab away and return.
     loadUserActions().then(migrateLegacyFavourites);
     maybeShowOnboarding();
+    // Pull preferred investment location from the user profile when this
+    // device has no local copy (new device / cleared storage).
+    syncPreferredLocationFromServer();
   }
 
   // Check Pro status
@@ -6158,6 +6296,17 @@ function syncFiltersToURL(){
 })();
 
 restoreFiltersFromURL();
+
+// Preferred investment location: apply the stored preference as the default
+// location filter (URL-restored filters above win), then — for anonymous
+// first-time visitors with no preference — ask for one. Delayed so auth has a
+// chance to resolve first; signed-in first-timers get the full wizard via
+// maybeShowOnboarding() instead.
+(function initPreferredLocation(){
+  const pref = getStoredPrefLocation();
+  if (pref) setTimeout(() => applyPreferredLocationIfUnset(pref), 0);
+  else setTimeout(maybeAskLocation, 2500);
+})();
 
 // Read showPast and status URL params on page load. ?status=unsold
 // activates the unsold view for Pro users (the alert email links land
