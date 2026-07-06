@@ -872,13 +872,27 @@ function showSkeletonCards(n){
   out.innerHTML='<div class="lots-grid'+(_viewMode==='list'?' list-view':'')+'" id="lotsGrid">'+skelHtml+'</div>';
 }
 
-function onShowPastChange(){
+function onShowPastChange(opts){
   const showPast=$('fShowPast')?.checked;
   const url=new URL(window.location);
   if(showPast) url.searchParams.set('showPast','true');
   else url.searchParams.delete('showPast');
   window.history.replaceState({},'',url);
-  loadAllLots();
+  loadAllLots(opts);
+}
+
+// LOT STATUS values that inherently refer to past auctions. Selecting one
+// auto-enables "Show past auctions" and refetches — without this, Sold /
+// Sale Agreed / Recently unsold filtered a future-only dataset and silently
+// returned an empty grid (2026-07-06 audit).
+const PAST_STATUS_VALUES=new Set(['unsold','recently_unsold','sold','stc','withdrawn','everything']);
+function onStatusChange(){
+  const v=$('fSoldTop')?.value;
+  if(PAST_STATUS_VALUES.has(v)&&$('fShowPast')&&!$('fShowPast').checked){
+    $('fShowPast').checked=true;
+    onShowPastChange({force:true}); // syncs the URL + refetches with includePast
+  }
+  debouncedRender();
 }
 
 let _lotsLoadedAt=0; // timestamp of last successful load
@@ -2820,6 +2834,18 @@ function renderLots(){
   const aff=fp.aff;
   let lots=LOTS.slice();
 
+  // Property-type dropdown matcher. The DB vocabulary is wider than the
+  // dropdown (block_sale, commercial_block, portfolio — 101 active lots at
+  // the 2026-07-06 audit were unreachable by every option): 'commercial'
+  // folds in commercial blocks, and 'other' is a catch-all for anything the
+  // named options don't cover, so no lot is silently unfilterable.
+  const PROP_TYPE_NAMED=['house','flat','bungalow','commercial','land','garage'];
+  function matchesPropType(pt,sel){
+    if(sel==='commercial') return pt==='commercial'||pt==='commercial_block';
+    if(sel==='other') return !PROP_TYPE_NAMED.includes(pt||'');
+    return pt===sel;
+  }
+
   // Assign stable index for card IDs
   lots.forEach((l,i) => { l._idx = i; });
 
@@ -2892,7 +2918,7 @@ function renderLots(){
     // Beds
     if(minBeds&&l.beds&&l.beds<minBeds) return false;
     // Type / Deal / Tenure
-    if(ft&&!SMART_RESULTS&&l.propType!==ft) return false;
+    if(ft&&!SMART_RESULTS&&!matchesPropType(l.propType,ft)) return false;
     if(fd&&l.dealType!==fd) return false;
     if(ften&&l.tenure!==ften) return false;
     // Condition
@@ -6250,6 +6276,10 @@ const FILTER_PARAMS=['smartQuery','fSort','fMinPrice','fMaxPrice','fBeds','fType
 function restoreFiltersFromURL(){
   const p=new URLSearchParams(window.location.search);
   for(const id of FILTER_PARAMS){const v=p.get(id);if(v&&$(id))$(id).value=v}
+  // A past-implying LOT STATUS in a shared/reloaded URL needs past auctions
+  // in the dataset — tick the checkbox so the initial load fetches includePast.
+  const _rs=p.get('fSoldTop');
+  if(_rs&&PAST_STATUS_VALUES.has(_rs)&&$('fShowPast')) $('fShowPast').checked=true;
   updatePriceBtn();
   // Trigger geocoding for any restored town/postcode — setting .value directly
   // doesn't fire the oninput handler, so onLocationInput() never runs and the
@@ -6262,6 +6292,7 @@ function restoreFiltersFromURL(){
 function syncFiltersToURL(){
   const p=new URLSearchParams();
   for(const id of FILTER_PARAMS){const el=$(id);if(el&&el.value&&el.value!==el.querySelector('option')?.value)p.set(id,el.value)}
+  if($('fShowPast')?.checked) p.set('showPast','true');
   const curLot=new URLSearchParams(window.location.search).get('lot');
   if(curLot) p.set('lot', curLot);
   const qs=p.toString();

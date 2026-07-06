@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase.js';
 import { validateUserFromReq, rateLimit, getClientIP, safeCompare } from '../lib/auth.js';
 import { log } from '../lib/logging.js';
 import { resolveEffectiveTier, getAISearchLimit, STRIPE_ENABLED, stripAIFields } from '../lib/config.js';
-import { callAI } from '../lib/ai-provider.js';
+import { callAI, hasAIFallback } from '../lib/ai-provider.js';
 import { logActivityEvent, getCreditExhausted, setCreditExhausted, getCreditExhaustedAt, setCreditExhaustedAt } from '../lib/analysis.js';
 import { LOTS_SELECT, dbRowToLot } from '../lib/types/lot.js';
 import { enrichLotsWithFundability } from '../lib/fundability.js';
@@ -645,13 +645,22 @@ router.post('/api/smart-search', asyncHandler(async (req, res) => {
     log.warn('smart-search: no AI provider key set (GEMINI_API_KEY / OPENROUTER_API_KEY)');
     return res.status(500).json({ error: 'key_missing', message: 'AI search is not configured — no AI provider API key is set.' });
   }
-  if (getCreditExhausted()) {
+  // The creditExhausted flag is Gemini-specific (it can be latched by
+  // background catalogue extraction, not just search). With a fallback
+  // provider configured — production is OpenRouter-first — callAI rolls
+  // past a dead Gemini, so a latched flag must NOT block the search.
+  if (!hasAIFallback() && getCreditExhausted()) {
     const exhaustedAgo = getCreditExhaustedAt() ? Math.round((Date.now() - getCreditExhaustedAt()) / 60000) : '?';
     log.warn('smart-search: blocked by creditExhausted flag', { exhaustedMinutesAgo: exhaustedAgo });
     return res.status(503).json({ error: 'ai_quota_exhausted', message: `Gemini API rate limit hit ${exhaustedAgo}min ago. Auto-resets after 1 hour. Try again soon.`, exhaustedMinutesAgo: exhaustedAgo });
   }
   const keyPrefix = (process.env.GEMINI_API_KEY || '').substring(0, 10);
   log.info('smart-search pre-flight', { tier: 'fast', keyPrefix: keyPrefix + '...', query: query.substring(0, 60) });
+
+  // Hoisted for the catch block: once Layer 1 has produced a candidate pool,
+  // an AI-provider failure degrades to score-ranked DB results instead of a
+  // 503 — the search must not die when the database already answered.
+  let _l1Pool = null, _l1Sources = null, _l1Total = 0;
 
   try {
     // ═══════════════════════════════════════════════════════════
@@ -923,6 +932,7 @@ router.post('/api/smart-search', asyncHandler(async (req, res) => {
     // Wider candidate pool (was 200) so the LLM has more lots to reason over
     // when interpreting concept queries like "freehold multi unit block to split".
     const geminiLots = filteredLots.slice(0, 400);
+    _l1Pool = geminiLots; _l1Sources = sources; _l1Total = totalSearched;
     const lotSummaries = geminiLots.map((l, i) => {
       const meta = [
         l.status && l.status !== 'available' ? `STATUS:${l.status}` : '',
@@ -1044,9 +1054,40 @@ Pick the indices of lots that genuinely match the user's INTENT — quality over
   } catch (err) {
     const msg = err.message || String(err);
     log.error('Smart search error', { error: msg, status: err.status, stack: err.stack?.split('\n').slice(0, 3).join(' | ') });
-    if (err.status === 429 || /quota|rate.limit|resource.exhausted/i.test(msg)) {
-      setCreditExhausted(true); setCreditExhaustedAt(Date.now());
-      return res.status(503).json({ error: 'ai_quota_exhausted', message: 'AI rate limit hit. Auto-resets after 1 hour.', provider: process.env.AI_PROVIDER || 'gemini', tier: 'fast' });
+
+    const quotaShaped = err.status === 429 || /quota|rate.limit|resource.exhausted/i.test(msg);
+    // Latch the global flag only when Gemini is the sole provider. With a
+    // fallback chain this catch means every provider failed *this request*
+    // — transient, so latching would wrongly lock ALL users out for an hour
+    // (2026-07-06 prod incident: one failed search blanked AI search fleet-wide).
+    const geminiOnly = !hasAIFallback();
+    if (quotaShaped && geminiOnly) { setCreditExhausted(true); setCreditExhaustedAt(Date.now()); }
+
+    // Graceful degradation: if Layer 1 completed, the error came from the AI
+    // stage — serve the score-ranked DB pool with an honest report rather
+    // than failing the whole search (2026-07-06: both providers quota-dead
+    // turned every search into a 503 despite 954 matching lots in hand).
+    if (_l1Pool && _l1Pool.length) {
+      const results = _l1Pool.slice(0, 40);
+      for (const lot of results) delete lot._searchText;
+      await incrementSearchCounter();
+      log.warn('smart-search degraded: AI unavailable, serving Layer-1 results', { results: results.length, of: _l1Total, error: msg.substring(0, 120) });
+      logActivityEvent('smart_search', { query, results_count: results.length, mode: 'degraded_layer1' }, user?.email, getClientIP(req));
+      return res.json({
+        results,
+        report: `AI ranking is temporarily unavailable, so these are the top ${results.length} of ${_l1Total} lots matching your search filters, sorted by investment score. Try again later for AI-refined results.`,
+        sources: _l1Sources || [], totalSearched: _l1Total, searchesUsed, searchLimit, degraded: true,
+      });
+    }
+
+    if (quotaShaped) {
+      return res.status(503).json({
+        error: 'ai_quota_exhausted',
+        message: geminiOnly
+          ? 'AI rate limit hit. Auto-resets after 1 hour.'
+          : 'AI search is temporarily over capacity. The standard filters still work — please try again later.',
+        provider: process.env.AI_PROVIDER || 'gemini', tier: 'fast',
+      });
     }
     if (err.status === 401 || err.status === 403 || /invalid.api.key|unauthorized|forbidden/i.test(msg)) {
       return res.status(500).json({ error: 'key_invalid', message: 'AI API key is invalid or expired. Check environment variables in Railway.', provider: process.env.AI_PROVIDER || 'gemini' });
@@ -1136,6 +1177,11 @@ async function buildAllLotsResponse({ isSignedIn, includePast }) {
     // ── Step 2: Run independent queries in parallel ──
     const unsoldCutoff = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
     const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+    // Upper bound for the status side-queries: excludes sentinel-dated rows
+    // (always_on houses stamp 2099-12-31) which otherwise sort first under
+    // `order auction_date desc` and eat the row cap with stale zombies —
+    // same class of leak the 2026-07-03 get_active_lots sentinel guard fixed.
+    const dateHorizon = new Date(Date.now() + 180 * 86400000).toISOString().slice(0, 10);
 
     // Always call get_active_lots — after the 2026-05-06 RPC rewrite (Fix B,
     // see migrations/2026-05-06-rewrite-get-active-lots-rpc.sql) the RPC
@@ -1144,11 +1190,23 @@ async function buildAllLotsResponse({ isSignedIn, includePast }) {
     // (and worse — Supabase REST defaults cap fallback at ~1000 rows). The
     // fallback STILL runs to synthesize activeCatalogues for the `sources`
     // array, but we no longer use its lot rows.
-    const [lotResult, unsoldResult, calendarResult, skillsResult] = await Promise.all([
+    const [lotResult, unsoldResult, soldResult, calendarResult, skillsResult] = await Promise.all([
       supabase.rpc('get_active_lots'),
       supabase.from('lots').select(LOTS_SELECT)
         .in('status', ['unsold', 'withdrawn'])
         .gte('auction_date', unsoldCutoff)
+        .lte('auction_date', dateHorizon)
+        .limit(1000),
+      // Sold/STC within the same 30-day window. The LOT STATUS dropdown has
+      // offered "Sold" / "Sale Agreed" / "All (inc. sold)" since launch, but
+      // these rows never shipped — all three options silently returned an
+      // empty grid (2026-07-06 audit). Own query + cap so heavy sold volume
+      // can't crowd the unsold/withdrawn feed out of its 1000-row cap.
+      supabase.from('lots').select(LOTS_SELECT)
+        .in('status', ['sold', 'stc'])
+        .gte('auction_date', unsoldCutoff)
+        .lte('auction_date', dateHorizon)
+        .order('auction_date', { ascending: false })
         .limit(1000),
       supabase.from('auction_calendar').select('url, date').gte('date', weekAgo),
       supabase.from('house_skills').select('slug, logo_url').not('logo_url', 'is', null),
@@ -1156,6 +1214,7 @@ async function buildAllLotsResponse({ isSignedIn, includePast }) {
 
     const { data: lotRows, error: lotErr } = lotResult;
     const { data: unsoldRows } = unsoldResult;
+    const { data: soldRows } = soldResult;
 
     if (lotErr) {
       log.error('all-lots: get_active_lots RPC failed', { error: lotErr.message });
@@ -1166,13 +1225,14 @@ async function buildAllLotsResponse({ isSignedIn, includePast }) {
       return { body: emptyBody, etag: null };
     }
 
-    // Merge unsold lots, avoiding duplicates with active catalogue lots
+    // Merge unsold + sold lots, avoiding duplicates with active catalogue lots
     const activeLotKeys = new Set((lotRows || []).map(r => `${r.house}|${r.url}`));
     const extraUnsold = (unsoldRows || []).filter(r => !activeLotKeys.has(`${r.house}|${r.url}`));
+    const extraSold = (soldRows || []).filter(r => !activeLotKeys.has(`${r.house}|${r.url}`));
 
-    const allLotRows = [...(lotRows || []), ...extraUnsold];
+    const allLotRows = [...(lotRows || []), ...extraUnsold, ...extraSold];
     const rawTotal = allLotRows.length;
-    log.info('all-lots query', { activeCatalogues: activeCatalogues.length, activeLots: (lotRows || []).length, persistedUnsold: extraUnsold.length, rawLotCount: rawTotal });
+    log.info('all-lots query', { activeCatalogues: activeCatalogues.length, activeLots: (lotRows || []).length, persistedUnsold: extraUnsold.length, persistedSold: extraSold.length, rawLotCount: rawTotal });
 
     // ── Step 3: Map snake_case DB columns → camelCase frontend format ──
     const lots = allLotRows.map(r => ({
@@ -1365,9 +1425,20 @@ async function buildAllLotsResponse({ isSignedIn, includePast }) {
       const entry = crossAddrMap.get(houseAddr);
       if (entry) {
         entry.count++;
-        const entryDate = entry.lot._auctionDate || '9999-12-31';
-        const lotDate = lot._auctionDate || '9999-12-31';
-        if (lotDate < entryDate) entry.lot = lot;
+        // Prefer an actionable listing over an ended one: a relisted lot must
+        // not be shadowed by its own sold/stc/withdrawn record from a prior
+        // auction (matters now sold/stc rows ship for the status dropdown).
+        // Within the same class, keep the soonest auction date as before.
+        const ENDED_STATUSES = ['sold', 'stc', 'withdrawn'];
+        const entryEnded = ENDED_STATUSES.includes(entry.lot.status);
+        const lotEnded = ENDED_STATUSES.includes(lot.status);
+        if (entryEnded !== lotEnded) {
+          if (entryEnded) entry.lot = lot;
+        } else {
+          const entryDate = entry.lot._auctionDate || '9999-12-31';
+          const lotDate = lot._auctionDate || '9999-12-31';
+          if (lotDate < entryDate) entry.lot = lot;
+        }
       } else {
         crossAddrMap.set(houseAddr, { lot, count: 1 });
       }
