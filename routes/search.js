@@ -12,6 +12,7 @@ import { normaliseUrl, findAuctionDateInBullets } from '../lib/utils.js';
 import { FALLBACK_CALENDAR } from '../lib/calendar.js';
 import { getLotsForCatalogues } from '../lib/pipeline/lot-lookup.js';
 import { normaliseLotStatuses, isValidImageUrl } from '../lib/scraper.js';
+import { parseAIResponse } from '../lib/search-parse.js';
 import { createHash } from 'crypto';
 
 const router = Router();
@@ -638,9 +639,11 @@ router.post('/api/smart-search', asyncHandler(async (req, res) => {
     }
   }
 
-  if (!process.env.GEMINI_API_KEY) {
-    log.warn('smart-search: GEMINI_API_KEY not set');
-    return res.status(500).json({ error: 'key_missing', message: 'AI search is not configured — GEMINI_API_KEY is missing.' });
+  // Any provider in the callAI chain will do — OpenRouter serves production
+  // when the direct Gemini key is absent or quota-dead.
+  if (!process.env.GEMINI_API_KEY && !process.env.OPENROUTER_API_KEY) {
+    log.warn('smart-search: no AI provider key set (GEMINI_API_KEY / OPENROUTER_API_KEY)');
+    return res.status(500).json({ error: 'key_missing', message: 'AI search is not configured — no AI provider API key is set.' });
   }
   if (getCreditExhausted()) {
     const exhaustedAgo = getCreditExhaustedAt() ? Math.round((Date.now() - getCreditExhaustedAt()) / 60000) : '?';
@@ -751,17 +754,24 @@ router.post('/api/smart-search', asyncHandler(async (req, res) => {
     // Gemini so the report can be honest about what was matched.
     // Move 2: returns a Promise<{data, error}> via the dual-read helper
     // (was a query builder pre-Move-2; caller still awaits the same shape).
+    // Status filter (always applied — semantic meaning of 'available' /
+    // 'unsold' etc). Shared by the tiered Layer-1 query and the free-text
+    // recall pool below.
+    const applyStatusFilter = (q) => {
+      if (effectiveSold === 'available') return q.or('status.eq.available,status.is.null');
+      if (effectiveSold === 'sold') return q.in('status', ['sold', 'stc', 'withdrawn']);
+      if (effectiveSold === 'unsold') return q.eq('status', 'unsold');
+      if (effectiveSold === 'stc') return q.eq('status', 'stc');
+      if (effectiveSold === 'withdrawn') return q.eq('status', 'withdrawn');
+      if (effectiveSold !== 'everything') return q.or('status.eq.available,status.eq.unsold,status.is.null');
+      return q;
+    };
+
     async function buildLayer1Query(tier) {
       return getLotsForCatalogues(supabase, activeCatalogues, {
         select: LOTS_SELECT,
         applyFilters: (q) => {
-          // Status (always applied — semantic meaning of 'available' / 'unsold' etc)
-          if (effectiveSold === 'available') q = q.or('status.eq.available,status.is.null');
-          else if (effectiveSold === 'sold') q = q.in('status', ['sold', 'stc', 'withdrawn']);
-          else if (effectiveSold === 'unsold') q = q.eq('status', 'unsold');
-          else if (effectiveSold === 'stc') q = q.eq('status', 'stc');
-          else if (effectiveSold === 'withdrawn') q = q.eq('status', 'withdrawn');
-          else if (effectiveSold !== 'everything') q = q.or('status.eq.available,status.eq.unsold,status.is.null');
+          q = applyStatusFilter(q);
 
           // Hard filters (tier 0 only) — explicit user constraints from query parser
           if (tier === 0) {
@@ -772,13 +782,23 @@ router.post('/api/smart-search', asyncHandler(async (req, res) => {
             if (sqParsed.filters.condition) q = q.in('condition', sqParsed.filters.condition);
           }
 
-          // Location (tiers 0-1)
+          // Location (tiers 0-1). Each term matches address text OR the
+          // postcode column — "b34" / "bristol" style queries previously
+          // only ILIKEd address, dropping lots whose address string doesn't
+          // repeat the postcode/town (the Bristol-class recall bug).
           if (tier <= 1) {
-            for (const loc of sqParsed.locationTerms) q = q.ilike('address', `%${loc}%`);
+            for (const loc of sqParsed.locationTerms) q = q.or(`address.ilike.%${loc}%,postcode.ilike.${loc}%`);
             if (sqParsed.filters.regionPostcodes) {
               const pcOr = sqParsed.filters.regionPostcodes.map(p => `postcode.ilike.${p}%`).join(',');
               q = q.or(pcOr);
             }
+            // UI-supplied town/postcode + radius from the catalogue page
+            // dropdowns. The header comment above always promised this was
+            // applied here — it wasn't, so AI search silently ignored the
+            // user's location dropdowns for the main candidate pool. Tier 2
+            // (wildcard) intentionally relaxes past it, and the relaxation
+            // note tells the AI to say "no matches in your area".
+            q = applyUiLoc(q);
           }
 
           // Up the limit to 800 — Layer 2 (Gemini) gets a wider candidate pool to
@@ -808,6 +828,33 @@ router.post('/api/smart-search', asyncHandler(async (req, res) => {
     }
     if (searchTier > 0) log.info('smart-search relaxed filters', { from: 'strict', to: TIER_LABELS[searchTier], query, results: lotRows?.length || 0 });
 
+    // ── Free-text recall pool ──
+    // Unrecognised words ("sheldon", "stella croft" — suburbs, streets, any
+    // term not in the known-locations set) are deliberately NOT Layer-1
+    // filters, so lots matching them only reached the AI if they happened to
+    // rank inside the top-800-by-score pool — usually they didn't, and the AI
+    // saw zero relevant lots. Fetch lots that literally mention the terms and
+    // put them FIRST in the candidate pool so Layer 2 always sees them.
+    let freeTextRows = [];
+    if (sqParsed.freeText.length > 0) {
+      const ftOr = sqParsed.freeText.slice(0, 5)
+        .map(t => `address.ilike.%${t}%,postcode.ilike.${t}%,search_text.ilike.%${t}%`)
+        .join(',');
+      const { data: ftData, error: ftErr } = await getLotsForCatalogues(supabase, activeCatalogues, {
+        select: LOTS_SELECT,
+        applyFilters: (q) => {
+          q = applyStatusFilter(q);
+          q = applyUiLoc(q);
+          q = q.or(ftOr);
+          return q.order(sortCol, { ascending: false, nullsFirst: false }).limit(200);
+        },
+        limit: 200,
+      });
+      if (ftErr) log.warn('smart-search freetext pool query failed', { err: ftErr.message });
+      freeTextRows = ftData || [];
+      if (freeTextRows.length) log.info('smart-search freetext pool', { terms: sqParsed.freeText, extra: freeTextRows.length });
+    }
+
     // ── Also include persisted unsold lots from expired catalogues (30-day window) ──
     let unsoldExtra = [];
     if (effectiveSold === 'unsold' || effectiveSold === 'all' || sf === 'everything') {
@@ -819,7 +866,7 @@ router.post('/api/smart-search', asyncHandler(async (req, res) => {
       if (sqParsed.filters.tenure) unsoldQuery = unsoldQuery.ilike('tenure', sqParsed.filters.tenure);
       if (sqParsed.filters.maxPrice) unsoldQuery = unsoldQuery.lte('price', sqParsed.filters.maxPrice);
       if (sqParsed.filters.minPrice) unsoldQuery = unsoldQuery.gte('price', sqParsed.filters.minPrice);
-      for (const loc of sqParsed.locationTerms) unsoldQuery = unsoldQuery.ilike('address', `%${loc}%`);
+      for (const loc of sqParsed.locationTerms) unsoldQuery = unsoldQuery.or(`address.ilike.%${loc}%,postcode.ilike.${loc}%`);
       if (sqParsed.filters.regionPostcodes) unsoldQuery = unsoldQuery.or(sqParsed.filters.regionPostcodes.map(p => `postcode.ilike.${p}%`).join(','));
       unsoldQuery = applyUiLoc(unsoldQuery);
       // Apply same concept/soft OR clauses
@@ -834,8 +881,9 @@ router.post('/api/smart-search', asyncHandler(async (req, res) => {
       return res.status(500).json({ error: 'db_error', message: 'Database query failed.' });
     }
 
-    // Merge active + persisted unsold, dedup by URL
-    const allRows = [...(lotRows || []).map(dbRowToLot), ...unsoldExtra.map(dbRowToLot)];
+    // Merge free-text matches (first, so they survive the AI-pool slice) +
+    // active + persisted unsold, dedup by URL
+    const allRows = [...freeTextRows.map(dbRowToLot), ...(lotRows || []).map(dbRowToLot), ...unsoldExtra.map(dbRowToLot)];
     const dedupMap = new Map();
     for (const lot of allRows) {
       const key = lot.url || `${lot._house}|${(lot.address || '').toLowerCase().replace(/[\s,]+/g, ' ').trim()}`;
@@ -955,34 +1003,28 @@ ${lotSummaries}
 Respond in this exact JSON format (and nothing else):
 {"indices":[0,5,12],"report":"Your investment commentary..."}
 
-Pick the indices of lots that genuinely match the user's INTENT — quality over quantity. Aim for 5-30 picks for a typical query; fewer if matches are weak. The report (2-3 paragraphs) should: (1) summarise what was found, (2) call out standout lots with their investment angle, (3) honestly note if the user's exact concept couldn't be matched and what was returned instead.`, { tier: 'fast', maxTokens: 4000, taskType: 'search', userId: user.id });
+Pick the indices of lots that genuinely match the user's INTENT — quality over quantity. Aim for 5-30 picks for a typical query; fewer if matches are weak. HARD LIMIT: never return more than 40 indices — if more lots match, pick the best 40 and say in the report that more matches exist. The report (2 short paragraphs) should: (1) summarise what was found, (2) call out standout lots with their investment angle, (3) honestly note if the user's exact concept couldn't be matched and what was returned instead.`, { tier: 'fast', maxTokens: 8000, taskType: 'search', userId: user.id });
     log.info('smart_search_full', { tier: 'fast', preFiltered: totalSearched, sentToAI: geminiLots.length, relaxationTier: TIER_LABELS[searchTier] });
 
-    let aiParsed;
-    try {
-      let cleaned = responseText.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
-      const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-      aiParsed = jsonMatch ? JSON.parse(jsonMatch[0]) : JSON.parse(cleaned);
-    } catch (e) {
-      console.log('Smart search JSON parse failed:', e.message, 'Raw:', responseText.substring(0, 200));
-      const reportMatch = responseText.match(/"report"\s*:\s*"([\s\S]*?)(?:"\s*[,}])/);
-      const indicesMatch = responseText.match(/"indices"\s*:\s*\[([\d,\s]*)\]/);
-      aiParsed = {
-        indices: indicesMatch ? indicesMatch[1].split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n)) : [],
-        report: reportMatch ? reportMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"') : 'Search completed.'
-      };
+    const aiParsed = parseAIResponse(responseText);
+    if (aiParsed.salvaged) {
+      log.warn('smart-search AI response salvaged (truncated/malformed JSON)', { indices: aiParsed.indices.length, raw: responseText.substring(0, 200) });
     }
+    if (!aiParsed.report) aiParsed.report = 'Search completed.';
 
     let matchingLots = (aiParsed.indices || [])
       .filter(i => i >= 0 && i < geminiLots.length)
       .map(i => geminiLots[i]);
 
-    // Fallback: if Gemini returned nothing, return all pre-filtered lots (they already match)
+    // Fallback: if the AI returned nothing, return the TOP of the pre-filtered
+    // pool — capped. Previously this dumped the entire 400-lot candidate pool
+    // ("freehold blocks" → 400 "matches" on 2026-06-28), which reads as a
+    // broken search. 40 top-scored candidates with an honest report is useful.
     if (matchingLots.length === 0) {
-      matchingLots = geminiLots;
-      log.info('smart-search ai-empty-fallback', { returning: matchingLots.length });
+      matchingLots = geminiLots.slice(0, 40);
+      log.info('smart-search ai-empty-fallback', { returning: matchingLots.length, poolSize: geminiLots.length });
       if (!aiParsed.report || aiParsed.report === 'Search completed.') {
-        aiParsed.report = `Found ${totalSearched} lot${totalSearched !== 1 ? 's' : ''} matching "${query}". Sorted by investment score.`;
+        aiParsed.report = `The AI couldn't pinpoint exact matches for "${query}", so here are the top ${matchingLots.length} candidates (of ${totalSearched} searched) that fit your filters, sorted by investment score.`;
       }
     }
 
