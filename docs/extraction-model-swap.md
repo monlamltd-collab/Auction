@@ -87,11 +87,36 @@ resetting the previous value. After the swap, watch:
 - **PDF extraction** is pinned to direct Google Gemini (inline PDF isn't portable).
 - **Image classification** must stay multimodal (`callVisionAI`).
 
-## Open
+## Subscription vs pay-per-use — settled: stay pay-per-use (2026-07-07)
 
-- Subscription vs pay-per-use: whether a flat-rate plan (GLM / MiniMax / Qwen / Kimi)
-  beats deepseek-v4-flash pay-per-use — gated on the ≥256k-context requirement for
-  the huge pages and on the automated-batch ToS of coding-subscription plans.
-- Separate lever: image classification is ~52k calls/month with **no caching** — a
-  classify-once cache would gut the highest call volume (the `image_classifications`
-  table does not currently exist in prod).
+Researched flat-rate/subscription plans (Z.ai GLM, MiniMax, Alibaba Qwen, Moonshot
+Kimi, Chutes, Nebius). **None is usable for this workload** — each fails the
+context bar, the automated-batch ToS bar, or both:
+
+- **Context < 256k** → would silently truncate the 265k–772k-token outlier
+  catalogues: GLM ~205k, MiniMax ~205k, Kimi ~262k (marginal), Chutes/Nebius
+  DeepSeek 128–131k.
+- **Automated-batch ToS forbidden** (verified on each provider's policy page): the
+  GLM / MiniMax / Kimi "coding plans" restrict use to interactive IDE/agent tools
+  and explicitly forbid automated backends / batch pipelines. **Alibaba Cloud Model
+  Studio Coding Plan Pro** ($50/mo, 1M ctx) is the *only* flat plan that clears the
+  context bar — but its ToS bans "automated scripts, application backends, or other
+  non-interactive scenarios," i.e. exactly this pipeline.
+
+The ToS-clean *metered* variants (GLM API, Qwen-Plus PAYGO) hold ≤256k context and
+cost 4–7× the deepseek-v4-flash baseline. So `deepseek/deepseek-v4-flash` on
+OpenRouter pay-per-use stays the recommendation: cheapest, 1M context, ToS-clean,
+already integrated.
+
+## Next cost lever (if ever needed) — NOT a provider switch
+
+Input tokens dominate (extraction ~11–19k in vs ~5k out; image-classify 98M input
+tokens/mo). The lever is **input reduction / prompt caching** on the existing
+deepseek path — the extraction prompt+schema is a large fixed prefix that
+prompt-caching could discount on repeat calls — not a new provider/failure domain.
+
+## Related open lever
+
+- Image classification is ~52k calls/month with **no caching** — a classify-once
+  cache would gut the highest call volume (the `image_classifications` table does
+  not currently exist in prod).
