@@ -13,6 +13,7 @@ import { FALLBACK_CALENDAR } from '../lib/calendar.js';
 import { getLotsForCatalogues } from '../lib/pipeline/lot-lookup.js';
 import { normaliseLotStatuses, isValidImageUrl } from '../lib/scraper.js';
 import { parseAIResponse } from '../lib/search-parse.js';
+import { parseSmartSearchQuery } from '../lib/search-query-parse.js';
 import { createHash } from 'crypto';
 
 const router = Router();
@@ -121,196 +122,10 @@ function isPresetQuery(query) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// SMART SEARCH QUERY PARSER — extracts structured column filters
-// from natural language queries so the lots table can be queried
-// with SQL before sending the narrowed set to Gemini.
+// SMART SEARCH QUERY PARSER — extracted to lib/search-query-parse.js
+// (2026-07-07) so the parsing contract is unit-testable without this
+// module's Supabase-at-import dependency. See tests/test-smart-query-parse.js.
 // ═══════════════════════════════════════════════════════════════
-function parseSmartSearchQuery(query) {
-  const result = { filters: {}, softFilters: {}, locationTerms: [], freeText: [], intentWords: [], concepts: [], original: query };
-  let q = query.toLowerCase().trim();
-
-  // ── Concept detection — compound intents that shouldn't be split into individual hard filters ──
-  // "block(s) of flats" / "blocks of apartments" → multi-unit freehold concept
-  if (/blocks?\s+of\s+(?:flats?|apartments?)/i.test(q)) {
-    result.concepts.push('multi_unit_freehold');
-    q = q.replace(/blocks?\s+of\s+(?:flats?|apartments?)/gi, '').trim();
-  }
-  // "could title split" / "title split potential" / "potential to title split"
-  if (/(?:could|potential\s+to)\s+title\s+split/i.test(q)) {
-    result.concepts.push('title_split_potential');
-    q = q.replace(/(?:could|potential\s+to)\s+title\s+split/gi, '').trim();
-  }
-  // "HMO conversion" / "convert to HMO"
-  if (/(?:hmo\s+conversion|convert(?:ed)?\s+to\s+hmo)/i.test(q)) {
-    result.concepts.push('hmo_conversion');
-    q = q.replace(/(?:hmo\s+conversion|convert(?:ed)?\s+to\s+hmo)/gi, '').trim();
-  }
-  // "development site" / "development opportunity"
-  if (/development\s+(?:site|opportunity|potential|plot)/i.test(q)) {
-    result.concepts.push('development');
-    q = q.replace(/development\s+(?:site|opportunity|potential|plot)/gi, '').trim();
-  }
-  // "flip" / "buy to flip" / "quick flip"
-  if (/(?:buy\s+to\s+|quick\s+)?flip/i.test(q)) {
-    result.concepts.push('flip');
-    q = q.replace(/(?:buy\s+to\s+|quick\s+)?flip/gi, '').trim();
-  }
-  // "buy to let" / "BTL" / "rental"
-  if (/(?:buy\s+to\s+let|btl|rental\s+(?:investment|property|yield))/i.test(q)) {
-    result.concepts.push('buy_to_let');
-    q = q.replace(/(?:buy\s+to\s+let|btl|rental\s+(?:investment|property|yield))/gi, '').trim();
-  }
-
-  // ── Multi-word phrases (extract before splitting into words) ──
-  // title_split as standalone phrase (not part of a concept) → soft filter
-  if (/title\s+split/i.test(q)) { result.softFilters.title_split = true; q = q.replace(/title\s+splits?/gi, '').trim(); }
-  if (/need(?:s|ing)?\s+work/i.test(q)) { result.softFilters.condition = ['needs work', 'poor']; q = q.replace(/need(?:s|ing)?\s+(?:of\s+)?work/gi, '').trim(); }
-  if (/poor\s+condition/i.test(q)) { result.softFilters.condition = ['needs work', 'poor']; q = q.replace(/poor\s+condition/gi, '').trim(); }
-  if (/good\s+condition/i.test(q)) { result.filters.condition = ['good']; q = q.replace(/good\s+condition/gi, '').trim(); }
-  if (/share\s+of\s+freehold/i.test(q)) { result.filters.tenure = 'Share of Freehold'; q = q.replace(/share\s+of\s+freehold/gi, '').trim(); }
-  if (/high\s+yield/i.test(q)) { result.filters.sortBy = 'yield'; q = q.replace(/high\s+yield/gi, '').trim(); }
-  if (/deal\s+stack/i.test(q)) { result.concepts.push('deal_stack'); q = q.replace(/deal\s+stack(?:ing)?/gi, '').trim(); }
-
-  // ── Multi-word location names (must extract before splitting) ──
-  const multiWordLocations = {
-    'milton keynes': 'Milton Keynes', 'st albans': 'St Albans', 'stoke on trent': 'Stoke',
-    'weston-super-mare': 'Weston-super-Mare', 'weston super mare': 'Weston-super-Mare',
-    'tunbridge wells': 'Tunbridge', 'bury st edmunds': 'Bury St Edmunds',
-    'kings lynn': 'Kings Lynn', 'great yarmouth': 'Great Yarmouth',
-    'hemel hempstead': 'Hemel Hempstead', 'st helens': 'St Helens',
-    'west bromwich': 'West Bromwich', 'sutton coldfield': 'Sutton Coldfield',
-    'stratford-upon-avon': 'Stratford-upon-Avon', 'stratford upon avon': 'Stratford-upon-Avon',
-    'bishop auckland': 'Bishop Auckland', 'south shields': 'South Shields',
-    'port talbot': 'Port Talbot', 'isle of wight': 'Isle of Wight',
-    'fort william': 'Fort William', 'east kilbride': 'East Kilbride',
-    'barrow in furness': 'Barrow', 'colwyn bay': 'Colwyn Bay',
-  };
-  for (const [phrase, canonical] of Object.entries(multiWordLocations)) {
-    if (q.includes(phrase)) { result.locationTerms.push(canonical); q = q.replace(new RegExp(phrase.replace(/[-]/g, '\\-'), 'gi'), '').trim(); }
-  }
-
-  // ── Region names → postcode prefix filters ──
-  const regionPostcodes = {
-    'london': ['E','EC','N','NW','SE','SW','W','WC','EN','HA','IG','KT','TW','UB','BR','CR','DA','SM','RM'],
-    'south east': ['BN','CT','GU','ME','MK','OX','PO','RG','RH','SL','SO','TN','HP'],
-    'south west': ['BA','BH','BS','DT','EX','GL','PL','SN','SP','TA','TQ','TR'],
-    'east': ['AL','CB','CM','CO','IP','LU','NR','PE','SG','SS','WD'],
-    'west midlands': ['B','CV','DY','HR','ST','TF','WR','WS','WV'],
-    'east midlands': ['DE','DN','LE','LN','NG','NN'],
-    'north west': ['BB','BL','CA','CH','CW','FY','L','LA','M','OL','PR','SK','WA','WN'],
-    'north east': ['DH','DL','HG','NE','SR','TS'],
-    'yorkshire': ['BD','DN','HD','HG','HU','HX','LS','S','WF','YO'],
-    'wales': ['CF','LD','LL','NP','SA','SY'],
-    'scotland': ['AB','DD','DG','EH','FK','G','HS','IV','KA','KW','KY','ML','PA','PH','TD','ZE'],
-  };
-  // Check region phrases (must check multi-word first; 'london' is included
-  // because lots in "47 Brompton Road, SW3" never contain the literal word
-  // 'london' — postcode prefix matching catches them)
-  const regionOrder = ['south east','south west','west midlands','east midlands','north west','north east','east','yorkshire','wales','scotland','london'];
-  for (const region of regionOrder) {
-    // Use word-boundary regex so 'east' inside 'east-end' doesn't match
-    // and 'south east' doesn't trigger 'east' as well
-    const regionRe = new RegExp('\\b' + region.replace(/\s+/g, '\\s+') + '\\b', 'i');
-    if (regionRe.test(q)) {
-      result.filters.regionPostcodes = regionPostcodes[region];
-      result.filters.regionName = region;
-      q = q.replace(new RegExp(regionRe.source, 'gi'), '').trim();
-      break;
-    }
-  }
-
-  // ── Price patterns ──
-  const underMatch = q.match(/(?:under|below|max|up\s+to|less\s+than)\s*£?\s*(\d[\d,]*)\s*k?\b/i);
-  if (underMatch) {
-    let price = parseInt(underMatch[1].replace(/,/g, ''));
-    if (price < 10000) price *= 1000;
-    result.filters.maxPrice = price;
-    q = q.replace(underMatch[0], '').trim();
-  }
-  const overMatch = q.match(/(?:over|above|min|more\s+than|from)\s*£?\s*(\d[\d,]*)\s*k?\b/i);
-  if (overMatch) {
-    let price = parseInt(overMatch[1].replace(/,/g, ''));
-    if (price < 10000) price *= 1000;
-    result.filters.minPrice = price;
-    q = q.replace(overMatch[0], '').trim();
-  }
-
-  // ── Beds ──
-  const bedMatch = q.match(/(\d+)\s*(?:bed(?:room)?s?\b)/i);
-  if (bedMatch) { result.filters.beds = parseInt(bedMatch[1]); q = q.replace(bedMatch[0], '').trim(); }
-
-  // ── Word classification ──
-  const propTypes = { house: 'house', houses: 'house', property: null, properties: null, flat: 'flat', flats: 'flat', apartment: 'flat', apartments: 'flat', land: 'land', commercial: 'commercial', garage: 'garage', bungalow: 'bungalow' };
-  const conditionWords = { refurb: ['needs work', 'poor'], refurbishment: ['needs work', 'poor'], derelict: ['poor'], dilapidated: ['poor'], rundown: ['needs work', 'poor'] };
-
-  // Intent words — carry meaning for AI ranking but NOT for SQL filtering
-  const intentWords = new Set([
-    'best','good','great','top','cheap','cheapest','bargain','bargains','deal','deals',
-    'interesting','opportunity','opportunities','investment','investments','promising',
-    'strong','value','undervalued','potential','recommend','recommended','find','show',
-    'search','looking','want','need','any','all','the','with','for','and','near',
-    'around','area','region','in','at','on','from','to','what','where','which','how',
-    'can','could','should','would','some','these','those','most','more','very','really',
-    'please','thanks','help','me','my','give','list','lots','auction','auctions','market',
-  ]);
-
-  // Known UK cities/towns for location detection
-  const knownLocations = new Set([
-    'london','manchester','birmingham','leeds','sheffield','liverpool','bristol','newcastle','nottingham',
-    'cardiff','edinburgh','glasgow','belfast','bradford','leicester','coventry','hull','wolverhampton',
-    'stoke','derby','swansea','southampton','portsmouth','plymouth','exeter','reading','oxford','cambridge',
-    'brighton','bournemouth','bath','york','chester','lancaster','durham','norwich','ipswich','luton',
-    'sunderland','middlesbrough','blackpool','bolton','burnley','rochdale','wigan','warrington','crewe',
-    'gloucester','cheltenham','swindon','taunton','peterborough','northampton','lincoln','doncaster',
-    'halifax','huddersfield','wakefield','barnsley','rotherham','harrogate','scarborough','carlisle',
-    'preston','accrington','salford','oldham','stockport','macclesfield','stafford','tamworth',
-    'shrewsbury','telford','hereford','worcester','redditch','nuneaton','rugby','solihull',
-    'walsall','dudley','kidderminster','chesterfield','mansfield','grantham','loughborough','corby',
-    'kettering','wellingborough','buxton','matlock','colchester','chelmsford','southend','basildon',
-    'stevenage','watford','hertford','hastings','eastbourne','crawley','chichester',
-    'basingstoke','winchester','folkestone','margate','dover','ashford','woking','guildford','maidstone',
-    'canterbury','tunbridge','chatham','dartford','gravesend','poole','weymouth','dorchester','barnstaple',
-    'yeovil','bridgwater','salisbury','chippenham','truro','penzance','newquay','falmouth',
-    'carmarthen','wrexham','bangor','newport','llandudno','aberystwyth','barry','bridgend','neath',
-    'llanelli','haverfordwest','pembroke','brecon','aberdeen','dundee','inverness','stirling','perth',
-    'falkirk','paisley','kilmarnock','ayr','dumfries','dunfermline','livingston',
-    'croydon','bromley','sutton','kingston','richmond','ealing','hounslow','brent','harrow','barnet',
-    'enfield','brixton','peckham','hackney','islington','camden','greenwich','lewisham','southwark',
-    'lambeth','wandsworth','tottenham','stratford','ilford','romford','dagenham','woolwich','deptford',
-  ]);
-
-  const words = q.split(/\s+/).filter(w => w.length > 1);
-  const consumed = new Set();
-  for (const word of words) {
-    const w = word.replace(/[^a-z0-9-]/g, '');
-    if (!w) continue;
-    if (w === 'freehold' && !result.filters.tenure) { result.filters.tenure = 'Freehold'; consumed.add(word); }
-    else if (w === 'leasehold' && !result.filters.tenure) { result.filters.tenure = 'Leasehold'; consumed.add(word); }
-    else if (w === 'vacant') { result.softFilters.vacant = true; consumed.add(word); }
-    else if (w === 'unsold' || w === 'failed') { result.filters.statusOverride = 'unsold'; consumed.add(word); }
-    else if (w === 'development') { result.freeText.push(w); consumed.add(word); }
-    else if (w === 'hmo') { result.freeText.push(w); consumed.add(word); }
-    else if (w === 'repossession' || w === 'repossessed' || w === 'receivership') { result.freeText.push(w); consumed.add(word); }
-    else if (w === 'yield') { result.filters.sortBy = result.filters.sortBy || 'yield'; consumed.add(word); }
-    else if (propTypes[w] !== undefined) { if (propTypes[w]) result.softFilters.prop_type = propTypes[w]; consumed.add(word); }
-    else if (conditionWords[w] && !result.softFilters.condition) { result.softFilters.condition = conditionWords[w]; consumed.add(word); }
-    else if (knownLocations.has(w)) { result.locationTerms.push(w); consumed.add(word); }
-    // Postcode prefix (e.g. BS1, M1, LS2)
-    else if (/^[a-z]{1,2}\d{1,2}[a-z]?$/i.test(w)) { result.locationTerms.push(w.toUpperCase()); consumed.add(word); }
-    // Intent/filler words — strip from SQL, pass context to Gemini
-    else if (intentWords.has(w)) { result.intentWords.push(w); consumed.add(word); }
-  }
-
-  // Remaining unconsumed words → freeText for full-text search (NOT location)
-  for (const word of words) {
-    if (consumed.has(word)) continue;
-    const w = word.replace(/[^a-z0-9-]/g, '');
-    if (!w || w.length < 3) continue;
-    result.freeText.push(w);
-  }
-
-  return result;
-}
 
 // ═══════════════════════════════════════════════════════════════
 // SMART SEARCH: Column-filtered database query + AI analysis
@@ -868,13 +683,17 @@ router.post('/api/smart-search', asyncHandler(async (req, res) => {
     let unsoldExtra = [];
     if (effectiveSold === 'unsold' || effectiveSold === 'all' || sf === 'everything') {
       const unsoldCutoff = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+      // Honour an explicit 'unsold' filter — withdrawn lots are not unsold,
+      // and in the no-AI fallback paths this pool is served to users directly.
       let unsoldQuery = supabase.from('lots').select(LOTS_SELECT)
-        .in('status', ['unsold', 'withdrawn'])
+        .in('status', effectiveSold === 'unsold' ? ['unsold'] : ['unsold', 'withdrawn'])
         .gte('auction_date', unsoldCutoff);
       // Apply same hard filters to unsold lots
       if (sqParsed.filters.tenure) unsoldQuery = unsoldQuery.ilike('tenure', sqParsed.filters.tenure);
       if (sqParsed.filters.maxPrice) unsoldQuery = unsoldQuery.lte('price', sqParsed.filters.maxPrice);
       if (sqParsed.filters.minPrice) unsoldQuery = unsoldQuery.gte('price', sqParsed.filters.minPrice);
+      if (sqParsed.filters.beds) unsoldQuery = unsoldQuery.gte('beds', sqParsed.filters.beds);
+      if (sqParsed.filters.condition) unsoldQuery = unsoldQuery.in('condition', sqParsed.filters.condition);
       for (const loc of sqParsed.locationTerms) unsoldQuery = unsoldQuery.or(`address.ilike.%${loc}%,postcode.ilike.${loc}%`);
       if (sqParsed.filters.regionPostcodes) unsoldQuery = unsoldQuery.or(sqParsed.filters.regionPostcodes.map(p => `postcode.ilike.${p}%`).join(','));
       unsoldQuery = applyUiLoc(unsoldQuery);

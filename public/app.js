@@ -2545,8 +2545,15 @@ async function runSmartSearch(query) {
     }
   }
 
-  // Clean slate — abort previous, clear all state, reset filters
+  // Clean slate — abort previous, clear all state, reset filters.
+  // Capture the LOT STATUS selection FIRST: resetSearchState() sets fSoldTop
+  // to 'all', so reading it after (as the request body used to) silently
+  // discarded the user's Sold/Unsold/etc selection on every AI search.
+  const _smSold = $('fSoldTop')?.value || 'all';
   resetSearchState();
+  // Restore so the client-side post-filter on returned results matches what
+  // the server was asked to filter by.
+  if($('fSoldTop')) $('fSoldTop').value = _smSold;
   _searchAbort=new AbortController();
   const signal=_searchAbort.signal;
 
@@ -2595,7 +2602,7 @@ async function runSmartSearch(query) {
       headers: authHeaders(),
       body: JSON.stringify({
         query,
-        soldFilter: $('fSoldTop')?.value || 'all',
+        soldFilter: _smSold,
         location: (_smRaw || (_searchCentre && _smRadius)) ? {
           center: _searchCentre || null,
           rawInput: _smRaw || null,
@@ -2853,7 +2860,11 @@ function renderLots(){
   lots.forEach(l=>{l._affTag=getAffordabilityTag(l,aff)});
 
   // ── All filters in one pass ──
-  const minP=+$('fMinPrice').value, maxP=+$('fMaxPrice').value, minBeds=+$('fBeds').value;
+  let minP=+$('fMinPrice').value, maxP=+$('fMaxPrice').value;
+  // Inverted range (Min £500k / Max £100k) would otherwise show only POA lots
+  // with no cue — swap silently, matching standard portal behaviour.
+  if(minP&&maxP&&minP>maxP){const _t=minP;minP=maxP;maxP=_t;}
+  const minBeds=+$('fBeds').value;
   const ft=$('fType').value, fd=$('fDeal').value, fa=$('fAfford')?.value||'all';
   const fsold=$('fSoldTop')?.value||'';
   const fs=$('smartQuery').value.toLowerCase();
