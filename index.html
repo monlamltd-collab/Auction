@@ -338,11 +338,11 @@
            what AI can and can't do. -->
       <div class="sp-keywords-section">
         <div class="sp-keywords-head">
-          <h4 class="sp-keywords-title">Keywords <span class="beta-tag">BETA</span></h4>
-          <p class="sp-keywords-sub">Choose up to 3 keywords to refine your search.</p>
+          <h4 class="sp-keywords-title">AI Search <span class="beta-tag">BETA</span></h4>
+          <p class="sp-keywords-sub">Describe what you're looking for in plain English.</p>
         </div>
         <div class="sp-ai-group">
-          <input class="tb-search" id="smartQuery" placeholder="e.g. garden, planning, BTL" oninput="localFilter();updateSuggestions()" onfocus="showSuggestions()" aria-label="Refine search with up to 3 keywords" autocomplete="off">
+          <input class="tb-search" id="smartQuery" placeholder="e.g. 3-bed houses under £200k near Leeds needing work" oninput="localFilter();updateSuggestions()" onfocus="showSuggestions()" aria-label="Describe what you're looking for and search with AI" autocomplete="off">
           <button class="btn-main" id="mainBtn" onclick="handleSearch()" aria-label="Search auction lots">Search</button>
           <div class="ai-suggest" id="aiSuggest">
             <div class="ai-suggest-header">Try asking AI</div>
@@ -376,7 +376,7 @@
         <option value="">Bedrooms</option><option value="1">1+</option><option value="2">2+</option><option value="3">3+</option><option value="4">4+</option><option value="5">5+</option><option value="6">6+</option><option value="7">7+</option><option value="8">8+</option><option value="9">9+</option><option value="10">10+</option><option value="11">11+</option><option value="12">12+</option><option value="13">13+</option><option value="14">14+</option><option value="15">15+</option>
       </select>
       <select class="tb-select" id="fType" onchange="debouncedRender()" aria-label="Property type">
-        <option value="">Property type</option><option value="house">House</option><option value="flat">Flat</option><option value="bungalow">Bungalow</option><option value="commercial">Commercial</option><option value="land">Land</option><option value="garage">Garage</option><option value="other">Other</option>
+        <option value="">Property type</option><option value="house">House</option><option value="flat">Flat</option><option value="commercial">Commercial</option><option value="land">Land</option><option value="garage">Garage</option><option value="other">Other</option>
       </select>
       <select class="tb-select" id="fLocation" onchange="debouncedRender()" aria-label="Location">
         <option value="">Region</option>

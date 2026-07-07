@@ -524,7 +524,18 @@ function applyFilters(f) {
   updatePriceBtn();
   updateMoreDot();
   refreshMobileFilterCount();
-  renderLots();
+  // A saved/shared filter set can carry a past-implying LOT STATUS (sold, stc,
+  // unsold, withdrawn…). Setting the dropdown .value directly doesn't fire
+  // onStatusChange, so without this the past lots were never fetched and the
+  // grid rendered empty (2026-07-07 audit). Tick Show-past and refetch; its
+  // own render covers the view, so skip the immediate (empty) renderLots.
+  const _needPast = $('fSoldTop')?.value && PAST_STATUS_VALUES.has($('fSoldTop').value);
+  if (_needPast && $('fShowPast') && !$('fShowPast').checked) {
+    $('fShowPast').checked = true;
+    onShowPastChange({ force: true });
+  } else {
+    renderLots();
+  }
 }
 
 async function saveCurrentSearch() {
@@ -1011,8 +1022,12 @@ async function loadAllLots(opts){
     const showPast=$('fShowPast')?.checked;
     const apiUrl='/api/all-lots'+(showPast?'?includePast=true':'');
     const headers = { ...getAuthHeaders() };
+    // Only send If-None-Match when we actually have lots in memory to keep on a
+    // 304. The sessionStorage ETag outlives the 5-min IndexedDB render window,
+    // so without this guard a reload could 304 with ALL_LOTS empty → blank grid
+    // (2026-07-07 audit). No lots in hand → force a full 200.
     const cachedEtag = sessionStorage.getItem('ab_lots_etag');
-    if (cachedEtag) headers['If-None-Match'] = cachedEtag;
+    if (cachedEtag && ALL_LOTS.length > 0) headers['If-None-Match'] = cachedEtag;
 
     const r=await fetch(apiUrl,{headers});
 
@@ -1219,7 +1234,11 @@ function detectHouseFromUrl(url) {
 function handleSearch(){
   const q = $('smartQuery').value.trim();
   if(!q){
-    // No AI query — filters are live, just re-render
+    // Empty box. If we're sitting in an AI-result subset, the button reads
+    // 'Browse' and the user expects the full catalogue back — exit AI mode
+    // rather than just re-rendering the 12-lot subset (2026-07-07 audit).
+    if(SMART_RESULTS){ backToAuctions(); return; }
+    // Otherwise filters are live — just re-render.
     renderLots();
     return;
   }
@@ -2713,8 +2732,16 @@ function showView(v) {
 // LOT RENDERING
 // ═══════════════════════════════
 function buildLotFilters(){
+  const _prevDeal=$('fDeal')?.value||'';
   const deals=new Set(LOTS.map(l=>l.dealType).filter(Boolean));
   $('fDeal').innerHTML='<option value="">Opportunity</option>'+[...deals].sort().map(d=>`<option value="${esc(d)}">${esc(d)}</option>`).join('');
+  // fDeal options are built dynamically from loaded lots, but restoreFiltersFromURL()
+  // runs at parse time BEFORE they exist — so a shared ?fDeal=Title+Split URL was
+  // silently dropped and the grid showed every deal type (2026-07-07 audit).
+  // Re-apply the desired value (URL wins on first build; otherwise preserve the
+  // user's current selection across the rebuild) now that the option exists.
+  const _wantDeal=new URLSearchParams(location.search).get('fDeal')||_prevDeal;
+  if(_wantDeal){ $('fDeal').value=_wantDeal; } // no-op if the option doesn't exist (value stays '')
 
   /* fTS dropdown removed — title splits shown inline via section dividers */
 
@@ -2846,7 +2873,12 @@ function renderLots(){
   // the 2026-07-06 audit were unreachable by every option): 'commercial'
   // folds in commercial blocks, and 'other' is a catch-all for anything the
   // named options don't cover, so no lot is silently unfilterable.
-  const PROP_TYPE_NAMED=['house','flat','bungalow','commercial','land','garage'];
+  // Named options in the PROPERTY TYPE dropdown. 'bungalow' is intentionally
+  // absent: the extractor + address-inference canonicalise bungalows to
+  // 'house', so a Bungalow option was a dead control (always 0 lots) and was
+  // removed (2026-07-07 audit). Any stray prop_type='bungalow' now falls to
+  // 'Other' rather than becoming unreachable.
+  const PROP_TYPE_NAMED=['house','flat','commercial','land','garage'];
   function matchesPropType(pt,sel){
     if(sel==='commercial') return pt==='commercial'||pt==='commercial_block';
     if(sel==='other') return !PROP_TYPE_NAMED.includes(pt||'');

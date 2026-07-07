@@ -3,7 +3,7 @@ import { Router } from 'express';
 import { supabase } from '../lib/supabase.js';
 import { validateUserFromReq, safeCompare, rateLimit, getClientIP } from '../lib/auth.js';
 import { log } from '../lib/logging.js';
-import { STRIPE_ENABLED } from '../lib/config.js';
+import { STRIPE_ENABLED, resolveEffectiveTier } from '../lib/config.js';
 import { sendWelcomeEmail } from '../lib/email.js';
 import { logActivityEvent } from '../lib/analysis.js';
 import { runUnsoldAlertsCycle } from '../lib/pipeline/unsold-alerts.js';
@@ -167,7 +167,7 @@ router.get('/api/searches', async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('saved_searches')
-      .select('id, name, filters, created_at')
+      .select('id, name, filters, created_at, notify_email')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(20);
@@ -231,7 +231,11 @@ router.delete('/api/searches/:id', async (req, res) => {
 router.patch('/api/searches/:id', async (req, res) => {
   const user = await validateUserFromReq(req);
   if (!user) return res.status(401).json({ error: 'Authentication required' });
-  if (user.tier !== 'premium') {
+  // Use the EFFECTIVE tier, not the raw column: with Stripe disabled (current
+  // prod) resolveEffectiveTier grants everyone premium, so a raw `user.tier
+  // !== 'premium'` check 403'd the alert toggle for every real user (2026-07-07
+  // audit). Also honours active trials.
+  if (resolveEffectiveTier(user) !== 'premium') {
     return res.status(403).json({ error: 'Email alerts are a Pro feature', upgrade_required: true });
   }
 
