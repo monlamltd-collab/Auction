@@ -224,10 +224,10 @@ npm run dev        # runs with --watch, opens at http://localhost:3000
 ### Running tests
 
 ```bash
-npm test           # runs all 95 test files
+npm test           # runs all 96 test files
 ```
 
-Key test files: `test-scoring.js`, `test-harness.js`, `test-enrichment.js`, `test-healing-agent.js`, `test-recall.js`, `test-fundability.js`, `test-manifest.js`, `test-fabrication-guard.js`, `test-search-parse.js` (AI-search response salvage), `test-charlesdarrow-recogniser.js`, `test-sdlauctions-recogniser.js`, `test-cliveemson-recogniser.js`.
+Key test files: `test-scoring.js`, `test-harness.js`, `test-enrichment.js`, `test-healing-agent.js`, `test-recall.js`, `test-fundability.js`, `test-manifest.js`, `test-fabrication-guard.js`, `test-search-parse.js` (AI-search response salvage), `test-smart-query-parse.js` (AI-search query parsing: price/beds/location extraction), `test-charlesdarrow-recogniser.js`, `test-sdlauctions-recogniser.js`, `test-cliveemson-recogniser.js`.
 
 ---
 

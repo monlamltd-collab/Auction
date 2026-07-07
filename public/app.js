@@ -524,7 +524,18 @@ function applyFilters(f) {
   updatePriceBtn();
   updateMoreDot();
   refreshMobileFilterCount();
-  renderLots();
+  // A saved/shared filter set can carry a past-implying LOT STATUS (sold, stc,
+  // unsold, withdrawn…). Setting the dropdown .value directly doesn't fire
+  // onStatusChange, so without this the past lots were never fetched and the
+  // grid rendered empty (2026-07-07 audit). Tick Show-past and refetch; its
+  // own render covers the view, so skip the immediate (empty) renderLots.
+  const _needPast = $('fSoldTop')?.value && PAST_STATUS_VALUES.has($('fSoldTop').value);
+  if (_needPast && $('fShowPast') && !$('fShowPast').checked) {
+    $('fShowPast').checked = true;
+    onShowPastChange({ force: true });
+  } else {
+    renderLots();
+  }
 }
 
 async function saveCurrentSearch() {
@@ -872,13 +883,27 @@ function showSkeletonCards(n){
   out.innerHTML='<div class="lots-grid'+(_viewMode==='list'?' list-view':'')+'" id="lotsGrid">'+skelHtml+'</div>';
 }
 
-function onShowPastChange(){
+function onShowPastChange(opts){
   const showPast=$('fShowPast')?.checked;
   const url=new URL(window.location);
   if(showPast) url.searchParams.set('showPast','true');
   else url.searchParams.delete('showPast');
   window.history.replaceState({},'',url);
-  loadAllLots();
+  loadAllLots(opts);
+}
+
+// LOT STATUS values that inherently refer to past auctions. Selecting one
+// auto-enables "Show past auctions" and refetches — without this, Sold /
+// Sale Agreed / Recently unsold filtered a future-only dataset and silently
+// returned an empty grid (2026-07-06 audit).
+const PAST_STATUS_VALUES=new Set(['unsold','recently_unsold','sold','stc','withdrawn','everything']);
+function onStatusChange(){
+  const v=$('fSoldTop')?.value;
+  if(PAST_STATUS_VALUES.has(v)&&$('fShowPast')&&!$('fShowPast').checked){
+    $('fShowPast').checked=true;
+    onShowPastChange({force:true}); // syncs the URL + refetches with includePast
+  }
+  debouncedRender();
 }
 
 let _lotsLoadedAt=0; // timestamp of last successful load
@@ -997,8 +1022,12 @@ async function loadAllLots(opts){
     const showPast=$('fShowPast')?.checked;
     const apiUrl='/api/all-lots'+(showPast?'?includePast=true':'');
     const headers = { ...getAuthHeaders() };
+    // Only send If-None-Match when we actually have lots in memory to keep on a
+    // 304. The sessionStorage ETag outlives the 5-min IndexedDB render window,
+    // so without this guard a reload could 304 with ALL_LOTS empty → blank grid
+    // (2026-07-07 audit). No lots in hand → force a full 200.
     const cachedEtag = sessionStorage.getItem('ab_lots_etag');
-    if (cachedEtag) headers['If-None-Match'] = cachedEtag;
+    if (cachedEtag && ALL_LOTS.length > 0) headers['If-None-Match'] = cachedEtag;
 
     const r=await fetch(apiUrl,{headers});
 
@@ -1205,7 +1234,11 @@ function detectHouseFromUrl(url) {
 function handleSearch(){
   const q = $('smartQuery').value.trim();
   if(!q){
-    // No AI query — filters are live, just re-render
+    // Empty box. If we're sitting in an AI-result subset, the button reads
+    // 'Browse' and the user expects the full catalogue back — exit AI mode
+    // rather than just re-rendering the 12-lot subset (2026-07-07 audit).
+    if(SMART_RESULTS){ backToAuctions(); return; }
+    // Otherwise filters are live — just re-render.
     renderLots();
     return;
   }
@@ -2531,8 +2564,15 @@ async function runSmartSearch(query) {
     }
   }
 
-  // Clean slate — abort previous, clear all state, reset filters
+  // Clean slate — abort previous, clear all state, reset filters.
+  // Capture the LOT STATUS selection FIRST: resetSearchState() sets fSoldTop
+  // to 'all', so reading it after (as the request body used to) silently
+  // discarded the user's Sold/Unsold/etc selection on every AI search.
+  const _smSold = $('fSoldTop')?.value || 'all';
   resetSearchState();
+  // Restore so the client-side post-filter on returned results matches what
+  // the server was asked to filter by.
+  if($('fSoldTop')) $('fSoldTop').value = _smSold;
   _searchAbort=new AbortController();
   const signal=_searchAbort.signal;
 
@@ -2581,7 +2621,7 @@ async function runSmartSearch(query) {
       headers: authHeaders(),
       body: JSON.stringify({
         query,
-        soldFilter: $('fSoldTop')?.value || 'all',
+        soldFilter: _smSold,
         location: (_smRaw || (_searchCentre && _smRadius)) ? {
           center: _searchCentre || null,
           rawInput: _smRaw || null,
@@ -2692,8 +2732,16 @@ function showView(v) {
 // LOT RENDERING
 // ═══════════════════════════════
 function buildLotFilters(){
+  const _prevDeal=$('fDeal')?.value||'';
   const deals=new Set(LOTS.map(l=>l.dealType).filter(Boolean));
   $('fDeal').innerHTML='<option value="">Opportunity</option>'+[...deals].sort().map(d=>`<option value="${esc(d)}">${esc(d)}</option>`).join('');
+  // fDeal options are built dynamically from loaded lots, but restoreFiltersFromURL()
+  // runs at parse time BEFORE they exist — so a shared ?fDeal=Title+Split URL was
+  // silently dropped and the grid showed every deal type (2026-07-07 audit).
+  // Re-apply the desired value (URL wins on first build; otherwise preserve the
+  // user's current selection across the rebuild) now that the option exists.
+  const _wantDeal=new URLSearchParams(location.search).get('fDeal')||_prevDeal;
+  if(_wantDeal){ $('fDeal').value=_wantDeal; } // no-op if the option doesn't exist (value stays '')
 
   /* fTS dropdown removed — title splits shown inline via section dividers */
 
@@ -2820,6 +2868,23 @@ function renderLots(){
   const aff=fp.aff;
   let lots=LOTS.slice();
 
+  // Property-type dropdown matcher. The DB vocabulary is wider than the
+  // dropdown (block_sale, commercial_block, portfolio — 101 active lots at
+  // the 2026-07-06 audit were unreachable by every option): 'commercial'
+  // folds in commercial blocks, and 'other' is a catch-all for anything the
+  // named options don't cover, so no lot is silently unfilterable.
+  // Named options in the PROPERTY TYPE dropdown. 'bungalow' is intentionally
+  // absent: the extractor + address-inference canonicalise bungalows to
+  // 'house', so a Bungalow option was a dead control (always 0 lots) and was
+  // removed (2026-07-07 audit). Any stray prop_type='bungalow' now falls to
+  // 'Other' rather than becoming unreachable.
+  const PROP_TYPE_NAMED=['house','flat','commercial','land','garage'];
+  function matchesPropType(pt,sel){
+    if(sel==='commercial') return pt==='commercial'||pt==='commercial_block';
+    if(sel==='other') return !PROP_TYPE_NAMED.includes(pt||'');
+    return pt===sel;
+  }
+
   // Assign stable index for card IDs
   lots.forEach((l,i) => { l._idx = i; });
 
@@ -2827,7 +2892,11 @@ function renderLots(){
   lots.forEach(l=>{l._affTag=getAffordabilityTag(l,aff)});
 
   // ── All filters in one pass ──
-  const minP=+$('fMinPrice').value, maxP=+$('fMaxPrice').value, minBeds=+$('fBeds').value;
+  let minP=+$('fMinPrice').value, maxP=+$('fMaxPrice').value;
+  // Inverted range (Min £500k / Max £100k) would otherwise show only POA lots
+  // with no cue — swap silently, matching standard portal behaviour.
+  if(minP&&maxP&&minP>maxP){const _t=minP;minP=maxP;maxP=_t;}
+  const minBeds=+$('fBeds').value;
   const ft=$('fType').value, fd=$('fDeal').value, fa=$('fAfford')?.value||'all';
   const fsold=$('fSoldTop')?.value||'';
   const fs=$('smartQuery').value.toLowerCase();
@@ -2892,7 +2961,7 @@ function renderLots(){
     // Beds
     if(minBeds&&l.beds&&l.beds<minBeds) return false;
     // Type / Deal / Tenure
-    if(ft&&!SMART_RESULTS&&l.propType!==ft) return false;
+    if(ft&&!SMART_RESULTS&&!matchesPropType(l.propType,ft)) return false;
     if(fd&&l.dealType!==fd) return false;
     if(ften&&l.tenure!==ften) return false;
     // Condition
@@ -6250,6 +6319,10 @@ const FILTER_PARAMS=['smartQuery','fSort','fMinPrice','fMaxPrice','fBeds','fType
 function restoreFiltersFromURL(){
   const p=new URLSearchParams(window.location.search);
   for(const id of FILTER_PARAMS){const v=p.get(id);if(v&&$(id))$(id).value=v}
+  // A past-implying LOT STATUS in a shared/reloaded URL needs past auctions
+  // in the dataset — tick the checkbox so the initial load fetches includePast.
+  const _rs=p.get('fSoldTop');
+  if(_rs&&PAST_STATUS_VALUES.has(_rs)&&$('fShowPast')) $('fShowPast').checked=true;
   updatePriceBtn();
   // Trigger geocoding for any restored town/postcode — setting .value directly
   // doesn't fire the oninput handler, so onLocationInput() never runs and the
@@ -6262,6 +6335,7 @@ function restoreFiltersFromURL(){
 function syncFiltersToURL(){
   const p=new URLSearchParams();
   for(const id of FILTER_PARAMS){const el=$(id);if(el&&el.value&&el.value!==el.querySelector('option')?.value)p.set(id,el.value)}
+  if($('fShowPast')?.checked) p.set('showPast','true');
   const curLot=new URLSearchParams(window.location.search).get('lot');
   if(curLot) p.set('lot', curLot);
   const qs=p.toString();

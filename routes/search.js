@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase.js';
 import { validateUserFromReq, rateLimit, getClientIP, safeCompare } from '../lib/auth.js';
 import { log } from '../lib/logging.js';
 import { resolveEffectiveTier, getAISearchLimit, STRIPE_ENABLED, stripAIFields } from '../lib/config.js';
-import { callAI } from '../lib/ai-provider.js';
+import { callAI, hasAIFallback } from '../lib/ai-provider.js';
 import { logActivityEvent, getCreditExhausted, setCreditExhausted, getCreditExhaustedAt, setCreditExhaustedAt } from '../lib/analysis.js';
 import { LOTS_SELECT, dbRowToLot } from '../lib/types/lot.js';
 import { enrichLotsWithFundability } from '../lib/fundability.js';
@@ -13,6 +13,7 @@ import { FALLBACK_CALENDAR } from '../lib/calendar.js';
 import { getLotsForCatalogues } from '../lib/pipeline/lot-lookup.js';
 import { normaliseLotStatuses, isValidImageUrl } from '../lib/scraper.js';
 import { parseAIResponse } from '../lib/search-parse.js';
+import { parseSmartSearchQuery } from '../lib/search-query-parse.js';
 import { createHash } from 'crypto';
 
 const router = Router();
@@ -121,196 +122,10 @@ function isPresetQuery(query) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// SMART SEARCH QUERY PARSER — extracts structured column filters
-// from natural language queries so the lots table can be queried
-// with SQL before sending the narrowed set to Gemini.
+// SMART SEARCH QUERY PARSER — extracted to lib/search-query-parse.js
+// (2026-07-07) so the parsing contract is unit-testable without this
+// module's Supabase-at-import dependency. See tests/test-smart-query-parse.js.
 // ═══════════════════════════════════════════════════════════════
-function parseSmartSearchQuery(query) {
-  const result = { filters: {}, softFilters: {}, locationTerms: [], freeText: [], intentWords: [], concepts: [], original: query };
-  let q = query.toLowerCase().trim();
-
-  // ── Concept detection — compound intents that shouldn't be split into individual hard filters ──
-  // "block(s) of flats" / "blocks of apartments" → multi-unit freehold concept
-  if (/blocks?\s+of\s+(?:flats?|apartments?)/i.test(q)) {
-    result.concepts.push('multi_unit_freehold');
-    q = q.replace(/blocks?\s+of\s+(?:flats?|apartments?)/gi, '').trim();
-  }
-  // "could title split" / "title split potential" / "potential to title split"
-  if (/(?:could|potential\s+to)\s+title\s+split/i.test(q)) {
-    result.concepts.push('title_split_potential');
-    q = q.replace(/(?:could|potential\s+to)\s+title\s+split/gi, '').trim();
-  }
-  // "HMO conversion" / "convert to HMO"
-  if (/(?:hmo\s+conversion|convert(?:ed)?\s+to\s+hmo)/i.test(q)) {
-    result.concepts.push('hmo_conversion');
-    q = q.replace(/(?:hmo\s+conversion|convert(?:ed)?\s+to\s+hmo)/gi, '').trim();
-  }
-  // "development site" / "development opportunity"
-  if (/development\s+(?:site|opportunity|potential|plot)/i.test(q)) {
-    result.concepts.push('development');
-    q = q.replace(/development\s+(?:site|opportunity|potential|plot)/gi, '').trim();
-  }
-  // "flip" / "buy to flip" / "quick flip"
-  if (/(?:buy\s+to\s+|quick\s+)?flip/i.test(q)) {
-    result.concepts.push('flip');
-    q = q.replace(/(?:buy\s+to\s+|quick\s+)?flip/gi, '').trim();
-  }
-  // "buy to let" / "BTL" / "rental"
-  if (/(?:buy\s+to\s+let|btl|rental\s+(?:investment|property|yield))/i.test(q)) {
-    result.concepts.push('buy_to_let');
-    q = q.replace(/(?:buy\s+to\s+let|btl|rental\s+(?:investment|property|yield))/gi, '').trim();
-  }
-
-  // ── Multi-word phrases (extract before splitting into words) ──
-  // title_split as standalone phrase (not part of a concept) → soft filter
-  if (/title\s+split/i.test(q)) { result.softFilters.title_split = true; q = q.replace(/title\s+splits?/gi, '').trim(); }
-  if (/need(?:s|ing)?\s+work/i.test(q)) { result.softFilters.condition = ['needs work', 'poor']; q = q.replace(/need(?:s|ing)?\s+(?:of\s+)?work/gi, '').trim(); }
-  if (/poor\s+condition/i.test(q)) { result.softFilters.condition = ['needs work', 'poor']; q = q.replace(/poor\s+condition/gi, '').trim(); }
-  if (/good\s+condition/i.test(q)) { result.filters.condition = ['good']; q = q.replace(/good\s+condition/gi, '').trim(); }
-  if (/share\s+of\s+freehold/i.test(q)) { result.filters.tenure = 'Share of Freehold'; q = q.replace(/share\s+of\s+freehold/gi, '').trim(); }
-  if (/high\s+yield/i.test(q)) { result.filters.sortBy = 'yield'; q = q.replace(/high\s+yield/gi, '').trim(); }
-  if (/deal\s+stack/i.test(q)) { result.concepts.push('deal_stack'); q = q.replace(/deal\s+stack(?:ing)?/gi, '').trim(); }
-
-  // ── Multi-word location names (must extract before splitting) ──
-  const multiWordLocations = {
-    'milton keynes': 'Milton Keynes', 'st albans': 'St Albans', 'stoke on trent': 'Stoke',
-    'weston-super-mare': 'Weston-super-Mare', 'weston super mare': 'Weston-super-Mare',
-    'tunbridge wells': 'Tunbridge', 'bury st edmunds': 'Bury St Edmunds',
-    'kings lynn': 'Kings Lynn', 'great yarmouth': 'Great Yarmouth',
-    'hemel hempstead': 'Hemel Hempstead', 'st helens': 'St Helens',
-    'west bromwich': 'West Bromwich', 'sutton coldfield': 'Sutton Coldfield',
-    'stratford-upon-avon': 'Stratford-upon-Avon', 'stratford upon avon': 'Stratford-upon-Avon',
-    'bishop auckland': 'Bishop Auckland', 'south shields': 'South Shields',
-    'port talbot': 'Port Talbot', 'isle of wight': 'Isle of Wight',
-    'fort william': 'Fort William', 'east kilbride': 'East Kilbride',
-    'barrow in furness': 'Barrow', 'colwyn bay': 'Colwyn Bay',
-  };
-  for (const [phrase, canonical] of Object.entries(multiWordLocations)) {
-    if (q.includes(phrase)) { result.locationTerms.push(canonical); q = q.replace(new RegExp(phrase.replace(/[-]/g, '\\-'), 'gi'), '').trim(); }
-  }
-
-  // ── Region names → postcode prefix filters ──
-  const regionPostcodes = {
-    'london': ['E','EC','N','NW','SE','SW','W','WC','EN','HA','IG','KT','TW','UB','BR','CR','DA','SM','RM'],
-    'south east': ['BN','CT','GU','ME','MK','OX','PO','RG','RH','SL','SO','TN','HP'],
-    'south west': ['BA','BH','BS','DT','EX','GL','PL','SN','SP','TA','TQ','TR'],
-    'east': ['AL','CB','CM','CO','IP','LU','NR','PE','SG','SS','WD'],
-    'west midlands': ['B','CV','DY','HR','ST','TF','WR','WS','WV'],
-    'east midlands': ['DE','DN','LE','LN','NG','NN'],
-    'north west': ['BB','BL','CA','CH','CW','FY','L','LA','M','OL','PR','SK','WA','WN'],
-    'north east': ['DH','DL','HG','NE','SR','TS'],
-    'yorkshire': ['BD','DN','HD','HG','HU','HX','LS','S','WF','YO'],
-    'wales': ['CF','LD','LL','NP','SA','SY'],
-    'scotland': ['AB','DD','DG','EH','FK','G','HS','IV','KA','KW','KY','ML','PA','PH','TD','ZE'],
-  };
-  // Check region phrases (must check multi-word first; 'london' is included
-  // because lots in "47 Brompton Road, SW3" never contain the literal word
-  // 'london' — postcode prefix matching catches them)
-  const regionOrder = ['south east','south west','west midlands','east midlands','north west','north east','east','yorkshire','wales','scotland','london'];
-  for (const region of regionOrder) {
-    // Use word-boundary regex so 'east' inside 'east-end' doesn't match
-    // and 'south east' doesn't trigger 'east' as well
-    const regionRe = new RegExp('\\b' + region.replace(/\s+/g, '\\s+') + '\\b', 'i');
-    if (regionRe.test(q)) {
-      result.filters.regionPostcodes = regionPostcodes[region];
-      result.filters.regionName = region;
-      q = q.replace(new RegExp(regionRe.source, 'gi'), '').trim();
-      break;
-    }
-  }
-
-  // ── Price patterns ──
-  const underMatch = q.match(/(?:under|below|max|up\s+to|less\s+than)\s*£?\s*(\d[\d,]*)\s*k?\b/i);
-  if (underMatch) {
-    let price = parseInt(underMatch[1].replace(/,/g, ''));
-    if (price < 10000) price *= 1000;
-    result.filters.maxPrice = price;
-    q = q.replace(underMatch[0], '').trim();
-  }
-  const overMatch = q.match(/(?:over|above|min|more\s+than|from)\s*£?\s*(\d[\d,]*)\s*k?\b/i);
-  if (overMatch) {
-    let price = parseInt(overMatch[1].replace(/,/g, ''));
-    if (price < 10000) price *= 1000;
-    result.filters.minPrice = price;
-    q = q.replace(overMatch[0], '').trim();
-  }
-
-  // ── Beds ──
-  const bedMatch = q.match(/(\d+)\s*(?:bed(?:room)?s?\b)/i);
-  if (bedMatch) { result.filters.beds = parseInt(bedMatch[1]); q = q.replace(bedMatch[0], '').trim(); }
-
-  // ── Word classification ──
-  const propTypes = { house: 'house', houses: 'house', property: null, properties: null, flat: 'flat', flats: 'flat', apartment: 'flat', apartments: 'flat', land: 'land', commercial: 'commercial', garage: 'garage', bungalow: 'bungalow' };
-  const conditionWords = { refurb: ['needs work', 'poor'], refurbishment: ['needs work', 'poor'], derelict: ['poor'], dilapidated: ['poor'], rundown: ['needs work', 'poor'] };
-
-  // Intent words — carry meaning for AI ranking but NOT for SQL filtering
-  const intentWords = new Set([
-    'best','good','great','top','cheap','cheapest','bargain','bargains','deal','deals',
-    'interesting','opportunity','opportunities','investment','investments','promising',
-    'strong','value','undervalued','potential','recommend','recommended','find','show',
-    'search','looking','want','need','any','all','the','with','for','and','near',
-    'around','area','region','in','at','on','from','to','what','where','which','how',
-    'can','could','should','would','some','these','those','most','more','very','really',
-    'please','thanks','help','me','my','give','list','lots','auction','auctions','market',
-  ]);
-
-  // Known UK cities/towns for location detection
-  const knownLocations = new Set([
-    'london','manchester','birmingham','leeds','sheffield','liverpool','bristol','newcastle','nottingham',
-    'cardiff','edinburgh','glasgow','belfast','bradford','leicester','coventry','hull','wolverhampton',
-    'stoke','derby','swansea','southampton','portsmouth','plymouth','exeter','reading','oxford','cambridge',
-    'brighton','bournemouth','bath','york','chester','lancaster','durham','norwich','ipswich','luton',
-    'sunderland','middlesbrough','blackpool','bolton','burnley','rochdale','wigan','warrington','crewe',
-    'gloucester','cheltenham','swindon','taunton','peterborough','northampton','lincoln','doncaster',
-    'halifax','huddersfield','wakefield','barnsley','rotherham','harrogate','scarborough','carlisle',
-    'preston','accrington','salford','oldham','stockport','macclesfield','stafford','tamworth',
-    'shrewsbury','telford','hereford','worcester','redditch','nuneaton','rugby','solihull',
-    'walsall','dudley','kidderminster','chesterfield','mansfield','grantham','loughborough','corby',
-    'kettering','wellingborough','buxton','matlock','colchester','chelmsford','southend','basildon',
-    'stevenage','watford','hertford','hastings','eastbourne','crawley','chichester',
-    'basingstoke','winchester','folkestone','margate','dover','ashford','woking','guildford','maidstone',
-    'canterbury','tunbridge','chatham','dartford','gravesend','poole','weymouth','dorchester','barnstaple',
-    'yeovil','bridgwater','salisbury','chippenham','truro','penzance','newquay','falmouth',
-    'carmarthen','wrexham','bangor','newport','llandudno','aberystwyth','barry','bridgend','neath',
-    'llanelli','haverfordwest','pembroke','brecon','aberdeen','dundee','inverness','stirling','perth',
-    'falkirk','paisley','kilmarnock','ayr','dumfries','dunfermline','livingston',
-    'croydon','bromley','sutton','kingston','richmond','ealing','hounslow','brent','harrow','barnet',
-    'enfield','brixton','peckham','hackney','islington','camden','greenwich','lewisham','southwark',
-    'lambeth','wandsworth','tottenham','stratford','ilford','romford','dagenham','woolwich','deptford',
-  ]);
-
-  const words = q.split(/\s+/).filter(w => w.length > 1);
-  const consumed = new Set();
-  for (const word of words) {
-    const w = word.replace(/[^a-z0-9-]/g, '');
-    if (!w) continue;
-    if (w === 'freehold' && !result.filters.tenure) { result.filters.tenure = 'Freehold'; consumed.add(word); }
-    else if (w === 'leasehold' && !result.filters.tenure) { result.filters.tenure = 'Leasehold'; consumed.add(word); }
-    else if (w === 'vacant') { result.softFilters.vacant = true; consumed.add(word); }
-    else if (w === 'unsold' || w === 'failed') { result.filters.statusOverride = 'unsold'; consumed.add(word); }
-    else if (w === 'development') { result.freeText.push(w); consumed.add(word); }
-    else if (w === 'hmo') { result.freeText.push(w); consumed.add(word); }
-    else if (w === 'repossession' || w === 'repossessed' || w === 'receivership') { result.freeText.push(w); consumed.add(word); }
-    else if (w === 'yield') { result.filters.sortBy = result.filters.sortBy || 'yield'; consumed.add(word); }
-    else if (propTypes[w] !== undefined) { if (propTypes[w]) result.softFilters.prop_type = propTypes[w]; consumed.add(word); }
-    else if (conditionWords[w] && !result.softFilters.condition) { result.softFilters.condition = conditionWords[w]; consumed.add(word); }
-    else if (knownLocations.has(w)) { result.locationTerms.push(w); consumed.add(word); }
-    // Postcode prefix (e.g. BS1, M1, LS2)
-    else if (/^[a-z]{1,2}\d{1,2}[a-z]?$/i.test(w)) { result.locationTerms.push(w.toUpperCase()); consumed.add(word); }
-    // Intent/filler words — strip from SQL, pass context to Gemini
-    else if (intentWords.has(w)) { result.intentWords.push(w); consumed.add(word); }
-  }
-
-  // Remaining unconsumed words → freeText for full-text search (NOT location)
-  for (const word of words) {
-    if (consumed.has(word)) continue;
-    const w = word.replace(/[^a-z0-9-]/g, '');
-    if (!w || w.length < 3) continue;
-    result.freeText.push(w);
-  }
-
-  return result;
-}
 
 // ═══════════════════════════════════════════════════════════════
 // SMART SEARCH: Column-filtered database query + AI analysis
@@ -404,6 +219,25 @@ async function getActiveCataloguesWithFallback() {
   return { rows: [...merged.values()], error: null, fromFallback: usedFallback };
 }
 
+// Build a PostgREST OR clause matching lots whose postcode is in a region's
+// postcode-area list. Single-letter areas (B, E, N, W, L, M, S, G) MUST be
+// digit-guarded: bare `postcode.ilike.B%` matched every area starting with B
+// (Bristol/Brighton/Bradford/Bath…) — a "west midlands" AI search returned 370
+// lots of which only 103 were Birmingham (2026-07-07 audit, verified in prod).
+// A UK postcode area is 1–2 letters ALWAYS followed by a digit, so `B0%..B9%`
+// matches exactly the single-letter 'B' area and nothing beginning 'BS'/'BN'.
+function regionPostcodeOrClause(prefixes) {
+  const terms = [];
+  for (const p of prefixes) {
+    if (p.length === 1) {
+      for (let d = 0; d <= 9; d++) terms.push(`postcode.ilike.${p}${d}%`);
+    } else {
+      terms.push(`postcode.ilike.${p}%`);
+    }
+  }
+  return terms.join(',');
+}
+
 // asyncHandler: the pre-try section (auth + rate limiting + location parse)
 // runs outside the handler's own try/catch — a rejection there previously
 // hung the request (Phase 5).
@@ -421,17 +255,37 @@ router.post('/api/smart-search', asyncHandler(async (req, res) => {
       : null;
     const radiusMiles = Number.isFinite(+location.radiusMiles) && +location.radiusMiles > 0 ? +location.radiusMiles : null;
     const rawInput = typeof location.rawInput === 'string' ? location.rawInput.trim() : '';
+    const pcMatch = rawInput.match(/^([A-Z]{1,2}\d[A-Z\d]?)/i);
     if (center && radiusMiles) {
       // Bounding-box approximation: 1° lat ≈ 69mi; 1° lng ≈ 40mi at UK latitudes (conservative).
-      uiLoc = { type: 'bbox', minLat: center.lat - radiusMiles / 69, maxLat: center.lat + radiusMiles / 69, minLng: center.lng - radiusMiles / 40, maxLng: center.lng + radiusMiles / 40 };
+      uiLoc = {
+        type: 'bbox',
+        minLat: +(center.lat - radiusMiles / 69).toFixed(6), maxLat: +(center.lat + radiusMiles / 69).toFixed(6),
+        minLng: +(center.lng - radiusMiles / 40).toFixed(6), maxLng: +(center.lng + radiusMiles / 40).toFixed(6),
+        // Text fallback for the ~47% of lots with no lat/lng — without it a
+        // bbox silently drops every coord-less lot in the area, so AI search
+        // returned far fewer lots than browse for the same town (2026-07-07).
+        pcPrefix: pcMatch ? pcMatch[1].toUpperCase() : null,
+        // Commas/parens would break the PostgREST .or() grammar; drop the
+        // address fallback rather than risk a malformed filter.
+        addrText: (rawInput && !/[(),]/.test(rawInput)) ? rawInput : null,
+      };
     } else if (rawInput) {
-      const pcMatch = rawInput.match(/^([A-Z]{1,2}\d[A-Z\d]?)/i);
       uiLoc = pcMatch ? { type: 'postcode', prefix: pcMatch[1].toUpperCase() } : { type: 'address', text: rawInput };
     }
   }
   const applyUiLoc = (q) => {
     if (!uiLoc) return q;
-    if (uiLoc.type === 'bbox') return q.gte('lat', uiLoc.minLat).lte('lat', uiLoc.maxLat).gte('lng', uiLoc.minLng).lte('lng', uiLoc.maxLng);
+    if (uiLoc.type === 'bbox') {
+      const bbox = `and(lat.gte.${uiLoc.minLat},lat.lte.${uiLoc.maxLat},lng.gte.${uiLoc.minLng},lng.lte.${uiLoc.maxLng})`;
+      const fb = [];
+      if (uiLoc.pcPrefix) fb.push(`postcode.ilike.${uiLoc.pcPrefix}%`);
+      if (uiLoc.addrText) fb.push(`address.ilike.%${uiLoc.addrText}%`);
+      if (!fb.length) return q.or(bbox);
+      // Coord-having lots: strict bbox. Coord-less lots: text-area fallback.
+      const fbGroup = fb.length > 1 ? `or(${fb.join(',')})` : fb[0];
+      return q.or(`${bbox},and(lat.is.null,${fbGroup})`);
+    }
     if (uiLoc.type === 'postcode') return q.ilike('postcode', `${uiLoc.prefix}%`);
     if (uiLoc.type === 'address') return q.ilike('address', `%${uiLoc.text}%`);
     return q;
@@ -545,6 +399,28 @@ router.post('/api/smart-search', asyncHandler(async (req, res) => {
     } catch { /* non-critical */ }
   }
 
+  // Refund the upfront atomic increment when the search fails for a reason
+  // that isn't the user's fault (no AI key, provider quota-dead, DB error).
+  // The counter is bumped BEFORE the AI call to keep the quota race-safe, so a
+  // failed search would otherwise silently burn one of the user's daily
+  // searches (2026-07-07 audit). Guarded, floor-at-0; only fires when we
+  // actually charged this request atomically.
+  let _refunded = false;
+  async function refundSearchCounter() {
+    if (!user || !userIncrementedAtomically || _refunded) return;
+    _refunded = true;
+    try {
+      await supabase.rpc('refund_ai_search', { p_user_id: user.id, p_today: searchToday });
+    } catch {
+      // Fallback if the RPC isn't deployed: guarded non-atomic decrement.
+      try {
+        const cur = Math.max(0, (searchesUsed || 1) - 1);
+        await supabase.from('users').update({ ai_searches_today: cur }).eq('id', user.id).eq('ai_searches_date', searchToday);
+      } catch { /* non-critical */ }
+    }
+    searchesUsed = Math.max(0, searchesUsed - 1);
+  }
+
   const presetSlug = isPresetQuery(query);
   const sf = soldFilter || 'all';
 
@@ -643,15 +519,26 @@ router.post('/api/smart-search', asyncHandler(async (req, res) => {
   // when the direct Gemini key is absent or quota-dead.
   if (!process.env.GEMINI_API_KEY && !process.env.OPENROUTER_API_KEY) {
     log.warn('smart-search: no AI provider key set (GEMINI_API_KEY / OPENROUTER_API_KEY)');
+    await refundSearchCounter();
     return res.status(500).json({ error: 'key_missing', message: 'AI search is not configured — no AI provider API key is set.' });
   }
-  if (getCreditExhausted()) {
+  // The creditExhausted flag is Gemini-specific (it can be latched by
+  // background catalogue extraction, not just search). With a fallback
+  // provider configured — production is OpenRouter-first — callAI rolls
+  // past a dead Gemini, so a latched flag must NOT block the search.
+  if (!hasAIFallback() && getCreditExhausted()) {
     const exhaustedAgo = getCreditExhaustedAt() ? Math.round((Date.now() - getCreditExhaustedAt()) / 60000) : '?';
     log.warn('smart-search: blocked by creditExhausted flag', { exhaustedMinutesAgo: exhaustedAgo });
+    await refundSearchCounter();
     return res.status(503).json({ error: 'ai_quota_exhausted', message: `Gemini API rate limit hit ${exhaustedAgo}min ago. Auto-resets after 1 hour. Try again soon.`, exhaustedMinutesAgo: exhaustedAgo });
   }
   const keyPrefix = (process.env.GEMINI_API_KEY || '').substring(0, 10);
   log.info('smart-search pre-flight', { tier: 'fast', keyPrefix: keyPrefix + '...', query: query.substring(0, 60) });
+
+  // Hoisted for the catch block: once Layer 1 has produced a candidate pool,
+  // an AI-provider failure degrades to score-ranked DB results instead of a
+  // 503 — the search must not die when the database already answered.
+  let _l1Pool = null, _l1Sources = null, _l1Total = 0;
 
   try {
     // ═══════════════════════════════════════════════════════════
@@ -757,8 +644,18 @@ router.post('/api/smart-search', asyncHandler(async (req, res) => {
     // Status filter (always applied — semantic meaning of 'available' /
     // 'unsold' etc). Shared by the tiered Layer-1 query and the free-text
     // recall pool below.
+    // Freshness guards mirroring get_active_lots() so an AI "available" search
+    // can't surface ended or stale-cached lots the browse grid deliberately
+    // hides (2026-07-07 audit): available requires last_seen within 7d AND a
+    // null/today-or-future auction date.
+    const freshCutoffISO = new Date(Date.now() - 7 * 86400000).toISOString();
+    const dateFloor = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
     const applyStatusFilter = (q) => {
-      if (effectiveSold === 'available') return q.or('status.eq.available,status.is.null');
+      if (effectiveSold === 'available') {
+        return q.or('status.eq.available,status.is.null')
+          .gte('last_seen_at', freshCutoffISO)
+          .or(`auction_date.is.null,auction_date.gte.${dateFloor}`);
+      }
       if (effectiveSold === 'sold') return q.in('status', ['sold', 'stc', 'withdrawn']);
       if (effectiveSold === 'unsold') return q.eq('status', 'unsold');
       if (effectiveSold === 'stc') return q.eq('status', 'stc');
@@ -789,8 +686,7 @@ router.post('/api/smart-search', asyncHandler(async (req, res) => {
           if (tier <= 1) {
             for (const loc of sqParsed.locationTerms) q = q.or(`address.ilike.%${loc}%,postcode.ilike.${loc}%`);
             if (sqParsed.filters.regionPostcodes) {
-              const pcOr = sqParsed.filters.regionPostcodes.map(p => `postcode.ilike.${p}%`).join(',');
-              q = q.or(pcOr);
+              q = q.or(regionPostcodeOrClause(sqParsed.filters.regionPostcodes));
             }
             // UI-supplied town/postcode + radius from the catalogue page
             // dropdowns. The header comment above always promised this was
@@ -859,15 +755,19 @@ router.post('/api/smart-search', asyncHandler(async (req, res) => {
     let unsoldExtra = [];
     if (effectiveSold === 'unsold' || effectiveSold === 'all' || sf === 'everything') {
       const unsoldCutoff = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+      // Honour an explicit 'unsold' filter — withdrawn lots are not unsold,
+      // and in the no-AI fallback paths this pool is served to users directly.
       let unsoldQuery = supabase.from('lots').select(LOTS_SELECT)
-        .in('status', ['unsold', 'withdrawn'])
+        .in('status', effectiveSold === 'unsold' ? ['unsold'] : ['unsold', 'withdrawn'])
         .gte('auction_date', unsoldCutoff);
       // Apply same hard filters to unsold lots
       if (sqParsed.filters.tenure) unsoldQuery = unsoldQuery.ilike('tenure', sqParsed.filters.tenure);
       if (sqParsed.filters.maxPrice) unsoldQuery = unsoldQuery.lte('price', sqParsed.filters.maxPrice);
       if (sqParsed.filters.minPrice) unsoldQuery = unsoldQuery.gte('price', sqParsed.filters.minPrice);
+      if (sqParsed.filters.beds) unsoldQuery = unsoldQuery.gte('beds', sqParsed.filters.beds);
+      if (sqParsed.filters.condition) unsoldQuery = unsoldQuery.in('condition', sqParsed.filters.condition);
       for (const loc of sqParsed.locationTerms) unsoldQuery = unsoldQuery.or(`address.ilike.%${loc}%,postcode.ilike.${loc}%`);
-      if (sqParsed.filters.regionPostcodes) unsoldQuery = unsoldQuery.or(sqParsed.filters.regionPostcodes.map(p => `postcode.ilike.${p}%`).join(','));
+      if (sqParsed.filters.regionPostcodes) unsoldQuery = unsoldQuery.or(regionPostcodeOrClause(sqParsed.filters.regionPostcodes));
       unsoldQuery = applyUiLoc(unsoldQuery);
       // Apply same concept/soft OR clauses
       if (allOrClauses.length > 0) unsoldQuery = unsoldQuery.or(allOrClauses.join(','));
@@ -878,6 +778,7 @@ router.post('/api/smart-search', asyncHandler(async (req, res) => {
 
     if (lotErr) {
       log.error('smart-search lots query failed', { error: lotErr.message });
+      await refundSearchCounter();
       return res.status(500).json({ error: 'db_error', message: 'Database query failed.' });
     }
 
@@ -923,6 +824,7 @@ router.post('/api/smart-search', asyncHandler(async (req, res) => {
     // Wider candidate pool (was 200) so the LLM has more lots to reason over
     // when interpreting concept queries like "freehold multi unit block to split".
     const geminiLots = filteredLots.slice(0, 400);
+    _l1Pool = geminiLots; _l1Sources = sources; _l1Total = totalSearched;
     const lotSummaries = geminiLots.map((l, i) => {
       const meta = [
         l.status && l.status !== 'available' ? `STATUS:${l.status}` : '',
@@ -1044,9 +946,43 @@ Pick the indices of lots that genuinely match the user's INTENT — quality over
   } catch (err) {
     const msg = err.message || String(err);
     log.error('Smart search error', { error: msg, status: err.status, stack: err.stack?.split('\n').slice(0, 3).join(' | ') });
-    if (err.status === 429 || /quota|rate.limit|resource.exhausted/i.test(msg)) {
-      setCreditExhausted(true); setCreditExhaustedAt(Date.now());
-      return res.status(503).json({ error: 'ai_quota_exhausted', message: 'AI rate limit hit. Auto-resets after 1 hour.', provider: process.env.AI_PROVIDER || 'gemini', tier: 'fast' });
+
+    const quotaShaped = err.status === 429 || /quota|rate.limit|resource.exhausted/i.test(msg);
+    // Latch the global flag only when Gemini is the sole provider. With a
+    // fallback chain this catch means every provider failed *this request*
+    // — transient, so latching would wrongly lock ALL users out for an hour
+    // (2026-07-06 prod incident: one failed search blanked AI search fleet-wide).
+    const geminiOnly = !hasAIFallback();
+    if (quotaShaped && geminiOnly) { setCreditExhausted(true); setCreditExhaustedAt(Date.now()); }
+
+    // Graceful degradation: if Layer 1 completed, the error came from the AI
+    // stage — serve the score-ranked DB pool with an honest report rather
+    // than failing the whole search (2026-07-06: both providers quota-dead
+    // turned every search into a 503 despite 954 matching lots in hand).
+    if (_l1Pool && _l1Pool.length) {
+      const results = _l1Pool.slice(0, 40);
+      for (const lot of results) delete lot._searchText;
+      await incrementSearchCounter();
+      log.warn('smart-search degraded: AI unavailable, serving Layer-1 results', { results: results.length, of: _l1Total, error: msg.substring(0, 120) });
+      logActivityEvent('smart_search', { query, results_count: results.length, mode: 'degraded_layer1' }, user?.email, getClientIP(req));
+      return res.json({
+        results,
+        report: `AI ranking is temporarily unavailable, so these are the top ${results.length} of ${_l1Total} lots matching your search filters, sorted by investment score. Try again later for AI-refined results.`,
+        sources: _l1Sources || [], totalSearched: _l1Total, searchesUsed, searchLimit, degraded: true,
+      });
+    }
+
+    // No results were served (degraded path above didn't fire) — the search
+    // failed outright, so refund the upfront quota charge.
+    await refundSearchCounter();
+    if (quotaShaped) {
+      return res.status(503).json({
+        error: 'ai_quota_exhausted',
+        message: geminiOnly
+          ? 'AI rate limit hit. Auto-resets after 1 hour.'
+          : 'AI search is temporarily over capacity. The standard filters still work — please try again later.',
+        provider: process.env.AI_PROVIDER || 'gemini', tier: 'fast',
+      });
     }
     if (err.status === 401 || err.status === 403 || /invalid.api.key|unauthorized|forbidden/i.test(msg)) {
       return res.status(500).json({ error: 'key_invalid', message: 'AI API key is invalid or expired. Check environment variables in Railway.', provider: process.env.AI_PROVIDER || 'gemini' });
@@ -1136,6 +1072,11 @@ async function buildAllLotsResponse({ isSignedIn, includePast }) {
     // ── Step 2: Run independent queries in parallel ──
     const unsoldCutoff = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
     const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+    // Upper bound for the status side-queries: excludes sentinel-dated rows
+    // (always_on houses stamp 2099-12-31) which otherwise sort first under
+    // `order auction_date desc` and eat the row cap with stale zombies —
+    // same class of leak the 2026-07-03 get_active_lots sentinel guard fixed.
+    const dateHorizon = new Date(Date.now() + 180 * 86400000).toISOString().slice(0, 10);
 
     // Always call get_active_lots — after the 2026-05-06 RPC rewrite (Fix B,
     // see migrations/2026-05-06-rewrite-get-active-lots-rpc.sql) the RPC
@@ -1144,11 +1085,23 @@ async function buildAllLotsResponse({ isSignedIn, includePast }) {
     // (and worse — Supabase REST defaults cap fallback at ~1000 rows). The
     // fallback STILL runs to synthesize activeCatalogues for the `sources`
     // array, but we no longer use its lot rows.
-    const [lotResult, unsoldResult, calendarResult, skillsResult] = await Promise.all([
+    const [lotResult, unsoldResult, soldResult, calendarResult, skillsResult] = await Promise.all([
       supabase.rpc('get_active_lots'),
       supabase.from('lots').select(LOTS_SELECT)
         .in('status', ['unsold', 'withdrawn'])
         .gte('auction_date', unsoldCutoff)
+        .lte('auction_date', dateHorizon)
+        .limit(1000),
+      // Sold/STC within the same 30-day window. The LOT STATUS dropdown has
+      // offered "Sold" / "Sale Agreed" / "All (inc. sold)" since launch, but
+      // these rows never shipped — all three options silently returned an
+      // empty grid (2026-07-06 audit). Own query + cap so heavy sold volume
+      // can't crowd the unsold/withdrawn feed out of its 1000-row cap.
+      supabase.from('lots').select(LOTS_SELECT)
+        .in('status', ['sold', 'stc'])
+        .gte('auction_date', unsoldCutoff)
+        .lte('auction_date', dateHorizon)
+        .order('auction_date', { ascending: false })
         .limit(1000),
       supabase.from('auction_calendar').select('url, date').gte('date', weekAgo),
       supabase.from('house_skills').select('slug, logo_url').not('logo_url', 'is', null),
@@ -1156,6 +1109,7 @@ async function buildAllLotsResponse({ isSignedIn, includePast }) {
 
     const { data: lotRows, error: lotErr } = lotResult;
     const { data: unsoldRows } = unsoldResult;
+    const { data: soldRows } = soldResult;
 
     if (lotErr) {
       log.error('all-lots: get_active_lots RPC failed', { error: lotErr.message });
@@ -1166,13 +1120,14 @@ async function buildAllLotsResponse({ isSignedIn, includePast }) {
       return { body: emptyBody, etag: null };
     }
 
-    // Merge unsold lots, avoiding duplicates with active catalogue lots
+    // Merge unsold + sold lots, avoiding duplicates with active catalogue lots
     const activeLotKeys = new Set((lotRows || []).map(r => `${r.house}|${r.url}`));
     const extraUnsold = (unsoldRows || []).filter(r => !activeLotKeys.has(`${r.house}|${r.url}`));
+    const extraSold = (soldRows || []).filter(r => !activeLotKeys.has(`${r.house}|${r.url}`));
 
-    const allLotRows = [...(lotRows || []), ...extraUnsold];
+    const allLotRows = [...(lotRows || []), ...extraUnsold, ...extraSold];
     const rawTotal = allLotRows.length;
-    log.info('all-lots query', { activeCatalogues: activeCatalogues.length, activeLots: (lotRows || []).length, persistedUnsold: extraUnsold.length, rawLotCount: rawTotal });
+    log.info('all-lots query', { activeCatalogues: activeCatalogues.length, activeLots: (lotRows || []).length, persistedUnsold: extraUnsold.length, persistedSold: extraSold.length, rawLotCount: rawTotal });
 
     // ── Step 3: Map snake_case DB columns → camelCase frontend format ──
     const lots = allLotRows.map(r => ({
@@ -1202,7 +1157,13 @@ async function buildAllLotsResponse({ isSignedIn, includePast }) {
       floorPlanUrl: (Array.isArray(r.floor_plans) && r.floor_plans[0]) || null,
       bullets: r.bullets || [],
       units: r.units || 0,
-      _auctionDate: r.auction_date,
+      // Null the always-on / timed-house sentinel (2099-12-31) at source so no
+      // downstream render shows a bogus "31 December 2099" date or clusters
+      // 69% of active lots under a 2099 divider under SOONEST FIRST (2026-07-07
+      // audit). No-date semantics are correct for these — they're perpetually
+      // live. Safe: get_active_lots already gates 'available' on last_seen>7d,
+      // so the 14-day stale-synth block below never fires on these rows.
+      _auctionDate: (r.auction_date && r.auction_date > '2098-01-01') ? null : r.auction_date,
       status: r.status,
       epcRating: r.epc_rating,
       epcScore: r.epc_score,
@@ -1365,9 +1326,20 @@ async function buildAllLotsResponse({ isSignedIn, includePast }) {
       const entry = crossAddrMap.get(houseAddr);
       if (entry) {
         entry.count++;
-        const entryDate = entry.lot._auctionDate || '9999-12-31';
-        const lotDate = lot._auctionDate || '9999-12-31';
-        if (lotDate < entryDate) entry.lot = lot;
+        // Prefer an actionable listing over an ended one: a relisted lot must
+        // not be shadowed by its own sold/stc/withdrawn record from a prior
+        // auction (matters now sold/stc rows ship for the status dropdown).
+        // Within the same class, keep the soonest auction date as before.
+        const ENDED_STATUSES = ['sold', 'stc', 'withdrawn'];
+        const entryEnded = ENDED_STATUSES.includes(entry.lot.status);
+        const lotEnded = ENDED_STATUSES.includes(lot.status);
+        if (entryEnded !== lotEnded) {
+          if (entryEnded) entry.lot = lot;
+        } else {
+          const entryDate = entry.lot._auctionDate || '9999-12-31';
+          const lotDate = lot._auctionDate || '9999-12-31';
+          if (lotDate < entryDate) entry.lot = lot;
+        }
       } else {
         crossAddrMap.set(houseAddr, { lot, count: 1 });
       }
@@ -1599,8 +1571,14 @@ async function buildAllLotsResponse({ isSignedIn, includePast }) {
     // states with the same lots produce different payloads. Without this, a
     // signed-in user whose browser cached the anon ETag gets 304 and keeps
     // seeing "Sign up for AI scores" / "Sign up for deal type" stubs.
+    // Hash the FULL serialised lot payload, not just url+status. The old hash
+    // ignored price, auction_date, images, score, address, beds, EPC, etc., so
+    // a lot whose guide price changed (url+status unchanged) kept its ETag and
+    // the browser was served 304 → the user saw a stale price indefinitely
+    // (2026-07-07 audit). JSON.stringify over the already-built cleanLots is
+    // cheap here — this runs only on a cache miss / warm-loop rebuild.
     const etag = '"' + createHash('md5')
-      .update((isSignedIn ? 'signed:' : 'anon:') + cleanLots.length + ':' + cleanLots.map(l => l.url + (l.status || '')).join(','))
+      .update((isSignedIn ? 'signed:' : 'anon:') + cleanLots.length + ':' + JSON.stringify(cleanLots))
       .digest('hex') + '"';
 
     const body = {
