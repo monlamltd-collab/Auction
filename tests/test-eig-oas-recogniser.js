@@ -71,15 +71,25 @@ The property comprises a 4 bedroom semi-detached house available to view.
 ](https://www.landwoodpropertyauctions.com/lot/details/999001)
 A description with no price, no date, no status token at all.
 [View Details](https://www.landwoodpropertyauctions.com/lot/details/999001)
+
+[![](https://cdn.eigpropertyauctions.co.uk/ams/images/43/auction/0/2720133_web_medium?v=)](https://online.firstforauctions.co.uk/lot/details/186266)
+[
+### Flat 1 Marston Ferry Court, Marston Ferry Road, Oxford, Oxfordshire, OX2 7XH
+](https://online.firstforauctions.co.uk/lot/details/186266)
+**Guide Price\*:**  £270,000 **Minimum Opening Bid:**  £250,000 **End Time:**  30 Jul 2099 12:00
+[View Details](https://online.firstforauctions.co.uk/lot/details/186266)
 `;
 
 console.log('EIG OAS recogniser — live-only, zero ended leakage');
 const lots = recogniseEigOasLotsFromMarkdown(MD, TODAY);
 
-// ── Recall: both live lots captured, keyed by id ──
-assert(lots.size === 2, `exactly 2 live lots recovered (got ${lots.size})`);
+// ── Recall: all three live lots captured, keyed by id ──
+assert(lots.size === 3, `exactly 3 live lots recovered (got ${lots.size})`);
 assert(lots.has('742e9488-b032-426b-8af4-e243afaa0265'), 'UUID live lot (Buy It Now) captured');
 assert(lots.has('186060'), 'numeric live lot (Guide Price) captured');
+assert(lots.has('186266'), 'live lot with month-name End Time date captured');
+// month-name date ("30 Jul 2099") parses to ISO — the firstforauctions theme.
+assert(lots.get('186266')?.auction_date === '2099-07-30', `month-name date → ISO (got ${lots.get('186266')?.auction_date})`);
 
 // ── Anti-leak: no ended / no-signal lot present ──
 assert(!lots.has('186986'), 'ended lot (Auction Ended + Result: Unsold) DROPPED');
