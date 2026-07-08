@@ -6,7 +6,7 @@
  * Run: node tests/test-ai-provider-chain.js
  */
 
-import { buildProviderChain, hasAIFallback, openRouterGlobalBackups, baseModelSlug, openRouterBackoffMs, callSpecificModel } from '../lib/ai-provider.js';
+import { buildProviderChain, hasAIFallback, openRouterGlobalBackups, baseModelSlug, openRouterBackoffMs, callSpecificModel, positiveIntEnv, callAI } from '../lib/ai-provider.js';
 
 let passed = 0, failed = 0;
 function assert(cond, msg) {
@@ -179,6 +179,47 @@ async function run() {
     assert(threw, 'threw after retries exhausted');
     assert(n === 3, `made exactly OPENROUTER_MAX_ATTEMPTS=3 attempts (got ${n})`);
   }
+
+  console.log('\nTest 16b: 429 with Retry-After beyond the 8s cap → fails over NOW (no futile wait)');
+  {
+    let n = 0;
+    const err429ra = { ok: false, status: 429, headers: { get: (h) => (String(h).toLowerCase() === 'retry-after' ? '30' : null) }, text: async () => 'slow down' };
+    global.fetch = async () => { n++; return err429ra; };
+    let threw = false, msg = '';
+    try { await callSpecificModel('x', { provider: 'openrouter', model: 'deepseek/deepseek-v4-flash', maxTokens: 8 }); }
+    catch (e) { threw = true; msg = e.message; }
+    assert(threw, 'threw');
+    assert(n === 1, `failed over on the FIRST 429 — no sleep-and-re-429 (got ${n} attempts)`);
+    assert(/failing over now/i.test(msg), 'error explains the early fail-over');
+  }
+}
+
+console.log('\nTest 16: positiveIntEnv — non-numeric/0/negative fall back to default (NaN-cap guard)');
+{
+  assert(positiveIntEnv('high', 3) === 3, 'non-numeric "high" → default 3 (not NaN)');
+  assert(positiveIntEnv(undefined, 3) === 3, 'unset → default');
+  assert(positiveIntEnv('0', 3) === 3, '"0" → default (must be >0)');
+  assert(positiveIntEnv('-2', 3) === 3, 'negative → default');
+  assert(positiveIntEnv('5', 3) === 5, 'valid "5" → 5');
+  assert(positiveIntEnv('7x', 3) === 7, 'parseInt-leading "7x" → 7 (radix 10)');
+}
+
+console.log('\nTest 17: callAI surfaces the WHOLE chain (primary first), not just the dead-Gemini tail');
+{
+  reset();
+  process.env.AI_PROVIDER = 'openrouter';
+  process.env.OPENROUTER_API_KEY = 'sk-or-test';
+  process.env.GEMINI_API_KEY = 'AIza-test'; // chain = [openrouter, gemini]
+  const rf = global.fetch;
+  // OpenRouter → non-retryable 400 (throws); Gemini → not-initialized (throws).
+  global.fetch = async () => ({ ok: false, status: 400, headers: { get: () => null }, text: async () => 'bad request' });
+  let msg = '';
+  try { await callAI('x', { tier: 'fast', maxTokens: 8 }); }
+  catch (e) { msg = e.message; }
+  global.fetch = rf;
+  assert(/openrouter/i.test(msg) && /gemini/i.test(msg), `names BOTH providers (got: ${msg.slice(0, 120)})`);
+  assert(msg.indexOf('openrouter') < msg.indexOf('gemini'), 'leads with the primary (openrouter) as the root cause');
+  assert(/openrouter → gemini/.test(msg), 'shows the chain order');
 }
 
 await run().finally(() => { global.fetch = realFetch; });
