@@ -4,9 +4,12 @@
 model (Google Gemini 2.5 Pro) with a much cheaper long-context model, without
 regressing recall or field completeness.
 
-**Status:** PREP ONLY. The pricing table + cost-logging fix ship in this change;
-the actual model flip is an env-var change applied **after** validation. Subscription-
-vs-pay-per-use comparison pending (see bottom).
+**Status:** DECIDED (2026-07-08) — **`deepseek/deepseek-v4-flash` is the primary
+extraction model for BOTH tiers**, with a Google Gemini in-request fallback. This
+PR ships the cost-logging plumbing (pricing table + date-suffix fix). The model
+flip is a hot env-var change (values below) — apply when ready. The variance risk
+that once argued for Gemini is now caught by the **recall gate** (`recall_below_100`
+alerts) and the **dense-page chunking fix**, both shipped in PR #177.
 
 ## Why
 
@@ -19,32 +22,64 @@ exists for **recall on long/dense pages** (EWMA<0.70 promotion in
 `lib/scraper/extraction-tier.js`), i.e. it needs context window + reliable JSON, not
 a premium reasoning model.
 
-## Recommended chains (verified against the live OpenRouter models API 2026-07-07)
+## Recommended chains (all slugs verified live via a direct OpenRouter API call 2026-07-08)
 
-| Env var | Value | Note |
-|---|---|---|
-| `OPENROUTER_CAPABLE_MODEL` | `deepseek/deepseek-v4-flash,google/gemini-3.1-flash-lite` | primary $0.09/$0.18 per Mtok, 1M ctx; Gemini 3.1 Flash-Lite fallback |
-| `OPENROUTER_FAST_MODEL` | keep current if it still resolves; else `deepseek/deepseek-v4-flash,google/gemini-3.1-flash-lite` | see slug-drift note |
+| Env var | Current | Set to | Why |
+|---|---|---|---|
+| `OPENROUTER_CAPABLE_MODEL` | *(unset → code default `google/gemini-2.5-pro`)* | `deepseek/deepseek-v4-flash,google/gemini-2.5-flash` | ~34× cheaper/call than Gemini 2.5 Pro; **won on dense houses** in testing |
+| `OPENROUTER_FAST_MODEL` | `deepseek/deepseek-v4-pro` | `deepseek/deepseek-v4-flash,google/gemini-2.5-flash` | see **Fast-tier move** below — 5× cheaper than the -pro sibling, matched/beat it |
 
-**Slug drift:** `google/gemini-2.5-flash`, `-flash-lite`, and `-pro` no longer appear
-in the OpenRouter catalog (superseded by Gemini 3.x). Current cheap Google slugs:
-`google/gemini-3.1-flash-lite` ($0.25/$1.50, 1M ctx) and `google/gemini-3.5-flash`
-($1.50/$9.00). Before flipping, confirm the *actually billed* slug in `ai_usage` —
-if the fast tier is still pinned to a dead 2.5 slug it has been silently rolling to
-the free-Llama fallback.
+deepseek-v4-flash `$0.09/$0.18` per Mtok, 1M ctx, text-only. Gemini 2.5 Flash is the
+in-request fallback (fires only on a hard deepseek error, so its cost stays ~zero).
+
+**Slug facts (corrected):** an earlier catalog check *falsely* reported the
+`google/gemini-2.5-*` slugs as retired. A direct `/chat/completions` probe confirms
+`gemini-2.5-pro`, `-flash`, and `-flash-lite` **all resolve** — the WebFetch summary
+had just omitted them. OpenRouter returns **date-suffixed served slugs** (e.g.
+`deepseek/deepseek-v4-flash-20260423`); the `estimateCost` fix in this PR strips the
+suffix so cost still logs (otherwise every deepseek call reads $0).
+
+## Fast-tier move (spec) — `deepseek-v4-pro` → `deepseek-v4-flash`
+
+The fast tier currently runs `deepseek/deepseek-v4-pro` (`$0.435/$0.87` per Mtok).
+`deepseek-v4-flash` (`$0.09/$0.18`) is the **same V4 family, ~5× cheaper**, and in the
+A/B harness it **matched or beat** the stronger models on the fast-tier houses it was
+tested against (e.g. bondwolfe 133 lots with chunking vs Gemini 2.5 Pro's 88;
+astleys parity). Known houses are the easy path — there is no recall case for paying
+5× for `-pro` on them. Chain: `deepseek/deepseek-v4-flash,google/gemini-2.5-flash`
+(flash-lite → flash fallback for the rare error). Validate with the same harness +
+gate as the capable tier before flipping; the recall gate backstops any regression.
 
 ## Projected impact
 
-Full active month (~9,000 calls, ~5:1 fast:capable): **~$122/mo → ~$29/mo (~76% off)**.
-The saving is almost entirely the capable-tier swap (Gemini 2.5 Pro ~$95/mo →
-deepseek-v4-flash ~$3/mo). Fast tier is already cheap.
+Full active month (~9,000 calls): **~$122/mo → ~$20–29/mo (~76–84% off)**. The bulk
+is the capable swap (Gemini 2.5 Pro ~$95/mo → deepseek-v4-flash ~$3/mo); the fast-tier
+move (`-pro` → `-flash`) trims the remainder (~$26/mo → ~$16/mo).
 
-## Prerequisite (blocking — Simon)
+## Benchmark evidence (live harness, real extractor + Crawlee render, 2026-07-07/08)
+
+| House (sentinel) | deepseek-v4-flash | Gemini 2.5 Pro | Gemini 3.1 Flash-Lite |
+|---|---|---|---|
+| astleys (27) | 8 | 8 | 8 |
+| **bondwolfe (174), chunked** | **133** | 88 | — |
+| cliveemson (170) | 49 (0 on one earlier run) | 48 | 89 |
+| propertysolvers (123) | 35→59 chunked | — | 0 |
+
+Reads: (1) the expensive **Gemini 2.5 Pro is the *worst* on dense houses** — the
+capable tier was paying premium for a weaker result. (2) **Every model has occasional
+0-lot runs** (deepseek on cliveemson once; flash-lite on propertysolvers/nesbits) —
+so reliability is not a deepseek-only problem, and it's now handled by the recall
+gate + fallback, not by model choice. (3) deepseek is cheapest and won the dense
+cases. Net: deepseek-v4-flash primary + Gemini fallback + recall gate is the
+cost-optimal, coverage-safe design. Full harness output in the session log.
+
+## Prerequisite
 
 `scripts/test-extraction-model-ab.mjs` and the pipeline both call OpenRouter for
-real. The **AuctionBrain Prod** key ("$30/MONTH" cap) is exhausted — raise it
-(~$200) before benchmarking, or every call errors. Cannot be self-served (no
-OpenRouter MCP).
+real, so the **AuctionBrain Prod** key must have monthly headroom — cap raised to
+$200 on 2026-07-07 (done). To run the harness locally: put `OPENROUTER_API_KEY` in
+`Auction/.env` and set `PUPPETEER_EXECUTABLE_PATH` to the bundled Chromium
+(`node -e "console.log(require('puppeteer').executablePath())"`) so Crawlee renders.
 
 ## Validation (before flipping the env var)
 
@@ -67,8 +102,16 @@ must pass:
 
 Flip `OPENROUTER_CAPABLE_MODEL` only after the **huge-page** house passes. The one
 real risk is silent lot-drop from long-context omission — grounding
-(`isLotGrounded`) rejects *fabrication*, not *omission* — so the huge-page recall
-check is mandatory.
+(`isLotGrounded`) rejects *fabrication*, not *omission*.
+
+**Backstops (PR #177) that make deepseek-first safe:** (a) the **dense-page chunking
+fix** removes the 16k-output truncation that used to halve recall on big pages,
+independent of model; (b) the **recall gate** fires a `recall_below_100` alert
+(error/warning) the moment any house lands below sentinel parity — so a deepseek
+under-recall is surfaced loudly and queryably (`pipeline_alerts WHERE
+type='recall_below_100'`), not silent. Between the in-request Gemini fallback, the
+gate, and the EWMA/`needs_recogniser` policy, a bad deepseek run degrades visibly
+and reversibly rather than dropping lots unnoticed.
 
 ## Flip + rollback
 
