@@ -31,7 +31,8 @@ const recogniser = override.recogniseFromMarkdown;
 if (!sentinel) { console.error(`${house}: no recall sentinel — cannot measure`); process.exit(1); }
 if (!recogniser) { console.error(`${house}: no recogniseFromMarkdown override — uses LLM path only`); process.exit(1); }
 
-const maxPages = override.maxPages || 1;
+const mpArg = parseInt((process.argv.find(a => a.startsWith('--maxpages=')) || '').split('=')[1] || '');
+const maxPages = Number.isFinite(mpArg) ? mpArg : (override.maxPages || 1);
 console.log(`Recogniser-coverage audit: ${house}`);
 console.log(`URL: ${url}  (maxPages ${maxPages})\nRendering with Crawlee…`);
 
