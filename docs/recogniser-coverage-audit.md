@@ -55,12 +55,25 @@ ahlondon 35, sarahmains 34, halls 32, howkinsandharrison 29, brownco 26, gth 21,
 stags 20, allwalesauction 19, walkersingleton 18, rendells 15, johnfrancis 13,
 sheldonbosley 12, henrysykes 11, lot9 11, astleys 10, pattinson 8, bramleys 7.
 
-This is a **liveness/scheduling** issue, not a recogniser gap, and dwarfs the
-recall-% gaps in lot volume. **Needs triage before treating as breakage** (the
-dead-house rule: many infrequent auctioneers are legitimately between auctions;
-verify against the source's current calendar, don't retire). purplebricksgoto
-(1,124) is the priority to diagnose. pattinson is a recogniser house that also went
-dark — worth checking its scheduler/circuit separately.
+Triaged by circuit state + last alert into two groups:
+
+**GENUINELY BROKEN — circuit OPEN, `zero_lots_no_heal` (retried, returns 0 lots,
+self-healing failed):** these are real coverage loss since mid-June.
+- `purplebricksgoto` — 9 consecutive failures, health 0, **1,124 lots** (biggest).
+- `edwardmellor` — 9 failures.
+- `pattinson` — 10 failures (a RECOGNISER house — its render/recogniser broke).
+- `wilsons` — 5 failures.
+- (…the rest of the ~25 need the same circuit/alert check to classify.)
+
+**BETWEEN-AUCTIONS / minor — circuit CLOSED, health 100 (NOT bugs):** e.g. `stags`
+(`quality_gate_ended_lot_ratio` — auction ended), `astleys`, `lot9`. Scraping fine,
+just no current auction or a minor enrichment nit. Per the dead-house rule, do not
+retire — they'll refill when their next auction lists.
+
+The broken group is a **per-house scraper-repair** job (each broke for its own
+reason — site redesign, anti-bot, render change — around the same week), the
+`auction-self-healing` skill's territory. Start with purplebricksgoto (volume) and
+pattinson (a recogniser house that regressed).
 
 ## Ranked next actions
 
