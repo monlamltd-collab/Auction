@@ -6,7 +6,7 @@
  * Run: node tests/test-ai-provider-chain.js
  */
 
-import { buildProviderChain, hasAIFallback, openRouterGlobalBackups } from '../lib/ai-provider.js';
+import { buildProviderChain, hasAIFallback, openRouterGlobalBackups, baseModelSlug, openRouterBackoffMs, callSpecificModel } from '../lib/ai-provider.js';
 
 let passed = 0, failed = 0;
 function assert(cond, msg) {
@@ -113,7 +113,78 @@ console.log('\nTest 9: OPENROUTER_FALLBACK_MODELS overrides + "" disables');
   assert(eq(openRouterGlobalBackups(), []), 'empty string disables the default backup');
 }
 
+console.log('\nTest 10: baseModelSlug — undated request served as dated snapshot is the SAME model');
+{
+  assert(baseModelSlug('deepseek/deepseek-v4-flash-20260423') === 'deepseek/deepseek-v4-flash', 'strips -YYYYMMDD snapshot suffix');
+  assert(baseModelSlug('deepseek/deepseek-v4-flash') === baseModelSlug('deepseek/deepseek-v4-flash-20260423'), 'undated == dated base (no false "backup" log)');
+  assert(baseModelSlug('meta-llama/llama-3.3-70b-instruct:free') === 'meta-llama/llama-3.3-70b-instruct', 'strips :free tag');
+  assert(baseModelSlug('deepseek/deepseek-v4-pro') !== baseModelSlug('google/gemini-2.5-pro'), 'genuinely different models stay different');
+}
+
+console.log('\nTest 11: openRouterBackoffMs — grows with attempt, honours Retry-After, capped at 8s');
+{
+  const a1 = openRouterBackoffMs(1, null), a3 = openRouterBackoffMs(3, null);
+  assert(a1 >= 400 && a1 <= 500, `attempt 1 ≈ 400ms+jitter (got ${Math.round(a1)})`);
+  assert(a3 > a1, `attempt 3 > attempt 1 (exponential) (got ${Math.round(a3)} > ${Math.round(a1)})`);
+  assert(openRouterBackoffMs(1, 2000) === 2000, 'Retry-After honoured verbatim');
+  assert(openRouterBackoffMs(10, null) <= 8000, 'capped at 8s');
+  assert(openRouterBackoffMs(1, 999999) === 8000, 'huge Retry-After clamped to 8s');
+}
+
+// ── Integration: OpenRouter transient-failure retry (mocked fetch) ──
+const realFetch = global.fetch;
+const ok200 = () => ({ ok: true, status: 200, headers: { get: () => null }, json: async () => ({ choices: [{ message: { content: '[]' } }], model: 'deepseek/deepseek-v4-flash-20260423', usage: { prompt_tokens: 5, completion_tokens: 2 } }) });
+const err = (status) => ({ ok: false, status, headers: { get: () => null }, text: async () => `err ${status}` });
+
+async function run() {
+  process.env.OPENROUTER_API_KEY = 'sk-or-test';
+  process.env.OPENROUTER_MAX_ATTEMPTS = '3';
+
+  console.log('\nTest 12: 429 twice then 200 → retries and succeeds');
+  {
+    let n = 0;
+    global.fetch = async () => { n++; return n < 3 ? err(429) : ok200(); };
+    const r = await callSpecificModel('x', { provider: 'openrouter', model: 'deepseek/deepseek-v4-flash', maxTokens: 8 });
+    assert(n === 3, `made 3 attempts (got ${n})`);
+    assert(r.text === '[]', 'returned the successful body');
+  }
+
+  console.log('\nTest 13: HTTP 400 → NOT retried (config error, fail fast)');
+  {
+    let n = 0;
+    global.fetch = async () => { n++; return err(400); };
+    let threw = false;
+    try { await callSpecificModel('x', { provider: 'openrouter', model: 'deepseek/deepseek-v4-flash', maxTokens: 8 }); }
+    catch { threw = true; }
+    assert(threw, 'threw on 400');
+    assert(n === 1, `made exactly 1 attempt, no retry (got ${n})`);
+  }
+
+  console.log('\nTest 14: network throw twice then 200 → retries and succeeds');
+  {
+    let n = 0;
+    global.fetch = async () => { n++; if (n < 3) throw new Error('ECONNRESET'); return ok200(); };
+    const r = await callSpecificModel('x', { provider: 'openrouter', model: 'deepseek/deepseek-v4-flash', maxTokens: 8 });
+    assert(n === 3, `retried network errors (got ${n})`);
+    assert(r.text === '[]', 'recovered after transient network failures');
+  }
+
+  console.log('\nTest 15: 429 every time → throws after exhausting attempts (does NOT hang)');
+  {
+    let n = 0;
+    global.fetch = async () => { n++; return err(429); };
+    let threw = false;
+    try { await callSpecificModel('x', { provider: 'openrouter', model: 'deepseek/deepseek-v4-flash', maxTokens: 8 }); }
+    catch { threw = true; }
+    assert(threw, 'threw after retries exhausted');
+    assert(n === 3, `made exactly OPENROUTER_MAX_ATTEMPTS=3 attempts (got ${n})`);
+  }
+}
+
+await run().finally(() => { global.fetch = realFetch; });
+
 for (const k of KEYS) { if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k]; }
+delete process.env.OPENROUTER_MAX_ATTEMPTS;
 
 console.log(`\n${'═'.repeat(50)}`);
 console.log(`AI provider chain tests: ${passed} passed, ${failed} failed`);
