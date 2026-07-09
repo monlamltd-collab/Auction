@@ -52,6 +52,24 @@ console.log('\nrecallGateAlert: payload shape');
   assert(okAlert.type === 'recall_diagnostic' && okAlert.severity === 'info', 'parity → low-noise recall_diagnostic info');
 }
 
+console.log('\nrecallGateAlert: dormant houses never raise a coverage-gap alarm');
+{
+  // Same 79% gap that fires ERROR for a live house must be INFO for a dormant
+  // one — a between-auctions/retired house has no live lots to leave behind.
+  const live = recallGateAlert({ house: 'x', recall: 137 / 174, lots: 137, sentinelLots: 174, dormant: false });
+  assert(live.severity === 'error' && live.type === 'recall_below_100', 'live house, 79% → error / recall_below_100 (unchanged)');
+
+  const dorm = recallGateAlert({ house: 'x', recall: 137 / 174, lots: 137, sentinelLots: 174, dormant: true });
+  assert(dorm.severity === 'info', 'dormant house, 79% → info (not warning/error)');
+  assert(dorm.type === 'recall_diagnostic', 'dormant house → recall_diagnostic, not recall_below_100');
+  assert(/\[dormant\]/.test(dorm.message), 'dormant flagged in message');
+  assert(dorm.meta.dormant === true, 'meta.dormant carries the flag');
+
+  // Parity is info either way; dormant flag is still recorded in meta.
+  const dormParity = recallGateAlert({ house: 'x', recall: 1.0, lots: 5, sentinelLots: 5, dormant: true });
+  assert(dormParity.severity === 'info' && dormParity.meta.dormant === true, 'dormant + parity → info, meta.dormant true');
+}
+
 console.log('\nconstants sane');
 {
   assert(RECALL_ERROR_FLOOR > 0 && RECALL_ERROR_FLOOR < 1, `error floor in (0,1): ${RECALL_ERROR_FLOOR}`);
