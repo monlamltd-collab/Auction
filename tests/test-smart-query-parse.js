@@ -5,7 +5,7 @@
 // parsed to no filter at all while leaking 'under' into freeText ilike
 // noise, and "under 5000" was silently multiplied into a £5M cap.
 
-import { parseSmartSearchQuery } from '../lib/search-query-parse.js';
+import { parseSmartSearchQuery, REGION_POSTCODES } from '../lib/search-query-parse.js';
 
 let pass = 0;
 let fail = 0;
@@ -77,6 +77,24 @@ console.log('\nexisting contract intact');
   assert(r.filters.maxPrice === 200000, 'price parsed');
   const r2 = parseSmartSearchQuery('blocks of flats to title split');
   assert(r2.concepts.includes('multi_unit_freehold'), 'concept detection intact');
+}
+
+console.log('\nregion map: exported for the UI-dropdown → AI-scope path');
+{
+  // The smart-search route imports REGION_POSTCODES to fold the fLocation
+  // dropdown into the same scoping the query-text region path uses. If this
+  // export or its keys drift, the region dropdown silently stops reaching the
+  // AI and the "N matches vs 1 card" desync returns (2026-07-09 fix).
+  assert(REGION_POSTCODES && typeof REGION_POSTCODES === 'object', 'REGION_POSTCODES is exported');
+  assert(Array.isArray(REGION_POSTCODES['south west']), "'south west' key present");
+  assert(REGION_POSTCODES['south west'].includes('BA'), "'south west' includes BA (Yeovil/Bath)");
+  assert(!REGION_POSTCODES['south west'].includes('B'), "'south west' excludes bare 'B' (Birmingham)");
+  // Query-text region path still populates filters from the same map — the
+  // route's dropdown injection only fires when this is absent.
+  const r = parseSmartSearchQuery('flats in south west');
+  assert(r.filters.regionName === 'south west', 'query-text region sets regionName');
+  assert(r.filters.regionPostcodes === REGION_POSTCODES['south west'],
+    'query-text region reuses the exported map (single source of truth)');
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

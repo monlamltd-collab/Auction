@@ -2622,6 +2622,11 @@ async function runSmartSearch(query) {
       body: JSON.stringify({
         query,
         soldFilter: _smSold,
+        // Region dropdown (fLocation) — scope the AI candidate pool server-side
+        // so "N matches" reflects what's actually shown. Client-side region
+        // filtering is skipped for SMART_RESULTS (see renderLots) to avoid
+        // double-filtering the already-scoped set.
+        region: $('fLocation')?.value || '',
         location: (_smRaw || (_searchCentre && _smRadius)) ? {
           center: _searchCentre || null,
           rawInput: _smRaw || null,
@@ -2972,8 +2977,11 @@ function renderLots(){
     else if(fco==='repossession'){
       if(!(_repoPattern.test((l.bullets||[]).join(' '))||_repoPattern2.test((l.opps||[]).join(' ')))) return false;
     }
-    // Location (region)
-    if(floc&&!matchesRegion(l.address, floc)) return false;
+    // Location (region) — skip for SMART_RESULTS: the AI search scopes by
+    // region server-side (postcode column, authoritative), so re-applying the
+    // weaker address-string matchesRegion here would double-filter and drop
+    // genuine matches, desyncing the grid from the "N matches" count.
+    if(floc&&!SMART_RESULTS&&!matchesRegion(l.address, floc)) return false;
     // Postcode / town / radius
     if(_radiusSearch){
       if(l._lat&&l._lng){ if(haversine(_searchCentre.lat,_searchCentre.lng,l._lat,l._lng)>fradius) return false; }
