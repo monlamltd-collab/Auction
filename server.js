@@ -282,6 +282,7 @@ import { sweepPostAuctionStatuses } from './lib/pipeline/post-auction-sweep.js';
 import { sweepSameDayStatuses } from './lib/pipeline/same-day-sweep.js';
 import { sweepMultiImages } from './lib/pipeline/multi-image-sweep.js';
 import { sweepNarratives } from './lib/pipeline/narrative-sweep.js';
+import { sweepFloorPlans } from './lib/pipeline/floor-plan-sweep.js';
 
 initAnalysis({
   // Resource budget (new: centralised resource state)
@@ -360,7 +361,7 @@ initCompanies({ supabase });
 const _scheduleState = {
   lastFullPass: 0, lastFreeEnrich: 0, lastStatusDrift: 0,
   lastRentalDrain: 0, lastRetryDrain: 0, lastPostAuctionSweep: 0,
-  lastBudgetLog: 0, lastMultiImageSweep: 0, lastNarrativeSweep: 0, lastHmlrRefresh: 0,
+  lastBudgetLog: 0, lastMultiImageSweep: 0, lastNarrativeSweep: 0, lastFloorPlanSweep: 0, lastHmlrRefresh: 0,
   // Phase 5 tiers (alert-sweep / coverage-digest); sitemap-regen retired
   // 2026-07-03 — /sitemap.xml is now dynamic (lib/sitemap.js):
   lastAlertSweep: 0, lastCoverageDigest: 0,
@@ -675,6 +676,18 @@ function scheduleTick() {
     sweepNarratives()
       .then(r => console.log(`SCHEDULE narrative sweep: cache=${r.reconciledFromCache} fetched=${r.fetched}/${r.eligible} added=${r.descriptionAdded} none=${r.noDescriptionFound} dead=${r.urlDead} failed=${r.fetchFailed}`))
       .catch(e => console.error('SCHEDULE narrative sweep failed:', e.message));
+  }
+
+  // Tier 7c: Floor-plan sweep daily at 07:30 UK (offset again so the three
+  // detail-page passes never overlap). Visible lots with no floor_plans get the
+  // source site's plan extracted — cache-first, live HTTP→Crawlee for the rest.
+  // No Firecrawl credits in this path.
+  if (hour === 7 && minute >= 30 && minute < 35 && now - _scheduleState.lastFloorPlanSweep > 60 * 60 * 1000) {
+    _scheduleState.lastFloorPlanSweep = now;
+    console.log('SCHEDULE: 07:30 UK — running sweepFloorPlans');
+    sweepFloorPlans()
+      .then(r => console.log(`SCHEDULE floor-plan sweep: cache=${r.reconciledFromCache} fetched=${r.fetched}/${r.eligible} added=${r.floorPlansAdded} none=${r.noFloorPlanFound} dead=${r.urlDead} failed=${r.fetchFailed}`))
+      .catch(e => console.error('SCHEDULE floor-plan sweep failed:', e.message));
   }
 
   // Tier 9: Alert sweeper, daily 02:30 UK. Resolves pipeline_alerts older

@@ -10,7 +10,7 @@
  */
 import {
   extractImagesFromHtml, stripBleedImages, computeBleedByHouse,
-  dechromeGallery, isChromeUrl, JUNK_IMG,
+  dechromeGallery, isChromeUrl, JUNK_IMG, extractFloorPlansFromHtml,
 } from '../lib/pipeline/image-extract.js';
 
 let pass = 0, fail = 0;
@@ -162,6 +162,124 @@ console.log('\ndechromeGallery — never blank via the repetition heuristic (saf
   // Token-chrome MAY blank (lot then becomes under-target → sweep refetches).
   const g5 = dechromeGallery(['https://x/a.svg', 'https://x/loader.gif'], 'https://x/a.svg', bleed);
   assert(eq(g5.images, []) && g5.imageUrl === null, 'all-token-chrome still blanks (sweep will refill)');
+}
+
+// ── extractFloorPlansFromHtml ──
+// Fixtures are REAL markup pulled from lot_details cache on 2026-07-10. The
+// recurring trap: the plan's URL carries no "floor" token — the signal lives in
+// alt/title/href/data-* or the modal it opens.
+console.log('\nextractFloorPlansFromHtml');
+{
+  const BASE = 'https://example.co.uk/lot/1';
+
+  // EIG / Auction House UK platform (auctionhouse*, austingray): the <a> wraps the
+  // <img>; both name the plan, and both point at the same asset (?w=670 = fullsize).
+  const eig = `<a href="/lot-image/899620?w=670" title="Click to view full size floor plan" target="_blank">
+    <img src="/lot-image/899620" alt="Floorplan" title="Click to view full size floor plan" Class="img-responsive" /></a>`;
+  const eigOut = extractFloorPlansFromHtml(eig, BASE);
+  assert(eq(eigOut, ['https://example.co.uk/lot-image/899620?w=670']),
+    'EIG platform: alt/title signal captured, thumb+fullsize deduped to one (fullsize wins)');
+
+  // hollismorgan / maggsandallen: <img alt="Floorplan for …">, src has no token.
+  const maggs = '<img src="/resize/34755229/19/980" class="img-responsive" alt="Floorplan for Kelston Road, Bristol">';
+  assert(eq(extractFloorPlansFromHtml(maggs, BASE), ['https://example.co.uk/resize/34755229/19/980']),
+    'alt-only signal captured when the URL has no floor-plan token');
+
+  // bradleyhall: <a alt="Floor Plan"> straight to an extension-less CDN image.
+  const bradley = '<a href="https://cdn.eigpropertyauctions.co.uk/ams/images/299/auction/0/2723667_web" target="_blank" alt="Floor Plan"></a>';
+  assert(eq(extractFloorPlansFromHtml(bradley, BASE), ['https://cdn.eigpropertyauctions.co.uk/ams/images/299/auction/0/2723667_web']),
+    'anchor to an extension-less CDN image is a plausible asset');
+
+  // propertysolvers: anchor href literally names the plan.
+  const psolv = '<a href="https://auctions.propertysolvers.co.uk/wp-content/uploads/2024/05/Alderney-House-Floor-Plan.jpg" data-fancybox="floorplans"></a>';
+  assert(extractFloorPlansFromHtml(psolv, BASE)[0].endsWith('Alderney-House-Floor-Plan.jpg'),
+    'propertysolvers: anchor to a named .jpg plan captured');
+
+  // connectuk: real plan is a hidden anchor flagged only by data-fslightbox.
+  const connect = `<a href="#property-details-floorplans" class="btn" data-type="floorplans">View</a>
+    <a href="https://fs-04.apex27.co.uk/data_6e58/listing_1016943_0019.jpg?t=178" data-fslightbox="floorplans" data-type="image" style="display:none;"></a>`;
+  const connectOut = extractFloorPlansFromHtml(connect, BASE);
+  assert(connectOut.length === 1 && connectOut[0].includes('listing_1016943_0019.jpg'),
+    'connectuk: data-fslightbox anchor captured; bare #fragment tab trigger is not an asset');
+
+  // purplebricksgoto: Bootstrap modal. Trigger names the plan; the image lives in
+  // the modal body. A sibling EPC modal shares the id prefix and must NOT be taken.
+  const pb = `<li><a style="cursor:pointer" data-toggle="modal" data-target="#epcmodal-2288712" alt="Floor Plan">View Floor Plan</a></li>
+    <div class="modal fade" id="epcmodal-2288712"><div class="modal-body">
+      <img src="https://cdn.eigpropertyauctions.co.uk/ams/images/156/auction/0/2288712_web" class="img-responsive" /></div></div>
+    <li><a data-toggle="modal" data-target="#epcmodal-2288716" alt="EPC">View EPC</a></li>
+    <div class="modal fade" id="epcmodal-2288716"><div class="modal-body">
+      <img src="https://cdn.eigpropertyauctions.co.uk/ams/images/156/auction/0/2288716_web" class="img-responsive" /></div></div>`;
+  const pbOut = extractFloorPlansFromHtml(pb, BASE);
+  assert(eq(pbOut, ['https://cdn.eigpropertyauctions.co.uk/ams/images/156/auction/0/2288712_web']),
+    'purplebricks modal resolved to the floor-plan image; sibling EPC modal ignored');
+
+  // auctionhammermidlands: token lives in the anchor TEXT; the href names nothing.
+  const hammer = '<a href="https://ahm.co.uk/wp/fpm_t202605071614.jpeg"> <span class="elementor-button-content-wrapper">' +
+    '<span class="elementor-button-text">FLOORPLAN</span> </span> </a>';
+  assert(eq(extractFloorPlansFromHtml(hammer, BASE), ['https://ahm.co.uk/wp/fpm_t202605071614.jpeg']),
+    'anchor text signal captured when href is a real image asset');
+
+  // …but a text signal alone must not promote a plain page link to a plan.
+  assert(eq(extractFloorPlansFromHtml('<a href="/lot/123">View Floor Plan</a>', BASE), []),
+    'text-only signal on a non-asset href rejected (weaker signal, stricter rule)');
+
+  // Auction House UK platform: <button> opens #FloorplanModal, whose body holds
+  // the titled full-size anchor. Both the button and the anchor must resolve to
+  // the one plan (thumb/fullsize collapse).
+  const ahuk = `<button type="button" class="btn" data-toggle="modal" data-target="#FloorplanModal">Floor Plan</button>
+    <div id="FloorplanModal" class="modal fade floorplan-modal"><div class="modal-body">
+      <h4 class="modal-title">Floor Plans</h4>
+      <a href="/lot-image/895837?w=670" title="Click to view full size floor plan" target="_blank">
+        <img src="/lot-image/895837" alt="Floorplan"></a></div></div>`;
+  assert(eq(extractFloorPlansFromHtml(ahuk, BASE), ['https://example.co.uk/lot-image/895837?w=670']),
+    'AH-UK <button> modal + titled anchor resolve to a single plan');
+
+  // auctionhouselondon: plans live in an embedded JS payload with escaped quotes.
+  const ahl = 'x\\"extLotId\\":353818,\\"floorPlans\\":[\\"https://cdn.eigpropertyauctions.co.uk/ams/images/20/auction/4301/2748377_web_medium\\"],\\"guidePrice\\":110000';
+  assert(eq(extractFloorPlansFromHtml(ahl, BASE), ['https://cdn.eigpropertyauctions.co.uk/ams/images/20/auction/4301/2748377_web_medium']),
+    'embedded JSON floorPlans array captured (escaped quotes tolerated)');
+
+  // hunters: the key is present but the array is empty — genuinely no plan.
+  assert(eq(extractFloorPlansFromHtml('"floorplanImages":[],"location":{"type":"Point"}', BASE), []),
+    'empty embedded floorplanImages array yields no plans');
+
+  // The JSON slice stops at its own closing bracket — a neighbouring gallery
+  // array must never bleed into the plans.
+  const bleed = '"floorPlans":[],"galleryImages":["https://x/photo_01.jpg"]';
+  assert(eq(extractFloorPlansFromHtml(bleed, BASE), []),
+    'adjacent gallery array does not bleed into an empty plans array');
+
+  // Regression: a plan named after a UK street must not be eaten by the JUNK_IMG
+  // token filter — "Nunney Close" contains `close` (a ✕-button token).
+  // cityandruralpropertyauctions, 15 Nunney Close, Keynsham.
+  const streetPlan = '<a href="https://ah-hub.property-world.co.uk/x/_pictures/15_Nunney_Close_t202606171732.jpg" data-lightbox="floor_plan">' +
+    '<img src="https://cityandrural.com/uploads/floorplan-1.svg" title="floorplan-1.svg" alt="free house valuation" /></a>';
+  assert(eq(extractFloorPlansFromHtml(streetPlan, BASE), ['https://ah-hub.property-world.co.uk/x/_pictures/15_Nunney_Close_t202606171732.jpg']),
+    'plan on a street named "Close" is kept; the sibling .svg site graphic is dropped');
+
+  // A land lot whose plan trigger points nowhere is a genuine absence.
+  assert(eq(extractFloorPlansFromHtml('<a href="#" data-lightbox="floor_plan"></a>', BASE), []),
+    'plan trigger with an empty (#) href yields nothing');
+
+  // Filename that is plainly a logo/icon asset is still rejected.
+  assert(eq(extractFloorPlansFromHtml('<img alt="Floorplan" src="https://x/img/site-logo.png">', BASE), []),
+    'logo filename rejected even with a floor-plan alt');
+
+  // Negatives — the detector must stay quiet.
+  assert(eq(extractFloorPlansFromHtml('<img src="https://x/upload/photo_01.jpg" alt="Front elevation">', BASE), []),
+    'ordinary property photo is not a floor plan');
+  assert(eq(extractFloorPlansFromHtml('<a href="/guides/how-to-read-a-floor-plan.html">Guide</a>', BASE), []),
+    'article link naming a floor plan is not an asset (page extension rejected)');
+  assert(eq(extractFloorPlansFromHtml('<img alt="Floorplan" src="/img/floorplan-icon.svg">', BASE), []),
+    'vector/icon chrome rejected even when it names a floor plan');
+  assert(eq(extractFloorPlansFromHtml('', BASE), []) && eq(extractFloorPlansFromHtml(null, BASE), []),
+    'empty/null html yields no plans');
+
+  // Multi-storey properties publish several plans; cap still applies.
+  const many = Array.from({ length: 9 }, (_, i) => `<img src="/plan${i}.jpg" alt="Floorplan">`).join('');
+  assert(extractFloorPlansFromHtml(many, BASE).length === 6, 'plan list capped at max (6)');
+  assert(extractFloorPlansFromHtml(many, BASE, { max: 2 }).length === 2, 'max option respected');
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

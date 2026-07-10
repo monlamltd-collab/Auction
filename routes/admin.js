@@ -30,6 +30,7 @@ import { LOTS_SELECT, dbRowToLot } from '../lib/types/lot.js';
 import { computeBleedByHouse, dechromeGallery } from '../lib/pipeline/image-extract.js';
 import { sweepMultiImages } from '../lib/pipeline/multi-image-sweep.js';
 import { sweepNarratives } from '../lib/pipeline/narrative-sweep.js';
+import { sweepFloorPlans } from '../lib/pipeline/floor-plan-sweep.js';
 import { getAICostSummary } from '../lib/ai-provider.js';
 import { enrichLots, getCircuitBreakers, fetchEPCByPostcode, matchEPCToLot, fetchEPCCertificate } from '../lib/enrichment.js';
 import { normaliseUrl, applyUmamiInjection } from '../lib/utils.js';
@@ -121,6 +122,15 @@ router.post('/api/admin/sweep-narratives', rateLimit(60000, 5), requireAdmin, as
   const house = (typeof req.body?.house === 'string' && req.body.house.trim()) || null;
   res.json({ message: `Narrative sweep triggered${house ? ` (house=${house})` : ''}. Check server logs for progress.` });
   sweepNarratives({ house }).catch(e => log.error('Manual sweep-narratives failed', { error: e.message, house }));
+});
+
+// Admin: run the floor-plan sweep on demand (fills lot.floor_plans from the
+// source site's detail pages — cache-first, then HTTP→Crawlee). Async like
+// sweep-narratives: respond immediately, run in the background.
+router.post('/api/admin/sweep-floorplans', rateLimit(60000, 5), requireAdmin, async (req, res) => {
+  const house = (typeof req.body?.house === 'string' && req.body.house.trim()) || null;
+  res.json({ message: `Floor-plan sweep triggered${house ? ` (house=${house})` : ''}. Check server logs for progress.` });
+  sweepFloorPlans({ house }).catch(e => log.error('Manual sweep-floorplans failed', { error: e.message, house }));
 });
 
 // Admin: backfill images for all cached catalogues (no AI tokens used)
