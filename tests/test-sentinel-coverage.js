@@ -70,8 +70,12 @@ console.log('\nTest 4: platform auto-detection patterns');
 console.log('\nTest 5: derived sentinels match the real production lot URLs they came from');
 {
   const samples = [
-    ['hawkesford', 'https://hawkesford.co.uk/property/portland-street-leamington-spa/', 'portland-street-leamington-spa'],
-    ['howkinsandharrison', 'https://howkinsandharrison.co.uk/auction/8', '8'],
+    // hawkesford + howkinsandharrison were retargeted onto their Bamboo subdomains
+    // (2026-07-10) — their .co.uk pages are marketing only and carry no lots — so
+    // their sentinels now come from detectPlatformSentinel()'s shared Bamboo
+    // /property/{slug-id} form. These are real lot URLs from the live catalogues.
+    ['hawkesford', 'https://hawkesford.bambooauctions.com/property/16-horsepool-hollow-8880693', '16-horsepool-hollow-8880693'],
+    ['howkinsandharrison', 'https://howkinsandharrison.bambooauctions.com/property/lilbourne-rugby-cv23-0sx-6836739', 'lilbourne-rugby-cv23-0sx-6836739'],
     ['fisherGerman', 'https://fishergerman.bambooauctions.com/property/chester-cottage-wakefield-road-hampole-doncaster-dn6-7ez-6903829', 'chester-cottage-wakefield-road-hampole-doncaster-dn6-7ez-6903829'],
     ['williamhbrownnorwich', 'https://www.barnardmarcusauctions.co.uk/auctions/19-may-2026/688382/', '688382'],
     ['dedmangray', 'https://www.dedmangray.co.uk/current-auction.htm?lid=4421', '4421'],
