@@ -13,7 +13,7 @@ import { FALLBACK_CALENDAR } from '../lib/calendar.js';
 import { getLotsForCatalogues } from '../lib/pipeline/lot-lookup.js';
 import { normaliseLotStatuses, isValidImageUrl } from '../lib/scraper.js';
 import { parseAIResponse } from '../lib/search-parse.js';
-import { parseSmartSearchQuery } from '../lib/search-query-parse.js';
+import { parseSmartSearchQuery, REGION_POSTCODES } from '../lib/search-query-parse.js';
 import { createHash } from 'crypto';
 
 const router = Router();
@@ -242,7 +242,7 @@ function regionPostcodeOrClause(prefixes) {
 // runs outside the handler's own try/catch — a rejection there previously
 // hung the request (Phase 5).
 router.post('/api/smart-search', asyncHandler(async (req, res) => {
-  const { query, soldFilter, location } = req.body || {};
+  const { query, soldFilter, location, region } = req.body || {};
   if (!query) return res.status(400).json({ error: 'Missing search query' });
 
   // ── Normalise UI-supplied location filter (postcode/town input + radius) ──
@@ -424,12 +424,25 @@ router.post('/api/smart-search', asyncHandler(async (req, res) => {
   const presetSlug = isPresetQuery(query);
   const sf = soldFilter || 'all';
 
+  // ── UI region dropdown (fLocation) → postcode-prefix scope ──
+  // The region dropdown isn't part of the query text (the parser never sees
+  // it) and until 2026-07-09 was applied ONLY client-side after results
+  // returned — so the AI/preset searched nationwide, the "N matches" count
+  // reflected that, but the browser then hid every out-of-region lot ("5
+  // matches", 1 card). Resolve it once here and scope BOTH the preset fast
+  // path (applyUiRegion) and the AI candidate pool (via sqParsed.filters
+  // .regionPostcodes) server-side so the count matches the grid.
+  const uiRegionKey = typeof region === 'string' ? region.trim().toLowerCase() : '';
+  const uiRegionPostcodes = (uiRegionKey && REGION_POSTCODES[uiRegionKey]) ? REGION_POSTCODES[uiRegionKey] : null;
+  const applyUiRegion = (q) => uiRegionPostcodes ? q.or(regionPostcodeOrClause(uiRegionPostcodes)) : q;
+
   // ── Smart search cache: return cached result for identical queries ──
-  // The key MUST include the UI location filter — it shapes the result set,
-  // and omitting it served one user's Bristol-scoped results to another
-  // user's identical query scoped to Leeds (Phase 5 review, cross-user bug).
+  // The key MUST include the UI location filter AND region — they shape the
+  // result set, and omitting location served one user's Bristol-scoped results
+  // to another user's identical query scoped to Leeds (Phase 5 review,
+  // cross-user bug). Region has the same hazard, so it's in the key too.
   const _smLocKey = uiLoc ? JSON.stringify(uiLoc) : '';
-  const _smCacheKey = (query.toLowerCase().trim() + '|' + sf + '|' + _smLocKey).trim();
+  const _smCacheKey = (query.toLowerCase().trim() + '|' + sf + '|' + _smLocKey + '|' + (uiRegionKey || '')).trim();
   const _smCached = _smartSearchCache.get(_smCacheKey);
   if (_smCached && (Date.now() - _smCached.timestamp) < SMART_CACHE_TTL) {
     await incrementSearchCounter();
@@ -466,6 +479,7 @@ router.post('/api/smart-search', asyncHandler(async (req, res) => {
           else if (sf === 'withdrawn') q = q.eq('status', 'withdrawn');
           else if (sf !== 'everything') q = q.or('status.eq.available,status.eq.unsold,status.is.null');
           q = applyUiLoc(q);
+          q = applyUiRegion(q);
           return q.order('score', { ascending: false, nullsFirst: false }).limit(2000);
         },
         sort: (a, b) => {
@@ -545,6 +559,16 @@ router.post('/api/smart-search', asyncHandler(async (req, res) => {
     // LAYER 1: Parse query into structured column filters
     // ═══════════════════════════════════════════════════════════
     const sqParsed = parseSmartSearchQuery(query);
+
+    // Fold the UI region dropdown (resolved once near the top) into the SAME
+    // regionPostcodes mechanism the query-text region path uses, so the AI
+    // searches and ranks WITHIN the region (applied in buildLayer1Query /
+    // unsold pool below). A region typed into the query wins (already parsed);
+    // the dropdown only fills the gap when none was typed.
+    if (uiRegionPostcodes && !sqParsed.filters.regionPostcodes) {
+      sqParsed.filters.regionPostcodes = uiRegionPostcodes;
+      sqParsed.filters.regionName = uiRegionKey;
+    }
     log.info('smart-search parsed', sqParsed);
 
     // ── Get active catalogue URLs for freshness gate (with fallback) ──
