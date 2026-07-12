@@ -292,6 +292,7 @@ Active tables and their write paths:
 | `cached_analyses` | 1 per catalogue URL (legacy 7-day cache) | `routes/analyse.js` |
 | `os_places_cache` | 1 per address (90-day TTL) | `lib/os-places.js` |
 | `enrichment_cache` | 1 per (provider, query) | `lib/enrichment.js` |
+| `image_classifications` | 1 per image URL (90-day TTL) — vision verdict cache | `lib/pipeline/image-quality-filter.js` |
 | `house_skills` | 1 per house slug | `lib/harness/manager.js` |
 | `auction_calendar` | 1 per (house, date, url) | `routes/calendar.js` admin |
 | `pipeline_alerts` | 1 per alert event | `lib/harness/alert-router.js` |
