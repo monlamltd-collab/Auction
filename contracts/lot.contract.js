@@ -31,7 +31,13 @@
 // auction house's own narrative, captured by the catalogue/detail extraction
 // passthrough and the daily narrative sweep (lib/pipeline/narrative-sweep.js).
 // Displayed in the expanded lot panel; feeds search_text. Additive.
-export const LOT_SCHEMA_VERSION = '3.3.0';
+// 3.4.0 — deal-signal identifier layer (2026-07-13): deal_signals (jsonb array
+// of multi-label archetype slugs from lib/pipeline/deal-signals.js),
+// stated_income_pa (listing-stated rent normalised to £/annum), income_kind
+// ('passing' | 'potential'). Written by analyseLot on every scoring pass;
+// deal_type stays single-label for back-compat (new 'HMO' value added to its
+// chain). Additive.
+export const LOT_SCHEMA_VERSION = '3.4.0';
 
 // Snake-case DB columns the app's standard lot SELECT pulls.
 // Mirrors LOT_COLUMNS in lib/types/lot.js. Additive changes (new columns)
@@ -45,6 +51,7 @@ export const LOT_COLUMNS_PINNED = Object.freeze([
   'epc_rating', 'epc_score', 'floor_area_sqm', 'flood_zone', 'flood_risk',
   'comparable_price', 'street_sales_count', 'below_market', 'est_monthly_rent',
   'est_gross_yield', 'score', 'score_breakdown', 'opps', 'risks', 'deal_type',
+  'deal_signals', 'stated_income_pa', 'income_kind',
   'vacant', 'title_split', 'search_text', 'enrichment_manifest',
   'value_estimate', 'last_seen_at',
 ]);
@@ -65,6 +72,7 @@ export const LOT_APP_FIELDS_PINNED = Object.freeze([
   'comparablePrice', 'streetAvg', 'streetSalesCount',
   'belowMarket', 'estMonthlyRent', 'estAnnualRent', 'estGrossYield',
   'score', 'scoreBreakdown', 'opps', 'risks', 'dealType',
+  'dealSignals', 'statedIncomePa', 'incomeKind',
   'vacant', 'titleSplit',
   'valueEstimate', 'auctioneer',
   'enrichedAt',

@@ -62,6 +62,9 @@ const GATE = {
   below_market: 'displayed',
   score_breakdown: 'displayed',
   deal_type: 'displayed',
+  deal_signals: 'displayed',     // multi-label archetype chips + hmo preset filter (3.4.0)
+  stated_income_pa: 'displayed', // listing-stated income (£/annum) — chip + AI-search flag
+  income_kind: 'displayed',      // passing vs potential qualifier on the income chip
   value_estimate: 'displayed',
 
   // Feeds score / fundability (also displayed, but the scoring tie is why it stays)
