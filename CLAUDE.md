@@ -84,7 +84,8 @@ Other key tables:
 
 **Known data model notes (from WORKSTREAMS.md):**
 - `bullets` field has two semantic shapes upstream. Needs reconciliation in `normaliseScrapedLot` — flag if behaviour changes.
-- `description` (added 2026-07-04) is the source site's narrative — canonical home for lot prose. Captured at extraction (`normaliseScrapedLot` passthrough + detail pass) and backfilled by the daily 07:00 narrative sweep (`lib/pipeline/narrative-sweep.js`, house-agnostic extraction in `lib/pipeline/description-extract.js`). The bullets fold of `raw.description` remains for display/signal back-compat — don't remove it.
+- `description` (added 2026-07-04) is the source site's narrative — canonical home for lot prose. Captured at extraction (`normaliseScrapedLot` passthrough + detail pass) and backfilled by the daily 07:00 narrative sweep (`lib/pipeline/narrative-sweep.js`, house-agnostic extraction in `lib/pipeline/description-extract.js`). The bullets fold of `raw.description` remains for display/signal back-compat — don't remove it. Since 2026-07-13 `description` also feeds `analyseLot`'s detection text, and the narrative sweep re-analyses + rebuilds `search_text` after harvesting narrative.
+- `deal_signals` / `stated_income_pa` / `income_kind` (added 2026-07-13, contract 3.4.0) — the multi-label deal-archetype layer, written by `analyseLot` via `lib/pipeline/deal-signals.js` (pure regex, no LLM). `deal_type` stays single-label (new `HMO` value). Slugs are literal filter keys — renames are breaking.
 - `auction_date` has no timezone handling. Europe/London is assumed implicitly throughout.
 - `dbRowToLot` emits `enrichedAt` and `rawText` but canonical `LOTS_SELECT` doesn't fetch those columns — they resolve to `undefined` unless the caller expands their select.
 
