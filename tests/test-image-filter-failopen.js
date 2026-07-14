@@ -14,6 +14,10 @@
 
 process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'http://localhost.invalid';
 process.env.SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || 'test-key';
+// Disable the per-URL classification cache so these fail-open assertions
+// exercise the vision path directly (no DB round-trips against the stub URL).
+// The cache itself is covered by tests/test-image-classification-cache.js.
+process.env.IMAGE_CLASSIFICATION_CACHE = 'off';
 
 // Tests 1-3 exercise the legacy direct-Gemini path deterministically (no
 // OpenRouter key). Test 4 sets its own key for the OpenRouter vision path.
