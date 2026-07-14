@@ -39,6 +39,36 @@ console.log('deal-signals: income extraction');
   check(r.statedIncomePa === 21600, `monthly+annual duplicates normalise to the same figure (got ${r.statedIncomePa})`);
 }
 
+console.log('deal-signals: income regressions (2026-07-13 adversarial review)');
+{
+  const r = extractStatedIncome('the property could produce £30,000 per annum when fully let');
+  check(r.incomeKind === 'potential', `"could produce … when fully let" is POTENTIAL, not passing (got ${r.incomeKind})`);
+}
+{
+  const r = extractStatedIncome('with the potential to achieve a rental income of £30,000 per annum');
+  check(r.incomeKind === 'potential', `"potential to achieve a rental income of" is POTENTIAL (got ${r.incomeKind})`);
+}
+{
+  const r = extractStatedIncome('an estimated rent of £2,000 pcm');
+  check(r.incomeKind === 'potential', `"estimated rent of" is POTENTIAL (got ${r.incomeKind})`);
+}
+{
+  const r = extractStatedIncome('outgoings include £2,400 per annum service charge');
+  check(r.statedIncomePa === null, `trailing "service charge" label is a cost, not income (got ${r.statedIncomePa})`);
+}
+{
+  const r = extractStatedIncome('rates payable of approximately £4,800 pa');
+  check(r.statedIncomePa === null, `"rates payable" is a cost, not income (got ${r.statedIncomePa})`);
+}
+{
+  const r = extractStatedIncome('held on a lease at a rent of £2,000 pa payable to the freeholder');
+  check(r.statedIncomePa === null, `head rent "payable to the freeholder" is a cost, not income (got ${r.statedIncomePa})`);
+}
+{
+  const r = extractStatedIncome('currently let at a rent of £12,000 pa plus service charge');
+  check(r.statedIncomePa === 12000 && r.incomeKind === 'passing', `"£12,000 pa plus service charge" keeps the income (got ${r.statedIncomePa} ${r.incomeKind})`);
+}
+
 console.log('deal-signals: en-suite counting');
 {
   check(countEnsuites('6 bedrooms, 3 ensuite bathrooms and 2 shared bathrooms', 6) === 3, 'Pembroke bullet → 3 en-suites');
@@ -46,6 +76,8 @@ console.log('deal-signals: en-suite counting');
   check(countEnsuites('en-suite to all bedrooms', 6) === 6, '"en-suite to all bedrooms" + beds=6 → 6');
   check(countEnsuites('master bedroom with en-suite', 2) === 1, 'bare singular → 1');
   check(countEnsuites('no bathrooms mentioned here', 4) === 0, 'no mention → 0');
+  check(countEnsuites('bedroom 2 with fitted wardrobes. bedroom 3 en-suite shower room.', 5) === 1, 'accommodation-list room label "bedroom 3 en-suite" counts 1, not 3');
+  check(countEnsuites('room 4 en-suite bathroom', 5) === 1, '"room 4 en-suite" room label counts 1, not 4');
 }
 
 console.log('deal-signals: HMO + investment-valuation detection');
@@ -90,6 +122,31 @@ console.log('deal-signals: HMO + investment-valuation detection');
   });
   check(!ds.signals.includes('hmo'), '14-room hotel (non-house propType) is NOT an HMO');
 }
+{
+  // Adversarial-review regression: single-family AST on a big house ≠ HMO.
+  const ds = detectDealSignals({
+    text: 'a five bedroom semi-detached house let to a family on an assured shorthold tenancy at £1,400 pcm',
+    beds: 5, propType: 'house', leaseLength: null, titleSplit: false,
+  });
+  check(!ds.signals.includes('hmo'), '5-bed house on a single family AST is NOT an HMO');
+  check(ds.signals.includes('income-stated'), 'but its stated rent IS still captured');
+}
+{
+  // Adversarial-review regression: room-label en-suite must not tip the gate.
+  const ds = detectDealSignals({
+    text: 'a substantial five bedroom detached family home. bedroom 2 with fitted wardrobes. bedroom 3 en-suite shower room.',
+    beds: 5, propType: 'house', leaseLength: null, titleSplit: false,
+  });
+  check(!ds.signals.includes('hmo'), 'family home with "bedroom 3 en-suite" room label is NOT an HMO');
+}
+{
+  // Multi-let language still qualifies the 5+ bed route.
+  const ds = detectDealSignals({
+    text: 'six bedroom house let by the room to working professionals',
+    beds: 6, propType: 'house', leaseLength: null, titleSplit: false,
+  });
+  check(ds.signals.includes('hmo'), '6-bed house let by the room IS an HMO');
+}
 
 console.log('deal-signals: other archetypes');
 {
@@ -116,6 +173,23 @@ console.log('deal-signals: other archetypes');
     beds: 3, propType: 'house', leaseLength: null, titleSplit: false,
   });
   check(ds.signals.includes('holiday-let'), 'holiday-let detected');
+}
+{
+  // Adversarial-review regression: occupational lease term on a FREEHOLD
+  // commercial investment is not a title defect.
+  const ds = detectDealSignals({
+    text: 'freehold shop investment let to a national retailer on a lease with 7 years unexpired at a rent of £12,000 per annum',
+    beds: null, propType: 'commercial', tenure: 'Freehold', leaseLength: null, titleSplit: false,
+  });
+  check(!ds.signals.includes('short-lease'), 'freehold commercial with tenant lease "7 years unexpired" is NOT short-lease');
+  check(ds.signals.includes('income-stated'), 'its rental income IS still captured');
+}
+{
+  // Adversarial-review regression: negated/conditional planning phrasings.
+  const neg1 = detectDealSignals({ text: 'sold subject to planning permission being granted', beds: null, propType: 'land', leaseLength: null, titleSplit: false });
+  check(!neg1.signals.includes('planning-granted'), '"subject to planning permission being granted" is NOT planning-granted');
+  const neg2 = detectDealSignals({ text: 'no planning permission has been granted for the works', beds: null, propType: 'house', leaseLength: null, titleSplit: false });
+  check(!neg2.signals.includes('planning-granted'), '"no planning permission has been granted" is NOT planning-granted');
 }
 
 console.log('deal-signals: analyseLot integration (the Pembroke end-to-end)');

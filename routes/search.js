@@ -1224,6 +1224,12 @@ async function buildAllLotsResponse({ isSignedIn, includePast }) {
       opps: r.opps || [],
       risks: r.risks || [],
       dealType: r.deal_type,
+      // deal-signal layer (3.4.0). Defensive defaults: the RPC only returns
+      // these after the 2026-07-13 republish, and rows keep NULL until their
+      // next scoring pass.
+      dealSignals: Array.isArray(r.deal_signals) ? r.deal_signals : [],
+      statedIncomePa: r.stated_income_pa ?? null,
+      incomeKind: r.income_kind || null,
       vacant: r.vacant,
       titleSplit: r.title_split,
       valueEstimate: r.value_estimate || null,
