@@ -33,6 +33,7 @@ const PRESET_QUERIES = {
   'Commercial property': 'commercial',
   'Land and development sites': 'land-dev',
   'Flats and apartments': 'flats',
+  'HMO and multi-let investments': 'hmo',
 };
 
 // ── Deterministic preset filters — bypass Gemini entirely ──
@@ -114,6 +115,17 @@ const PRESET_FILTERS = {
     report: (n, total) => n > 0
       ? `Found ${n} land and development sites across ${total} lots, sorted by investment score. Includes building plots, development sites, and properties with planning permission.`
       : `No land or development sites found in current catalogues.`,
+  },
+  'hmo': {
+    filter: l => l.dealType === 'HMO' || (l.dealSignals || []).includes('hmo'),
+    // Investment-valuation candidates first, then stated income, then score.
+    sort: (a, b) =>
+      (((b.dealSignals || []).includes('investment-valuation') ? 1 : 0) - ((a.dealSignals || []).includes('investment-valuation') ? 1 : 0))
+      || ((b.statedIncomePa || 0) - (a.statedIncomePa || 0))
+      || ((b.score || 0) - (a.score || 0)),
+    report: (n, total) => n > 0
+      ? `Found ${n} HMO and multi-let investments across ${total} lots. Lots flagged as investment-valuation candidates (larger HMOs with en-suites or stated passing income, where some lenders may apply a commercial yield-based valuation rather than bricks-and-mortar comparables) are shown first. Verify licensing, planning status and the valuation basis with your lender before bidding.`
+      : `No HMO or multi-let lots detected in current catalogues. These are identified from listing text — HMO keywords, 5+ bedroom houses with letting context, en-suite counts and stated rental income.`,
   },
 };
 
@@ -860,6 +872,9 @@ router.post('/api/smart-search', asyncHandler(async (req, res) => {
         l.belowMarket ? `${l.belowMarket}%belowMkt` : '',
         l.vacant ? 'VACANT' : '',
         l.titleSplit ? 'TITLE_SPLIT' : '',
+        (l.dealSignals || []).includes('hmo') ? 'HMO' : '',
+        (l.dealSignals || []).includes('investment-valuation') ? 'INVESTMENT_VALUATION' : '',
+        l.statedIncomePa ? `Income:£${l.statedIncomePa}pa(${l.incomeKind || 'stated'})` : '',
       ].filter(Boolean).join(' ');
       const context = (l._searchText || '').substring(0, 500);
       return `[${i}] ${l._house} L${l.lot}: ${l.address} | £${l.price || '?'} | Score:${l.score || 0} | ${meta} | ${context}`;
@@ -1209,6 +1224,12 @@ async function buildAllLotsResponse({ isSignedIn, includePast }) {
       opps: r.opps || [],
       risks: r.risks || [],
       dealType: r.deal_type,
+      // deal-signal layer (3.4.0). Defensive defaults: the RPC only returns
+      // these after the 2026-07-13 republish, and rows keep NULL until their
+      // next scoring pass.
+      dealSignals: Array.isArray(r.deal_signals) ? r.deal_signals : [],
+      statedIncomePa: r.stated_income_pa ?? null,
+      incomeKind: r.income_kind || null,
       vacant: r.vacant,
       titleSplit: r.title_split,
       valueEstimate: r.value_estimate || null,

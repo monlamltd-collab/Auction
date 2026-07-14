@@ -158,6 +158,7 @@ Every enrichment result (success or failure) is recorded in `lots.enrichment_man
 | Quick completion | +0.5 |
 | Motivated seller | +0.5 |
 | Title split potential | +1.0 |
+| Investment valuation candidate (HMO) | +1.0 |
 | Sitting tenant | -2.0 |
 | Knotweed | -2.0 |
 | Flying freehold | -1.0 |
@@ -166,6 +167,8 @@ Every enrichment result (success or failure) is recorded in `lots.enrichment_man
 | Contamination | -1.0 |
 
 Manifest gating prevents double-counting: `canScoreYield` and `canScoreBelowMarket` gates must pass before yield or below-market signals are applied.
+
+Alongside the single-label `deal_type` (which gains an `HMO` value), every scoring pass also emits **multi-label deal signals** (`lib/pipeline/deal-signals.js` → `lots.deal_signals`): `hmo`, `investment-valuation` (larger HMOs with en-suites or stated passing income where lenders may apply a commercial yield-based valuation), `income-stated` (with `stated_income_pa` normalised to £/annum and `income_kind` passing/potential), `title-split`, `short-lease`, `mixed-use`, `cash-buyers-only`, `planning-granted`, `regulated-tenancy`, `holiday-let`. Detection is pure regex over bullets + narrative + address; preview fleet-wide impact read-only with `node scripts/verify-deal-signals.mjs`.
 
 ---
 
