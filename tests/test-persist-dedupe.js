@@ -71,5 +71,24 @@ console.log('\nTest 4: rows without a url are all kept (null conflict key does n
   assert(out.filter(r => !r.url).length === 2, 'both url-less rows kept');
 }
 
+console.log('\nTest 5: a collapse is noted on the surviving row\'s enrichment_manifest');
+{
+  const rows = [
+    { url: 'https://x/a', beds: 1, enrichment_manifest: { data_hygiene: [] } },
+    { url: 'https://x/a', beds: 2, enrichment_manifest: { data_hygiene: [] } }, // dup, kept (last)
+  ];
+  const out = dedupeRowsByUrl(rows);
+  assert(out.length === 1, `collapsed to 1 (got ${out.length})`);
+  const notes = out[0].enrichment_manifest.data_hygiene;
+  assert(notes.length === 1 && notes[0].kind === 'duplicate_url_collapsed' && notes[0].field === 'url',
+    `collapse noted on survivor (got ${JSON.stringify(notes)})`);
+}
+
+console.log('\nTest 6: dedup is a no-op-safe when rows carry no manifest');
+{
+  const out = dedupeRowsByUrl([{ url: 'https://x/a' }, { url: 'https://x/a' }]);
+  assert(out.length === 1, 'still collapses without a manifest (no crash)');
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

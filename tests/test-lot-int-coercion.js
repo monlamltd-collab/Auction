@@ -57,5 +57,25 @@ console.log('\nTest 5: a non-numeric value becomes null rather than crashing the
   assert(row.beds === null, `unparseable beds -> null (got ${JSON.stringify(row.beds)})`);
 }
 
+console.log('\nTest 6: a coercion is recorded in enrichment_manifest.data_hygiene when a manifest is present');
+{
+  const row = lotToDbRow({
+    url: 'https://x/6', address: '6 Test St, London, E1 1AA',
+    beds: 2.5, sqft: 800, _enrichment: { data_hygiene: [] },
+  });
+  const notes = row.enrichment_manifest.data_hygiene;
+  assert(Array.isArray(notes) && notes.length === 1, `one hygiene note recorded (got ${JSON.stringify(notes)})`);
+  assert(notes[0].kind === 'int_coercion' && notes[0].field === 'beds' && notes[0].from === 2.5 && notes[0].to === 3,
+    `note captures field/from/to (got ${JSON.stringify(notes[0])})`);
+  assert(!notes.some(n => n.field === 'sqft'), 'a clean integer (sqft 800) is NOT recorded as a coercion');
+}
+
+console.log('\nTest 7: coercion recording is a no-op when the lot carries no manifest');
+{
+  const row = lotToDbRow({ url: 'https://x/7', address: '7 Test St, London, E1 1AA', beds: 2.5 });
+  assert(row.beds === 3, 'still coerced');
+  assert(!('enrichment_manifest' in row), 'no manifest key when the lot had none (no crash, no clobber)');
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
