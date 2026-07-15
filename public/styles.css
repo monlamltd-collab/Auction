@@ -3458,6 +3458,23 @@ footer p a {
   border-radius: 3px;
   pointer-events: none;
 }
+.exp-gallery-fp-doc {
+  /* PDF floor plan — a document link tile, not an image. <a> is inline by
+     default, so it needs display:flex to honour the tile's aspect-ratio. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  text-decoration: none;
+}
+.exp-gallery-fp-doc-text {
+  text-align: center;
+  color: var(--ink, #1A1A18);
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .04em;
+}
 
 /* ─── Lightbox overlay ─── */
 .exp-lightbox {

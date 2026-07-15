@@ -5281,6 +5281,13 @@ function _galleryFloorPlans(lot) {
   return lot.floorPlanUrl ? [lot.floorPlanUrl] : [];
 }
 
+// The extractor legitimately captures .pdf plans (some houses only publish the
+// plan as a PDF). Those can't render in an <img> or the lightbox — they get a
+// document link tile instead. Suffix test ignores querystring/hash.
+function _isPdfFloorPlan(url) {
+  return /\.pdf($|[?#])/i.test(String(url || ''));
+}
+
 function buildExpV2Gallery(lot) {
   const photos = _galleryPhotos(lot);
   const plans = _galleryFloorPlans(lot);
@@ -5305,13 +5312,24 @@ function buildExpV2Gallery(lot) {
     '</button>';
   }).join('');
 
-  // Plans follow the photos, so lightbox index = photos.length + j (openLotLightbox
-  // builds its item list in exactly this order).
+  // Plans follow the photos in the lightbox, so an image plan's lightbox index
+  // is photos.length + its position among IMAGE plans — openLotLightbox skips
+  // PDFs when it builds its item list. PDF plans render as document link tiles
+  // (an <img src="…pdf"> would just be a broken tile) opening in a new tab.
+  let imgPlanIdx = 0;
   const floorPlanTiles = plans.map(function (src, j) {
-    const optimSrc = (typeof optimImg === 'function') ? optimImg(src, 400) : src;
     const label = plans.length > 1 ? 'Floor plan ' + (j + 1) + ' of ' + plans.length : 'Floor plan';
+    if (_isPdfFloorPlan(src)) {
+      return '<a class="exp-gallery-tile exp-gallery-floorplan exp-gallery-fp-doc" ' +
+        'href="' + esc(src) + '" target="_blank" rel="noopener" ' +
+        'aria-label="' + esc(label + ' (PDF, opens in new tab)') + '">' +
+        '<span class="exp-gallery-fp-doc-text">View floor plan (PDF)</span>' +
+        '<span class="exp-gallery-fp-label">Floor plan</span>' +
+      '</a>';
+    }
+    const optimSrc = (typeof optimImg === 'function') ? optimImg(src, 400) : src;
     return '<button type="button" class="exp-gallery-tile exp-gallery-floorplan" ' +
-      'onclick="openLotLightbox(' + lot._idx + ',' + (photos.length + j) + ')" ' +
+      'onclick="openLotLightbox(' + lot._idx + ',' + (photos.length + imgPlanIdx++) + ')" ' +
       'aria-label="' + esc(label) + '">' +
       '<img src="' + esc(optimSrc) + '" alt="" loading="lazy" decoding="async">' +
       '<span class="exp-gallery-fp-label">Floor plan</span>' +
@@ -5428,9 +5446,12 @@ function openLotLightbox(lotIdx, itemIdx) {
   const items = photos.map(function (src, i) {
     return { src: src, label: 'Photo ' + (i + 1) };
   });
-  _galleryFloorPlans(lot).forEach(function (src, j, arr) {
-    items.push({ src: src, label: arr.length > 1 ? 'Floor plan ' + (j + 1) : 'Floor plan' });
-  });
+  // PDF plans are excluded — the lightbox renders <img>, which a PDF breaks.
+  // They stay in the data and get a document link tile in the gallery instead.
+  _galleryFloorPlans(lot).filter(function (src) { return !_isPdfFloorPlan(src); })
+    .forEach(function (src, j, arr) {
+      items.push({ src: src, label: arr.length > 1 ? 'Floor plan ' + (j + 1) : 'Floor plan' });
+    });
   if (!items.length) return;
   _lightboxItems = items;
   _lightboxIdx = Math.max(0, Math.min(items.length - 1, itemIdx || 0));
