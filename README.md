@@ -109,6 +109,9 @@ A daily multi-image sweep (`lib/pipeline/multi-image-sweep.js`) fills each lot's
 
 ## Self-Healing Harness
 
+> **The healer must never corrupt a catalogue URL.** When a house returns 0 lots, `healBrokenHouse` looks for a new catalogue URL. Its gate used to be "the candidate page returns >500 chars" — so when the AI extractor went quota-dead fleet-wide and every house briefly returned 0 lots, the healer replaced dozens of *correct* catalogue URLs with junk (a news article, a buyer's guide, the bare homepage, a single-lot page) and those houses stayed dark forever — the biggest single cause of the dark-house backlog. `healCandidateVerdict` (`lib/pipeline/healing.js`) now requires a candidate to be alive, **not itself a single lot page** (URL must not match the house's lot sentinel), and to **actually advertise ≥4 lot links** (its recall sentinel ∪ a generic lot-link shape) before it is adopted. It is conservative on purpose: a JS-rendered catalogue whose lots aren't in the raw HTML is kept on its old URL + a needs-rediscovery alert, rather than silently replaced with a lot-less page.
+
+
 `lib/harness/` handles autonomous recovery from scraper failures.
 
 - **`healBrokenHouse()`** — when a house returns 0 lots, searches for the new catalogue URL via Firecrawl + Gemini with exponential cooldown (24h → 7d backoff).
