@@ -2242,15 +2242,16 @@ footer .logo-f span{color:var(--green)}
     color: #fff;
     border-color: var(--text, #1a2a3a);
   }
-  /* Collapsed state — only the search row is visible */
+  /* Collapsed state — only the search row is visible. sp-page-info is
+     deliberately NOT hidden here: it carries the result count in the
+     mobile top bar (styled in the .sp-search-row block further down). */
   .search-panel .sp-filter-row,
   .search-panel .sp-toggle-row,
-  .search-panel .sp-per-page,
-  .search-panel .sp-page-info {
+  .search-panel .sp-per-page {
     display: none;
   }
-  /* Expanded state — show everything except the per-page/page-info meta
-     widgets which stay hidden on mobile (low-value chrome) */
+  /* Expanded state — show everything except the per-page widget which
+     stays hidden on mobile (low-value chrome) */
   .search-panel.mobile-expanded .sp-filter-row { display: flex; }
   .search-panel.mobile-expanded .sp-toggle-row { display: flex; }
 }
