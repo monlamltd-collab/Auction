@@ -3,7 +3,7 @@ import { asyncHandler } from '../lib/async-handler.js';
 import { supabase } from '../lib/supabase.js';
 import { validateUserFromReq, rateLimit, getClientIP, safeCompare } from '../lib/auth.js';
 import { log } from '../lib/logging.js';
-import { resolveEffectiveTier, getAISearchLimit, STRIPE_ENABLED, stripAIFields } from '../lib/config.js';
+import { resolveEffectiveTier, getAISearchLimit, STRIPE_ENABLED, stripAIFields, applyAnonTeaserGate } from '../lib/config.js';
 import { callAI, hasAIFallback } from '../lib/ai-provider.js';
 import { logActivityEvent, getCreditExhausted, setCreditExhausted, getCreditExhaustedAt, setCreditExhaustedAt } from '../lib/analysis.js';
 import { LOTS_SELECT, dbRowToLot } from '../lib/types/lot.js';
@@ -1583,22 +1583,12 @@ async function buildAllLotsResponse({ isSignedIn, includePast }) {
       }
     }
 
-    // Directory data: free for all, but AI analysis layer requires signup
-    // Anonymous users see address/price/image/house but not scores/opps/risks/dealType
+    // Directory data: free for all, but the AI analysis layer requires signup.
+    // Anonymous users see address/price/image/house — plus an HMO teaser (the
+    // deal-type badge/tag/filter) — but not scores/opps/risks/income/yield.
+    // See applyAnonTeaserGate for the exact reveal/gate line.
     if (!isSignedIn) {
-      for (const lot of cleanLots) {
-        lot.score = null;
-        lot.opps = [];
-        lot.risks = [];
-        lot.scoreBreakdown = [];
-        lot.dealType = null;
-        lot.condition = null;
-        lot.vacant = null;
-        lot.titleSplit = null;
-        lot.estGrossYield = null;
-        lot.anonGated = true;   // Signal to frontend to show signup prompt
-        delete lot.blurred;
-      }
+      for (const lot of cleanLots) applyAnonTeaserGate(lot);
     } else {
       for (const lot of cleanLots) { delete lot.blurred; }
     }
