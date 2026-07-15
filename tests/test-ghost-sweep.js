@@ -135,5 +135,37 @@ console.log('\nTest 6: runGhostSweep — dry run + kill switch');
   delete process.env.GHOST_SWEEP_DISABLED;
 }
 
+console.log('\nTest 7: runGhostSweep — failed flip emits NO events (event integrity)');
+{
+  const rows = [
+    row('a1', 'active', 0), row('a2', 'active', 0), row('a3', 'active', 5),   // ghost a3
+    row('d1', 'olddates', 9, { auction_date: daysAgo(10).slice(0, 10) }),      // past-dated d1
+  ];
+  const { deps, state } = fakeDeps(rows);
+  // Fail the ghost batch (contains a3); let the past-dated batch through.
+  deps.flipLots = async (ids, patch) => {
+    if (ids.includes('a3')) throw new Error('db down');
+    state.flipped.push(...ids); state.patches.push(patch); return ids.length;
+  };
+  const r = await runGhostSweep(deps, { nowMs: NOW });
+  assert(r.ghosts === 0 && r.flipFailures === 1, `failed batch counted as flipFailures, not retired (ghosts=${r.ghosts} flipFailures=${r.flipFailures})`);
+  assert(state.events.every(e => e.lotId !== 'a3'), 'no lot_events for lots whose flip failed');
+  assert(r.pastDated === 1 && state.flipped.includes('d1'), 'later pass still runs after a failed batch');
+  assert(state.events.some(e => e.lotId === 'd1'), 'events still emitted for the successful flip');
+  assert(state.alerts.some(a => a.type === 'ghost_sweep_flip_failed' && a.severity === 'error' && a.meta.lots === 1),
+    'flip failure surfaced via fireAlert');
+}
+
+console.log('\nTest 8: runGhostSweep — flipLots returning 0 rows treated as failure');
+{
+  const rows = [row('a1', 'active', 0), row('a2', 'active', 5)];
+  const { deps, state } = fakeDeps(rows);
+  deps.flipLots = async () => 0; // legacy swallow contract: error eaten, 0 returned
+  const r = await runGhostSweep(deps, { nowMs: NOW });
+  assert(r.ghosts === 0 && r.flipFailures === 1, 'zero-row flip counted as failure');
+  assert(state.events.length === 0, 'no events when nothing was actually flipped');
+  assert(state.alerts.some(a => a.type === 'ghost_sweep_flip_failed'), 'zero-row flip alerted');
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

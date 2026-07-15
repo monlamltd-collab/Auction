@@ -977,15 +977,17 @@ function scheduleTick() {
         return out;
       },
       flipLots: async (ids, patch) => {
+        // Throw on failure — the sweep must know the flip didn't land so it
+        // skips the batch's lot_events (no withdrawals asserted that never happened).
         const { error } = await supabase.from('lots').update(patch).in('id', ids);
-        if (error) { console.warn(`GHOST-SWEEP: flip failed: ${error.message}`); return 0; }
+        if (error) throw new Error(`ghost-sweep flip: ${error.message}`);
         return ids.length;
       },
       emitEvents: (events) => insertLotEvents(events),
       buildVanishedEvent, buildLotEvent, LOT_EVENT_TYPES,
       fireAlert: harnessFireAlert,
     }))
-      .then(r => { if (!r.skipped) console.log(`SCHEDULE ghost sweep: ghosts=${r.ghosts} pastDated=${r.pastDated} held=${r.held.length}`); })
+      .then(r => { if (!r.skipped) console.log(`SCHEDULE ghost sweep: ghosts=${r.ghosts} pastDated=${r.pastDated} held=${r.held.length} flipFailures=${r.flipFailures}`); })
       .catch(e => console.error('SCHEDULE ghost sweep failed:', e.message));
   }
 
