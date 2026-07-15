@@ -170,6 +170,8 @@ Manifest gating prevents double-counting: `canScoreYield` and `canScoreBelowMark
 
 Alongside the single-label `deal_type` (which gains an `HMO` value), every scoring pass also emits **multi-label deal signals** (`lib/pipeline/deal-signals.js` → `lots.deal_signals`): `hmo`, `investment-valuation` (larger HMOs with en-suites or stated passing income where lenders may apply a commercial yield-based valuation), `income-stated` (with `stated_income_pa` normalised to £/annum and `income_kind` passing/potential), `title-split`, `short-lease`, `mixed-use`, `cash-buyers-only`, `planning-granted`, `regulated-tenancy`, `holiday-let`. Detection is pure regex over bullets + narrative + address; preview fleet-wide impact read-only with `node scripts/verify-deal-signals.mjs`.
 
+**Anonymous gating** (`lib/config.js::applyAnonTeaserGate`, used by `/api/all-lots`): logged-out users get the free directory (address, price, image, house) plus an **HMO teaser** — the `HMO` deal-type badge, a `+ HMO` card tag and the Opportunity dropdown filter — to advertise those deals. The premium analysis (AI score, `stated_income_pa`, the `investment-valuation` thesis, yield, condition, all other deal types) stays gated to drive signup. `tests/test-anon-gating.js` pins the reveal/gate line.
+
 ---
 
 ## Tech Stack
