@@ -58,8 +58,8 @@ function localFilter(){ clearTimeout(_filterTimer);_filterTimer=setTimeout(()=>r
 
 // ── List view ──
 // The grid/list toggle was removed 2026-05-25 — list view is now the only
-// layout. Keeping the `list-view` class on `.lots-grid` because dozens of
-// styles in styles.css (lines 507–514, 772–773, etc.) hang off it.
+// layout. Keeping the `list-view` class on `.lots-grid` because many
+// styles.css selectors hang off it.
 
 // ── MORE FILTERS POPOVER ──
 function toggleMoreFilters(e) {
