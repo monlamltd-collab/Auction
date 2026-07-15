@@ -1,3 +1,11 @@
+-- ============================================================================
+-- RECORD ONLY — DO NOT RE-APPLY.
+-- Superseded by migrations/2026-07-13-deal-signals.sql, which redefines
+-- get_active_lots with columns this body predates (description, deal_signals,
+-- stated_income_pa, income_kind). Re-applying this file would DROP those
+-- columns from the served feed.
+-- ============================================================================
+--
 -- migrations/2026-07-04-get-active-lots-fresh-window.sql
 -- APPLIED TO PROD 2026-07-04 (portfolio-freshness pass, owner-approved).
 --
