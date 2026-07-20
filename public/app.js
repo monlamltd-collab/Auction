@@ -56,18 +56,10 @@ function clearAllFilters(silent){
 let _filterTimer=null;
 function localFilter(){ clearTimeout(_filterTimer);_filterTimer=setTimeout(()=>renderLots(),150); }
 
-// ── Grid / List view toggle ──
-let _viewMode='grid';try{_viewMode=localStorage.getItem('bm_view')||'grid'}catch(e){}
-function setView(mode){
-  _viewMode=mode;
-  try{localStorage.setItem('bm_view',mode)}catch(e){}
-  const grid=$('lotsGrid');
-  if(grid){
-    grid.classList.toggle('list-view',mode==='list');
-  }
-  $('gridViewBtn').classList.toggle('active',mode==='grid');
-  $('listViewBtn').classList.toggle('active',mode==='list');
-}
+// ── List view ──
+// The grid/list toggle was removed 2026-05-25 — list view is now the only
+// layout. Keeping the `list-view` class on `.lots-grid` because many
+// styles.css selectors hang off it.
 
 // ── MORE FILTERS POPOVER ──
 function toggleMoreFilters(e) {
@@ -867,7 +859,6 @@ function savePerPage(){try{localStorage.setItem('bm_per_page',$('fPerPage').valu
 function restorePerPage(){try{const v=localStorage.getItem('bm_per_page');if(v&&$('fPerPage'))$('fPerPage').value=v}catch(e){}}
 restorePerPage();
 // Restore view toggle state
-if(_viewMode==='list'){const gb=$('gridViewBtn'),lb=$('listViewBtn');if(gb)gb.classList.remove('active');if(lb)lb.classList.add('active')}
 let _pageFromGoPage=false;
 function goPage(p){_pageFromGoPage=true;_currentPage=Math.max(1,p);renderLots();window.scrollTo({top:$('filterBar')?.offsetTop||0,behavior:'smooth'})}
 
@@ -880,7 +871,7 @@ function showSkeletonCards(n){
   const cv=$('cardsView');if(cv)cv.style.display='block';
   const out=$('lotsOut');if(!out)return;
   const skelHtml=Array(n).fill('<div class="skel-card"><div class="skel-img"></div><div class="skel-body"><div class="skel-line w80"></div><div class="skel-line w60"></div><div class="skel-line w40"></div></div></div>').join('');
-  out.innerHTML='<div class="lots-grid'+(_viewMode==='list'?' list-view':'')+'" id="lotsGrid">'+skelHtml+'</div>';
+  out.innerHTML='<div class="lots-grid list-view" id="lotsGrid">'+skelHtml+'</div>';
 }
 
 function onShowPastChange(opts){
@@ -3189,9 +3180,12 @@ function renderLots(){
     locBanner.remove();
   }
 
-  // Update filter count
+  // Update filter count — compact form so it fits the mobile top bar where
+  // the grid/list toggle used to live. Active filter count on the Filters
+  // chip already communicates "you've narrowed something", so the
+  // "of Y total" framing isn't carrying weight.
   const filterCountEl=$('filterBarCount');
-  if(filterCountEl) filterCountEl.textContent='Showing '+lots.length.toLocaleString()+' of '+LOTS.length.toLocaleString()+' lots';
+  if(filterCountEl) filterCountEl.textContent=lots.length.toLocaleString()+' lots';
   // Mobile sheet CTA + sort mirror + auction-date chips sync
   const sheetCta=$('sheetCtaCount'); if(sheetCta) sheetCta.textContent=lots.length.toLocaleString();
   if(typeof syncSortToMirror==='function') syncSortToMirror();
@@ -3316,9 +3310,9 @@ function renderLots(){
   }
 
   // Skip DOM rebuild if same lots on same page (avoids image reload flicker)
-  var _renderKey=_currentPage+'|'+_viewMode+'|'+pageItems.filter(i=>!i.isDivider).map(i=>i.idx).join(',');
+  var _renderKey=_currentPage+'|'+pageItems.filter(i=>!i.isDivider).map(i=>i.idx).join(',');
   if(_renderKey===window._lastRenderKey&&document.getElementById('lotsGrid')){
-    if(filterCountEl) filterCountEl.textContent='Page '+_currentPage+' of '+totalPages+' · '+totalLots.toLocaleString()+' lots';
+    if(filterCountEl) filterCountEl.textContent=totalLots.toLocaleString()+' lots';
     if(typeof syncFiltersToURL==='function') syncFiltersToURL();
     return;
   }
@@ -3326,13 +3320,13 @@ function renderLots(){
   _expandedPanelCache.clear(); // Only clear when we're actually rebuilding DOM
   try { sessionStorage.setItem('ab_render_key', _renderKey); } catch(e) {}
   _imgRenderCount=0;
-  out.innerHTML='<div class="lots-grid'+(_viewMode==='list'?' list-view':'')+'" id="lotsGrid">'+pageItems.map(i=>i.html).join('')+'</div>';
+  out.innerHTML='<div class="lots-grid list-view" id="lotsGrid">'+pageItems.map(i=>i.html).join('')+'</div>';
   // Preload all images on this page into browser cache for instant re-renders
   pageItems.forEach(function(i){if(i.lot&&i.lot.imageUrl){var p=new Image();p.src=optimImg(i.lot.imageUrl,400)}});
   const renderedCount=pageItems.filter(i=>!i.isDivider).length;
 
-  // Update filter count with page info
-  if(filterCountEl) filterCountEl.textContent='Page '+_currentPage+' of '+totalPages+' · '+totalLots.toLocaleString()+' lots';
+  // Update filter count — compact form for the top bar
+  if(filterCountEl) filterCountEl.textContent=totalLots.toLocaleString()+' lots';
 
   // Pagination controls
   if(totalPages>1){

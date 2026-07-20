@@ -2242,16 +2242,16 @@ footer .logo-f span{color:var(--green)}
     color: #fff;
     border-color: var(--text, #1a2a3a);
   }
-  /* Collapsed state — only the search row is visible */
+  /* Collapsed state — only the search row is visible. sp-page-info is
+     deliberately NOT hidden here: it carries the result count in the
+     mobile top bar (styled in the .sp-search-row block further down). */
   .search-panel .sp-filter-row,
   .search-panel .sp-toggle-row,
-  .search-panel .sp-per-page,
-  .search-panel .view-toggle,
-  .search-panel .sp-page-info {
+  .search-panel .sp-per-page {
     display: none;
   }
-  /* Expanded state — show everything except the per-page/view-toggle/
-     page-info meta widgets which stay hidden on mobile (low-value chrome) */
+  /* Expanded state — show everything except the per-page widget which
+     stays hidden on mobile (low-value chrome) */
   .search-panel.mobile-expanded .sp-filter-row { display: flex; }
   .search-panel.mobile-expanded .sp-toggle-row { display: flex; }
 }
@@ -2959,9 +2959,24 @@ footer p a {
     background: var(--white);
     border-radius: 8px;
   }
-  .sp-search-row .view-toggle { display: flex; order: 3; flex: 0 0 auto; }
-  .sp-search-row .sp-per-page,
-  .sp-search-row .sp-page-info { display: none !important; }
+  .sp-search-row .sp-per-page { display: none !important; }
+  /* Result count fills the slot the grid/list toggle used to occupy
+     (removed 2026-05-25). Compact Rightmove-style "1,234 lots" caption
+     so users can see scope at a glance. */
+  .sp-search-row .sp-page-info {
+    display: inline-flex;
+    order: 3;
+    align-items: center;
+    flex: 0 0 auto;
+    margin-left: auto;
+    padding: 0 4px;
+    font-family: var(--font-mono);
+    font-size: .72rem;
+    letter-spacing: .04em;
+    color: var(--text2);
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
 
   /* Hide the desktop in-row sort and the desktop Pro-filters trigger —
      both are surfaced inside the sheet instead. */
