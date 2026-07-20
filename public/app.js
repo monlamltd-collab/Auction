@@ -5027,86 +5027,13 @@ function toggleLotDesc(btn) {
   btn.textContent = expanded ? 'Show less' : 'Read full description';
 }
 
-function buildExpV2DD(lot) {
-  // Due-diligence checklist derived from the data we actually have:
-  //   - Flood zone (1 = lowest = ✓; 2 amber; 3 = bad)
-  //   - Tenure (Freehold ✓; Leasehold ✓ if length known and >80yr; otherwise warn)
-  //   - EPC (A-D ✓; E-G warn — not lettable below F)
-  //   - Vacant possession (derived from opps[]) — ✓ if found
-  // Items that resolve to "unknown" become amber-warn so the user knows
-  // verification is still needed.
-  const items = [];
-
-  // Flood zone
-  if (lot.floodZone === '1') {
-    items.push({ icon: 'ok', label: 'Flood zone 1 (lowest)' });
-  } else if (lot.floodZone === '2') {
-    items.push({ icon: 'warn', label: 'Flood zone 2 — insurance check' });
-  } else if (lot.floodZone === '3') {
-    items.push({ icon: 'bad', label: 'Flood zone 3 — high risk' });
-  } else {
-    items.push({ icon: 'warn', label: 'Flood zone TBD' });
-  }
-
-  // Tenure
-  if (lot.tenure === 'Freehold') {
-    items.push({ icon: 'ok', label: 'Freehold confirmed' });
-  } else if (lot.tenure === 'Share of Freehold') {
-    items.push({ icon: 'ok', label: 'Share of freehold confirmed' });
-  } else if (lot.tenure === 'Leasehold') {
-    if (lot.leaseLength && lot.leaseLength >= 80) {
-      items.push({ icon: 'ok', label: 'Leasehold (' + lot.leaseLength + 'yr) — comfortable' });
-    } else if (lot.leaseLength && lot.leaseLength < 80) {
-      items.push({ icon: 'bad', label: 'Leasehold (' + lot.leaseLength + 'yr) — short, plan extension' });
-    } else {
-      items.push({ icon: 'warn', label: 'Leasehold — verify lease length' });
-    }
-  } else {
-    items.push({ icon: 'warn', label: 'Tenure TBD' });
-  }
-
-  // EPC
-  if (lot.epcRating) {
-    const r = String(lot.epcRating).toUpperCase()[0];
-    if ('ABCD'.includes(r)) {
-      items.push({ icon: 'ok', label: 'EPC ' + r + (lot.epcScore ? ' · ' + lot.epcScore + '/100' : '') });
-    } else if (r === 'E') {
-      items.push({ icon: 'warn', label: 'EPC E — verify if letting' });
-    } else {
-      items.push({ icon: 'bad', label: 'EPC ' + r + ' — unlettable until upgraded' });
-    }
-  } else {
-    items.push({ icon: 'warn', label: 'EPC TBD' });
-  }
-
-  // Vacant possession (signal from opps array)
-  const oppsLower = (lot.opps || []).map(o => String(o).toLowerCase()).join(' ');
-  if (oppsLower.includes('vacant')) {
-    items.push({ icon: 'ok', label: 'Vacant possession' });
-  } else if (oppsLower.includes('tenanted') || oppsLower.includes('sitting tenant')) {
-    items.push({ icon: 'warn', label: 'Tenanted — review tenancy terms' });
-  } else {
-    items.push({ icon: 'warn', label: 'Occupancy TBD' });
-  }
-
-  const cleared = items.filter(i => i.icon === 'ok').length;
-  const total = items.length;
-
-  const liHtml = items.map(function (it, i) {
-    const sym = it.icon === 'ok' ? '✓' : it.icon === 'warn' ? '!' : '✕';
-    return '<li><span class="dd-icon ' + it.icon + '">' + sym + '</span><span>' + esc(it.label) + '</span></li>';
-  }).join('');
-
-  const summaryColor = cleared === total ? 'var(--signal-green)' : (cleared >= total - 1 ? 'var(--signal-green)' : 'var(--signal-amber)');
-
-  return '<section class="sec">' +
-    '<div class="head">' +
-      '<span class="sec-head"><span class="sec-num-badge">__SEC_NUM__</span><span class="eyebrow ink">Due diligence checks</span></span>' +
-      '<span style="font-family:var(--font-mono);font-size:11px;color:' + summaryColor + '">' + cleared + ' of ' + total + ' cleared</span>' +
-    '</div>' +
-    '<ul class="dd-list">' + liHtml + '</ul>' +
-  '</section>';
-}
+// The "Due diligence checks" section was removed 2026-07-10. Every item it
+// could show was either a restatement of a field already on the panel (flood
+// zone, tenure, EPC) or, far more often, a "TBD" amber warning that merely
+// announced our own missing enrichment data. It read as a checklist of the
+// property's risks when it was really a checklist of our gaps — so it was
+// noise at best and misleading at worst. Enrichment gaps belong in
+// `lots.enrichment_manifest`, not in the investor's face.
 
 function buildExpV2Scores(lot) {
   const sb = Array.isArray(lot.scoreBreakdown) ? lot.scoreBreakdown : [];
@@ -5338,11 +5265,28 @@ function _galleryPhotos(lot) {
   return out;
 }
 
+// Floor plans for the gallery + lightbox. `floorPlans` is the canonical array
+// (lots.floor_plans); `floorPlanUrl` is the legacy first-plan alias. A property
+// often publishes one plan per storey, so render them all rather than the first.
+// These bypass isValidImageUrl deliberately — that filter exists to keep plans
+// OUT of the photo carousel, and would reject the very URLs we want here.
+function _galleryFloorPlans(lot) {
+  if (Array.isArray(lot.floorPlans) && lot.floorPlans.length) return lot.floorPlans.filter(Boolean);
+  return lot.floorPlanUrl ? [lot.floorPlanUrl] : [];
+}
+
+// The extractor legitimately captures .pdf plans (some houses only publish the
+// plan as a PDF). Those can't render in an <img> or the lightbox — they get a
+// document link tile instead. Suffix test ignores querystring/hash.
+function _isPdfFloorPlan(url) {
+  return /\.pdf($|[?#])/i.test(String(url || ''));
+}
+
 function buildExpV2Gallery(lot) {
   const photos = _galleryPhotos(lot);
-  const fp = lot.floorPlanUrl || null;
+  const plans = _galleryFloorPlans(lot);
   // Single hero + no floor plan → the header already shows everything we have
-  if (photos.length <= 1 && !fp) return '';
+  if (photos.length <= 1 && plans.length === 0) return '';
 
   const MAX_VISIBLE = 8;
   const visiblePhotos = photos.slice(0, MAX_VISIBLE);
@@ -5362,23 +5306,39 @@ function buildExpV2Gallery(lot) {
     '</button>';
   }).join('');
 
-  const floorPlanTile = fp
-    ? '<button type="button" class="exp-gallery-tile exp-gallery-floorplan" ' +
-        'onclick="openLotLightbox(' + lot._idx + ',' + photos.length + ')" ' +
-        'aria-label="Floor plan">' +
-        '<img src="' + esc(typeof optimImg === 'function' ? optimImg(fp, 400) : fp) + '" alt="" loading="lazy" decoding="async">' +
+  // Plans follow the photos in the lightbox, so an image plan's lightbox index
+  // is photos.length + its position among IMAGE plans — openLotLightbox skips
+  // PDFs when it builds its item list. PDF plans render as document link tiles
+  // (an <img src="…pdf"> would just be a broken tile) opening in a new tab.
+  let imgPlanIdx = 0;
+  const floorPlanTiles = plans.map(function (src, j) {
+    const label = plans.length > 1 ? 'Floor plan ' + (j + 1) + ' of ' + plans.length : 'Floor plan';
+    if (_isPdfFloorPlan(src)) {
+      return '<a class="exp-gallery-tile exp-gallery-floorplan exp-gallery-fp-doc" ' +
+        'href="' + esc(src) + '" target="_blank" rel="noopener" ' +
+        'aria-label="' + esc(label + ' (PDF, opens in new tab)') + '">' +
+        '<span class="exp-gallery-fp-doc-text">View floor plan (PDF)</span>' +
         '<span class="exp-gallery-fp-label">Floor plan</span>' +
-      '</button>'
-    : '';
+      '</a>';
+    }
+    const optimSrc = (typeof optimImg === 'function') ? optimImg(src, 400) : src;
+    return '<button type="button" class="exp-gallery-tile exp-gallery-floorplan" ' +
+      'onclick="openLotLightbox(' + lot._idx + ',' + (photos.length + imgPlanIdx++) + ')" ' +
+      'aria-label="' + esc(label) + '">' +
+      '<img src="' + esc(optimSrc) + '" alt="" loading="lazy" decoding="async">' +
+      '<span class="exp-gallery-fp-label">Floor plan</span>' +
+    '</button>';
+  }).join('');
 
-  const photosLabel = photos.length === 1 ? '1 photo' : photos.length + ' photos';
-  const fpLabel = fp ? ' · 1 floor plan' : '';
+  const parts = [];
+  if (photos.length) parts.push(photos.length === 1 ? '1 photo' : photos.length + ' photos');
+  if (plans.length) parts.push(plans.length === 1 ? '1 floor plan' : plans.length + ' floor plans');
 
   return '<section class="exp-gallery">' +
     '<div class="exp-gallery-head">' +
-      '<span class="eyebrow ink">Gallery · ' + photosLabel + fpLabel + '</span>' +
+      '<span class="eyebrow ink">Gallery · ' + parts.join(' · ') + '</span>' +
     '</div>' +
-    '<div class="exp-gallery-grid">' + tiles + floorPlanTile + '</div>' +
+    '<div class="exp-gallery-grid">' + tiles + floorPlanTiles + '</div>' +
   '</section>';
 }
 
@@ -5480,7 +5440,12 @@ function openLotLightbox(lotIdx, itemIdx) {
   const items = photos.map(function (src, i) {
     return { src: src, label: 'Photo ' + (i + 1) };
   });
-  if (lot.floorPlanUrl) items.push({ src: lot.floorPlanUrl, label: 'Floor plan' });
+  // PDF plans are excluded — the lightbox renders <img>, which a PDF breaks.
+  // They stay in the data and get a document link tile in the gallery instead.
+  _galleryFloorPlans(lot).filter(function (src) { return !_isPdfFloorPlan(src); })
+    .forEach(function (src, j, arr) {
+      items.push({ src: src, label: arr.length > 1 ? 'Floor plan ' + (j + 1) : 'Floor plan' });
+    });
   if (!items.length) return;
   _lightboxItems = items;
   _lightboxIdx = Math.max(0, Math.min(items.length - 1, itemIdx || 0));
@@ -5815,7 +5780,6 @@ function buildExpandedPanelHTML(lot) {
   // Each builder now emits __SEC_NUM__ and we substitute as we walk
   // the surviving non-empty fragments.
   const _leftSectionsRaw = [
-    buildExpV2DD(lot),
     buildExpV2Scores(lot),
     buildExpV2Comparables(lot, premiumNow),
   ];

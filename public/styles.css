@@ -1253,21 +1253,6 @@ footer .logo-f span{color:var(--green)}
 .exp-v2 .sec .head.bold{background:var(--ink);color:var(--bg);border-bottom:none}
 .exp-v2 .sec .body{padding:18px}
 
-/* Due-diligence list */
-.exp-v2 .dd-list{list-style:none;margin:0;padding:0}
-.exp-v2 .dd-list li{
-  padding:12px 18px;display:flex;align-items:center;gap:10px;
-  border-top:1px solid var(--border);font-size:14px;color:var(--ink)
-}
-.exp-v2 .dd-list li:first-child{border-top:none}
-.exp-v2 .dd-icon{
-  display:inline-flex;align-items:center;justify-content:center;
-  width:14px;height:14px;font-size:10px;font-weight:700;color:#fff;font-family:var(--font-main)
-}
-.exp-v2 .dd-icon.ok{background:var(--signal-green)}
-.exp-v2 .dd-icon.warn{background:var(--signal-amber)}
-.exp-v2 .dd-icon.bad{background:var(--red)}
-
 /* Why-this-scores list */
 .exp-v2 .ws-list{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;list-style:none}
 .exp-v2 .ws-list li{display:flex;align-items:flex-start;gap:8px;font-size:14px;color:var(--ink)}
@@ -3487,6 +3472,23 @@ footer p a {
   text-transform: uppercase;
   border-radius: 3px;
   pointer-events: none;
+}
+.exp-gallery-fp-doc {
+  /* PDF floor plan — a document link tile, not an image. <a> is inline by
+     default, so it needs display:flex to honour the tile's aspect-ratio. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  text-decoration: none;
+}
+.exp-gallery-fp-doc-text {
+  text-align: center;
+  color: var(--ink, #1A1A18);
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .04em;
 }
 
 /* ─── Lightbox overlay ─── */
