@@ -270,6 +270,8 @@ process.on('unhandledRejection', (reason) => {
 // ═══════════════════════════════════════════════════════════════
 import { initAnalysis, autoAnalyseAll, autoAnalyseOne, isAutoAnalysisRunning, healBrokenHouse, runEnrichmentWave, drainHygieneRetries } from './lib/analysis.js';
 import { runFreshnessPulse } from './lib/pipeline/freshness-pulse.js';
+import { runGhostSweep } from './lib/pipeline/ghost-sweep.js';
+import { LOT_EVENT_TYPES, buildLotEvent, buildVanishedEvent, insertLotEvents } from './lib/pipeline/lot-events.js';
 import { isPdfUrl } from './lib/scraper/extraction.js';
 import { auditStatusDrift } from './lib/harness/sub-agents.js';
 import { initWatcher, watchAuctionCalendar } from './lib/pipeline/auction-watcher.js';
@@ -282,6 +284,7 @@ import { sweepPostAuctionStatuses } from './lib/pipeline/post-auction-sweep.js';
 import { sweepSameDayStatuses } from './lib/pipeline/same-day-sweep.js';
 import { sweepMultiImages } from './lib/pipeline/multi-image-sweep.js';
 import { sweepNarratives } from './lib/pipeline/narrative-sweep.js';
+import { sweepFloorPlans } from './lib/pipeline/floor-plan-sweep.js';
 
 initAnalysis({
   // Resource budget (new: centralised resource state)
@@ -360,7 +363,7 @@ initCompanies({ supabase });
 const _scheduleState = {
   lastFullPass: 0, lastFreeEnrich: 0, lastStatusDrift: 0,
   lastRentalDrain: 0, lastRetryDrain: 0, lastPostAuctionSweep: 0,
-  lastBudgetLog: 0, lastMultiImageSweep: 0, lastNarrativeSweep: 0, lastHmlrRefresh: 0,
+  lastBudgetLog: 0, lastMultiImageSweep: 0, lastNarrativeSweep: 0, lastFloorPlanSweep: 0, lastHmlrRefresh: 0,
   // Phase 5 tiers (alert-sweep / coverage-digest); sitemap-regen retired
   // 2026-07-03 — /sitemap.xml is now dynamic (lib/sitemap.js):
   lastAlertSweep: 0, lastCoverageDigest: 0,
@@ -384,6 +387,8 @@ const _scheduleState = {
   lastUnsoldAlerts: 0,
   // Tier 20 (freshness pulse — hourly xx:20 outside the overnight batch window):
   lastFreshnessPulse: 0,
+  // Tier 21 (ghost sweep — daily 05:40, retires served-but-vanished lots):
+  lastGhostSweep: 0,
 };
 
 function getUkHourMinute() {
@@ -677,6 +682,18 @@ function scheduleTick() {
       .catch(e => console.error('SCHEDULE narrative sweep failed:', e.message));
   }
 
+  // Tier 7c: Floor-plan sweep daily at 07:30 UK (offset again so the three
+  // detail-page passes never overlap). Visible lots with no floor_plans get the
+  // source site's plan extracted — cache-first, live HTTP→Crawlee for the rest.
+  // No Firecrawl credits in this path.
+  if (hour === 7 && minute >= 30 && minute < 35 && now - _scheduleState.lastFloorPlanSweep > 60 * 60 * 1000) {
+    _scheduleState.lastFloorPlanSweep = now;
+    console.log('SCHEDULE: 07:30 UK — running sweepFloorPlans');
+    sweepFloorPlans()
+      .then(r => console.log(`SCHEDULE floor-plan sweep: cache=${r.reconciledFromCache} fetched=${r.fetched}/${r.eligible} added=${r.floorPlansAdded} none=${r.noFloorPlanFound} dead=${r.urlDead} failed=${r.fetchFailed}`))
+      .catch(e => console.error('SCHEDULE floor-plan sweep failed:', e.message));
+  }
+
   // Tier 9: Alert sweeper, daily 02:30 UK. Resolves pipeline_alerts older
   // than 30 days where the per-type "now healthy" predicate confirms the
   // underlying problem is gone (lib/pipeline/alert-sweeper.js).
@@ -932,6 +949,46 @@ function scheduleTick() {
     sweepSameDayStatuses()
       .then(r => console.log(`SCHEDULE same-day sweep: eligible=${r.eligible} fetched=${r.fetched} updated=${r.statusUpdated} unchanged=${r.noChange} dead=${r.urlDead} failed=${r.fetchFailed}`))
       .catch(e => console.error('SCHEDULE same-day sweep failed:', e.message));
+  }
+
+  // Tier 21: Ghost sweep — daily 05:40 UK (after the 05:00 post-auction sweep,
+  // before the 06:00 multi-image sweep). Retires 'available' lots that a
+  // recently-scraped house no longer lists (ghosts) and long-past-dated lots
+  // the status sweeps missed — the two classes the 2026-07-04 portfolio audit
+  // found being served stale. Kill switch: GHOST_SWEEP_DISABLED=true.
+  if (hour === 5 && minute >= 40 && minute < 45 && now - _scheduleState.lastGhostSweep > 23 * 60 * 60 * 1000) {
+    _scheduleState.lastGhostSweep = now;
+    console.log('SCHEDULE: 05:40 UK — running ghost sweep');
+    withTier('ghost-sweep', () => runGhostSweep({
+      fetchAvailableRows: async () => {
+        // Page past PostgREST's 1000-row cap (same pattern as coverage-digest).
+        const out = [];
+        for (let from = 0; ; from += 1000) {
+          const { data, error } = await supabase
+            .from('lots')
+            .select('id, house, last_seen_at, auction_date, status')
+            .eq('status', 'available')
+            .order('id', { ascending: true })
+            .range(from, from + 999);
+          if (error) throw new Error(`ghost-sweep fetch: ${error.message}`);
+          out.push(...(data || []));
+          if (!data || data.length < 1000) break;
+        }
+        return out;
+      },
+      flipLots: async (ids, patch) => {
+        // Throw on failure — the sweep must know the flip didn't land so it
+        // skips the batch's lot_events (no withdrawals asserted that never happened).
+        const { error } = await supabase.from('lots').update(patch).in('id', ids);
+        if (error) throw new Error(`ghost-sweep flip: ${error.message}`);
+        return ids.length;
+      },
+      emitEvents: (events) => insertLotEvents(events),
+      buildVanishedEvent, buildLotEvent, LOT_EVENT_TYPES,
+      fireAlert: harnessFireAlert,
+    }))
+      .then(r => { if (!r.skipped) console.log(`SCHEDULE ghost sweep: ghosts=${r.ghosts} pastDated=${r.pastDated} held=${r.held.length} flipFailures=${r.flipFailures}`); })
+      .catch(e => console.error('SCHEDULE ghost sweep failed:', e.message));
   }
 
   // Tier 20: Freshness pulse — hourly at xx:20, skipping the 02:00–06:59

@@ -1253,21 +1253,6 @@ footer .logo-f span{color:var(--green)}
 .exp-v2 .sec .head.bold{background:var(--ink);color:var(--bg);border-bottom:none}
 .exp-v2 .sec .body{padding:18px}
 
-/* Due-diligence list */
-.exp-v2 .dd-list{list-style:none;margin:0;padding:0}
-.exp-v2 .dd-list li{
-  padding:12px 18px;display:flex;align-items:center;gap:10px;
-  border-top:1px solid var(--border);font-size:14px;color:var(--ink)
-}
-.exp-v2 .dd-list li:first-child{border-top:none}
-.exp-v2 .dd-icon{
-  display:inline-flex;align-items:center;justify-content:center;
-  width:14px;height:14px;font-size:10px;font-weight:700;color:#fff;font-family:var(--font-main)
-}
-.exp-v2 .dd-icon.ok{background:var(--signal-green)}
-.exp-v2 .dd-icon.warn{background:var(--signal-amber)}
-.exp-v2 .dd-icon.bad{background:var(--red)}
-
 /* Why-this-scores list */
 .exp-v2 .ws-list{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;list-style:none}
 .exp-v2 .ws-list li{display:flex;align-items:flex-start;gap:8px;font-size:14px;color:var(--ink)}
@@ -2242,16 +2227,16 @@ footer .logo-f span{color:var(--green)}
     color: #fff;
     border-color: var(--text, #1a2a3a);
   }
-  /* Collapsed state — only the search row is visible */
+  /* Collapsed state — only the search row is visible. sp-page-info is
+     deliberately NOT hidden here: it carries the result count in the
+     mobile top bar (styled in the .sp-search-row block further down). */
   .search-panel .sp-filter-row,
   .search-panel .sp-toggle-row,
-  .search-panel .sp-per-page,
-  .search-panel .view-toggle,
-  .search-panel .sp-page-info {
+  .search-panel .sp-per-page {
     display: none;
   }
-  /* Expanded state — show everything except the per-page/view-toggle/
-     page-info meta widgets which stay hidden on mobile (low-value chrome) */
+  /* Expanded state — show everything except the per-page widget which
+     stays hidden on mobile (low-value chrome) */
   .search-panel.mobile-expanded .sp-filter-row { display: flex; }
   .search-panel.mobile-expanded .sp-toggle-row { display: flex; }
 }
@@ -2959,9 +2944,24 @@ footer p a {
     background: var(--white);
     border-radius: 8px;
   }
-  .sp-search-row .view-toggle { display: flex; order: 3; flex: 0 0 auto; }
-  .sp-search-row .sp-per-page,
-  .sp-search-row .sp-page-info { display: none !important; }
+  .sp-search-row .sp-per-page { display: none !important; }
+  /* Result count fills the slot the grid/list toggle used to occupy
+     (removed 2026-05-25). Compact Rightmove-style "1,234 lots" caption
+     so users can see scope at a glance. */
+  .sp-search-row .sp-page-info {
+    display: inline-flex;
+    order: 3;
+    align-items: center;
+    flex: 0 0 auto;
+    margin-left: auto;
+    padding: 0 4px;
+    font-family: var(--font-mono);
+    font-size: .72rem;
+    letter-spacing: .04em;
+    color: var(--text2);
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
 
   /* Hide the desktop in-row sort and the desktop Pro-filters trigger —
      both are surfaced inside the sheet instead. */
@@ -3472,6 +3472,23 @@ footer p a {
   text-transform: uppercase;
   border-radius: 3px;
   pointer-events: none;
+}
+.exp-gallery-fp-doc {
+  /* PDF floor plan — a document link tile, not an image. <a> is inline by
+     default, so it needs display:flex to honour the tile's aspect-ratio. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  text-decoration: none;
+}
+.exp-gallery-fp-doc-text {
+  text-align: center;
+  color: var(--ink, #1A1A18);
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .04em;
 }
 
 /* ─── Lightbox overlay ─── */
