@@ -1,0 +1,35 @@
+-- migrations/2026-07-04-hermes-hwd-recent-probe.sql
+--
+-- APPLIED TO PROD 2026-07-04 (owner-approved tuning pass). Documents the live
+-- hermes_run_deterministic_rules() after adding a recent-probe requirement to
+-- house_went_dark (and the rollup's dark count).
+--
+-- Why: the predicate previously keyed on frozen state. Slugs that never probe
+-- under their own name — retired estate agents (humberts) or platform-routed
+-- slugs (wrightmarshall: its iamsold.co.uk URL maps to the `iamsold` slug in
+-- detectAuctionHouse, so the wrightmarshall slug itself never scrapes) — kept
+-- a stale last_probe_result='same' + positive average_lot_count forever and
+-- re-fired house_went_dark on every run (wrightmarshall reached 8 occurrences).
+-- average_lot_count averages only NON-ZERO counts, so an occasionally-stocked
+-- house looks "normally productive" even when legitimately empty.
+--
+-- Fix: `last_probe_at > now() - interval '7 days'` in both the per-house loop
+-- and the rollup's v_dark — a finding now requires that the pipeline actually
+-- LOOKED recently and got nothing. Frozen slugs go quiet; genuinely-attempted
+-- 0-extract houses still fire. Full applied function definition: see the
+-- migration applied via Supabase (hermes_hwd_recent_probe_2026_07_04); this
+-- file records the diff-of-intent for the repo:
+--
+--   for r in
+--     select slug, average_lot_count
+--       from house_skills
+--      where not coalesce(dormant,false)
+--        and last_probe_result in ('changed','same')
+--   +    and last_probe_at > now() - interval '7 days'
+--        and coalesce(last_extracted_count,0) = 0
+--        and coalesce(average_lot_count,0) > 0
+--        and (last_success_at is null or last_success_at < now() - interval '4 days')
+--
+-- (identical condition added to the scrape_coverage_degraded v_dark count; the
+--  suggested_action now points triagers at docs/houses/ for known estate-agent
+--  houses before chasing a recogniser fix.)

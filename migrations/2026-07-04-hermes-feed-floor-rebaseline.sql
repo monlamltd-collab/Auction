@@ -1,0 +1,18 @@
+-- migrations/2026-07-04-hermes-feed-floor-rebaseline.sql
+-- APPLIED TO PROD 2026-07-04, same pass as the fresh-window migration.
+--
+-- active_feed_collapse floor re-baselined 3000 -> 2000. The old baseline
+-- (~4561) was measured against a feed padded with ghosts (696 served), host-
+-- variant duplicates (1,800 rows), and a 21-day staleness window. After the
+-- portfolio-freshness pass the HONEST feed measured ~2,580 — the old 3000
+-- floor would have fired a false collapse alarm nightly. Floor 2000 keeps
+-- roughly the same proportional collapse-detection margin against the honest
+-- baseline (~2600). Expect the feed to grow from here as the recovered long
+-- tail (#150/#154/#155) re-confirms fresh lots — the floor can be re-raised
+-- once a new steady state is observed.
+--
+-- Diff-of-intent (full function otherwise unchanged from
+-- 2026-07-04-hermes-hwd-recent-probe.sql):
+--   -  if v_active < 3000 then ... 'baseline ~4561; floor 3000'
+--   +  if v_active < 2000 then ... 'honest baseline ~2600 post 2026-07-04
+--        freshness pass; floor 2000'
