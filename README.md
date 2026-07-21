@@ -41,7 +41,7 @@ Railway Worker Process (background)
 ├── Adaptive scrape scheduler  →  Firecrawl (primary)
 │                                  Markdown recogniser (per-house + AuctionHouse platform; Bond Wolfe via Crawlee "Load more")
 │                                  Gemini fallback (Flash / Pro)
-│                                  Allsop JSON API (direct exception)
+│                                  Allsop + Under The Hammer JSON APIs (direct exceptions)
 │                                  Puppeteer (browser fallback)
 ├── Self-healing harness       →  healBrokenHouse() + circuit breakers
 ├── Enrichment pipeline        →  UPRN (OS Places) + EPC + value estimator
@@ -99,6 +99,9 @@ Full headless Chrome. Heavier than Firecrawl. Used for pages that require a real
 
 **6. Symonds & Sampson CF-stealth exception**
 `lib/scraper/symondsandsampson.js` — `auctions.symondsandsampson.co.uk` is behind Cloudflare, which 403s every engine except Firecrawl's residential `proxy:'stealth'`. A bespoke two-tier scraper resolves the soonest upcoming event from the stable events page, then parses its `/property/{id}/{postcode}/{town}/{slug}` lots. Dispatched on `paginateAs:'symondsandsampson_stealth'` (mirrors the Allsop exception). Stealth costs ~5 credits/scrape, so it scrapes only the soonest event — the events page lists lots ~6 weeks pre-auction, so later events are empty.
+
+**7. Under The Hammer JSON-API exception**
+`lib/scraper/underthehammer.js` — `underthehammer.com` is a Next.js SPA whose catalogue page ships an empty shell and hydrates every card from its own public `/api/properties` endpoint (plain HTTP 200, no Cloudflare, no auth). The house had no recogniser, so it depended on render→AI extraction, saw ~9 of 161 lots and went dark when the AI quota died. A bespoke consumer reads the endpoint directly and paginates on `skip`; dispatched on `paginateAs:'underthehammer_api'` (mirrors the Allsop exception). Zero credits, one fetch, no AI. **The endpoint publishes the whole book** (285 records → 161 live), so the live filter is the load-bearing correctness gate: `status === 'upcoming'` **and** an auction end date today-or-later, both required — the live feed contains a sold lot with a future date and stale `upcoming` records past their date, so either gate alone leaks ended lots as `available`.
 
 **Image hygiene — galleries + thumbnails**
 A daily multi-image sweep (`lib/pipeline/multi-image-sweep.js`) fills each lot's `images[]` carousel from its detail page; the single `image_url` card thumbnail is promoted from the first real photo. Non-property "chrome" — logos, trade-body badges (Propertymark/NAEA/RICS/TPO), map loaders, `.svg`/`.gif` assets, and per-house placeholder slides repeated across many lots — is stripped house-agnostically via `lib/pipeline/image-extract.js` (`isChromeUrl` + cross-lot `computeBleedByHouse`/`dechromeGallery`), so a branded slide never leads a carousel or becomes a thumbnail. Existing data can be cleaned retroactively with `POST /api/admin/dechrome-images` (dry-run by default; `{ apply: true }` to write).
@@ -240,7 +243,7 @@ npm run dev        # runs with --watch, opens at http://localhost:3000
 ### Running tests
 
 ```bash
-npm test           # runs all 111 test files
+npm test           # runs all 112 test files
 ```
 
 Key test files: `test-scoring.js`, `test-harness.js`, `test-enrichment.js`, `test-healing-agent.js`, `test-recall.js`, `test-recall-gate.js` (THE 100% COMMANDMENT — a scrape below sentinel parity fires a coverage-bug alert), `test-extraction-chunking.js` (dense-page chunking so extraction never truncates at the output cap), `test-fundability.js`, `test-manifest.js`, `test-fabrication-guard.js`, `test-search-parse.js` (AI-search response salvage), `test-smart-query-parse.js` (AI-search query parsing: price/beds/location extraction), `test-charlesdarrow-recogniser.js`, `test-sdlauctions-recogniser.js`, `test-cliveemson-recogniser.js`.
