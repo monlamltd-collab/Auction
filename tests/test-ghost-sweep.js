@@ -9,6 +9,7 @@
  */
 
 import { classifyGhosts, runGhostSweep, ghostUnseenDays } from '../lib/pipeline/ghost-sweep.js';
+import { LOT_COLUMNS } from '../lib/types/lot.js';
 
 let passed = 0;
 let failed = 0;
@@ -114,8 +115,9 @@ console.log('\nTest 5: runGhostSweep — flips, events, alerts');
   assert(!state.flipped.includes('p2') && !state.flipped.includes('p3'), 'held house not flipped');
   assert(r.held.length === 1 && state.alerts.length === 1 && state.alerts[0].type === 'ghost_sweep_held',
     'held house alerted');
-  assert(state.patches.every(p => p.status === 'withdrawn' && p.removed_reason && p.removed_at),
-    'flip patch mirrors prune semantics (withdrawn + removed_reason + removed_at)');
+  assert(state.patches.every(p => p.status === 'withdrawn'
+      && p.enrichment_manifest?.removed_reason && p.enrichment_manifest?.removed_at),
+    'flip patch mirrors prune semantics (withdrawn + removed_reason/removed_at inside enrichment_manifest)');
   const a3Events = state.events.filter(e => e.lotId === 'a3');
   assert(a3Events.some(e => e.kind === 'vanished') && a3Events.some(e => e.kind === 'flip' && e.newValue.status === 'withdrawn'),
     'vanished + status-flip events emitted per lot');
@@ -165,6 +167,46 @@ console.log('\nTest 8: runGhostSweep — flipLots returning 0 rows treated as fa
   assert(r.ghosts === 0 && r.flipFailures === 1, 'zero-row flip counted as failure');
   assert(state.events.length === 0, 'no events when nothing was actually flipped');
   assert(state.alerts.some(a => a.type === 'ghost_sweep_flip_failed'), 'zero-row flip alerted');
+}
+
+// ── Schema guard ──
+// The 2026-07-21 bug: the flip patch named top-level `removed_reason` /
+// `removed_at` columns that `lots` does not have, so PostgREST rejected EVERY
+// flip in production ("Could not find the 'removed_at' column of 'lots' in the
+// schema cache") and no stale lot was ever retired. The mocks above happily
+// accept any patch shape, so nothing caught it. This asserts the patch against
+// the canonical column list instead.
+//
+// LOT_COLUMNS is the app's verified-against-information_schema set. It omits a
+// few real-but-rarely-read columns (enriched_at, first_seen_at, created_at,
+// sources, uprn, property_key, auction_id) — if a future patch legitimately
+// needs one, add it to WRITABLE_EXTRAS deliberately rather than loosening this.
+console.log('\nTest 9: flip patch names only real `lots` columns (phantom-column guard)');
+{
+  const WRITABLE_EXTRAS = new Set([]);
+  const allowed = new Set([...LOT_COLUMNS, ...WRITABLE_EXTRAS]);
+  const rows = [
+    row('a1', 'active', 0), row('a2', 'active', 0), row('a3', 'active', 5),
+    row('d1', 'olddates', 9, { auction_date: daysAgo(10).slice(0, 10) }),
+  ];
+  const { deps, state } = fakeDeps(rows);
+  await runGhostSweep(deps, { nowMs: NOW });
+
+  assert(state.patches.length > 0, 'sweep produced at least one patch to check');
+  const bad = [...new Set(state.patches.flatMap(p => Object.keys(p)))].filter(k => !allowed.has(k));
+  assert(bad.length === 0,
+    `every flip-patch key is a real lots column (offending: ${JSON.stringify(bad)})`);
+
+  // The provenance must be nested, not flattened — the precise shape of the bug.
+  assert(state.patches.every(p => !('removed_reason' in p) && !('removed_at' in p)),
+    'removed_reason/removed_at are NOT top-level patch keys');
+  assert(state.patches.every(p => p.enrichment_manifest
+      && typeof p.enrichment_manifest === 'object'
+      && !Array.isArray(p.enrichment_manifest)),
+    'enrichment_manifest patch is a jsonb object (merged by retire_lots, not replaced)');
+  const reasons = new Set(state.patches.map(p => p.enrichment_manifest?.removed_reason));
+  assert(reasons.has('ghost_sweep_unseen') && reasons.has('auction_passed_unswept'),
+    `both retirement reasons are stamped (got ${JSON.stringify([...reasons])})`);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
