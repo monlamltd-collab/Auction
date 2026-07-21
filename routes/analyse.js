@@ -10,7 +10,7 @@ import { getAuctionDateForUrl } from '../lib/calendar.js';
 import { detectAuctionHouse, getHouseDisplayName, HOUSE_DISPLAY_NAMES, rewriteUrl } from '../lib/houses.js';
 import { normaliseUrl } from '../lib/utils.js';
 import {
-  scrapeRenderedPage, scrapeAllsopApi, extractAllsopLotsFromJson,
+  scrapeRenderedPage, scrapeAllsopApi, extractAllsopLotsFromJson, scrapeUnderTheHammer,
   extractLotsWithAI, extractLotsFromPdf, isPdfUrl,
   enrichLotsFromLotPages, normaliseLotStatuses,
   getLastScrapeEngine, getLastAITier,
@@ -232,6 +232,13 @@ router.post('/api/analyse', asyncHandler(async (req, res) => {
         sseWrite(res, 'phase', { step: 'extracting' });
         rawLots = extractAllsopLotsFromJson(pages);
       }
+    } else if (rewritten.paginateAs === 'underthehammer_api') {
+      // Under The Hammer JSON API — mirrors the cron path (lib/pipeline/scrape-stage.js)
+      // so the on-demand route can't drift. Returns already-normalised lots,
+      // filtered to the live book.
+      sseWrite(res, 'phase', { step: 'extracting' });
+      rawLots = await scrapeUnderTheHammer(rewritten.baseUrl);
+      sseWrite(res, 'scrape', { pages: 1, lots: rawLots.length });
     } else if (houseRecogniser(house)?.staticCatalogue) {
       // ── Static-HTTP catalogue (SSR houses, e.g. BTG/sdl) ──
       // Plain HTTP keeps the inline "Guide Price: £X" a browser render would
