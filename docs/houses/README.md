@@ -27,6 +27,7 @@ files. Consult the relevant dossier **first** when touching a house.
 | `charlesdarrow` | Charles Darrow | own ASP.NET site (independent) | [charlesdarrow.md](charlesdarrow.md) |
 | `sdlauctions` | SDL Auctions | own WordPress site; property-world photos; EIG online mirror | [sdlauctions.md](sdlauctions.md) |
 | `cliveemson` | Clive Emson | own JS-rendered SPA (Crawlee render); land-heavy | [cliveemson.md](cliveemson.md) |
+| `savills` | Savills | own Joomla site (static SSR); calendar drill → every upcoming sale, `/page-n/quantity-100` | [savills.md](savills.md) |
 | `purplebricksgoto` | Purplebricks (GOTO) | EIG OAS, static `?pagesize=5000` | [purplebricksgoto.md](purplebricksgoto.md) |
 | **EIG OAS cluster** (26: `tcpa`, `firstforauctions`, `landwood`, `sageandco`, `harmanhealy`, `hmox`, `thepropertyauctionhouse`, `ahlondon`, +18) | — | EIG OAS current-auction recogniser + live-boundary static path (`?view=List`) | [eig-oas.md](eig-oas.md) |
 | `humberts` | Humberts | estate agent, NOT an auction house — RETIRED + dormant; 0 lots is normal | [humberts.md](humberts.md) |
