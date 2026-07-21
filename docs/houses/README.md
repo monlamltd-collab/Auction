@@ -29,6 +29,7 @@ files. Consult the relevant dossier **first** when touching a house.
 | `cliveemson` | Clive Emson | own JS-rendered SPA (Crawlee render); land-heavy | [cliveemson.md](cliveemson.md) |
 | `purplebricksgoto` | Purplebricks (GOTO) | EIG OAS, static `?pagesize=5000` | [purplebricksgoto.md](purplebricksgoto.md) |
 | **EIG OAS cluster** (26: `tcpa`, `firstforauctions`, `landwood`, `sageandco`, `harmanhealy`, `hmox`, `thepropertyauctionhouse`, `ahlondon`, +18) | — | EIG OAS current-auction recogniser + live-boundary static path (`?view=List`) | [eig-oas.md](eig-oas.md) |
+| `bagshaws` | Bagshaws Auctions | hand-built static HTML page; lots hosted on the Sequence group's Barnard Marcus sale | [bagshaws.md](bagshaws.md) |
 | `humberts` | Humberts | estate agent, NOT an auction house — RETIRED + dormant; 0 lots is normal | [humberts.md](humberts.md) |
 | `wrightmarshall` | Wright Marshall | estate agent; occasional lots via the iamSold platform slug — own slug never probes | [wrightmarshall.md](wrightmarshall.md) |
 
