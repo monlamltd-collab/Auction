@@ -39,6 +39,8 @@ Phased roadmap and status: `WORKSTREAMS.md`.
 
 > **Per-house knowledge** lives in `docs/houses/<slug>.md` (index: `docs/houses/README.md`) — the slug-keyed home for each house's config pointers, quirks, and incident history. Consult it first when touching a house; create/update it when onboarding (`auction-conventions` Step 6.5) or healing (`auction-self-healing` LEARN loop).
 
+> **EIG card-boundary invariant (do not regress).** EIG-OAS renders a card's metadata header — `### Lot N | End Time - DD/MM/YYYY` — **above** that card's lot anchor. `recogniseEigOasLotsFromMarkdown` therefore slices blocks **header-to-header**, never anchor-to-anchor: anchor slicing hands every card the *following* card's end-date, status badge and lot number, and leaves the last card of a catalogue with no date (→ the `2099-12-31` sentinel). Fixed 2026-07-21 — the off-by-one made `higginsdrysdale` report 0 live lots because its one live lot inherited the next card's "Auction Ended", and the genuine-zero path then persisted nothing, self-perpetuating at 0. Themes that emit no `Lot N` header fall back to anchor slicing unchanged. Affects all ~26 houses in `EIG_OAS_HOUSES`; re-verify tcpa/landwood/firstforauctions after any change here.
+
 > **DOM extractors retired 2026-05-08.** `lib/extractors/` was deleted along with `tests/snapshots/`, `tests/test-extractors.js`, `tests/test-detail-extractors.js`, and `scripts/audit*.mjs`. The `USE_FIRECRAWL_EXTRACT` env var, `FORCE_EXTRACT_HOUSES` safelist, `BROKEN_EXTRACTORS` set, and DOM→Gemini merge code are all gone. If you find references to any of these, they are stale — flag them.
 
 ### First-contact maximisation
