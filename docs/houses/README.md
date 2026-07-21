@@ -33,6 +33,7 @@ files. Consult the relevant dossier **first** when touching a house.
 | `underthehammer` | Under The Hammer | Next.js SPA served by its own public JSON API (`/api/properties`) — bespoke scraper, no AI | [underthehammer.md](underthehammer.md) |
 | `johnpye` | John Pye | own WordPress + Avada/Fusion card grid, static HTTP; mixed timed-auction + private-treaty stock | [johnpye.md](johnpye.md) |
 | `bagshaws` | Bagshaws Auctions | hand-built static HTML page; lots hosted on the Sequence group's Barnard Marcus sale | [bagshaws.md](bagshaws.md) |
+| `williamhbrownnorwich` | William H Brown (Norwich) | hand-built static XHTML table; lots sold through Barnard Marcus (Sequence) | [williamhbrownnorwich.md](williamhbrownnorwich.md) |
 | `humberts` | Humberts | estate agent, NOT an auction house — RETIRED + dormant; 0 lots is normal | [humberts.md](humberts.md) |
 | `wrightmarshall` | Wright Marshall | estate agent; occasional lots via the iamSold platform slug — own slug never probes | [wrightmarshall.md](wrightmarshall.md) |
 

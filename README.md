@@ -242,7 +242,7 @@ npm run dev        # runs with --watch, opens at http://localhost:3000
 ### Running tests
 
 ```bash
-npm test           # runs all 116 test files
+npm test           # runs all 117 test files
 ```
 
 Key test files: `test-scoring.js`, `test-harness.js`, `test-enrichment.js`, `test-healing-agent.js`, `test-recall.js`, `test-recall-gate.js` (THE 100% COMMANDMENT — a scrape below sentinel parity fires a coverage-bug alert), `test-extraction-chunking.js` (dense-page chunking so extraction never truncates at the output cap), `test-fundability.js`, `test-manifest.js`, `test-fabrication-guard.js`, `test-search-parse.js` (AI-search response salvage), `test-smart-query-parse.js` (AI-search query parsing: price/beds/location extraction), `test-charlesdarrow-recogniser.js`, `test-sdlauctions-recogniser.js`, `test-cliveemson-recogniser.js`, `test-savills-recogniser.js` (calendar drill, divider-bleed and sold/withdrawn anti-leak, sentinel counts in both markdown and HTML).
