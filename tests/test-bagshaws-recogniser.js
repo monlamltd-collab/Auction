@@ -17,7 +17,7 @@
 //      on the live page). Its URL + photo are recovered from the thumbnail block,
 //      whose image basename IS the lot number, rather than dropping the lot.
 
-import { recogniseBagshawsLotsFromMarkdown } from '../lib/pipeline/firecrawl-extract.js';
+import { recogniseSequenceBranchLotsFromMarkdown } from '../lib/pipeline/firecrawl-extract.js';
 import { normaliseScrapedLot } from '../lib/types/lot.js';
 
 let pass = 0, fail = 0;
@@ -84,7 +84,7 @@ DE22 3LL\\
 `;
 
 console.log('Bagshaws recogniser — 100% recall, sold-prior never available, real auction date');
-const lots = recogniseBagshawsLotsFromMarkdown(MD);
+const lots = recogniseSequenceBranchLotsFromMarkdown(MD);
 
 // ── Recall: every card recovered, keyed by the Sentinel lot id ──
 assert(lots.size === 4, `all 4 cards recovered (got ${lots.size})`);
@@ -93,6 +93,15 @@ assert(lots.has('707826') && lots.has('707825') && lots.has('707838') && lots.ha
 
 // ── Anti-leak: SOLD PRIOR must never ship as available ──
 assert(lots.get('707842').lot_status === 'sold', 'SOLD PRIOR lot is status=sold (never available)');
+// Status text must NOT reach `bullets`: persist-lots resolves the sale date as
+// `bulletDate || _auctionDate || calendarDate` (bullets FIRST) and
+// parseAuctionDateFromBullet matches any bare "DD Month YYYY", so a hand-typed
+// "Postponed to 15 September 2026" would override the authoritative slug date.
+assert([...lots.values()].every(l => l.bullets.length === 0), 'no lot emits bullets (a dated status line must never outrank the URL-slug date)');
+const DATED_STATUS_MD = MD.replace('**Sold Prior**', '**Postponed to 15 September 2026**');
+const datedStatus = recogniseSequenceBranchLotsFromMarkdown(DATED_STATUS_MD);
+assert(datedStatus.get('707842').auction_date === '2026-07-28', 'a status line carrying its own date does not become the auction date');
+assert(datedStatus.get('707842').lot_status === 'withdrawn', 'a "Postponed" lot is withdrawn, never available');
 assert(lots.get('707842').guide_price === '', 'sold lot has no guide price (no bleed from a neighbour)');
 assert([...lots.values()].filter(l => l.lot_status === 'available').length === 3, 'exactly 3 available lots');
 
@@ -132,21 +141,33 @@ assert(norm.filter(l => l.status === 'available').length === 3, 'still exactly 3
 assert(norm.find(l => l.lot === '253').price === 60000, 'guide price parsed to an integer');
 assert(norm.every(l => /^https:\/\//.test(l.url)), 'every lot has an absolute detail URL');
 
-// ── A PAST sale keeps its real (past) date — never rolled forward ──
-// The Maggs 2026-05-12 incident was a no-year bullet rolled forward 12 months,
-// which resurrects an ended catalogue as "live". Here the date is unambiguous in
-// the URL, so the only correct behaviour is to report it verbatim and let
-// get_active_lots (auction_date >= current_date - 1) drop the lots.
+// ── A PAST sale is dropped outright, never rolled forward, never kept ──
+// Two failure modes this pins at once:
+//   1. The Maggs 2026-05-12 incident — a no-year bullet rolled forward 12 months,
+//      resurrecting an ended catalogue as "live". The date here is unambiguous in
+//      the URL, so it can never be rolled forward.
+//   2. Keeping the lot with its real past date and relying on a downstream gate
+//      (tried and reverted 2026-07-22). get_active_lots does gate on
+//      `auction_date >= current_date - 1`, but lib/sitemap.js's live cohort is an
+//      OR with `last_seen_at` within 7d, so a re-seen past-dated `available` row
+//      is submitted to Google as a live listing — and ghost-sweep can never
+//      retire it, because it only flips lots UNSEEN for 7+ days and this card is
+//      re-seen on every scrape.
 const PAST_MD = MD.replace(/28-july-2026/g, '19-may-2026');
-const pastLots = recogniseBagshawsLotsFromMarkdown(PAST_MD);
-assert(pastLots.size === 4, 'past-dated catalogue still parses every lot');
-assert([...pastLots.values()].every(l => l.auction_date === '2026-05-19'),
-  'past sale keeps its real past date (no roll-forward → no ended-lot leak)');
+const pastLots = recogniseSequenceBranchLotsFromMarkdown(PAST_MD);
+assert(pastLots.size === 0, `every lot of a past-dated catalogue is dropped (got ${pastLots.size})`);
+
+// ── ...but the boundary is the sale date, not "any date" — a FUTURE sale is kept ──
+const FUTURE_MD = MD.replace(/28-july-2026/g, '28-july-2099');
+assert(recogniseSequenceBranchLotsFromMarkdown(FUTURE_MD).size === 4, 'a future-dated catalogue is fully parsed');
+// Injectable today: on the day of the sale the lots are still live.
+assert(recogniseSequenceBranchLotsFromMarkdown(MD, '2026-07-28').size === 4, 'lots are still live ON the sale day');
+assert(recogniseSequenceBranchLotsFromMarkdown(MD, '2026-07-29').size === 0, 'lots are gone the day AFTER the sale');
 
 // ── Empty / garbage input never throws ──
-assert(recogniseBagshawsLotsFromMarkdown('').size === 0, 'empty markdown → empty map');
-assert(recogniseBagshawsLotsFromMarkdown(null).size === 0, 'null markdown → empty map');
-assert(recogniseBagshawsLotsFromMarkdown('# no lots here').size === 0, 'lot-less page → empty map');
+assert(recogniseSequenceBranchLotsFromMarkdown('').size === 0, 'empty markdown → empty map');
+assert(recogniseSequenceBranchLotsFromMarkdown(null).size === 0, 'null markdown → empty map');
+assert(recogniseSequenceBranchLotsFromMarkdown('# no lots here').size === 0, 'lot-less page → empty map');
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);
