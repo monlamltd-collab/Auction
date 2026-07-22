@@ -117,6 +117,12 @@ lot's own id, so hero-bleed is structurally impossible.
   sentinel + `never-deep` profile. Live: 161/161 current lots through
   `normaliseScrapedLot`, 0 ended leaked, real addresses/prices/images, real auction dates
   (2026-07-28 / 08-12 / 08-26) replacing the 2099 sentinel.
+- **2026-07-22 — `never-deep` was dead config.** The profile was set at the 2026-07-21 fix
+  but `enrichLotsFromLotPages` ran the identical gap-fill body for it, so it never skipped
+  anything. `isGapFillTarget` tests `!condition` and `vacant == null`, which the API never
+  publishes, so every lot requalified every cycle — up to 80 (`DETAIL_FETCH_CAP_PER_RUN`)
+  Crawlee browser renders per cycle against SPA shells that add nothing. Now a real skip;
+  first-contact lots still deep-fetch once. Pinned by `tests/test-extraction-profile-policy.js`.
 
 ## Follow-ups
 - The `FALLBACK_CALENDAR` row (`lib/calendar.js`) is still the `2099-12-31` `always_on`

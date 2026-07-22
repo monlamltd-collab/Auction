@@ -22,7 +22,7 @@ import {
   initScraper,
   FIRECRAWL_API_KEY, FIRECRAWL_SKIP, scrapeWithFirecrawl, scrapeRenderedPage,
   scrapeAllPages, scrapeAllsopApi, extractAllsopLotsFromJson, enrichAllsopLots, scrapeSymondsAndSampson,
-  scrapeUnderTheHammer,
+  scrapeUnderTheHammer, scrapePattinson,
   detectTotalPages, buildPageUrl, fetchPage, extractLotsWithAI,
   backfillImages, backfillImagesWithFirecrawl,
   backfillImagesFromLotPages, fetchLotPage, normaliseLotStatuses, puppeteer,
@@ -293,7 +293,7 @@ initAnalysis({
   // Scraper (legacy deps — will migrate to budget incrementally)
   FIRECRAWL_API_KEY, FIRECRAWL_SKIP, scrapeWithFirecrawl, scrapeRenderedPage,
   scrapeAllPages, scrapeAllsopApi, extractAllsopLotsFromJson, enrichAllsopLots, scrapeSymondsAndSampson,
-  scrapeUnderTheHammer,
+  scrapeUnderTheHammer, scrapePattinson,
   detectTotalPages, buildPageUrl, fetchPage, extractLotsWithAI,
   backfillImages, backfillImagesWithFirecrawl,
   backfillImagesFromLotPages, fetchLotPage, normaliseLotStatuses, puppeteer,
@@ -979,11 +979,23 @@ function scheduleTick() {
         return out;
       },
       flipLots: async (ids, patch) => {
+        // Routed through the retire_lots RPC (migrations/2026-07-22-retire-lots-rpc.sql)
+        // because the manifest stamp must be MERGED into enrichment_manifest, not
+        // replace it — candidates average ~9 enrichment keys including paid OS Places
+        // lookups, and a PostgREST batch .update() can only write one literal value
+        // across the whole batch. The RPC also guards on status='available', so a lot
+        // another process moved to 'sold' mid-sweep is never clobbered.
+        //
         // Throw on failure — the sweep must know the flip didn't land so it
         // skips the batch's lot_events (no withdrawals asserted that never happened).
-        const { error } = await supabase.from('lots').update(patch).in('id', ids);
+        const { data, error } = await supabase.rpc('retire_lots', {
+          p_ids: ids,
+          p_manifest_patch: patch.enrichment_manifest ?? {},
+        });
         if (error) throw new Error(`ghost-sweep flip: ${error.message}`);
-        return ids.length;
+        // Returns rows ACTUALLY updated — 0 means nothing landed, which the sweep
+        // correctly treats as a failed batch rather than emitting phantom events.
+        return typeof data === 'number' ? data : 0;
       },
       emitEvents: (events) => insertLotEvents(events),
       buildVanishedEvent, buildLotEvent, LOT_EVENT_TYPES,
