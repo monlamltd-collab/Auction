@@ -107,17 +107,16 @@ Tel: 01603 598975/7/8 | Email: [auctions.norwich@sequencehome.co.uk](mailto:auct
 console.log('William H Brown (Norwich) recogniser — recall, live boundary, photo binding');
 const lots = recogniseSequenceBranchLotsFromMarkdown(MD, TODAY);
 
-// ── 1. Recall: every card recovered and keyed by lot id ──
-// The stray 11-march-2025 card is kept, carrying its REAL past date, rather than
-// dropped at the recogniser. Dropping it would read as a recall shortfall against
-// the sentinel (which counts every lot id on the page) and hand the harness a
-// false regression; liveness is enforced one layer down, where get_active_lots
-// admits `available` lots only while auction_date >= current_date - 1. See the
-// live-boundary assertions in section 5.
-assert(lots.size === 6, `all 6 cards recovered (got ${lots.size})`);
+// ── 1. Recall: every CURRENT card recovered, keyed by lot id; past sale dropped ──
+// The stray 11-march-2025 card must NOT survive. Keeping it with its real past
+// date and relying on a downstream gate was tried and reverted 2026-07-22: the
+// sitemap's live cohort is an OR (`auction_date >= today` OR `last_seen_at` within
+// 7d), so a re-seen past-dated `available` row is submitted to Google as live, and
+// no sweep can retire it — ghost-sweep only flips lots UNSEEN for 7+ days, and a
+// card still on the page is re-seen every scrape.
+assert(lots.size === 5, `5 current cards recovered (got ${lots.size})`);
 assert(['707599', '707594', '707585', '707595', '707586'].every(id => lots.has(id)), 'keyed by Sequence lot id');
-assert(lots.get('699001') && lots.get('699001').auction_date === '2025-03-11',
-  'the PAST 11-march-2025 card keeps its real past date (no roll-forward, no silent drop)');
+assert(!lots.has('699001'), 'lot from the PAST 11-march-2025 sale is dropped (live boundary)');
 
 // ── 2. Fields are real, not placeholders ──
 const l234 = lots.get('707599');
@@ -146,12 +145,9 @@ assert([...lots.values()].filter(l => l.lot_status === 'available' && l.auction_
 const normalised = [...lots.values()]
   .map(l => normaliseScrapedLot(l, { house: 'williamhbrownnorwich', catalogueUrl: CATALOGUE, extractionSource: 'static-recognition' }))
   .filter(Boolean);
-assert(normalised.length === 6, `all 6 survive normaliseScrapedLot (got ${normalised.length})`);
+assert(normalised.length === 5, `all 5 survive normaliseScrapedLot (got ${normalised.length})`);
 assert(normalised.every(l => l.price > 0), 'every normalised lot carries a numeric price');
-// The live boundary, stated the way get_active_lots enforces it: the stale card
-// carries a real PAST date, so the `auction_date >= current_date - 1` gate drops
-// it. What must never happen is a past card wearing a future/sentinel date.
-assert(normalised.filter(l => l._auctionDate < TODAY).length === 1, 'the one stale card is past-dated');
+assert(normalised.every(l => l._auctionDate >= TODAY), 'no normalised lot carries a past auction date');
 assert(!normalised.some(l => !l._auctionDate || l._auctionDate === '2099-12-31'),
   'no lot carries an empty or 2099 sentinel date (that is what kept dead lots live)');
 assert(normalised.filter(l => l.status === 'available' && l._auctionDate >= TODAY).length === 3,

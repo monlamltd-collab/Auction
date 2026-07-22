@@ -22,6 +22,25 @@ range out of the shared sale, and `barnardmarcus`'s own catalogue is the London 
 Scraping all four adds coverage, not duplicates. Re-run the overlap check before
 onboarding any further Sequence branch (e.g. William H Brown Leeds).
 
+**Standing risk — this is an observation, not an invariant.** Five slugs
+(`barnardmarcus`, `foxandsons`, `bagshaws`, `williamhbrownnorwich`, and the retired
+`sequence`) can all emit URLs in the `barnardmarcusauctions.co.uk/auctions/{date}/{id}/`
+namespace. `lots.url` is globally UNIQUE, persist upserts `onConflict:'url'`, and
+`house` is in `IDENTITY_FIELDS` (`lib/pipeline/persist-lots.js`) — so if `barnardmarcus`
+ever lists a branch lot in its own catalogue, whichever slug scrapes **last steals the
+row**, exactly the `auctionhousenational` mode that cost 386 rows in #205. Today the
+ranges are disjoint and nothing collides. Monitor with:
+
+```sql
+select regexp_replace(url,'^.*/auctions/([a-z0-9-]+)/([0-9]+).*$','\1|\2') k,
+       string_agg(distinct house,',') who, count(*)
+from lots where url ilike '%barnardmarcusauctions.co.uk/auctions/%'
+group by k having count(distinct house) > 1;
+```
+
+Expected result: zero rows. Anything else means a branch and the parent are fighting
+over the same lot, and the fix is retirement, not a recogniser.
+
 ## Page shape
 The homepage IS the catalogue (and `/Current_Auction.html` serves the identical lot set —
 both were verified at 21/21; the root is pinned because a healed `Auction-Results.html`,
