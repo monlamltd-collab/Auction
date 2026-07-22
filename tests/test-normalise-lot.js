@@ -13,7 +13,7 @@
 process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'http://localhost.invalid';
 process.env.SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || 'test-key';
 
-const { normaliseScrapedLot } = await import('../lib/types/lot.js');
+const { normaliseScrapedLot, isNonLotUrl } = await import('../lib/types/lot.js');
 
 let passed = 0;
 let failed = 0;
@@ -131,6 +131,48 @@ console.log('\nTest 8: extractionSource override is honoured');
   // through the ctx. Make sure the override actually lands on the lot.
   const out = normaliseScrapedLot({ address: ADDR }, { ...CTX, extractionSource: 'firecrawl-markdown-recognition' });
   assert(out._extractionSource === 'firecrawl-markdown-recognition', 'extractionSource override applied');
+}
+
+// ── Page-as-a-lot guard (2026-07-22) ──
+// A degraded extraction emits the page it was standing on as a lot: the site
+// root, an index page, or the catalogue URL itself. 47 such rows reached
+// `lots` (17 served as 'available') — e.g. bagshaws' "lot" at
+// https://www.bagshawsauctions.co.uk/ and another at /link.
+console.log('\nTest 9: a page is not a lot');
+{
+  const cat = 'https://www.house.co.uk/auctions/28-july-2026';
+  const reject = [
+    ['bare origin', 'https://www.bagshawsauctions.co.uk/'],
+    ['bare origin, no slash', 'https://www.bagshawsauctions.co.uk'],
+    ['index.html', 'https://www.foxandsonsauctions.co.uk/index.html'],
+    ['the catalogue page itself', cat],
+    ['catalogue page, trailing slash', `${cat}/`],
+    ['catalogue page, www variance', 'https://house.co.uk/auctions/28-july-2026'],
+  ];
+  for (const [label, url] of reject) {
+    assert(isNonLotUrl(url, cat) === true, `rejected: ${label}`);
+    assert(normaliseScrapedLot({ address: ADDR, detail_url: url }, { ...CTX, catalogueUrl: cat }) === null,
+      `normaliseScrapedLot drops it: ${label}`);
+  }
+
+  const keep = [
+    ['real lot page', 'https://www.house.co.uk/auctions/28-july-2026/707836/'],
+    ['shallow but real path', 'https://www.house.co.uk/lot/12'],
+    ['sibling of the catalogue', 'https://www.house.co.uk/auctions/23-june-2026'],
+    ['/linked-cottage is not /link', 'https://www.house.co.uk/linked-cottage'],
+  ];
+  for (const [label, url] of keep) {
+    assert(isNonLotUrl(url, cat) === false, `kept: ${label}`);
+    const out = normaliseScrapedLot({ address: ADDR, detail_url: url }, { ...CTX, catalogueUrl: cat });
+    assert(out !== null && out.url === url, `normaliseScrapedLot keeps it: ${label}`);
+  }
+
+  // Must not change existing behaviour for empty/garbage URLs.
+  assert(isNonLotUrl('', cat) === false, 'empty url is left to existing handling');
+  assert(isNonLotUrl('not a url', cat) === false, 'unparseable url is left to existing handling');
+  assert(isNonLotUrl(null, cat) === false, 'null url is left to existing handling');
+  assert(normaliseScrapedLot({ address: ADDR, detail_url: '' }, { ...CTX, catalogueUrl: cat }) !== null,
+    'a lot with no detail_url still survives (unchanged behaviour)');
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

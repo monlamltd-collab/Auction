@@ -968,7 +968,7 @@ function scheduleTick() {
         for (let from = 0; ; from += 1000) {
           const { data, error } = await supabase
             .from('lots')
-            .select('id, house, last_seen_at, auction_date, status')
+            .select('id, house, last_seen_at, auction_date, status, catalogue_url')
             .eq('status', 'available')
             .order('id', { ascending: true })
             .range(from, from + 999);
@@ -977,6 +977,31 @@ function scheduleTick() {
           if (!data || data.length < 1000) break;
         }
         return out;
+      },
+      // Latest recall measurement per house. Only a PROVEN recent 100% lets the
+      // sweep retire lots from a house whose fresh count fell below its ghost
+      // count — otherwise a normal catalogue rollover reads as a partial scrape
+      // and the house is held (which is what stalled ~2.2k lots across 34
+      // healthy houses). Newest-first, so the 1000-row PostgREST cap can only
+      // drop older duplicates, never a house's latest reading.
+      fetchRecall: async () => {
+        const since = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+        const { data, error } = await supabase
+          .from('pipeline_alerts')
+          .select('house, meta, created_at')
+          .eq('event_type', 'recall_diagnostic')
+          .gte('created_at', since)
+          .order('created_at', { ascending: false });
+        if (error) throw new Error(`ghost-sweep recall: ${error.message}`);
+        const byHouse = new Map();
+        for (const row of data || []) {
+          if (!row.house || byHouse.has(row.house)) continue;
+          byHouse.set(row.house, {
+            recall: Number(row.meta?.recall),
+            atMs: new Date(row.created_at).getTime(),
+          });
+        }
+        return byHouse;
       },
       flipLots: async (ids, patch) => {
         // Routed through the retire_lots RPC (migrations/2026-07-22-retire-lots-rpc.sql)
@@ -1001,7 +1026,7 @@ function scheduleTick() {
       buildVanishedEvent, buildLotEvent, LOT_EVENT_TYPES,
       fireAlert: harnessFireAlert,
     }))
-      .then(r => { if (!r.skipped) console.log(`SCHEDULE ghost sweep: ghosts=${r.ghosts} pastDated=${r.pastDated} held=${r.held.length} flipFailures=${r.flipFailures}`); })
+      .then(r => { if (!r.skipped) console.log(`SCHEDULE ghost sweep: ghosts=${r.ghosts} pastDated=${r.pastDated} held=${r.held.length} unconfirmed=${r.unconfirmed} flipFailures=${r.flipFailures}`); })
       .catch(e => console.error('SCHEDULE ghost sweep failed:', e.message));
   }
 

@@ -8,7 +8,7 @@
  * Run: node tests/test-ghost-sweep.js
  */
 
-import { classifyGhosts, runGhostSweep, ghostUnseenDays } from '../lib/pipeline/ghost-sweep.js';
+import { classifyGhosts, runGhostSweep, ghostUnseenDays, hasProvenRecall } from '../lib/pipeline/ghost-sweep.js';
 import { LOT_COLUMNS } from '../lib/types/lot.js';
 
 let passed = 0;
@@ -19,10 +19,15 @@ function assert(cond, msg) {
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const HOUR = 60 * 60 * 1000;
 const NOW = Date.parse('2026-07-04T12:00:00Z');
 const daysAgo = (d) => new Date(NOW - d * DAY_MS).toISOString();
+// catalogue_url is always populated in prod (0 nulls across every sweep
+// candidate), and the sweep needs it to prove a lot's OWN catalogue was
+// re-visited — so fixtures carry one by default, per house.
 const row = (id, house, seenDaysAgo, extra = {}) => ({
-  id, house, last_seen_at: daysAgo(seenDaysAgo), status: 'available', auction_date: null, ...extra,
+  id, house, last_seen_at: daysAgo(seenDaysAgo), status: 'available', auction_date: null,
+  catalogue_url: `https://${house}.example/catalogue`, ...extra,
 });
 
 console.log('Test 1: classifyGhosts — core ghost logic');
@@ -207,6 +212,81 @@ console.log('\nTest 9: flip patch names only real `lots` columns (phantom-column
   const reasons = new Set(state.patches.map(p => p.enrichment_manifest?.removed_reason));
   assert(reasons.has('ghost_sweep_unseen') && reasons.has('auction_passed_unswept'),
     `both retirement reasons are stamped (got ${JSON.stringify([...reasons])})`);
+}
+
+// ── Completeness gate (2026-07-22) ──
+// `fresh < ghosts` alone is ALSO the signature of a healthy catalogue rollover:
+// the sale ended, most lots left, the remainder looks like a failed scrape.
+// That misfire held 34 healthy houses (~2.2k lots) — cliveemson sat at a proven
+// 170/170 recall while 158 of its lots were held as "partial scrape".
+console.log('\nTest 10: proven 100% recall releases a rollover house');
+{
+  const rows = [
+    row('r1', 'rollover', 0), row('r2', 'rollover', 6), row('r3', 'rollover', 7), row('r4', 'rollover', 8),
+  ];
+  const recall = new Map([['rollover', { recall: 1, atMs: NOW - 3 * 60 * 60 * 1000 }]]);
+  const { ghostFlips, held } = classifyGhosts({ rows, nowMs: NOW, recallByHouse: recall });
+  assert(held.length === 0, 'house with proven 100% recall is NOT held despite fresh < ghosts');
+  assert(ghostFlips.length === 3, `all 3 vanished lots retire (got ${ghostFlips.length})`);
+
+  // Without the proof, the same shape must stay held.
+  const bare = classifyGhosts({ rows, nowMs: NOW });
+  assert(bare.held.length === 1 && bare.ghostFlips.length === 0,
+    'same house with NO recall measurement stays held');
+}
+
+console.log('\nTest 11: recall proof must be 100% and recent');
+{
+  const rows = [row('x1', 'h', 0), row('x2', 'h', 6), row('x3', 'h', 7)];
+  const cases = [
+    ['recall 0.94 (below 100%)', { recall: 0.94, atMs: NOW - HOUR }],
+    ['recall 1 but 5 days stale', { recall: 1, atMs: NOW - 5 * DAY_MS }],
+    ['recall missing', { atMs: NOW - HOUR }],
+    ['recall NaN', { recall: NaN, atMs: NOW - HOUR }],
+    ['no atMs', { recall: 1 }],
+  ];
+  for (const [label, entry] of cases) {
+    const r = classifyGhosts({ rows, nowMs: NOW, recallByHouse: new Map([['h', entry]]) });
+    assert(r.held.length === 1 && r.ghostFlips.length === 0, `${label} → still held`);
+  }
+  assert(hasProvenRecall({ recall: 1, atMs: NOW - HOUR }, NOW), 'fresh 100% recall is proof');
+  assert(hasProvenRecall({ recall: 1.02, atMs: NOW - HOUR }, NOW), 'recall above 1 (sentinel undercount) is proof');
+  assert(!hasProvenRecall(null, NOW), 'no entry is not proof');
+}
+
+console.log('\nTest 12: a lot whose own catalogue was NOT re-scraped is never retired');
+{
+  // Both catalogues belong to one healthy house (fresh >= ghosts, so no hold),
+  // but only catalogue A was re-visited this cycle.
+  const A = 'https://h.example/sale-a', B = 'https://h.example/sale-b';
+  const rows = [
+    row('a1', 'h', 0, { catalogue_url: A }), row('a2', 'h', 0, { catalogue_url: A }),
+    row('a3', 'h', 0, { catalogue_url: A }),
+    row('a4', 'h', 9, { catalogue_url: A }),   // stale, catalogue re-visited → gone
+    row('b1', 'h', 9, { catalogue_url: B }),   // stale, catalogue never re-visited → unknown
+  ];
+  const { ghostFlips, unconfirmed, held } = classifyGhosts({ rows, nowMs: NOW });
+  assert(held.length === 0, 'healthy house not held');
+  const ids = ghostFlips.map(r => r.id);
+  assert(JSON.stringify(ids) === JSON.stringify(['a4']),
+    `only the re-visited catalogue's vanished lot retires (got ${JSON.stringify(ids)})`);
+  assert(unconfirmed.length === 1 && unconfirmed[0].id === 'b1',
+    'the un-revisited catalogue\'s lot is reported as unconfirmed, not retired');
+}
+
+console.log('\nTest 13: runGhostSweep surfaces unconfirmed + survives a failing recall lookup');
+{
+  const A = 'https://h.example/a', B = 'https://h.example/b';
+  const rows = [
+    row('a1', 'h', 0, { catalogue_url: A }), row('a2', 'h', 0, { catalogue_url: A }),
+    row('a3', 'h', 9, { catalogue_url: A }), row('b1', 'h', 9, { catalogue_url: B }),
+  ];
+  const { deps, state } = fakeDeps(rows);
+  deps.fetchRecall = async () => { throw new Error('alerts table unreachable'); };
+  const r = await runGhostSweep(deps, { nowMs: NOW });
+  assert(r.ghosts === 1 && state.flipped.includes('a3'), 'sweep still runs when recall lookup throws');
+  assert(r.unconfirmed === 1 && !state.flipped.includes('b1'), 'unconfirmed lot reported and not flipped');
+  assert(state.events.every(e => e.lotId !== 'b1'), 'no events for an unconfirmed lot');
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
