@@ -17,7 +17,7 @@
 //      binding would smear one lot's photo across its neighbours, and the page
 //      logo (an image link to the homepage) must never become a lot photo.
 
-import { recogniseWilliamHBrownNorwichLotsFromMarkdown } from '../lib/pipeline/firecrawl-extract.js';
+import { recogniseSequenceBranchLotsFromMarkdown } from '../lib/pipeline/firecrawl-extract.js';
 import { normaliseScrapedLot } from '../lib/types/lot.js';
 
 let pass = 0, fail = 0;
@@ -105,9 +105,15 @@ Tel: 01603 598975/7/8 | Email: [auctions.norwich@sequencehome.co.uk](mailto:auct
 `;
 
 console.log('William H Brown (Norwich) recogniser — recall, live boundary, photo binding');
-const lots = recogniseWilliamHBrownNorwichLotsFromMarkdown(MD, TODAY);
+const lots = recogniseSequenceBranchLotsFromMarkdown(MD, TODAY);
 
 // ── 1. Recall: every CURRENT card recovered, keyed by lot id; past sale dropped ──
+// The stray 11-march-2025 card must NOT survive. Keeping it with its real past
+// date and relying on a downstream gate was tried and reverted 2026-07-22: the
+// sitemap's live cohort is an OR (`auction_date >= today` OR `last_seen_at` within
+// 7d), so a re-seen past-dated `available` row is submitted to Google as live, and
+// no sweep can retire it — ghost-sweep only flips lots UNSEEN for 7+ days, and a
+// card still on the page is re-seen every scrape.
 assert(lots.size === 5, `5 current cards recovered (got ${lots.size})`);
 assert(['707599', '707594', '707585', '707595', '707586'].every(id => lots.has(id)), 'keyed by Sequence lot id');
 assert(!lots.has('699001'), 'lot from the PAST 11-march-2025 sale is dropped (live boundary)');
@@ -124,14 +130,16 @@ assert(lots.get('707586').property_type === 'land', '"Plot adj" classified as la
 // ── 3. Photo binding by shared detail URL — never positional, never chrome ──
 assert(l234.image_url === 'https://www.williamhbrownauctions-norwich.co.uk/images/auctions/2026/july26/234.jpg', 'lot 234 gets its OWN photo');
 assert(lots.get('707586').image_url.endsWith('/241.jpg'), 'lot 241 photo survives the interleaved spacer cells (bound by URL)');
-assert(new Set([...lots.values()].map(l => l.image_url)).size === 5, 'every lot has a DISTINCT photo (no hero bleed)');
+const photos = [...lots.values()].map(l => l.image_url).filter(Boolean);
+assert(photos.length === lots.size && new Set(photos).size === lots.size, 'every lot has its OWN distinct photo (no hero bleed, none missing)');
 assert(![...lots.values()].some(l => /\/images\/general\//i.test(l.image_url)), 'page logo / spacer / rule chrome never used as a lot photo');
 
 // ── 4. Anti-leak: sold / withdrawn never ship as available ──
 assert(lots.get('707594').lot_status === 'sold', 'SOLD PRIOR lot is status=sold (never available)');
 assert(lots.get('707585').lot_status === 'withdrawn', 'WITHDRAWN lot is status=withdrawn (never available)');
 assert(lots.get('707594').address === 'St. Davids House, Friday Market Place, WALSINGHAM, Norfolk, NR22 6DB', 'status marker line stays OUT of the address');
-assert([...lots.values()].filter(l => l.lot_status === 'available').length === 3, 'exactly 3 available lots');
+assert([...lots.values()].filter(l => l.lot_status === 'available' && l.auction_date >= TODAY).length === 3,
+  'exactly 3 available lots on the CURRENT sale');
 
 // ── 5. Survival through normaliseScrapedLot — the count that actually ships ──
 const normalised = [...lots.values()]
@@ -140,14 +148,17 @@ const normalised = [...lots.values()]
 assert(normalised.length === 5, `all 5 survive normaliseScrapedLot (got ${normalised.length})`);
 assert(normalised.every(l => l.price > 0), 'every normalised lot carries a numeric price');
 assert(normalised.every(l => l._auctionDate >= TODAY), 'no normalised lot carries a past auction date');
-assert(normalised.filter(l => l.status === 'available').length === 3, 'only 3 lots would ship as available');
+assert(!normalised.some(l => !l._auctionDate || l._auctionDate === '2099-12-31'),
+  'no lot carries an empty or 2099 sentinel date (that is what kept dead lots live)');
+assert(normalised.filter(l => l.status === 'available' && l._auctionDate >= TODAY).length === 3,
+  'only 3 lots would ship as live+available through get_active_lots');
 assert(!normalised.some(l => /5 Bank Plain/i.test(l.address)), 'the office address in the page footer is never emitted as a lot');
 assert(!normalised.some(l => /Current_Auction\.html/i.test(l.url)), 'no lot falls back to the catalogue URL as its detail URL');
 
 // ── 6. Defensive: junk input never throws ──
-assert(recogniseWilliamHBrownNorwichLotsFromMarkdown('').size === 0, 'empty markdown → empty map');
-assert(recogniseWilliamHBrownNorwichLotsFromMarkdown(null).size === 0, 'null markdown → empty map');
-assert(recogniseWilliamHBrownNorwichLotsFromMarkdown('# no lots here').size === 0, 'lot-less markdown → empty map');
+assert(recogniseSequenceBranchLotsFromMarkdown('').size === 0, 'empty markdown → empty map');
+assert(recogniseSequenceBranchLotsFromMarkdown(null).size === 0, 'null markdown → empty map');
+assert(recogniseSequenceBranchLotsFromMarkdown('# no lots here').size === 0, 'lot-less markdown → empty map');
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);
