@@ -6,7 +6,7 @@
 | **Display name** | William H Brown (Norwich) |
 | **Platform** | **None.** A hand-maintained static XHTML page (~17KB, table layout, no JS, no CMS) on `williamhbrownauctions-norwich.co.uk`. The branch is part of the Sequence / Connells group and sells through **Barnard Marcus Auctions** — this page is a guide-price index of *its own* lots in the shared sale. |
 | **Region** | Norfolk / Suffolk / Cambridgeshire / Lincolnshire (Norwich branch) |
-| **Catalogue URL** | `https://www.williamhbrownauctions-norwich.co.uk/Current_Auction.html` (`HOUSE_ROOTS`) — a **rolling** URL reused for every sale. |
+| **Catalogue URL** | `https://www.williamhbrownauctions-norwich.co.uk/` (`HOUSE_ROOTS`) — a **rolling** URL reused for every sale. Changed from `/Current_Auction.html` to the site ROOT on 2026-07-22: the root serves the identical catalogue (verified 19/19), matches the two Sequence siblings, and — because `rewriteUrl` pins this house to `HOUSE_ROOTS` — avoids depending on one hand-maintained FILE whose rename would take the house to 0 with healing unable to recover (every healed URL is discarded by the pin). |
 | **Detection** | `detectAuctionHouse()` routes `williamhbrownauctions-norwich` → `williamhbrownnorwich`. Note `barnardmarcusauctions` → `barnardmarcus`, so the **detail** URLs belong to a sibling slug; only the catalogue host decides this house. |
 | **Status** | Fixed 2026-07-21 (0 live → 19/19 lots, deterministic static recogniser). Prod verify = deploy + rescrape. |
 | **Last verified** | 2026-07-21 (live page: 19 lots, sentinel 19, recogniser 19, 19 surviving `normaliseScrapedLot`). |
@@ -23,9 +23,16 @@ what makes the live boundary cheap and deterministic here.
 `sequence`, the other Sequence-network slug.
 
 ## Recogniser
-`recogniseWilliamHBrownNorwichLotsFromMarkdown(markdown, todayIso)`
+`recogniseSequenceBranchLotsFromMarkdown(markdown)`
 (`lib/pipeline/firecrawl-extract.js`), registered `staticCatalogue: true, maxPages: 1`
 — one plain-HTTP fetch carries the whole catalogue, so no browser render and **no AI**.
+
+**Changed 2026-07-22:** this house moved off its own
+`recogniseWilliamHBrownNorwichLotsFromMarkdown` onto the recogniser shared with
+`bagshaws` and `foxandsons` (all three serve the identical Sequence template). The shared
+parser was the superset — it additionally rescues a lot whose text anchor is a broken
+`href="link"` typo, which the old WHB parser silently dropped. `property_type` inference
+was carried across from the old parser. Re-verified 19/19 survivors on the live page.
 
 Card shape in recognition markdown (`htmlToRecognitionMarkdown`):
 
@@ -50,10 +57,26 @@ Three things the layout forces:
   status line (`SOLD PRIOR`, `Withdrawn`) feeds the status parse but is kept **out** of
   the address.
 - **Live boundary from the URL slug.** `auction_date` is parsed per lot from
-  `/auctions/28-july-2026/`; a lot whose sale has passed is dropped outright. The page
-  has no "ended" badges of its own, so this is the only ended-leak guard available —
-  and it also replaces the `2099-12-31` `always_on` calendar placeholder with the real
-  date (`_auctionDate` outranks the calendar in `persist-lots.js`).
+  `/auctions/28-july-2026/`. The page has no "ended" badges of its own, so this is the
+  only ended-leak guard available — and it replaces the `2099-12-31` `always_on` calendar
+  placeholder with the real date (`_auctionDate` outranks the calendar in
+  `persist-lots.js`).
+  **Do not "keep it and hide it downstream" — tried and reverted 2026-07-22.** The
+  idea was to return past-dated lots with their real past date and let
+  `get_active_lots` (`auction_date >= current_date - 1`) hide them. It does not work:
+  - `lib/sitemap.js`'s live cohort is an **OR** (`auction_date >= today` OR
+    `last_seen_at` within 7d), so a re-seen past-dated `available` row is submitted
+    to **Google as a live listing**.
+  - Nothing can retire it. `ghost-sweep` only flips lots **unseen** for 7+ days, and a
+    card still on the page is re-seen every scrape, so it is re-stamped `available`
+    forever. Inside `post-auction-sweep`'s 30-day window the two fight: the sweep sets
+    `sold`/`unsold`, the next scrape reverts it to `available`.
+  - The "dropping causes a false recall regression" argument does not apply — the
+    recall gate runs on the Crawlee and Firecrawl paths only, and this house runs
+    `staticCatalogue`, which never evaluates the sentinel.
+
+  Both invariants are asserted directly: the past card is dropped, and no surviving lot
+  may carry an empty or `2099-12-31` date (which is what kept dead lots live).
 
 Covered by `tests/test-williamhbrownnorwich-recogniser.js`.
 
