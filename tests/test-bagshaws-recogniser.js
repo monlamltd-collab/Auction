@@ -17,7 +17,7 @@
 //      on the live page). Its URL + photo are recovered from the thumbnail block,
 //      whose image basename IS the lot number, rather than dropping the lot.
 
-import { recogniseBagshawsLotsFromMarkdown } from '../lib/pipeline/firecrawl-extract.js';
+import { recogniseSequenceBranchLotsFromMarkdown } from '../lib/pipeline/firecrawl-extract.js';
 import { normaliseScrapedLot } from '../lib/types/lot.js';
 
 let pass = 0, fail = 0;
@@ -84,7 +84,7 @@ DE22 3LL\\
 `;
 
 console.log('Bagshaws recogniser — 100% recall, sold-prior never available, real auction date');
-const lots = recogniseBagshawsLotsFromMarkdown(MD);
+const lots = recogniseSequenceBranchLotsFromMarkdown(MD);
 
 // ── Recall: every card recovered, keyed by the Sentinel lot id ──
 assert(lots.size === 4, `all 4 cards recovered (got ${lots.size})`);
@@ -138,15 +138,15 @@ assert(norm.every(l => /^https:\/\//.test(l.url)), 'every lot has an absolute de
 // the URL, so the only correct behaviour is to report it verbatim and let
 // get_active_lots (auction_date >= current_date - 1) drop the lots.
 const PAST_MD = MD.replace(/28-july-2026/g, '19-may-2026');
-const pastLots = recogniseBagshawsLotsFromMarkdown(PAST_MD);
+const pastLots = recogniseSequenceBranchLotsFromMarkdown(PAST_MD);
 assert(pastLots.size === 4, 'past-dated catalogue still parses every lot');
 assert([...pastLots.values()].every(l => l.auction_date === '2026-05-19'),
   'past sale keeps its real past date (no roll-forward → no ended-lot leak)');
 
 // ── Empty / garbage input never throws ──
-assert(recogniseBagshawsLotsFromMarkdown('').size === 0, 'empty markdown → empty map');
-assert(recogniseBagshawsLotsFromMarkdown(null).size === 0, 'null markdown → empty map');
-assert(recogniseBagshawsLotsFromMarkdown('# no lots here').size === 0, 'lot-less page → empty map');
+assert(recogniseSequenceBranchLotsFromMarkdown('').size === 0, 'empty markdown → empty map');
+assert(recogniseSequenceBranchLotsFromMarkdown(null).size === 0, 'null markdown → empty map');
+assert(recogniseSequenceBranchLotsFromMarkdown('# no lots here').size === 0, 'lot-less page → empty map');
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

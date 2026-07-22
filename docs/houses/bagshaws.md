@@ -38,8 +38,11 @@ Guide: £185,000
 Counts 23 distinct ids on the live page = the recogniser's 23 lots.
 
 ## Recogniser
-`recogniseBagshawsLotsFromMarkdown(markdown)` in `lib/pipeline/firecrawl-extract.js`,
-registered `staticCatalogue: true, maxPages: 1` in `lib/scraper/house-recognisers.js`
+`recogniseSequenceBranchLotsFromMarkdown(markdown)` in `lib/pipeline/firecrawl-extract.js`
+— **shared with `foxandsons` and `williamhbrownnorwich`** since 2026-07-22 (it was
+`recogniseBagshawsLotsFromMarkdown`; this implementation was the superset and became the
+shared one). Registered `staticCatalogue: true, maxPages: 1` in
+`lib/scraper/house-recognisers.js`
 (plain HTTP → `htmlToRecognitionMarkdown` → recogniser; **no browser, no AI**).
 Keyed by the Sequence lot id so the Crawlee recovery/corroboration path can match it.
 Covered by `tests/test-bagshaws-recogniser.js`.
@@ -87,11 +90,13 @@ from the Barnard Marcus lot pages via the multi-image sweep.
 - **Calendar row.** `auction_calendar` for `bagshaws` is a single `2099-12-31 always_on`
   placeholder. Harmless now that the recogniser stamps the real date, but the honest fix
   is a dated row per sale.
-- **Sibling houses.** `foxandsons` and `williamhbrownnorwich` run the *same* hand-built
-  Sequence template and contribute adjacent lot ranges to the same national sale
-  (138–159 and 234–252 vs Bagshaws' 253–275). `foxandsons` is currently healthy on the AI
-  path and `williamhbrownnorwich` is stale (last seen 2026-07-11) — both are candidates for
-  the same recogniser, but that is a separate, separately-verified change.
+- ~~**Sibling houses.**~~ **Done 2026-07-22.** `foxandsons` and `williamhbrownnorwich` run
+  the *same* hand-built Sequence template and contribute adjacent lot ranges to the same
+  national sale (138–159 and 234–252 vs Bagshaws' 253–275). Both are now registered on the
+  shared `recogniseSequenceBranchLotsFromMarkdown` — 21/21 and 19/19 survivor-verified. See
+  [foxandsons.md](foxandsons.md) and [williamhbrownnorwich.md](williamhbrownnorwich.md).
+  Three junk rows on this slug (`/`, the root, `/link`) were confirmed still `available` at
+  that date — see the PR description for the cleanup SQL.
 
 ## Lesson
 When a house's lot links point at a **sibling group host**, the recall sentinel and the

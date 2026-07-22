@@ -23,9 +23,16 @@ what makes the live boundary cheap and deterministic here.
 `sequence`, the other Sequence-network slug.
 
 ## Recogniser
-`recogniseWilliamHBrownNorwichLotsFromMarkdown(markdown, todayIso)`
+`recogniseSequenceBranchLotsFromMarkdown(markdown)`
 (`lib/pipeline/firecrawl-extract.js`), registered `staticCatalogue: true, maxPages: 1`
 — one plain-HTTP fetch carries the whole catalogue, so no browser render and **no AI**.
+
+**Changed 2026-07-22:** this house moved off its own
+`recogniseWilliamHBrownNorwichLotsFromMarkdown` onto the recogniser shared with
+`bagshaws` and `foxandsons` (all three serve the identical Sequence template). The shared
+parser was the superset — it additionally rescues a lot whose text anchor is a broken
+`href="link"` typo, which the old WHB parser silently dropped. `property_type` inference
+was carried across from the old parser. Re-verified 19/19 survivors on the live page.
 
 Card shape in recognition markdown (`htmlToRecognitionMarkdown`):
 
@@ -50,10 +57,17 @@ Three things the layout forces:
   status line (`SOLD PRIOR`, `Withdrawn`) feeds the status parse but is kept **out** of
   the address.
 - **Live boundary from the URL slug.** `auction_date` is parsed per lot from
-  `/auctions/28-july-2026/`; a lot whose sale has passed is dropped outright. The page
-  has no "ended" badges of its own, so this is the only ended-leak guard available —
-  and it also replaces the `2099-12-31` `always_on` calendar placeholder with the real
-  date (`_auctionDate` outranks the calendar in `persist-lots.js`).
+  `/auctions/28-july-2026/`. The page has no "ended" badges of its own, so this is the
+  only ended-leak guard available — and it replaces the `2099-12-31` `always_on` calendar
+  placeholder with the real date (`_auctionDate` outranks the calendar in
+  `persist-lots.js`).
+  **Contract changed 2026-07-22:** a past-dated lot now keeps its **real past date**
+  instead of being dropped at the recogniser. Dropping it read as a recall shortfall
+  against the sentinel (which counts every lot id on the page) and would hand the harness
+  a false regression; liveness is enforced one layer down, where `get_active_lots` admits
+  `available` lots only while `auction_date >= current_date - 1`. The invariant that
+  matters is unchanged and now asserted directly: no lot may carry an empty or
+  `2099-12-31` date, because that is precisely what kept dead lots live.
 
 Covered by `tests/test-williamhbrownnorwich-recogniser.js`.
 
