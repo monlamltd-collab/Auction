@@ -36,16 +36,20 @@ console.log('\nfrontend shell: external assets');
     'loads /public/supabase.min.js');
   assert(scriptSrcs.includes('/public/town-match.js'),
     'loads /public/town-match.js');
+  assert(scriptSrcs.includes('/public/finance.js'),
+    'loads /public/finance.js');
   assert(scriptSrcs.includes('/public/app.js'),
     'loads /public/app.js');
 
-  // Order matters: supabase + town-match must load before app.js so app.js
-  // can reference window.supabase and window.AB_townMatch synchronously.
+  // Order matters: supabase + town-match + finance must load before app.js so
+  // app.js can reference window.supabase / AB_townMatch / AB_finance synchronously.
   const orderIdx = (s) => scriptSrcs.indexOf(s);
   assert(orderIdx('/public/supabase.min.js') < orderIdx('/public/app.js'),
     'supabase loads before app.js');
   assert(orderIdx('/public/town-match.js') < orderIdx('/public/app.js'),
     'town-match loads before app.js');
+  assert(orderIdx('/public/finance.js') < orderIdx('/public/app.js'),
+    'finance loads before app.js');
 }
 
 console.log('\nfrontend shell: env-shim must remain inline');
