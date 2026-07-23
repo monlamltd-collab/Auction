@@ -11,6 +11,7 @@
 import {
   extractDescriptionParas, computeDescriptionBleed, assembleDescription,
   extractDescriptionFromHtml, paraKey, DESCRIPTION_MAX_CHARS,
+  shouldUpgradeDescription, EXTRACT_HTML_CAP,
 } from '../lib/pipeline/description-extract.js';
 
 let pass = 0, fail = 0;
@@ -109,6 +110,31 @@ console.log('extractDescriptionFromHtml — one-shot');
   const text = extractDescriptionFromHtml(html);
   assert(text && text.includes(NARRATIVE_1) && text.includes(NARRATIVE_2), 'one-shot returns assembled narrative');
   assert(extractDescriptionFromHtml('<html><body></body></html>') === null || extractDescriptionFromHtml('<html><body></body></html>').length >= 40, 'empty body → null or meta');
+}
+
+console.log('shouldUpgradeDescription — prefer-longer rule (sweep-side #194 mirror)');
+{
+  const rich = 'R'.repeat(400);
+  const thin = 'T'.repeat(100);
+  assert(shouldUpgradeDescription(null, rich) === true, 'no existing + real candidate → upgrade');
+  assert(shouldUpgradeDescription('', rich) === true, 'empty existing → upgrade');
+  assert(shouldUpgradeDescription(thin, rich) === true, 'longer candidate replaces shorter stored');
+  assert(shouldUpgradeDescription(rich, thin) === false, 'shorter candidate NEVER clobbers richer stored');
+  assert(shouldUpgradeDescription(rich, rich) === false, 'equal length → no churn');
+  assert(shouldUpgradeDescription(null, 'x'.repeat(10)) === false, 'below MIN_CHARS → not narrative, no write');
+  assert(shouldUpgradeDescription(thin, null) === false, 'null candidate → no write');
+}
+
+console.log('EXTRACT_HTML_CAP — huge SPA shells cannot OOM the parse');
+{
+  // Narrative in the head of the page, followed by multi-MB of script payload
+  // (the shape that OOM-killed the prod process). The cap must bound the parse
+  // while still extracting the narrative that sits before it.
+  const hugeTail = '<script>' + 'x'.repeat(EXTRACT_HTML_CAP + 500_000) + '</script>';
+  const html = page(`<div class="description"><p>${NARRATIVE_1}</p><p>${NARRATIVE_2}</p></div>`).replace('</body>', hugeTail + '</body>');
+  const paras = extractDescriptionParas(html);
+  assert(paras.some(p => p.includes('three bedroom semi detached')), 'narrative before the cap still extracted');
+  assert(typeof EXTRACT_HTML_CAP === 'number' && EXTRACT_HTML_CAP <= 1_000_000, `cap exported and bounded (${EXTRACT_HTML_CAP})`);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
