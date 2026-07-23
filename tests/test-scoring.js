@@ -110,6 +110,19 @@ test('Knotweed scores -2', () => {
   assert(result.risks.includes('Knotweed'), 'should have knotweed risk');
 });
 
+test('Subsidence scores -1.5', () => {
+  const lot = { address: '1 High St', bullets: ['Evidence of historic subsidence, property has been underpinned'], price: 100000 };
+  const result = scoreLot(lot);
+  assert(result.risks.includes('Subsidence'), 'should have subsidence risk');
+});
+
+test('Cladding/EWS1 flagged only in defect context', () => {
+  const flagged = scoreLot({ address: '1 High St', bullets: ['Third floor flat, EWS1 form not available'], price: 100000 });
+  assert(flagged.risks.includes('Cladding/EWS1'), 'EWS1 mention should flag cladding risk');
+  const benign = scoreLot({ address: '1 High St', bullets: ['Detached house with attractive cedar cladding'], price: 100000 });
+  assert(!benign.risks.includes('Cladding/EWS1'), 'decorative cladding must not flag');
+});
+
 test('Score is capped between 0 and 10', () => {
   // Stack multiple positives to exceed 10
   const lot = { address: '1 High St', bullets: [
