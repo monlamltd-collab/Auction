@@ -14,6 +14,7 @@ import { getLotsForCatalogues } from '../lib/pipeline/lot-lookup.js';
 import { normaliseLotStatuses, isValidImageUrl } from '../lib/scraper.js';
 import { parseAIResponse } from '../lib/search-parse.js';
 import { parseSmartSearchQuery, REGION_POSTCODES } from '../lib/search-query-parse.js';
+import { buildDeepSummaries, applyDeepVerdict, isSemanticQuery, DEEP_READ_MIN_LOTS } from '../lib/search-deep-read.js';
 import { createHash } from 'crypto';
 
 const router = Router();
@@ -961,11 +962,55 @@ Pick the indices of lots that genuinely match the user's INTENT — quality over
     // pool — capped. Previously this dumped the entire 400-lot candidate pool
     // ("freehold blocks" → 400 "matches" on 2026-06-28), which reads as a
     // broken search. 40 top-scored candidates with an honest report is useful.
+    let aiEmptyFallback = false;
     if (matchingLots.length === 0) {
+      aiEmptyFallback = true;
       matchingLots = geminiLots.slice(0, 40);
       log.info('smart-search ai-empty-fallback', { returning: matchingLots.length, poolSize: geminiLots.length });
       if (!aiParsed.report || aiParsed.report === 'Search completed.') {
         aiParsed.report = `The AI couldn't pinpoint exact matches for "${query}", so here are the top ${matchingLots.length} candidates (of ${totalSearched} searched) that fit your filters, sorted by investment score.`;
+      }
+    }
+
+    // ── Stage 2: deep-read verification over the shortlist ──
+    // Stage 1 picked from 500-char snippets. For semantic queries the shortlist
+    // is now re-read with each lot's FULL data + the auctioneer's verbatim
+    // narrative (lots.description), so the model can verify genuine fit, rank
+    // best-first, and write a report that cites the actual prose. Kill switch:
+    // SMART_SEARCH_DEEP_READ=false. A failure here NEVER degrades below the
+    // stage-1 result — it's a refinement pass, not a dependency.
+    if (process.env.SMART_SEARCH_DEEP_READ !== 'false'
+        && !aiEmptyFallback
+        && matchingLots.length >= DEEP_READ_MIN_LOTS
+        && isSemanticQuery(sqParsed)) {
+      try {
+        const deepSummaries = buildDeepSummaries(matchingLots);
+        const deepResponse = await callAI(`You are a UK property investment analyst. This is the VERIFICATION pass of a two-stage search: a shortlist was picked from short text snippets, and you now see each candidate's full data plus the auction house's verbatim NARRATIVE for the lot.
+
+USER'S SEARCH QUERY: "${query}"
+${soldInstruction}${conceptNote}
+
+Read each candidate's NARRATIVE closely and decide whether the lot GENUINELY fits the user's intent. Drop candidates the full text contradicts or fails to support; keep every lot that genuinely fits. Order the kept indices best-fit first. A lot with no captured narrative is judged on its DATA line alone — do not penalise the absence.
+
+Candidates (${matchingLots.length} shortlisted):
+${deepSummaries}
+
+Respond in this exact JSON format (and nothing else):
+{"indices":[2,0,5],"report":"Your investment commentary..."}
+
+The report (2 short paragraphs) must cite SPECIFICS from the narratives — actual facts (unit counts, tenancies, stated income, condition, planning position) that make the standout lots fit the query. Present what fits and why; no meta-commentary about the verification process.`, { tier: 'fast', maxTokens: 6000, taskType: 'search', userId: user.id });
+
+        const deepParsed = parseAIResponse(deepResponse);
+        const kept = applyDeepVerdict(matchingLots, deepParsed.indices);
+        if (kept) {
+          log.info('smart-search deep-read', { shortlisted: matchingLots.length, kept: kept.length, dropped: matchingLots.length - kept.length });
+          matchingLots = kept;
+          if (deepParsed.report) aiParsed.report = deepParsed.report;
+        } else {
+          log.warn('smart-search deep-read verdict unusable — serving stage-1 results', { raw: String(deepResponse).substring(0, 120) });
+        }
+      } catch (deepErr) {
+        log.warn('smart-search deep-read failed — serving stage-1 results', { err: deepErr.message });
       }
     }
 
