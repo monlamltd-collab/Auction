@@ -3026,10 +3026,14 @@ function renderLots(){
       else if(fEpcV==='de'&&b!=='D'&&b!=='E') return false;
       else if(fEpcV==='fg'&&b!=='F'&&b!=='G') return false;
     }
-    // Flood — exclude mode keeps unknown-flood lots visible (absence of data
-    // is not evidence of safety); only23 is the deliberate bargain-hunt view.
-    if(fFloodV==='exclude23'&&(l.floodZone==='2'||l.floodZone==='3')) return false;
-    if(fFloodV==='only23'&&l.floodZone!=='2'&&l.floodZone!=='3') return false;
+    // Flood — filters on floodRiskLevel (lots.flood_risk, the EA catchment
+    // proxy: 'Low'/'Medium', ~70% coverage). NOT flood_zone, which is null
+    // fleet-wide (the proxy can't grade zones — see lib/flood-lookup.js).
+    // exclude mode keeps unknown-flood lots visible (absence of data is not
+    // evidence of safety); 'medium' is the deliberate bargain-hunt view.
+    if(fFloodV==='exclude_medium'&&l.floodRiskLevel==='Medium') return false;
+    if(fFloodV==='medium'&&l.floodRiskLevel!=='Medium') return false;
+    if(fFloodV==='low'&&l.floodRiskLevel!=='Low') return false;
     // Red flags (hard risks only — see RED_FLAG_RISKS)
     if(fRedFlagV==='exclude'&&hasRedFlag(l)) return false;
     if(fRedFlagV==='only'&&!hasRedFlag(l)) return false;
@@ -3173,12 +3177,13 @@ function renderLots(){
   // Coverage honesty for metric filters — say how many lots even carry the
   // metric, so "yield ≥ 8%" is never mistaken for a scan of the full set.
   let covNote='';
-  if(fMinYieldV||fMinBmvV||fMinRoceV||(fEpcV&&fEpcV!=='none')){
+  if(fMinYieldV||fMinBmvV||fMinRoceV||(fEpcV&&fEpcV!=='none')||fFloodV==='medium'||fFloodV==='low'){
     const base=LOTS.length;
     const parts=[];
     if(fMinYieldV||fMinRoceV) parts.push('rent estimate on '+LOTS.filter(l=>l.estGrossYield!=null).length+' of '+base+' lots');
     if(fMinBmvV) parts.push('street comparables on '+LOTS.filter(l=>l.belowMarket!=null).length+' of '+base+' lots');
     if(fEpcV&&fEpcV!=='none') parts.push('EPC on '+LOTS.filter(l=>l.epcRating).length+' of '+base+' lots');
+    if(fFloodV==='medium'||fFloodV==='low') parts.push('flood data on '+LOTS.filter(l=>l.floodRiskLevel).length+' of '+base+' lots');
     covNote='<div class="stat-card" style="grid-column:1/-1;font-size:.72rem;color:var(--text3)">Data coverage: '+parts.join(' · ')+' — lots without this data are excluded while the filter is on</div>';
   }
   $('statsRow').innerHTML=statsHtml+covNote;
