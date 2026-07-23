@@ -312,6 +312,8 @@
         <option value="price_asc">Price low → high</option>
         <option value="price_desc">Price high → low</option>
         <option value="yield">Best yield</option>
+        <option value="net_yield">Best net yield</option>
+        <option value="roce">Best ROCE</option>
         <option value="bmv">Most below market</option>
         <option value="score">Best score</option>
         <option value="days_unsold">Longest unsold</option>
@@ -392,6 +394,8 @@
         <option value="price_asc">Price low → high</option>
         <option value="price_desc">Price high → low</option>
         <option value="yield">Best yield</option>
+        <option value="net_yield">Best net yield</option>
+        <option value="roce">Best ROCE</option>
         <option value="bmv">Most below market</option>
         <option value="score">Best score</option>
         <option value="days_unsold">Longest unsold</option>
@@ -491,6 +495,18 @@
               <label>Red flags</label>
               <select class="tb-select" id="fRedFlag" onchange="debouncedRender();updateMoreDot()" aria-label="Red-flag risks (knotweed, subsidence, cladding, sitting tenant…)" title="Knotweed, subsidence, cladding/EWS1, flying freehold, sitting/regulated tenant, non-standard construction, contamination">
                 <option value="">Any</option><option value="exclude">Hide red-flag lots</option><option value="only">Red-flag lots only</option>
+              </select>
+            </div>
+            <div class="mf-field">
+              <label>Min ROCE</label>
+              <select class="tb-select" id="fMinRoce" onchange="debouncedRender();updateMoreDot()" aria-label="Minimum return on capital employed" title="Cash-on-cash return after a 75% LTV interest-only BTL mortgage — assumptions shown on each card">
+                <option value="">Any ROCE</option><option value="4">4%+</option><option value="6">6%+</option><option value="8">8%+</option><option value="10">10%+</option><option value="15">15%+</option>
+              </select>
+            </div>
+            <div class="mf-field">
+              <label>Max-bid target</label>
+              <select class="tb-select" id="fBidTarget" onchange="debouncedRender();updateMoreDot()" aria-label="Show max bid for a target gross yield" title="Shows the maximum bid that hits your target gross yield on every lot with a rent estimate">
+                <option value="">Off</option><option value="6">6% yield target</option><option value="7">7% yield target</option><option value="8">8% yield target</option><option value="10">10% yield target</option>
               </select>
             </div>
           </div>
@@ -687,6 +703,7 @@
 
 <script src="/public/supabase.min.js"></script>
 <script src="/public/town-match.js"></script>
+<script src="/public/finance.js"></script>
 <script type="module" src="/public/img-validator.js"></script>
 <script>
 const SUPABASE_URL = window.__SUPABASE_URL__ || '';

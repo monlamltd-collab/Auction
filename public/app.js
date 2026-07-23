@@ -39,7 +39,7 @@ function resetSearchState(){
 }
 
 function clearAllFilters(silent){
-  const resets={fDeal:'',fType:'',fCondition:'',fTenure:'',fLocation:'',fAfford:'all',fSoldTop:'all',fSort:'score',fBeds:'',fTown:'',fPostcode:'',fMinPrice:'',fMaxPrice:'',fExcludePOA:'',fRadius:'',fMinYield:'',fMinBmv:'',fMinScore:'',fSignal:'',fEpc:'',fFlood:'',fRedFlag:''};
+  const resets={fDeal:'',fType:'',fCondition:'',fTenure:'',fLocation:'',fAfford:'all',fSoldTop:'all',fSort:'score',fBeds:'',fTown:'',fPostcode:'',fMinPrice:'',fMaxPrice:'',fExcludePOA:'',fRadius:'',fMinYield:'',fMinBmv:'',fMinScore:'',fSignal:'',fEpc:'',fFlood:'',fRedFlag:'',fMinRoce:'',fBidTarget:''};
   for(const[id,val] of Object.entries(resets)){const el=$(id);if(el)el.value=val}
   _searchCentre=null;
   if($('fShowPast')) { $('fShowPast').checked=false; if(!silent) onShowPastChange(); }
@@ -86,6 +86,7 @@ function updateMoreDot() {
     $('fExcludePOA')?.value || $('fCondition')?.value ||
     $('fMinYield')?.value || $('fMinBmv')?.value || $('fMinScore')?.value ||
     $('fSignal')?.value || $('fEpc')?.value || $('fFlood')?.value || $('fRedFlag')?.value ||
+    $('fMinRoce')?.value || $('fBidTarget')?.value ||
     (getSelectedHouses && getSelectedHouses().length > 0);
   $('mfDot').style.display = active ? '' : 'none';
 }
@@ -116,6 +117,8 @@ function getActiveFilterCount() {
   if ($('fEpc')?.value) n++;
   if ($('fFlood')?.value) n++;
   if ($('fRedFlag')?.value) n++;
+  if ($('fMinRoce')?.value) n++;
+  if ($('fBidTarget')?.value) n++;
   if (typeof getSelectedHouses === 'function' && getSelectedHouses().length > 0) n++;
   return n;
 }
@@ -504,6 +507,8 @@ function getCurrentFilters() {
     epc: $('fEpc')?.value || '',
     flood: $('fFlood')?.value || '',
     redFlag: $('fRedFlag')?.value || '',
+    minRoce: $('fMinRoce')?.value || '',
+    bidTarget: $('fBidTarget')?.value || '',
     query: $('smartQuery')?.value || ''
   };
 }
@@ -531,6 +536,8 @@ function applyFilters(f) {
   if (f.epc && $('fEpc')) $('fEpc').value = f.epc;
   if (f.flood && $('fFlood')) $('fFlood').value = f.flood;
   if (f.redFlag && $('fRedFlag')) $('fRedFlag').value = f.redFlag;
+  if (f.minRoce && $('fMinRoce')) $('fMinRoce').value = f.minRoce;
+  if (f.bidTarget && $('fBidTarget')) $('fBidTarget').value = f.bidTarget;
   if (f.query && $('smartQuery')) $('smartQuery').value = f.query;
   if (typeof umami !== 'undefined') {
     const keys = Object.keys(f).filter(k => f[k] != null && f[k] !== '');
@@ -1270,7 +1277,7 @@ function setQ(q){
 }
 function applyPreset(name){
   // Reset all filters first
-  const resets={fDeal:'',fType:'',fCondition:'',fTenure:'',fLocation:'',fSoldTop:'all',fSort:'score',fBeds:'',fTown:'',fPostcode:'',fMinPrice:'',fMaxPrice:'',fExcludePOA:'',fMinYield:'',fMinBmv:'',fMinScore:'',fSignal:'',fEpc:'',fFlood:'',fRedFlag:''};
+  const resets={fDeal:'',fType:'',fCondition:'',fTenure:'',fLocation:'',fSoldTop:'all',fSort:'score',fBeds:'',fTown:'',fPostcode:'',fMinPrice:'',fMaxPrice:'',fExcludePOA:'',fMinYield:'',fMinBmv:'',fMinScore:'',fSignal:'',fEpc:'',fFlood:'',fRedFlag:'',fMinRoce:'',fBidTarget:''};
   for(const[id,val] of Object.entries(resets)){const el=$(id);if(el)el.value=val}
   $('smartQuery').value='';
   if(name==='refurb150'){$('fCondition').value='needs work';$('fMaxPrice').value='150000'}
@@ -2957,6 +2964,7 @@ function renderLots(){
   const fEpcV=$('fEpc')?.value||'';
   const fFloodV=$('fFlood')?.value||'';
   const fRedFlagV=$('fRedFlag')?.value||'';
+  const fMinRoceV=+($('fMinRoce')?.value||0);
   const selectedHouses=getSelectedHouses();
   const _hasFavView=typeof _favViewActive!=='undefined'&&_favViewActive;
   const favKeys=_hasFavView?getFavourites():null;
@@ -3025,6 +3033,9 @@ function renderLots(){
     // Red flags (hard risks only — see RED_FLAG_RISKS)
     if(fRedFlagV==='exclude'&&hasRedFlag(l)) return false;
     if(fRedFlagV==='only'&&!hasRedFlag(l)) return false;
+    // ROCE threshold — derived client-side (public/finance.js); lots without
+    // a rent estimate compute to null and are excluded while active
+    if(fMinRoceV&&!(roceOf(l)>=fMinRoceV)) return false;
     // Location (region) — skip for SMART_RESULTS: the AI search scopes by
     // region server-side (postcode column, authoritative), so re-applying the
     // weaker address-string matchesRegion here would double-filter and drop
@@ -3138,6 +3149,8 @@ function renderLots(){
   else if(sortVal==='yield') lots.sort((a,b)=>((b.estGrossYield||0)-(a.estGrossYield||0)));
   // belowMarket is signed (negative = above comps); lots without comps sink last
   else if(sortVal==='bmv') lots.sort((a,b)=>((b.belowMarket??-1e9)-(a.belowMarket??-1e9)));
+  else if(sortVal==='net_yield') lots.sort((a,b)=>((netYieldOf(b)??-1e9)-(netYieldOf(a)??-1e9)));
+  else if(sortVal==='roce') lots.sort((a,b)=>((roceOf(b)??-1e9)-(roceOf(a)??-1e9)));
   else if(sortVal==='days_unsold') lots.sort((a,b)=>((b.daysSinceAuction||0)-(a.daysSinceAuction||0)));
 
   // Store filtered lots for export functions
@@ -3160,10 +3173,10 @@ function renderLots(){
   // Coverage honesty for metric filters — say how many lots even carry the
   // metric, so "yield ≥ 8%" is never mistaken for a scan of the full set.
   let covNote='';
-  if(fMinYieldV||fMinBmvV||(fEpcV&&fEpcV!=='none')){
+  if(fMinYieldV||fMinBmvV||fMinRoceV||(fEpcV&&fEpcV!=='none')){
     const base=LOTS.length;
     const parts=[];
-    if(fMinYieldV) parts.push('rent estimate on '+LOTS.filter(l=>l.estGrossYield!=null).length+' of '+base+' lots');
+    if(fMinYieldV||fMinRoceV) parts.push('rent estimate on '+LOTS.filter(l=>l.estGrossYield!=null).length+' of '+base+' lots');
     if(fMinBmvV) parts.push('street comparables on '+LOTS.filter(l=>l.belowMarket!=null).length+' of '+base+' lots');
     if(fEpcV&&fEpcV!=='none') parts.push('EPC on '+LOTS.filter(l=>l.epcRating).length+' of '+base+' lots');
     covNote='<div class="stat-card" style="grid-column:1/-1;font-size:.72rem;color:var(--text3)">Data coverage: '+parts.join(' · ')+' — lots without this data are excluded while the filter is on</div>';
@@ -3381,8 +3394,10 @@ function renderLots(){
     if(lotsSeen>=pageEnd) break;
   }
 
-  // Skip DOM rebuild if same lots on same page (avoids image reload flicker)
-  var _renderKey=_currentPage+'|'+pageItems.filter(i=>!i.isDivider).map(i=>i.idx).join(',');
+  // Skip DOM rebuild if same lots on same page (avoids image reload flicker).
+  // fBidTarget changes what each card DISPLAYS without changing which lots
+  // show, so it must be part of the key or the max-bid chips never (dis)appear.
+  var _renderKey=_currentPage+'|'+($('fBidTarget')?.value||'')+'|'+pageItems.filter(i=>!i.isDivider).map(i=>i.idx).join(',');
   if(_renderKey===window._lastRenderKey&&document.getElementById('lotsGrid')){
     if(filterCountEl) filterCountEl.textContent=totalLots.toLocaleString()+' lots';
     if(typeof syncFiltersToURL==='function') syncFiltersToURL();
@@ -3599,6 +3614,12 @@ function isNilReserveLot(l) {
 // 'Listed building') and 'Flood risk', which has its own structured filter.
 const RED_FLAG_RISKS = ['Sitting tenant', 'Knotweed', 'Flying freehold', 'Non-std construction', 'Contamination', 'Subsidence', 'Cladding/EWS1'];
 function hasRedFlag(l) { return (l.risks || []).some(function(r) { return RED_FLAG_RISKS.includes(r); }); }
+
+// Derived investor metrics (public/finance.js), cached on the lot object so a
+// render pass computes each at most once. Assumptions are static per deploy,
+// so cache staleness isn't a concern.
+function roceOf(l) { if (l._roce === undefined) l._roce = (window.AB_finance ? AB_finance.roce(l) : null); return l._roce; }
+function netYieldOf(l) { if (l._netYield === undefined) l._netYield = (window.AB_finance ? AB_finance.netYield(l) : null); return l._netYield; }
 
 function statusForStrip(l) {
   // Map lot.status to the editorial strip's dot colour + label.
@@ -3859,6 +3880,35 @@ function card(l){
     '</div>';
   }
 
+  // Deal-metrics line: net yield + ROCE (+ BRRR recycled % when a value
+  // estimate exists). Derived client-side from served fields; the tooltip
+  // carries the full assumption set so no number appears without its basis.
+  let metricsLineHtml = '';
+  if (window.AB_finance && !l.blurred && !l.anonGated && !l._yieldEstimateWarning) {
+    const ny = netYieldOf(l);
+    const rc = roceOf(l);
+    if (ny != null && rc != null) {
+      const brrr = AB_finance.brrrRecycledPct(l);
+      metricsLineHtml = '<div class="card-metrics" title="' + esc(AB_finance.describeAssumptions(l)) + '">' +
+        'NET ' + ny.toFixed(1) + '% · ROCE ' + rc.toFixed(1) + '%' +
+        ((brrr && brrr.pct >= 60) ? ' · BRRR ' + Math.round(brrr.pct) + '% out (' + esc(brrr.confidence) + ' conf)' : '') +
+        ' <span class="cm-info" aria-hidden="true">ⓘ</span></div>';
+    }
+  }
+  // Max-bid chip — user sets a target gross yield once (Pro filters); every
+  // lot with a rent estimate shows the price that hits it. Green when the
+  // guide is already at or under the user's max bid.
+  let maxBidHtml = '';
+  const bidTarget = +(document.getElementById('fBidTarget')?.value || 0);
+  if (window.AB_finance && bidTarget && !l.blurred && !l.anonGated) {
+    const mb = AB_finance.maxBid(l, bidTarget);
+    if (mb != null) {
+      const under = l.price && l.price <= mb;
+      maxBidHtml = '<div class="maxbid-chip' + (under ? ' ok' : '') + '" title="Highest price that still returns a ' + bidTarget + '% gross yield on the estimated rent">' +
+        'Max bid for ' + bidTarget + '%: £' + mb.toLocaleString() + (under ? ' — guide is under' : '') + '</div>';
+    }
+  }
+
   // Footer CTAs
   const viewHref = l.url ? safeHref(l.url) : '#';
   const bmHref = (l.fundability && l.fundability.bridgematchUrl)
@@ -3910,6 +3960,8 @@ function card(l){
     statsHtml +
     '<div class="lcv2-body">' +
       estLineHtml +
+      metricsLineHtml +
+      maxBidHtml +
       (tags.length ? '<div class="lcv2-tags">' + tags.join('') + '</div>' : '') +
       metaLine +
       quoteHtml +
@@ -6382,7 +6434,7 @@ function bridgeMatchLot(idx, event) {
 // ═══════════════════════════════
 // SHAREABLE FILTER URLs (#65)
 // ═══════════════════════════════
-const FILTER_PARAMS=['smartQuery','fSort','fMinPrice','fMaxPrice','fBeds','fType','fLocation','fDeal','fCondition','fTenure','fSoldTop','fTown','fPostcode','fRadius','fExcludePOA','fMinYield','fMinBmv','fMinScore','fSignal','fEpc','fFlood','fRedFlag'];
+const FILTER_PARAMS=['smartQuery','fSort','fMinPrice','fMaxPrice','fBeds','fType','fLocation','fDeal','fCondition','fTenure','fSoldTop','fTown','fPostcode','fRadius','fExcludePOA','fMinYield','fMinBmv','fMinScore','fSignal','fEpc','fFlood','fRedFlag','fMinRoce','fBidTarget'];
 function restoreFiltersFromURL(){
   const p=new URLSearchParams(window.location.search);
   for(const id of FILTER_PARAMS){const v=p.get(id);if(v&&$(id))$(id).value=v}
