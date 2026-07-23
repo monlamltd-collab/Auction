@@ -487,8 +487,8 @@
             </div>
             <div class="mf-field">
               <label>Flood risk</label>
-              <select class="tb-select" id="fFlood" onchange="debouncedRender();updateMoreDot()" aria-label="Flood risk">
-                <option value="">Any flood risk</option><option value="exclude23">Exclude flood zone 2–3</option><option value="only23">Flood zone 2–3 only</option>
+              <select class="tb-select" id="fFlood" onchange="debouncedRender();updateMoreDot()" aria-label="Flood risk" title="Environment Agency catchment proxy — grades lots Low or Medium; ~70% of lots have flood data">
+                <option value="">Any flood risk</option><option value="exclude_medium">Exclude medium flood risk</option><option value="medium">Medium flood risk only</option><option value="low">Low risk verified only</option>
               </select>
             </div>
             <div class="mf-field">
