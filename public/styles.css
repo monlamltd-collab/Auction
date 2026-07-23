@@ -959,6 +959,7 @@ footer .logo-f span{color:var(--green)}
 .tag.green{border-color:var(--signal-green);color:var(--signal-green)}
 .tag.red  {border-color:var(--red);color:var(--red)}
 .tag.amber{border-color:var(--signal-amber);color:var(--signal-amber)}
+.tag.signal{border-color:var(--accent-info);color:var(--accent-info)}
 
 .chip-ed{
   height:30px;padding:0 12px;font:14px/1 var(--font-main);

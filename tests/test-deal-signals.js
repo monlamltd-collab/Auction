@@ -233,6 +233,35 @@ console.log('deal-signals: analyseLot integration (the Pembroke end-to-end)');
   check(!lot.dealSignals.includes('hmo'), 'no hmo signal on a 2-bed refurb');
 }
 
+console.log('deal-signals: vendor-motivation archetypes');
+{
+  const r = detectDealSignals({ text: 'sold by order of the executors of the late mrs smith', beds: 3, propType: 'house' });
+  check(r.signals.includes('probate'), `executor sale → probate (got ${r.signals.join(',')})`);
+}
+{
+  const r = detectDealSignals({ text: 'for sale by order of the lpa receivers', beds: null, propType: 'commercial' });
+  check(r.signals.includes('receivership'), `LPA receivers → receivership (got ${r.signals.join(',')})`);
+  check(!r.signals.includes('repossession'), 'plain receivership is not tagged repossession');
+}
+{
+  const r = detectDealSignals({ text: 'by order of the mortgagees in possession acting through their lpa receivers', beds: 2, propType: 'house' });
+  check(r.signals.includes('repossession'), `mortgagees in possession → repossession (got ${r.signals.join(',')})`);
+  check(!r.signals.includes('receivership'), 'repossession outranks receivership when both phrasings appear');
+}
+{
+  const r = detectDealSignals({ text: 'offered for sale by order of the local authority', beds: 3, propType: 'house' });
+  check(r.signals.includes('public-sector-disposal'), `by order of the local authority → public-sector-disposal (got ${r.signals.join(',')})`);
+}
+{
+  const r = detectDealSignals({ text: 'by order of leeds city council following compulsory purchase', beds: 2, propType: 'house' });
+  check(r.signals.includes('public-sector-disposal'), `named city council → public-sector-disposal (got ${r.signals.join(',')})`);
+}
+{
+  const r = detectDealSignals({ text: 'a well presented two bedroom terrace with gardens front and rear', beds: 2, propType: 'house' });
+  check(!r.signals.some(s => ['probate', 'receivership', 'repossession', 'public-sector-disposal'].includes(s)),
+    `plain listing carries no vendor signals (got ${r.signals.join(',') || 'none'})`);
+}
+
 if (failures > 0) {
   console.error(`\ntest-deal-signals: FAIL — ${failures} assertion(s) failed.`);
   process.exit(1);

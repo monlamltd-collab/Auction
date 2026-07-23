@@ -39,7 +39,7 @@ function resetSearchState(){
 }
 
 function clearAllFilters(silent){
-  const resets={fDeal:'',fType:'',fCondition:'',fTenure:'',fLocation:'',fAfford:'all',fSoldTop:'all',fSort:'score',fBeds:'',fTown:'',fPostcode:'',fMinPrice:'',fMaxPrice:'',fExcludePOA:'',fRadius:''};
+  const resets={fDeal:'',fType:'',fCondition:'',fTenure:'',fLocation:'',fAfford:'all',fSoldTop:'all',fSort:'score',fBeds:'',fTown:'',fPostcode:'',fMinPrice:'',fMaxPrice:'',fExcludePOA:'',fRadius:'',fMinYield:'',fMinBmv:'',fMinScore:'',fSignal:'',fEpc:'',fFlood:'',fRedFlag:''};
   for(const[id,val] of Object.entries(resets)){const el=$(id);if(el)el.value=val}
   _searchCentre=null;
   if($('fShowPast')) { $('fShowPast').checked=false; if(!silent) onShowPastChange(); }
@@ -84,6 +84,8 @@ function updateMoreDot() {
   // popover, so don't count them toward the "active filter" dot indicator.
   var active = $('fDeal')?.value || $('fTenure')?.value ||
     $('fExcludePOA')?.value || $('fCondition')?.value ||
+    $('fMinYield')?.value || $('fMinBmv')?.value || $('fMinScore')?.value ||
+    $('fSignal')?.value || $('fEpc')?.value || $('fFlood')?.value || $('fRedFlag')?.value ||
     (getSelectedHouses && getSelectedHouses().length > 0);
   $('mfDot').style.display = active ? '' : 'none';
 }
@@ -107,6 +109,13 @@ function getActiveFilterCount() {
   if ($('fTenure')?.value) n++;
   if ($('fCondition')?.value) n++;
   if ($('fExcludePOA')?.value) n++;
+  if ($('fMinYield')?.value) n++;
+  if ($('fMinBmv')?.value) n++;
+  if ($('fMinScore')?.value) n++;
+  if ($('fSignal')?.value) n++;
+  if ($('fEpc')?.value) n++;
+  if ($('fFlood')?.value) n++;
+  if ($('fRedFlag')?.value) n++;
   if (typeof getSelectedHouses === 'function' && getSelectedHouses().length > 0) n++;
   return n;
 }
@@ -488,6 +497,13 @@ function getCurrentFilters() {
     radius: $('fRadius')?.value || '',
     condition: $('fCondition')?.value || '',
     excludePOA: $('fExcludePOA')?.value || '',
+    minYield: $('fMinYield')?.value || '',
+    minBmv: $('fMinBmv')?.value || '',
+    minScore: $('fMinScore')?.value || '',
+    signal: $('fSignal')?.value || '',
+    epc: $('fEpc')?.value || '',
+    flood: $('fFlood')?.value || '',
+    redFlag: $('fRedFlag')?.value || '',
     query: $('smartQuery')?.value || ''
   };
 }
@@ -508,6 +524,13 @@ function applyFilters(f) {
   if (f.radius && $('fRadius')) $('fRadius').value = f.radius;
   if (f.condition && $('fCondition')) $('fCondition').value = f.condition;
   if (f.excludePOA && $('fExcludePOA')) $('fExcludePOA').value = f.excludePOA;
+  if (f.minYield && $('fMinYield')) $('fMinYield').value = f.minYield;
+  if (f.minBmv && $('fMinBmv')) $('fMinBmv').value = f.minBmv;
+  if (f.minScore && $('fMinScore')) $('fMinScore').value = f.minScore;
+  if (f.signal && $('fSignal')) $('fSignal').value = f.signal;
+  if (f.epc && $('fEpc')) $('fEpc').value = f.epc;
+  if (f.flood && $('fFlood')) $('fFlood').value = f.flood;
+  if (f.redFlag && $('fRedFlag')) $('fRedFlag').value = f.redFlag;
   if (f.query && $('smartQuery')) $('smartQuery').value = f.query;
   if (typeof umami !== 'undefined') {
     const keys = Object.keys(f).filter(k => f[k] != null && f[k] !== '');
@@ -1247,7 +1270,7 @@ function setQ(q){
 }
 function applyPreset(name){
   // Reset all filters first
-  const resets={fDeal:'',fType:'',fCondition:'',fTenure:'',fLocation:'',fSoldTop:'all',fSort:'score',fBeds:'',fTown:'',fPostcode:'',fMinPrice:'',fMaxPrice:'',fExcludePOA:''};
+  const resets={fDeal:'',fType:'',fCondition:'',fTenure:'',fLocation:'',fSoldTop:'all',fSort:'score',fBeds:'',fTown:'',fPostcode:'',fMinPrice:'',fMaxPrice:'',fExcludePOA:'',fMinYield:'',fMinBmv:'',fMinScore:'',fSignal:'',fEpc:'',fFlood:'',fRedFlag:''};
   for(const[id,val] of Object.entries(resets)){const el=$(id);if(el)el.value=val}
   $('smartQuery').value='';
   if(name==='refurb150'){$('fCondition').value='needs work';$('fMaxPrice').value='150000'}
@@ -2923,7 +2946,17 @@ function renderLots(){
   const _radiusSearch=!!((fpc||ftown)&&_searchCentre&&fradius);
   const _prefixSearch=!!(fpc&&!_radiusSearch);
   const _townSearch=!!(ftown&&!_radiusSearch);
-  const fExcludePOA=$('fExcludePOA')&&$('fExcludePOA').value==='yes';
+  const fPoaMode=$('fExcludePOA')?.value||'';
+  const fExcludePOA=fPoaMode==='yes';
+  const fNilOnly=fPoaMode==='nil_reserve';
+  // Investor-metric + signal/risk filters (Pro filters popover)
+  const fMinYieldV=+($('fMinYield')?.value||0);
+  const fMinBmvV=+($('fMinBmv')?.value||0);
+  const fMinScoreV=+($('fMinScore')?.value||0);
+  const fSignalV=$('fSignal')?.value||'';
+  const fEpcV=$('fEpc')?.value||'';
+  const fFloodV=$('fFlood')?.value||'';
+  const fRedFlagV=$('fRedFlag')?.value||'';
   const selectedHouses=getSelectedHouses();
   const _hasFavView=typeof _favViewActive!=='undefined'&&_favViewActive;
   const favKeys=_hasFavView?getFavourites():null;
@@ -2968,6 +3001,30 @@ function renderLots(){
     else if(fco==='repossession'){
       if(!(_repoPattern.test((l.bullets||[]).join(' '))||_repoPattern2.test((l.opps||[]).join(' ')))) return false;
     }
+    // Investment-metric thresholds — a lot without the metric is excluded
+    // while its threshold is active; the stats row carries the coverage note
+    // so absence is visible, never silent.
+    if(fMinYieldV&&!(l.estGrossYield>=fMinYieldV)) return false;
+    if(fMinBmvV&&!(l.belowMarket>=fMinBmvV)) return false;
+    if(fMinScoreV&&!(l.score>=fMinScoreV)) return false;
+    // Deal signal (multi-label slugs from lib/pipeline/deal-signals.js)
+    if(fSignalV&&!(l.dealSignals||[]).includes(fSignalV)) return false;
+    // EPC band
+    if(fEpcV){
+      const b=l.epcRating?String(l.epcRating).toUpperCase()[0]:'';
+      if(fEpcV==='none'){ if(b) return false; }
+      else if(!b) return false;
+      else if(fEpcV==='ac'&&b!=='A'&&b!=='B'&&b!=='C') return false;
+      else if(fEpcV==='de'&&b!=='D'&&b!=='E') return false;
+      else if(fEpcV==='fg'&&b!=='F'&&b!=='G') return false;
+    }
+    // Flood — exclude mode keeps unknown-flood lots visible (absence of data
+    // is not evidence of safety); only23 is the deliberate bargain-hunt view.
+    if(fFloodV==='exclude23'&&(l.floodZone==='2'||l.floodZone==='3')) return false;
+    if(fFloodV==='only23'&&l.floodZone!=='2'&&l.floodZone!=='3') return false;
+    // Red flags (hard risks only — see RED_FLAG_RISKS)
+    if(fRedFlagV==='exclude'&&hasRedFlag(l)) return false;
+    if(fRedFlagV==='only'&&!hasRedFlag(l)) return false;
     // Location (region) — skip for SMART_RESULTS: the AI search scopes by
     // region server-side (postcode column, authoritative), so re-applying the
     // weaker address-string matchesRegion here would double-filter and drop
@@ -3044,6 +3101,8 @@ function renderLots(){
     // Exclude POA — but never hide Nil Reserve lots: no reserve is a positive
     // signal (sells to the highest bid), not a withheld price.
     if(fExcludePOA&&!(l.price>0)&&!isNilReserveLot(l)) return false;
+    // Nil Reserve only — the guaranteed-transaction hunting ground
+    if(fNilOnly&&!isNilReserveLot(l)) return false;
     // Lookahead
     if(houseAllowed&&l._auctionDate&&l._house){
       if(!houseAllowed[l._house]?.has(l._auctionDate)) return false;
@@ -3077,6 +3136,8 @@ function renderLots(){
   else if(sortVal==='price_asc') lots.sort((a,b)=>((a.price||Infinity)-(b.price||Infinity)));
   else if(sortVal==='price_desc') lots.sort((a,b)=>((b.price||0)-(a.price||0)));
   else if(sortVal==='yield') lots.sort((a,b)=>((b.estGrossYield||0)-(a.estGrossYield||0)));
+  // belowMarket is signed (negative = above comps); lots without comps sink last
+  else if(sortVal==='bmv') lots.sort((a,b)=>((b.belowMarket??-1e9)-(a.belowMarket??-1e9)));
   else if(sortVal==='days_unsold') lots.sort((a,b)=>((b.daysSinceAuction||0)-(a.daysSinceAuction||0)));
 
   // Store filtered lots for export functions
@@ -3096,7 +3157,18 @@ function renderLots(){
     const cOor=lots.filter(l=>l._affTag==='out_of_reach').length;
     statsHtml=`<div class="stat-card" style="grid-column:1/-1"><div class="aff-stats"><span class="aff-stat as-ok">${cOk} in budget</span>${cStr?`<span class="aff-stat as-str">${cStr} stretch</span>`:''}${cFull?`<span class="aff-stat" style="background:var(--violet-light);color:var(--violet)">${cFull} zero deposit</span>`:''}${cOor?`<span class="aff-stat as-oor">${cOor} out of reach</span>`:''}</div></div>`;
   }
-  $('statsRow').innerHTML=statsHtml;
+  // Coverage honesty for metric filters — say how many lots even carry the
+  // metric, so "yield ≥ 8%" is never mistaken for a scan of the full set.
+  let covNote='';
+  if(fMinYieldV||fMinBmvV||(fEpcV&&fEpcV!=='none')){
+    const base=LOTS.length;
+    const parts=[];
+    if(fMinYieldV) parts.push('rent estimate on '+LOTS.filter(l=>l.estGrossYield!=null).length+' of '+base+' lots');
+    if(fMinBmvV) parts.push('street comparables on '+LOTS.filter(l=>l.belowMarket!=null).length+' of '+base+' lots');
+    if(fEpcV&&fEpcV!=='none') parts.push('EPC on '+LOTS.filter(l=>l.epcRating).length+' of '+base+' lots');
+    covNote='<div class="stat-card" style="grid-column:1/-1;font-size:.72rem;color:var(--text3)">Data coverage: '+parts.join(' · ')+' — lots without this data are excluded while the filter is on</div>';
+  }
+  $('statsRow').innerHTML=statsHtml+covNote;
 
   // Lookahead warning banner
   const dupCount=lots.filter(l=>l._alsoInFutureAuctions).length;
@@ -3522,6 +3594,12 @@ function isNilReserveLot(l) {
   return !l.price && NIL_RESERVE_RE.test(l.priceText || '');
 }
 
+// Hard red flags an investor screens on — a subset of lots.risks written by
+// lib/pipeline/scoring.js. Deliberately excludes soft notes ('Guide TBA',
+// 'Listed building') and 'Flood risk', which has its own structured filter.
+const RED_FLAG_RISKS = ['Sitting tenant', 'Knotweed', 'Flying freehold', 'Non-std construction', 'Contamination', 'Subsidence', 'Cladding/EWS1'];
+function hasRedFlag(l) { return (l.risks || []).some(function(r) { return RED_FLAG_RISKS.includes(r); }); }
+
 function statusForStrip(l) {
   // Map lot.status to the editorial strip's dot colour + label.
   const s = (l.status || 'live').toLowerCase();
@@ -3626,9 +3704,23 @@ function card(l){
   const riskTags = (l.risks || []).slice(0, 3).map(function(r){
     return '<span class="tag red">! ' + esc(r) + '</span>';
   });
+  // MEES: an F/G EPC cannot legally be let under MEES — a hard legal trap for
+  // BTL buyers (and a value-add angle for refurbers), so it leads the tag row.
+  const epcBand = l.epcRating ? String(l.epcRating).toUpperCase()[0] : '';
+  const meesTag = (epcBand === 'F' || epcBand === 'G')
+    ? ['<span class="tag red">! MEES: can\'t let (EPC ' + epcBand + ')</span>'] : [];
+  // Deal-signal chips — multi-label slugs (lib/pipeline/deal-signals.js) the
+  // opps/risks tags don't already verbalise (HMO, probate, receivership and
+  // title-split arrive via opps). Capped at 2 so opps/risks keep priority.
+  const SIGNAL_CHIP_LABELS = { 'repossession': 'Repossession', 'public-sector-disposal': 'Public-sector sale', 'short-lease': 'Short lease', 'regulated-tenancy': 'Regulated tenancy', 'mixed-use': 'Mixed use', 'holiday-let': 'Holiday let', 'cash-buyers-only': 'Cash only' };
+  const signalTags = (l.dealSignals || [])
+    .filter(function(s){ return SIGNAL_CHIP_LABELS[s]; })
+    .slice(0, 2)
+    .map(function(s){ return '<span class="tag signal">◆ ' + esc(SIGNAL_CHIP_LABELS[s]) + '</span>'; });
   const tagBudget = 4;
-  const tags = oppTags.concat(riskTags).slice(0, tagBudget);
-  const overflow = (oppTags.length + riskTags.length) - tags.length;
+  const allTags = meesTag.concat(oppTags).concat(riskTags).concat(signalTags);
+  const tags = allTags.slice(0, tagBudget);
+  const overflow = allTags.length - tags.length;
   if (overflow > 0) tags.push('<span class="tag" style="opacity:.7">+' + overflow + ' more</span>');
 
   // Meta line: PROPTYPE · BEDS · TENURE · FZ · EPC
@@ -3648,6 +3740,15 @@ function card(l){
   if (l.epcRating) {
     const epcCls = epcSquareColor(l.epcRating);
     metaParts.push('<span>EPC<span class="epc-square ' + epcCls + '">' + esc(String(l.epcRating).toUpperCase()[0]) + '</span></span>');
+  }
+  // Rent estimate (the numerator behind the yield figure — showing it makes
+  // the yield auditable) + £/sqft, the least gameable value metric. Both
+  // respect the same gating as the yield cell.
+  if (l.estMonthlyRent && !l.blurred && !l.anonGated && !l._yieldEstimateWarning) {
+    metaParts.push('<span>~£' + Number(l.estMonthlyRent).toLocaleString() + ' PCM RENT</span>');
+  }
+  if (l.price && l.sqft) {
+    metaParts.push('<span>£' + Math.round(l.price / l.sqft) + '/SQFT</span>');
   }
   const metaLine = metaParts.length
     ? '<div class="lcv2-meta">' + metaParts.join('<span class="sep">·</span>') + '</div>'
@@ -4503,9 +4604,9 @@ function renderDealStackResults(idx, r, showHold) {
 function dlCSV(){fetch('/api/track/event', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action:'csv_export'})}).catch(function(){});
 if(!window._userTier){$('signupModal').classList.add('show');return;}
   const exportLots = window._filteredLots || LOTS;
-  const rows=[['Rank','Lot','Score','Deal','TitleSplit','Units','Address','Guide','Affordability','Type','Beds','Tenure','LeaseYrs','Condition','Sqft','StreetAvg','BelowMkt%','EstYield%','EstRent/mo','DaysSinceAuction','Opps','Risks','URL']];
+  const rows=[['Rank','Lot','Score','Deal','TitleSplit','Units','Address','Guide','Affordability','Type','Beds','Tenure','LeaseYrs','Condition','Sqft','£/Sqft','StreetAvg','BelowMkt%','EstYield%','EstRent/mo','StatedIncomePa','IncomeKind','DealSignals','EPC','FloodZone','House','AuctionDate','DaysSinceAuction','Opps','Risks','URL']];
   exportLots.forEach((l,i)=>{
-    rows.push([i+1,l.lot,l.score,l.dealType,l.titleSplit?'YES':'',l.units||'',l.address,l.price||'TBA',l._affTag||'',l.propType,l.beds??'',l.tenure,l.leaseLength||'',l.condition,l.sqft||'',l.streetAvg||'',l.belowMarket||'',l.estGrossYield||'',l.estMonthlyRent||'',l.daysSinceAuction??'',(l.opps||[]).join(' | '),(l.risks||[]).join(' | '),l.url])});
+    rows.push([i+1,l.lot,l.score,l.dealType,l.titleSplit?'YES':'',l.units||'',l.address,l.price||'TBA',l._affTag||'',l.propType,l.beds??'',l.tenure,l.leaseLength||'',l.condition,l.sqft||'',(l.price&&l.sqft)?Math.round(l.price/l.sqft):'',l.streetAvg||'',l.belowMarket||'',l.estGrossYield||'',l.estMonthlyRent||'',l.statedIncomePa||'',l.incomeKind||'',(l.dealSignals||[]).join(' | '),l.epcRating||'',l.floodZone||'',l._house||'',l._auctionDate||'',l.daysSinceAuction??'',(l.opps||[]).join(' | '),(l.risks||[]).join(' | '),l.url])});
   dl(rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n'),'auction_analysis.csv','text/csv');
 }
 function dlJSON(){if(!window._userTier){$('signupModal').classList.add('show');return;}const exportLots=window._filteredLots||LOTS;dl(JSON.stringify(exportLots,null,2),'auction_analysis.json','application/json')}
@@ -6281,7 +6382,7 @@ function bridgeMatchLot(idx, event) {
 // ═══════════════════════════════
 // SHAREABLE FILTER URLs (#65)
 // ═══════════════════════════════
-const FILTER_PARAMS=['smartQuery','fSort','fMinPrice','fMaxPrice','fBeds','fType','fLocation','fDeal','fCondition','fTenure','fSoldTop','fTown','fPostcode','fRadius','fExcludePOA'];
+const FILTER_PARAMS=['smartQuery','fSort','fMinPrice','fMaxPrice','fBeds','fType','fLocation','fDeal','fCondition','fTenure','fSoldTop','fTown','fPostcode','fRadius','fExcludePOA','fMinYield','fMinBmv','fMinScore','fSignal','fEpc','fFlood','fRedFlag'];
 function restoreFiltersFromURL(){
   const p=new URLSearchParams(window.location.search);
   for(const id of FILTER_PARAMS){const v=p.get(id);if(v&&$(id))$(id).value=v}
