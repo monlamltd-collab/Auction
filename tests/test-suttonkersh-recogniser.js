@@ -11,6 +11,7 @@
 // as `available`.
 
 import { recogniseSuttonKershLotsFromMarkdown } from '../lib/pipeline/firecrawl-extract.js';
+import { rewriteUrl } from '../lib/houses.js';
 
 let pass = 0, fail = 0;
 function assert(cond, msg) {
@@ -95,6 +96,29 @@ assert(lots.get('343999').guide_price === '', 'sold lot with no guide price → 
 // ── Empty / garbage input never throws ──
 assert(recogniseSuttonKershLotsFromMarkdown('').size === 0, 'empty markdown → empty map');
 assert(recogniseSuttonKershLotsFromMarkdown(null).size === 0, 'null markdown → empty map');
+
+// ── rewriteUrl query-param CASE repair (2026-07-22) ──
+// Calendar URLs pass through the normalise_calendar_url DB trigger (NEW.url :=
+// lower(...)) and normaliseUrl, so `auctionPeriod` returns as `auctionperiod`.
+// The param is CASE-SENSITIVE: with perPage=all the lowercase form returns the
+// whole ARCHIVE (11,476 lots, 15MB) instead of the 22-lot current sale. That
+// 15MB fetch timed out into a 0-lot run and kept re-opening the circuit breaker.
+// rewriteUrl must restore auctionPeriod. NB signature is rewriteUrl(url, house).
+const skRewrite = async (url) => (await rewriteUrl(url, 'suttonkersh')).baseUrl;
+{
+  const lower = await skRewrite('https://suttonkersh.co.uk/properties/gallery/?section=auction&auctionperiod=current');
+  assert(/auctionPeriod=current/.test(lower), `lowercased param is repaired to auctionPeriod (got ${lower})`);
+  assert(!/auctionperiod=/.test(lower), 'no lowercase auctionperiod remains');
+  assert(/perPage=all/.test(lower), 'perPage=all still forced');
+
+  const already = await skRewrite('https://www.suttonkersh.co.uk/properties/gallery/?section=auction&auctionPeriod=current');
+  assert(/auctionPeriod=current/.test(already) && !/auctionperiod=/.test(already),
+    'a correctly-cased URL is left correct (idempotent)');
+
+  const withStart = await skRewrite('https://suttonkersh.co.uk/properties/gallery/?section=auction&auctionperiod=current&start=16');
+  assert(/auctionPeriod=current/.test(withStart) && !/[?&]start=/.test(withStart),
+    'case repaired AND pagination dropped together');
+}
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

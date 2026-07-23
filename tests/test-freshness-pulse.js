@@ -210,5 +210,37 @@ console.log('\nTest 7: runFreshnessPulse — error and timeout isolation');
   assert(state.running === false, 'run lock released after errors');
 }
 
+console.log('\nTest: always_on evergreen row outranks a soonest-dated row (suttonkersh)');
+{
+  // The real suttonkersh shape: a dated 0-lot hub page sorts ahead of the
+  // always_on gallery that carries the live lots. Soonest-date-wins picked the
+  // hub, whose 0-lot run kept RE-OPENING the circuit breaker every hour — so the
+  // house could never recover. The pulse must prefer the evergreen catalogue,
+  // matching selectAuctionsPerHouse in the daily pass.
+  const { candidates } = selectPulseCandidates(baseSelectArgs({
+    auctions: [
+      { url: 'https://suttonkersh.example/auctions-property', date: '2026-07-16', status: 'upcoming' },
+      { url: 'https://suttonkersh.example/gallery', date: '2099-12-31', status: 'always_on' },
+    ],
+  }));
+  const sk = candidates.filter(c => slugFromUrl(c.url) === 'suttonkersh');
+  assert(sk.length === 1, 'exactly one suttonkersh candidate');
+  assert(sk[0] && sk[0].url.endsWith('/gallery'),
+    `the always_on gallery is chosen, not the dated hub (got ${sk[0]?.url})`);
+}
+
+console.log('\nTest: between two dated rows, soonest still wins (no regression)');
+{
+  const { candidates } = selectPulseCandidates(baseSelectArgs({
+    auctions: [
+      { url: 'https://h.example/late', date: '2026-08-20', status: 'upcoming' },
+      { url: 'https://h.example/soon', date: '2026-07-25', status: 'upcoming' },
+    ],
+  }));
+  const h = candidates.filter(c => slugFromUrl(c.url) === 'h');
+  assert(h.length === 1 && h[0].url.endsWith('/soon'),
+    `soonest dated row still wins when no always_on present (got ${h[0]?.url})`);
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
