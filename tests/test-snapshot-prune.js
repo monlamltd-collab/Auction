@@ -4,9 +4,13 @@
  * Run: node tests/test-snapshot-prune.js
  */
 
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import {
   selectPruneCandidatesFromSnapshot,
   detectScrapeRegression,
+  flipPruneCandidates,
+  PRUNE_RETIRE_STATUSES,
   _internals,
 } from '../lib/pipeline/prune-from-snapshot.js';
 
@@ -201,6 +205,121 @@ console.log('\nTest 17: _internals exported for visibility');
   assert(_internals.IN_PLAY.has('stc'), 'in_play has stc');
   assert(_internals.IN_PLAY.has('unsold'), 'in_play has unsold');
   assert(!_internals.IN_PLAY.has('sold'), 'in_play does NOT have sold');
+}
+
+// ── flipPruneCandidates: the retire_lots flip loop ──
+// The prune used to run its own batch .update({ enrichment_manifest: stamp }),
+// which REPLACED the manifest (destroying paid OS Places / EPC / scoring
+// provenance on every pruned lot) and credited `pruned += idBatch.length`
+// whether or not any row moved. It now calls the retire_lots RPC, which merges
+// server-side and returns the real count. These tests pin both.
+
+console.log('\nTest 18: flipPruneCandidates — batches, and counts the RPC\'s rows, not the batch size');
+{
+  const candidates = Array.from({ length: 250 }, (_, i) => lot(`https://a.com/${i}`));
+  const seen = [];
+  const r = await flipPruneCandidates({
+    candidates,
+    batchSize: 100,
+    flipLots: async (ids) => { seen.push(ids.length); return ids.length; },
+  });
+  assert(seen.join(',') === '100,100,50', `batched 100/100/50 (got ${seen.join(',')})`);
+  assert(r.pruned === 250, `pruned = 250 (got ${r.pruned})`);
+  assert(r.flipped.length === 250, 'every candidate reported flipped');
+  assert(r.failedBatches === 0 && r.failedLots === 0, 'no failures');
+}
+
+console.log('\nTest 19: flipPruneCandidates — pruned reflects rows ACTUALLY updated (partial flip)');
+{
+  // A lot sold between candidate selection and the flip: the RPC's status guard
+  // skips it, so it returns 8 for a 10-id batch. The old code would have said 10.
+  const candidates = Array.from({ length: 10 }, (_, i) => lot(`https://a.com/${i}`));
+  const r = await flipPruneCandidates({
+    candidates, batchSize: 10, flipLots: async () => 8,
+  });
+  assert(r.pruned === 8, `pruned = 8, not the batch size 10 (got ${r.pruned})`);
+}
+
+console.log('\nTest 20: flipPruneCandidates — failed batch is not counted and emits no flipped lots');
+{
+  const candidates = Array.from({ length: 20 }, (_, i) => lot(`https://a.com/${i}`));
+  const warnings = [];
+  const r = await flipPruneCandidates({
+    candidates,
+    batchSize: 10,
+    flipLots: async (ids) => {
+      if (ids.includes('id-https://a.com/0')) throw new Error('db down');
+      return ids.length;
+    },
+    onBatchFailure: (why) => warnings.push(why),
+  });
+  assert(r.pruned === 10, `only the surviving batch counted (got ${r.pruned})`);
+  assert(r.failedBatches === 1 && r.failedLots === 10, 'failed batch tallied separately');
+  assert(!r.flipped.some(c => c.id === 'id-https://a.com/0'),
+    'no lot_events would be emitted for the failed batch (event integrity)');
+  assert(r.flipped.some(c => c.id === 'id-https://a.com/15'), 'later batch still processed after a failure');
+  assert(warnings.length === 1 && warnings[0] === 'db down', 'failure surfaced to the caller, not swallowed');
+}
+
+console.log('\nTest 21: flipPruneCandidates — RPC returning 0 rows is a failure, not a success');
+{
+  const candidates = [lot('https://a.com/1'), lot('https://a.com/2')];
+  const warnings = [];
+  const r = await flipPruneCandidates({
+    candidates, batchSize: 100, flipLots: async () => 0, onBatchFailure: (w) => warnings.push(w),
+  });
+  assert(r.pruned === 0, 'nothing counted');
+  assert(r.flipped.length === 0, 'no events for a flip that never landed');
+  assert(r.failedLots === 2 && warnings.length === 1, 'zero-row flip reported as a failed batch');
+}
+
+console.log('\nTest 22: flipPruneCandidates — no candidates → no RPC calls');
+{
+  let calls = 0;
+  const r = await flipPruneCandidates({ candidates: [], flipLots: async () => { calls++; return 0; } });
+  assert(calls === 0 && r.pruned === 0 && r.flipped.length === 0, 'empty candidate list is a no-op');
+}
+
+// ── The status-guard drift guard ──
+// retire_lots was written for the ghost sweep and hardcoded `status='available'`.
+// The prune retires the wider IN_PLAY set: at the time of the switch, 53% of
+// real prune flips were stc/unsold (lot_events, writer=persist-lots.prune-vanished:
+// available 120, stc 116, unsold 20). Passing the RPC's available-only default
+// would have silently stopped retiring those lots forever, so the prune passes
+// its own status set. If IN_PLAY ever widens, this must travel with it.
+console.log('\nTest 23: PRUNE_RETIRE_STATUSES matches IN_PLAY exactly');
+{
+  const sent = [...PRUNE_RETIRE_STATUSES].sort();
+  const selected = [..._internals.IN_PLAY].sort();
+  assert(sent.join(',') === selected.join(','),
+    `the statuses sent to retire_lots equal the statuses selected as candidates (sent ${sent.join(',')} / selects ${selected.join(',')})`);
+  assert(sent.includes('stc') && sent.includes('unsold'),
+    'stc + unsold are retirable — the available-only default would strand them');
+  assert(!sent.includes('sold'), 'sold is never retirable');
+}
+
+console.log('\nTest 24: retire_lots migration parameterises the status guard');
+{
+  // Cheap schema guard, in the spirit of test-ghost-sweep Test 9: the code above
+  // passes p_allowed_statuses, so the shipped function must accept it. If the
+  // follow-up migration is reverted or never applied, the prune silently falls
+  // back to available-only and half its flips vanish with no error anywhere.
+  const raw = readFileSync(
+    fileURLToPath(new URL('../migrations/2026-07-22-retire-lots-allowed-statuses.sql', import.meta.url)),
+    'utf8',
+  );
+  // Strip `--` comments — the header prose quotes the old hardcoded guard.
+  // Normalise line endings first: on a CRLF checkout the trailing \r sits
+  // between the comment and end-of-string, so a `$`-anchored strip silently
+  // matches nothing and the prose leaks into the assertions.
+  const sql = raw.replace(/\r\n?/g, '\n').split('\n').map(l => l.replace(/--.*$/, '')).join('\n');
+  assert(/p_allowed_statuses\s+TEXT\[\]/i.test(sql), 'migration declares p_allowed_statuses TEXT[]');
+  assert(/status\s*=\s*ANY\s*\(/i.test(sql), 'guard is status = ANY(...), not a hardcoded literal');
+  assert(!/AND\s+status\s*=\s*'available'/i.test(sql), 'no leftover hardcoded available-only guard');
+  assert(/DROP FUNCTION IF EXISTS public\.retire_lots\(UUID\[\], JSONB\)/i.test(sql),
+    'drops the 2-arg version so a 2-arg call can never be ambiguous');
+  assert(/GRANT EXECUTE ON FUNCTION public\.retire_lots\(UUID\[\], JSONB, TEXT\[\]\) TO service_role/i.test(sql),
+    're-grants execute to service_role (DROP revokes it)');
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
