@@ -39,10 +39,12 @@ function resetSearchState(){
 }
 
 function clearAllFilters(silent){
-  const resets={fDeal:'',fType:'',fCondition:'',fTenure:'',fLocation:'',fAfford:'all',fSoldTop:'all',fSort:'score',fBeds:'',fTown:'',fPostcode:'',fMinPrice:'',fMaxPrice:'',fExcludePOA:'',fRadius:'',fMinYield:'',fMinBmv:'',fMinScore:'',fSignal:'',fEpc:'',fFlood:'',fRedFlag:'',fMinRoce:'',fBidTarget:''};
+  const resets={fDeal:'',fType:'',fCondition:'',fTenure:'',fLocation:'',fAfford:'all',fSoldTop:'all',fSort:'score',fBeds:'',fTown:'',fPostcode:'',fMinPrice:'',fMaxPrice:'',fExcludePOA:'',fRadius:'',fMinYield:'',fMinBmv:'',fMinScore:'',fSignal:'',fEpc:'',fFlood:'',fRedFlag:'',fMinRoce:'',fBidTarget:'',fLifecycle:'live',fFormats:'traditional,mmoa'};
   for(const[id,val] of Object.entries(resets)){const el=$(id);if(el)el.value=val}
   _searchCentre=null;
   if($('fShowPast')) { $('fShowPast').checked=false; if(!silent) onShowPastChange(); }
+  if(typeof refreshLifecycleChips==='function') refreshLifecycleChips();
+  if(typeof refreshFormatChips==='function') refreshFormatChips();
   _selectedHouses.clear();
   updateHouseBtn();
   updatePriceBtn();
@@ -158,8 +160,8 @@ function setLookaheadFromChip(val) {
   var sel = $('fLookahead'); if (!sel) return;
   sel.value = String(val);
   if (typeof saveLookahead === 'function') saveLookahead();
-  // Repaint chip active state
-  document.querySelectorAll('.sp-date-chips .sp-chip').forEach(function(b){
+  // Repaint chip active state (lookahead chips only — not lifecycle/format)
+  document.querySelectorAll('.sp-date-chips .sp-chip[data-look]').forEach(function(b){
     b.classList.toggle('is-active', b.getAttribute('data-look') === String(val));
   });
   if (typeof debouncedRender === 'function') debouncedRender();
@@ -167,9 +169,86 @@ function setLookaheadFromChip(val) {
 function refreshAuctionDateChips() {
   var sel = $('fLookahead'); if (!sel) return;
   var val = sel.value || '2';
-  document.querySelectorAll('.sp-date-chips .sp-chip').forEach(function(b){
+  document.querySelectorAll('.sp-date-chips .sp-chip[data-look]').forEach(function(b){
     b.classList.toggle('is-active', b.getAttribute('data-look') === val);
   });
+}
+
+// Lifecycle chips — Live / Passed · still available / Finished
+function setLifecycleFromChip(val) {
+  var el = $('fLifecycle'); if (!el) return;
+  el.value = String(val || 'live');
+  // Passed and Finished need past auctions in the payload.
+  if ((val === 'passed_in_play' || val === 'finished') && $('fShowPast') && !$('fShowPast').checked) {
+    $('fShowPast').checked = true;
+    onShowPastChange({ force: true });
+  } else if (val === 'live' && $('fShowPast') && $('fShowPast').checked) {
+    // Leave past data loaded if user already opted in — only filter client-side.
+  }
+  refreshLifecycleChips();
+  if (typeof debouncedRender === 'function') debouncedRender();
+  if (typeof syncFiltersToURL === 'function') syncFiltersToURL();
+}
+function refreshLifecycleChips() {
+  var val = ($('fLifecycle')?.value) || 'live';
+  document.querySelectorAll('.sp-lifecycle-chips .sp-chip[data-life]').forEach(function(b){
+    b.classList.toggle('is-active', b.getAttribute('data-life') === val);
+  });
+}
+
+// Sale-format chips — multi-select traditional / mmoa (default both on)
+function toggleFormatChip(fmt) {
+  var el = $('fFormats'); if (!el) return;
+  var set = new Set((el.value || '').split(',').map(function(s){return s.trim()}).filter(Boolean));
+  if (set.has(fmt)) {
+    // Don't allow zero formats selected — leaves empty grid with no cue.
+    if (set.size <= 1) return;
+    set.delete(fmt);
+  } else {
+    set.add(fmt);
+  }
+  el.value = ['traditional','mmoa'].filter(function(f){ return set.has(f); }).join(',');
+  refreshFormatChips();
+  if (typeof debouncedRender === 'function') debouncedRender();
+  if (typeof syncFiltersToURL === 'function') syncFiltersToURL();
+}
+function refreshFormatChips() {
+  var set = new Set((($('fFormats')?.value) || 'traditional,mmoa').split(',').map(function(s){return s.trim()}).filter(Boolean));
+  document.querySelectorAll('.sp-format-chips .sp-chip[data-fmt]').forEach(function(b){
+    b.classList.toggle('is-active', set.has(b.getAttribute('data-fmt')));
+  });
+}
+// Client-side fallback classifier when older API payloads lack _saleFormat.
+function classifyLotSaleFormat(l) {
+  if (l && l._saleFormat) return l._saleFormat;
+  if (l && l._auctionDate && l._auctionDate > '2098-01-01') return 'mmoa';
+  if (l && l._auctionDate && l._auctionDate < '2090-01-01') return 'traditional';
+  // Undated available stock is almost always continuous / MMOA-shaped.
+  if (l && (l.status === 'available' || !l.status) && !l._auctionDate) return 'mmoa';
+  return 'unknown';
+}
+function classifyLotLifecycle(l, today) {
+  if (l && l._lifecycle) return l._lifecycle;
+  var status = (l && l.status) || 'available';
+  if (status === 'sold' || status === 'withdrawn') return 'finished';
+  var fmt = classifyLotSaleFormat(l);
+  var d = l && l._auctionDate;
+  if (fmt === 'mmoa') {
+    if (status === 'available' || status === 'stc') return 'live';
+    if (status === 'unsold') return 'passed_in_play';
+    return 'other';
+  }
+  if (d && d < '2090-01-01') {
+    if (d >= today) {
+      if (status === 'available' || status === 'stc' || status === 'unsold') return 'live';
+      return 'other';
+    }
+    if (status === 'available' || status === 'unsold' || status === 'stc') return 'passed_in_play';
+    return 'finished';
+  }
+  if (status === 'available' || status === 'stc') return 'live';
+  if (status === 'unsold') return 'passed_in_play';
+  return 'other';
 }
 
 // ── FAVOURITES ──
@@ -917,13 +996,17 @@ function onShowPastChange(opts){
 // auto-enables "Show past auctions" and refetches — without this, Sold /
 // Sale Agreed / Recently unsold filtered a future-only dataset and silently
 // returned an empty grid (2026-07-06 audit).
-const PAST_STATUS_VALUES=new Set(['unsold','recently_unsold','sold','stc','withdrawn','everything']);
+const PAST_STATUS_VALUES=new Set(['unsold','recently_unsold','passed_available','sold','stc','withdrawn','everything']);
 function onStatusChange(){
   const v=$('fSoldTop')?.value;
   if(PAST_STATUS_VALUES.has(v)&&$('fShowPast')&&!$('fShowPast').checked){
     $('fShowPast').checked=true;
     onShowPastChange({force:true}); // syncs the URL + refetches with includePast
   }
+  // Keep lifecycle chips roughly in sync with specialised status picks.
+  if(v==='passed_available' && $('fLifecycle')) { $('fLifecycle').value='passed_in_play'; refreshLifecycleChips(); }
+  if((v==='sold'||v==='withdrawn') && $('fLifecycle')) { $('fLifecycle').value='finished'; refreshLifecycleChips(); }
+  if(v==='available' && $('fLifecycle')) { $('fLifecycle').value='live'; refreshLifecycleChips(); }
   debouncedRender();
 }
 
@@ -2956,6 +3039,10 @@ function renderLots(){
   const fPoaMode=$('fExcludePOA')?.value||'';
   const fExcludePOA=fPoaMode==='yes';
   const fNilOnly=fPoaMode==='nil_reserve';
+  // Lifecycle + sale format (Live / Passed · still available / Finished × Auction date / Modern Method)
+  const fLife=($('fLifecycle')?.value)||'live';
+  const fFmtSet=new Set((($('fFormats')?.value)||'traditional,mmoa').split(',').map(s=>s.trim()).filter(Boolean));
+  if(fFmtSet.size===0){ fFmtSet.add('traditional'); fFmtSet.add('mmoa'); }
   // Investor-metric + signal/risk filters (Pro filters popover)
   const fMinYieldV=+($('fMinYield')?.value||0);
   const fMinBmvV=+($('fMinBmv')?.value||0);
@@ -3063,6 +3150,19 @@ function renderLots(){
     // 'recently_unsold' surfaces lots whose auction passed within the last
     // 30 days AND ended unsold — these are motivated-seller territory; the
     // post-auction-sweep cron tags them accurately so the filter is reliable.
+    // Lifecycle chips (fLife) are the primary control when fSoldTop is default
+    // "all". Explicit fSoldTop options still win so saved links keep working.
+    const life=classifyLotLifecycle(l,_today);
+    const fmt=classifyLotSaleFormat(l);
+    // Format filter — unknown rides with whichever side is still on when both aren't.
+    if(fmt==='traditional' && !fFmtSet.has('traditional')) return false;
+    if(fmt==='mmoa' && !fFmtSet.has('mmoa')) return false;
+    if(fmt==='unknown'){
+      // Unknown undated: show with MMOA if on, else hide when only traditional selected.
+      if(!fFmtSet.has('mmoa') && !fFmtSet.has('traditional')) return false;
+      if(!fFmtSet.has('mmoa') && fFmtSet.has('traditional') && !l._auctionDate) return false;
+    }
+
     if(SMART_RESULTS){
       if(fsold==='available'&&!(l.status==='available'||!l.status)) return false;
       else if(fsold==='unsold'&&l.status!=='unsold') return false;
@@ -3072,13 +3172,17 @@ function renderLots(){
         const cutoff=new Date(_today); cutoff.setDate(cutoff.getDate()-30);
         if(l._auctionDate < cutoff.toISOString().slice(0,10)) return false;
       }
+      else if(fsold==='passed_available'){
+        if(!(l.status==='available'||!l.status)) return false;
+        if(!l._auctionDate || l._auctionDate >= _today) return false;
+        if(fmt==='mmoa') return false;
+      }
       else if(fsold==='sold'&&l.status!=='sold') return false;
       else if(fsold==='stc'&&l.status!=='stc') return false;
       else if(fsold==='withdrawn'&&l.status!=='withdrawn') return false;
-    } else {
+    } else if(fsold && fsold!=='all' && fsold!=='everything'){
       const notEnded=!l._auctionDate||l._auctionDate>=_today;
-      if(!fsold||fsold==='all'){ if(!(((!l.status||l.status==='available'||l.status==='unsold')&&notEnded))) return false; }
-      else if(fsold==='available'){ if(!((l.status==='available'||!l.status)&&notEnded)) return false; }
+      if(fsold==='available'){ if(!((l.status==='available'||!l.status)&&notEnded)) return false; }
       else if(fsold==='unsold'&&l.status!=='unsold') return false;
       else if(fsold==='recently_unsold'){
         if(l.status!=='unsold') return false;
@@ -3086,10 +3190,27 @@ function renderLots(){
         const cutoff=new Date(_today); cutoff.setDate(cutoff.getDate()-30);
         if(l._auctionDate < cutoff.toISOString().slice(0,10)) return false;
       }
+      else if(fsold==='passed_available'){
+        if(!(l.status==='available'||!l.status)) return false;
+        if(!l._auctionDate || l._auctionDate >= _today) return false;
+        if(fmt==='mmoa') return false;
+      }
       else if(fsold==='sold'&&l.status!=='sold') return false;
       else if(fsold==='stc'&&l.status!=='stc') return false;
       else if(fsold==='withdrawn'&&l.status!=='withdrawn') return false;
-      // fsold==='everything' → no filter
+    } else {
+      // Default path: lifecycle chip is the primary control.
+      // Legacy import of the old "all" default (= live-ish notEnded available|unsold)
+      // maps onto fLife=live unless user opened Finished / Passed.
+      if(fLife==='live'){
+        if(life!=='live') return false;
+      } else if(fLife==='passed_in_play'){
+        if(life!=='passed_in_play') return false;
+        // Passed mode is traditional hunt by product contract
+        if(fmt==='mmoa') return false;
+      } else if(fLife==='finished'){
+        if(life!=='finished') return false;
+      }
     }
     // Favourites — uses isFavourite() so it picks up server-backed likes for signed-in users
     if(_hasFavView && !isFavourite(l)) return false;
@@ -4807,8 +4928,14 @@ function getCardImageBadges(lot) {
     else label = 'Floor plan';
     html += '<div class="card-badge badge-photos">' + label + '</div>';
   }
-  // Urgency / ended badge
-  if (lot._auctionDate) {
+  // Urgency / ended / MMOA badge
+  const lifeB = classifyLotLifecycle(lot, new Date().toISOString().slice(0,10));
+  const fmtB = classifyLotSaleFormat(lot);
+  if (fmtB === 'mmoa' && lifeB === 'live') {
+    html += '<div class="badge-mmoa">Modern Method</div>';
+  } else if (lifeB === 'passed_in_play') {
+    html += '<div class="badge-passed">' + (lot.status === 'unsold' ? 'Unsold' : 'Passed · still listed') + '</div>';
+  } else if (lot._auctionDate) {
     const days = Math.ceil((new Date(lot._auctionDate) - new Date()) / 86400000);
     if (days < 0) {
       html += '<div class="badge-ended">Auction ended</div>';
@@ -6439,7 +6566,7 @@ function bridgeMatchLot(idx, event) {
 // ═══════════════════════════════
 // SHAREABLE FILTER URLs (#65)
 // ═══════════════════════════════
-const FILTER_PARAMS=['smartQuery','fSort','fMinPrice','fMaxPrice','fBeds','fType','fLocation','fDeal','fCondition','fTenure','fSoldTop','fTown','fPostcode','fRadius','fExcludePOA','fMinYield','fMinBmv','fMinScore','fSignal','fEpc','fFlood','fRedFlag','fMinRoce','fBidTarget'];
+const FILTER_PARAMS=['smartQuery','fSort','fMinPrice','fMaxPrice','fBeds','fType','fLocation','fDeal','fCondition','fTenure','fSoldTop','fTown','fPostcode','fRadius','fExcludePOA','fMinYield','fMinBmv','fMinScore','fSignal','fEpc','fFlood','fRedFlag','fMinRoce','fBidTarget','fLifecycle','fFormats'];
 function restoreFiltersFromURL(){
   const p=new URLSearchParams(window.location.search);
   for(const id of FILTER_PARAMS){const v=p.get(id);if(v&&$(id))$(id).value=v}
@@ -6447,6 +6574,14 @@ function restoreFiltersFromURL(){
   // in the dataset — tick the checkbox so the initial load fetches includePast.
   const _rs=p.get('fSoldTop');
   if(_rs&&PAST_STATUS_VALUES.has(_rs)&&$('fShowPast')) $('fShowPast').checked=true;
+  const _life=p.get('fLifecycle')||p.get('lifecycle');
+  if(_life&&$('fLifecycle')){
+    $('fLifecycle').value=_life;
+    if((_life==='passed_in_play'||_life==='finished')&&$('fShowPast')) $('fShowPast').checked=true;
+  }
+  if(p.get('fFormats')&&$('fFormats')) $('fFormats').value=p.get('fFormats');
+  if(typeof refreshLifecycleChips==='function') refreshLifecycleChips();
+  if(typeof refreshFormatChips==='function') refreshFormatChips();
   updatePriceBtn();
   // Trigger geocoding for any restored town/postcode — setting .value directly
   // doesn't fire the oninput handler, so onLocationInput() never runs and the

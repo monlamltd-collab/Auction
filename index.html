@@ -357,6 +357,21 @@
         <button type="button" class="sp-chip is-active" data-look="2" onclick="setLookaheadFromChip('2')">Next 2</button>
         <button type="button" class="sp-chip" data-look="all" onclick="setLookaheadFromChip('all')">All</button>
       </div>
+      <!-- Lifecycle — Live / Passed still available / Finished. Default Live. -->
+      <div class="sp-date-chips sp-lifecycle-chips" role="group" aria-label="Listing state">
+        <span class="sp-section-label">Listing</span>
+        <button type="button" class="sp-chip is-active" data-life="live" onclick="setLifecycleFromChip('live')" title="Upcoming auctions and live Modern Method listings">Live now</button>
+        <button type="button" class="sp-chip" data-life="passed_in_play" onclick="setLifecycleFromChip('passed_in_play')" title="Auction date passed but still available or unsold">Passed · still available</button>
+        <button type="button" class="sp-chip" data-life="finished" onclick="setLifecycleFromChip('finished')" title="Sold or withdrawn">Finished</button>
+      </div>
+      <!-- Sale format — traditional gavel day vs Modern Method / continuous -->
+      <div class="sp-date-chips sp-format-chips" role="group" aria-label="Sale type">
+        <span class="sp-section-label">Sale type</span>
+        <button type="button" class="sp-chip is-active" data-fmt="traditional" onclick="toggleFormatChip('traditional')" title="Fixed auction date sales">Auction date</button>
+        <button type="button" class="sp-chip is-active" data-fmt="mmoa" onclick="toggleFormatChip('mmoa')" title="Modern Method of Auction and continuous / rolling catalogues">Modern Method</button>
+      </div>
+      <input type="hidden" id="fLifecycle" value="live">
+      <input type="hidden" id="fFormats" value="traditional,mmoa">
       <!-- ROW 2: Filters -->
       <div class="sp-filter-row sp-primary">
       <button class="clear-all-btn" onclick="clearAllFilters()" title="Reset all filters">Clear all</button>
@@ -387,7 +402,7 @@
         <option value="">Distance from</option><option value="1">Within 1 mile</option><option value="5">Within 5 miles</option><option value="10">Within 10 miles</option><option value="25">Within 25 miles</option><option value="50">Within 50 miles</option>
       </select>
       <select class="tb-select" id="fSoldTop" onchange="onStatusChange()" aria-label="Lot status">
-        <option value="all">Lot status</option><option value="available">Available only</option><option value="unsold">Unsold (no sale)</option><option value="recently_unsold">Recently unsold (30d)</option><option value="sold">Sold</option><option value="stc">Sale Agreed</option><option value="withdrawn">Withdrawn</option><option value="everything">All (inc. sold)</option>
+        <option value="all">Lot status</option><option value="available">Available only</option><option value="unsold">Unsold (no sale)</option><option value="recently_unsold">Recently unsold (30d)</option><option value="passed_available">Passed · still listed</option><option value="sold">Sold</option><option value="stc">Sale Agreed</option><option value="withdrawn">Withdrawn</option><option value="everything">All (inc. sold)</option>
       </select>
       <select class="tb-select" id="fSort" onchange="debouncedRender()" aria-label="Sort lots by">
         <option value="date_asc">Soonest first</option>

@@ -16,6 +16,7 @@ import { parseAIResponse } from '../lib/search-parse.js';
 import { parseSmartSearchQuery, REGION_POSTCODES } from '../lib/search-query-parse.js';
 import { buildDeepSummaries, applyDeepVerdict, isSemanticQuery, DEEP_READ_MIN_LOTS } from '../lib/search-deep-read.js';
 import { createHash } from 'crypto';
+import { enrichLotsWithSaleFormat } from '../lib/sale-format.js';
 
 const router = Router();
 
@@ -1187,7 +1188,10 @@ async function buildAllLotsResponse({ isSignedIn, includePast }) {
         .lte('auction_date', dateHorizon)
         .order('auction_date', { ascending: false })
         .limit(1000),
-      supabase.from('auction_calendar').select('url, date').gte('date', weekAgo),
+      // Include always_on + type so MMOA/continuous catalogues classify correctly.
+      // Date floor still excludes ancient rows for traditional sales.
+      supabase.from('auction_calendar').select('url, date, status, type')
+        .or(`date.gte.${weekAgo},status.eq.always_on,date.eq.2099-12-31`),
       supabase.from('house_skills').select('slug, logo_url').not('logo_url', 'is', null),
     ]);
 
@@ -1339,16 +1343,27 @@ async function buildAllLotsResponse({ isSignedIn, includePast }) {
 
     // ── Attach _auctionDate from calendar (DB + fallback) ──
     const urlDateMap = {};
+    /** @type {Map<string, {status?:string, type?:string, date?:string}>} */
+    const calendarByUrl = new Map();
     // Use pre-fetched calendar data from parallel query (Step 2)
     const calRows = calendarResult.data;
     if (calRows) for (const a of calRows) {
       const nu = normaliseUrl(a.url);
-      if (nu && a.date && (!urlDateMap[nu] || a.date < urlDateMap[nu])) urlDateMap[nu] = a.date;
+      if (!nu) continue;
+      if (a.date && a.date <= '2098-01-01' && (!urlDateMap[nu] || a.date < urlDateMap[nu])) {
+        urlDateMap[nu] = a.date;
+      }
+      // Prefer always_on status when multiple calendar rows share a URL.
+      const prev = calendarByUrl.get(nu);
+      if (!prev || a.status === 'always_on' || (a.date && a.date > '2098-01-01')) {
+        calendarByUrl.set(nu, { status: a.status, type: a.type, date: a.date });
+      }
     }
     // Fallback calendar overlay
     for (const a of FALLBACK_CALENDAR) {
       const nu = normaliseUrl(a.url);
       if (!urlDateMap[nu] || a.date < urlDateMap[nu]) urlDateMap[nu] = a.date;
+      if (!calendarByUrl.has(nu)) calendarByUrl.set(nu, { status: a.status, type: a.type, date: a.date });
     }
     for (const lot of lots) {
       // Per-lot end date from bullets takes priority. Handles both EIG
@@ -1364,7 +1379,16 @@ async function buildAllLotsResponse({ isSignedIn, includePast }) {
         const rawDate = urlDateMap[su] || null;
         lot._auctionDate = (rawDate && rawDate > '2098-01-01') ? null : rawDate;
       }
+      lot._sourceUrlNorm = normaliseUrl(lot._sourceUrl);
     }
+
+    // Tag traditional vs Modern Method / continuous + lifecycle bucket.
+    // Must run AFTER date resolution and BEFORE stale-synth / future-only filter
+    // so undated continuous stock is classified as mmoa live, not dropped.
+    enrichLotsWithSaleFormat(lots, {
+      today: new Date().toISOString().slice(0, 10),
+      calendarByUrl,
+    });
 
     // ── Staleness fallback (Issue 2 fix (c)) ──
     // Lots with no auction_date (source doesn't publish one, no calendar row,
@@ -1507,11 +1531,18 @@ async function buildAllLotsResponse({ isSignedIn, includePast }) {
     // ── Post-processing enrichment fixes ──
     const todayStr = new Date().toISOString().slice(0, 10);
     for (const lot of cleanLots) {
-      // 1. Auto-reclassify past-auction lots as "unsold" if still "available"
-      if (lot._auctionDate && lot._auctionDate < todayStr &&
-          (!lot.status || lot.status === 'available')) {
-        lot.status = 'unsold';
+      // 1. DO NOT auto-reclassify past-auction `available` → `unsold`.
+      // That destroyed the "Passed · still available" hunt mode and lied about
+      // listings the house still shows as for sale. Status stays what the
+      // scraper last observed; lifecycle is derived separately via
+      // _lifecycle / _auctionPassed (enrichLotsWithSaleFormat).
+      // Legacy: we used to force unsold here — removed 2026-07-24.
+
+      // Recompute lifecycle after any late status tweaks (none above now).
+      if (!lot._lifecycle || !lot._saleFormat) {
+        // enrich ran earlier; ensure flags present if a late branch cloned lots
       }
+      lot._auctionPassed = !!(lot._auctionDate && lot._auctionDate < todayStr);
 
       // 2. Structural risk flag for ultra-low prices
       if (lot.price && lot.price < 25000 && lot.propType !== 'land' && lot.propType !== 'other') {
