@@ -110,11 +110,16 @@ console.log('finance: unrealistic token / extreme-BMV guides suppress % returns'
   const borderBad = { price: 75000, streetAvg: 250000, estMonthlyRent: 900, postcode: 'LS1' };
   check(F.isUnrealisticGuide(borderBad) === true, 'exactly 70% below / ratio 0.30 suppressed');
 
-  // Tiny guide with fabricated yield but no street avg.
+  // Tiny guide + whole-home rent fabricates giant yield even without comps.
   const noComp = { price: 5000, estMonthlyRent: 800, postcode: 'M1 1AA', estGrossYield: 192 };
   check(F.isUnrealisticGuide(noComp) === true, '£5k + whole-home rent with no comps still suppressed');
 
-  // Land cheap with no rent stays OK for net/roce (both null via missing rent, not guide flag).
+  // £20k with 100%+ yield (no sky-high street ratio) also suppressed via yield cap.
+  const cheapFlat = { price: 20000, estMonthlyRent: 2050, postcode: 'M14 6YF', estGrossYield: 123, streetAvg: 53000 };
+  check(F.isUnrealisticGuide(cheapFlat) === true, '£20k @ 123% yield suppressed even if only ~62% below street');
+  check(F.rankingGrossYield(cheapFlat) === null, 'ranking yield null for 123% guide');
+
+  // Land cheap with no rent stays flagged via street ratio.
   const landNoRent = { price: 2000, streetAvg: 300000, postcode: 'B1 1AA' };
   check(F.isUnrealisticGuide(landNoRent) === true, 'token guide vs street still flagged even without rent');
   check(F.netYield(landNoRent) === null, 'no rent → null net yield');

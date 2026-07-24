@@ -122,17 +122,22 @@
         return { bad: true, reason: 'guide_vs_street', bmvPct };
       }
     }
-    // No usable comps (or land/garage): still kill absurd yield on tiny guides
-    // when a normal home rent was applied.
-    if (price <= UNREALISTIC.maxTokenGuide && l.estMonthlyRent > 0) {
-      const gy = (l.estMonthlyRent * 12 / price) * 100;
-      if (gy >= UNREALISTIC.maxGrossYieldPct) {
-        return { bad: true, reason: 'token_guide_yield', bmvPct };
-      }
+    // Gross yield from served estimate OR from rent/price — either way
+    // >30% is not a trustworthy BTL figure for ranking (token guides,
+    // peppercorn witnesses, parking rented as flats, etc.).
+    let gy = null;
+    if (l.estGrossYield != null && Number.isFinite(Number(l.estGrossYield))) {
+      gy = Number(l.estGrossYield);
+    } else if (l.estMonthlyRent > 0) {
+      gy = (Number(l.estMonthlyRent) * 12 / price) * 100;
     }
-    // Server already flagged unrealistic gross yield during enrichment.
-    if (l._yieldEstimateWarning || (l.estGrossYield != null && l.estGrossYield > UNREALISTIC.maxGrossYieldPct)) {
+    if (l._yieldEstimateWarning || (gy != null && gy > UNREALISTIC.maxGrossYieldPct)) {
       return { bad: true, reason: 'gross_yield_cap', bmvPct };
+    }
+    // Tiny guide without a crazy yield still smells like a plot/parking token
+    // when paired with a normal-home rent estimate below the 30% cap somehow.
+    if (price <= UNREALISTIC.maxTokenGuide && l.estMonthlyRent > 0 && gy != null && gy >= 20) {
+      return { bad: true, reason: 'token_guide_yield', bmvPct };
     }
     return { bad: false, reason: null, bmvPct };
   }
