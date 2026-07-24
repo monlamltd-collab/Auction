@@ -74,6 +74,52 @@ console.log('finance: assumptions are surfaced');
     'tooltip names LTV, rate, tax country and condition-implied works');
 }
 
+console.log('finance: unrealistic token / extreme-BMV guides suppress % returns');
+{
+  // Your classic £1.5k guide on a £250k street.
+  const token = {
+    price: 1500,
+    streetAvg: 250000,
+    estMonthlyRent: 1100,
+    postcode: 'LS1 4AB',
+    estGrossYield: (1100 * 12 / 1500) * 100,
+  };
+  check(F.isUnrealisticGuide(token) === true, '£1.5k vs £250k street is unrealistic');
+  check(F.guideDistortion(token).reason === 'guide_vs_street', 'reason = guide_vs_street');
+  check(F.netYield(token) === null, 'net yield suppressed on token guide');
+  check(F.roce(token) === null, 'ROCE suppressed on token guide');
+  check(F.rankingGrossYield(token) === null, 'ranking gross yield null so sort sinks it');
+  check(F.maxBid(token, 8) === null, 'max bid suppressed on token guide');
+  check(F.brrrRecycledPct({ ...token, valueEstimate: { estimate: 250000, confidence: 'low' } }) === null,
+    'BRRR suppressed on token guide');
+
+  // Plausible deep discount (~40% below) must still compute — bought well, not a plot.
+  const realBargain = {
+    price: 150000,
+    streetAvg: 250000,
+    estMonthlyRent: 1100,
+    postcode: 'LS1 4AB',
+  };
+  check(F.isUnrealisticGuide(realBargain) === false, '40% below street still eligible');
+  check(F.netYield(realBargain) != null && F.netYield(realBargain) > 0, 'real bargain keeps net yield');
+  check(F.roce(realBargain) != null, 'real bargain keeps ROCE');
+
+  // Border at 70% below (ratio 0.30): £75k on £250k is still a house lever — allowed.
+  const borderOk = { price: 75001, streetAvg: 250000, estMonthlyRent: 900, postcode: 'LS1' };
+  check(F.isUnrealisticGuide(borderOk) === false, 'just under 70% below still allowed');
+  const borderBad = { price: 75000, streetAvg: 250000, estMonthlyRent: 900, postcode: 'LS1' };
+  check(F.isUnrealisticGuide(borderBad) === true, 'exactly 70% below / ratio 0.30 suppressed');
+
+  // Tiny guide with fabricated yield but no street avg.
+  const noComp = { price: 5000, estMonthlyRent: 800, postcode: 'M1 1AA', estGrossYield: 192 };
+  check(F.isUnrealisticGuide(noComp) === true, '£5k + whole-home rent with no comps still suppressed');
+
+  // Land cheap with no rent stays OK for net/roce (both null via missing rent, not guide flag).
+  const landNoRent = { price: 2000, streetAvg: 300000, postcode: 'B1 1AA' };
+  check(F.isUnrealisticGuide(landNoRent) === true, 'token guide vs street still flagged even without rent');
+  check(F.netYield(landNoRent) === null, 'no rent → null net yield');
+}
+
 if (failures > 0) {
   console.error(`\ntest-finance-metrics: FAIL — ${failures} assertion(s) failed.`);
   process.exit(1);

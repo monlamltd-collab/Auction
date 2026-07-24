@@ -3098,9 +3098,14 @@ function renderLots(){
     }
     // Investment-metric thresholds — a lot without the metric is excluded
     // while its threshold is active; the stats row carries the coverage note
-    // so absence is visible, never silent.
-    if(fMinYieldV&&!(l.estGrossYield>=fMinYieldV)) return false;
-    if(fMinBmvV&&!(l.belowMarket>=fMinBmvV)) return false;
+    // so absence is visible, never silent. Token / extreme-BMV guides never
+    // satisfy yield/ROCE floors (rankingGrossYieldOf/roceOf return null).
+    if(fMinYieldV&&!(rankingGrossYieldOf(l)>=fMinYieldV)) return false;
+    // Extreme BMV vs street (token guides) shouldn't win a "min BMV" hunt either.
+    if(fMinBmvV){
+      if(isUnrealisticGuideLot(l)) return false;
+      if(!(l.belowMarket>=fMinBmvV)) return false;
+    }
     if(fMinScoreV&&!(l.score>=fMinScoreV)) return false;
     // Deal signal (multi-label slugs from lib/pipeline/deal-signals.js)
     if(fSignalV&&!(l.dealSignals||[]).includes(fSignalV)) return false;
@@ -3271,9 +3276,16 @@ function renderLots(){
   }
   else if(sortVal==='price_asc') lots.sort((a,b)=>((a.price||Infinity)-(b.price||Infinity)));
   else if(sortVal==='price_desc') lots.sort((a,b)=>((b.price||0)-(a.price||0)));
-  else if(sortVal==='yield') lots.sort((a,b)=>((b.estGrossYield||0)-(a.estGrossYield||0)));
-  // belowMarket is signed (negative = above comps); lots without comps sink last
-  else if(sortVal==='bmv') lots.sort((a,b)=>((b.belowMarket??-1e9)-(a.belowMarket??-1e9)));
+  // Yield / ROCE sorts sink distorted token guides (e.g. £1.5k on a £250k street)
+  // so they can't top "Best yield" / "Best ROCE". Metric functions return null.
+  else if(sortVal==='yield') lots.sort((a,b)=>((rankingGrossYieldOf(b)??-1e9)-(rankingGrossYieldOf(a)??-1e9)));
+  // belowMarket is signed (negative = above comps); lots without comps sink last.
+  // Extreme BMV (>~70% below street) is usually land/parking/token — demote those.
+  else if(sortVal==='bmv') lots.sort((a,b)=>{
+    const ba=isUnrealisticGuideLot(a)?-1e9:(a.belowMarket??-1e9);
+    const bb=isUnrealisticGuideLot(b)?-1e9:(b.belowMarket??-1e9);
+    return bb-ba;
+  });
   else if(sortVal==='net_yield') lots.sort((a,b)=>((netYieldOf(b)??-1e9)-(netYieldOf(a)??-1e9)));
   else if(sortVal==='roce') lots.sort((a,b)=>((roceOf(b)??-1e9)-(roceOf(a)??-1e9)));
   else if(sortVal==='days_unsold') lots.sort((a,b)=>((b.daysSinceAuction||0)-(a.daysSinceAuction||0)));
@@ -3743,9 +3755,20 @@ function hasRedFlag(l) { return (l.risks || []).some(function(r) { return RED_FL
 
 // Derived investor metrics (public/finance.js), cached on the lot object so a
 // render pass computes each at most once. Assumptions are static per deploy,
-// so cache staleness isn't a concern.
+// so cache staleness isn't a concern. Unrealistic token guides return null.
 function roceOf(l) { if (l._roce === undefined) l._roce = (window.AB_finance ? AB_finance.roce(l) : null); return l._roce; }
 function netYieldOf(l) { if (l._netYield === undefined) l._netYield = (window.AB_finance ? AB_finance.netYield(l) : null); return l._netYield; }
+function rankingGrossYieldOf(l) {
+  if (l._rankGrossYield === undefined) {
+    l._rankGrossYield = (window.AB_finance && AB_finance.rankingGrossYield)
+      ? AB_finance.rankingGrossYield(l)
+      : (l.estGrossYield != null ? l.estGrossYield : null);
+  }
+  return l._rankGrossYield;
+}
+function isUnrealisticGuideLot(l) {
+  return !!(window.AB_finance && AB_finance.isUnrealisticGuide && AB_finance.isUnrealisticGuide(l));
+}
 
 function statusForStrip(l) {
   // Map lot.status to the editorial strip's dot colour + label.
@@ -3837,8 +3860,8 @@ function card(l){
   if (isNilReserve) guideText = 'Nil Reserve';
 
   // Yield
-  const showYield = l.estGrossYield && !l.blurred && !l.anonGated && !l._yieldEstimateWarning;
-  const yieldText = showYield ? l.estGrossYield.toFixed(1) : null;
+  const showYield = rankingGrossYieldOf(l) != null && !l.blurred && !l.anonGated && !l._yieldEstimateWarning && !isUnrealisticGuideLot(l);
+  const yieldText = showYield ? Number(rankingGrossYieldOf(l)).toFixed(1) : null;
 
   // Score
   const scoreKind = scoreBadgeKind(l.score);
@@ -4009,8 +4032,9 @@ function card(l){
   // Deal-metrics line: net yield + ROCE (+ BRRR recycled % when a value
   // estimate exists). Derived client-side from served fields; the tooltip
   // carries the full assumption set so no number appears without its basis.
+  // Token guides (£1–£5k vs £250k streets) suppress entirely — numbers would lie.
   let metricsLineHtml = '';
-  if (window.AB_finance && !l.blurred && !l.anonGated && !l._yieldEstimateWarning) {
+  if (window.AB_finance && !l.blurred && !l.anonGated && !l._yieldEstimateWarning && !isUnrealisticGuideLot(l)) {
     const ny = netYieldOf(l);
     const rc = roceOf(l);
     if (ny != null && rc != null) {
@@ -4020,6 +4044,9 @@ function card(l){
         ((brrr && brrr.pct >= 60) ? ' · BRRR ' + Math.round(brrr.pct) + '% out (' + esc(brrr.confidence) + ' conf)' : '') +
         ' <span class="cm-info" aria-hidden="true">ⓘ</span></div>';
     }
+  } else if (window.AB_finance && !l.blurred && !l.anonGated && isUnrealisticGuideLot(l) && l.price) {
+    metricsLineHtml = '<div class="card-metrics card-metrics-muted" title="Guide is far below local sold prices (or a non-house token guide). Net yield and ROCE hidden so rankings stay honest.">' +
+      'Guide not comparable · returns hidden</div>';
   }
   // Max-bid chip — user sets a target gross yield once (Pro filters); every
   // lot with a rent estimate shows the price that hits it. Green when the

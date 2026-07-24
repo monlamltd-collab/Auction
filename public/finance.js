@@ -83,6 +83,64 @@
 
   function lotCountry(l) { return countryFromPostcode(l.postcode || ''); }
 
+  // Token / plot / nominal-guide detectors. These poison net yield + ROCE
+  // rankings because rent is estimated like a normal home while the guide is
+  // £1–£5k (or a parking space / garden plot on a residential street).
+  //
+  // Thresholds deliberately below your "50% below road average" suggestion —
+  // at 50% we'd still show £125k guides on £250k streets, which can be real.
+  // 70%+ below comps on a tiny guide is almost always not a whole house.
+  const UNREALISTIC = {
+    maxTokenGuide: 15000,           // residential-looking guide this low is almost never the whole asset
+    maxGuideVsStreetRatio: 0.30,    // guide ≤ 30% of street avg ≈ ≥70% below market
+    maxGrossYieldPct: 30,           // already stamped as _yieldEstimateWarning server-side
+    requireStreetAvg: 50000,        // only trust street avg above this (avoids garbage comps)
+  };
+
+  function streetAvgOf(l) {
+    const v = l && (l.streetAvg != null ? l.streetAvg : l.comparablePrice);
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+
+  /**
+   * True when guide economics are too distorted for % returns / rankings.
+   * Does NOT hide the lot from browse — only suppresses net yield, ROCE,
+   * and (callers should) demote it in yield sorts.
+   *
+   * @returns {{ bad: boolean, reason: string|null, bmvPct: number|null }}
+   */
+  function guideDistortion(l) {
+    if (!l || !(l.price > 0)) return { bad: false, reason: null, bmvPct: null };
+    const price = Number(l.price);
+    const avg = streetAvgOf(l);
+    let bmvPct = null;
+    if (avg && avg >= UNREALISTIC.requireStreetAvg) {
+      bmvPct = ((avg - price) / avg) * 100;
+      // Extreme vs comps: £1.5k on a £250k street (~99% below).
+      if (price / avg <= UNREALISTIC.maxGuideVsStreetRatio) {
+        return { bad: true, reason: 'guide_vs_street', bmvPct };
+      }
+    }
+    // No usable comps (or land/garage): still kill absurd yield on tiny guides
+    // when a normal home rent was applied.
+    if (price <= UNREALISTIC.maxTokenGuide && l.estMonthlyRent > 0) {
+      const gy = (l.estMonthlyRent * 12 / price) * 100;
+      if (gy >= UNREALISTIC.maxGrossYieldPct) {
+        return { bad: true, reason: 'token_guide_yield', bmvPct };
+      }
+    }
+    // Server already flagged unrealistic gross yield during enrichment.
+    if (l._yieldEstimateWarning || (l.estGrossYield != null && l.estGrossYield > UNREALISTIC.maxGrossYieldPct)) {
+      return { bad: true, reason: 'gross_yield_cap', bmvPct };
+    }
+    return { bad: false, reason: null, bmvPct };
+  }
+
+  function isUnrealisticGuide(l) {
+    return guideDistortion(l).bad;
+  }
+
   function worksCost(l) {
     if (!l.price) return 0;
     const pct = ASSUMPTIONS.worksPctByCondition[l.condition] || 0;
@@ -105,6 +163,7 @@
   }
 
   function netYield(l) {
+    if (isUnrealisticGuide(l)) return null;
     const n = noi(l); const tc = trueCost(l);
     if (n == null || tc == null || tc <= 0) return null;
     return (n / tc) * 100;
@@ -114,6 +173,7 @@
   // interest-only BTL mortgage, over the actual cash in the deal (deposit +
   // stamp duty + fees + condition-implied works). Negative is honest.
   function roce(l) {
+    if (isUnrealisticGuide(l)) return null;
     const n = noi(l);
     if (n == null || !l.price) return null;
     const duty = sdlt(l.price, lotCountry(l));
@@ -127,6 +187,7 @@
   // deal comes back out. >100 = all money out. Confidence rides along from
   // the value estimate; callers must show it (the band IS the honesty).
   function brrrRecycledPct(l) {
+    if (isUnrealisticGuide(l)) return null;
     const ve = l.valueEstimate;
     if (!ve || typeof ve !== 'object' || !Number.isFinite(Number(ve.estimate)) || !l.price) return null;
     const refi = ASSUMPTIONS.refiLtv * Number(ve.estimate);
@@ -137,9 +198,20 @@
 
   // Inverse metric: the price at which this lot hits the user's target gross
   // yield, given the rent estimate. Guide-independent by design.
+  // Still suppressed on distorted guides so a £1.5k lot doesn't claim a
+  // hero "max bid for 8%" inflated by normal-home rent estimates.
   function maxBid(l, targetYieldPct) {
+    if (isUnrealisticGuide(l)) return null;
     if (!l.estMonthlyRent || !(targetYieldPct > 0)) return null;
     return Math.round((l.estMonthlyRent * 12) / (targetYieldPct / 100));
+  }
+
+  /** Gross yield for ranking only — null when guide is distorted. */
+  function rankingGrossYield(l) {
+    if (isUnrealisticGuide(l)) return null;
+    if (l.estGrossYield != null && Number.isFinite(Number(l.estGrossYield))) return Number(l.estGrossYield);
+    if (l.price > 0 && l.estMonthlyRent > 0) return (l.estMonthlyRent * 12 / l.price) * 100;
+    return null;
   }
 
   function describeAssumptions(l) {
@@ -154,8 +226,9 @@
   }
 
   root.AB_finance = {
-    ASSUMPTIONS, sdlt, countryFromPostcode, worksCost, trueCost, noi,
-    netYield, roce, brrrRecycledPct, maxBid, describeAssumptions,
+    ASSUMPTIONS, UNREALISTIC, sdlt, countryFromPostcode, streetAvgOf,
+    guideDistortion, isUnrealisticGuide, worksCost, trueCost, noi,
+    netYield, roce, brrrRecycledPct, maxBid, rankingGrossYield, describeAssumptions,
   };
 
 })(typeof window !== 'undefined' ? window : globalThis);

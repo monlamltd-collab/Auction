@@ -70,10 +70,19 @@ const PRESET_FILTERS = {
       : `No flats or apartments found in current catalogues.`,
   },
   'high-yield-8': {
-    filter: l => l.estGrossYield && l.estGrossYield >= 8,
+    // Exclude token / extreme-BMV guides (£1–£15k vs normal street prices) —
+    // those fabricate 100%+ yields and dominate the preset otherwise.
+    filter: l => {
+      if (!l.estGrossYield || l.estGrossYield < 8) return false;
+      if (l._yieldEstimateWarning) return false;
+      const avg = l.streetAvg || l.comparablePrice;
+      if (l.price > 0 && avg >= 50000 && l.price / avg <= 0.30) return false;
+      if (l.price > 0 && l.price <= 15000 && l.estGrossYield > 30) return false;
+      return true;
+    },
     sort: (a, b) => (b.estGrossYield || 0) - (a.estGrossYield || 0),
     report: (n, total) => n > 0
-      ? `Found ${n} properties with estimated gross yield of 8% or above across ${total} lots, sorted by yield. These yields are estimates based on guide price and local rental data — verify with your own research.`
+      ? `Found ${n} properties with estimated gross yield of 8% or above across ${total} lots, sorted by yield. These yields are estimates based on guide price and local rental data — verify with your own research. Extreme low-guide / non-comparable lots are excluded.`
       : `No properties currently show an estimated gross yield of 8% or above. Yields are calculated from guide prices and local rental data, so they update as new catalogues are published.`,
   },
   'title-splits': {
