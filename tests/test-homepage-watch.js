@@ -394,7 +394,7 @@ console.log('\nTest 22: buildActionableCardForDetail — new-domain (merger) car
   assert(!cbs.some(c => c.startsWith('rerun:')), 'no re-heal — new-domain needs human, not retry');
 }
 
-console.log('\nTest 23: buildActionableCardForDetail — parked card has Snooze + Dismiss only');
+console.log('\nTest 23: buildActionableCardForDetail — parked card has Retire + Snooze + Dismiss');
 {
   const card = buildActionableCardForDetail({
     verdict: VERDICTS.DOMAIN_PARKED, slug: 'dead', displayName: 'Dead House',
@@ -403,6 +403,7 @@ console.log('\nTest 23: buildActionableCardForDetail — parked card has Snooze 
   assert(card !== null, 'card returned');
   const cbs = card.buttons.flat().map(b => b.callback_data);
   assert(cbs.includes('snooze:p1') && cbs.includes('dismiss:p1'), 'snooze + dismiss present');
+  assert(cbs.includes('retire:p1'), 'retire present on parked');
   assert(!cbs.some(c => c.startsWith('accept:')), 'no accept — no candidate URL to apply');
 }
 

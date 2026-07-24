@@ -80,6 +80,11 @@ router.post('/telegram/webhook', async (req, res) => {
     await editMessageText(messageId, newText, []);  // empty buttons = strip keyboard
   }
 
+  // Accept/catalogue apply may request verification re-scrape.
+  if (result.ok && result.rescrape) {
+    void verifyHealedUrl(result.rescrape);
+  }
+
   // Always 200 to Telegram so it doesn't retry — we've handled (or logged) it.
   return res.json({ ok: true });
 });

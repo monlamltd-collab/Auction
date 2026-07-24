@@ -13,6 +13,7 @@ import {
   isPositive,
   POSITIVE_STATUSES,
   formatDigestForTelegram,
+  computeWorstHouses,
 } from '../lib/pipeline/coverage-digest.js';
 
 let passed = 0;
@@ -167,6 +168,23 @@ console.log('\nTest 9: zero lots edge case');
 {
   const out = formatDigestForTelegram({ totalLots: 0, coverage: {}, deltas: {} });
   assert(out.includes('No lots seen'), 'zero-lots message');
+}
+
+console.log('\nTest 10: computeWorstHouses ranks weak image/postcode');
+{
+  const rows = [];
+  for (let i = 0; i < 10; i++) rows.push({ house: 'weak', image_url: null, postcode: null });
+  for (let i = 0; i < 10; i++) rows.push({ house: 'strong', image_url: 'https://x', postcode: 'SW1A 1AA' });
+  const w = computeWorstHouses(rows, 5, 8);
+  assert(w[0].house === 'weak', 'weak first');
+  assert(w[0].image_pct === 0, 'weak 0 img');
+  const out = formatDigestForTelegram({
+    totalLots: 20,
+    coverage: { image_pct: 50, postcode_pct: 50, geocode_pct: 50, epc_pct: 10, flood_pct: 10, land_registry_pct: 10, fundability_pct: 10, yield_pct: 10 },
+    deltas: {},
+    worstHouses: w,
+  });
+  assert(/Weakest houses/.test(out) && /weak/.test(out), 'digest lists weak houses');
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
