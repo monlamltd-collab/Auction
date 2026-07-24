@@ -88,6 +88,7 @@ console.log('\nTest 4: healBrokenHouse short-circuits on missing API key');
     FIRECRAWL_API_KEY: undefined,
     scrapeWithFirecrawl: async () => ({ html: '' }),
     HEADERS: {},
+    force: true,
   });
   assert(result === null, 'returns null when FIRECRAWL_API_KEY missing');
 }
@@ -114,6 +115,7 @@ console.log('\nTest 6: healBrokenHouse honours MAX_HEAL_ATTEMPTS cap (no Firecra
     FIRECRAWL_API_KEY: 'test-key',
     scrapeWithFirecrawl: async () => { firecrawlCalled = true; return { html: '' }; },
     HEADERS: {},
+    force: true,
   });
   assert(result === null, 'returns null when at the cap');
   assert(!firecrawlCalled, 'no Firecrawl call when capped');
@@ -121,6 +123,19 @@ console.log('\nTest 6: healBrokenHouse honours MAX_HEAL_ATTEMPTS cap (no Firecra
 }
 
 // ── Test 7: isJunkSearchUrl rejects social/video/PDF surfaces ───
+console.log('\nTest 6b: auto-heal kill switch blocks without force/env');
+{
+  delete process.env.AUTO_HEAL_ENABLED;
+  let called = false;
+  const result = await healBrokenHouse('whatever', 'https://example.com/old', {
+    FIRECRAWL_API_KEY: 'test-key',
+    scrapeWithFirecrawl: async () => { called = true; return { html: '' }; },
+    HEADERS: {},
+  });
+  assert(result === null, 'kill switch returns null');
+  assert(!called, 'no scrape when auto-heal off');
+}
+
 console.log('\nTest 7: isJunkSearchUrl filters obvious non-catalogue URLs');
 {
   const junk = [

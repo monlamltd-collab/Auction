@@ -142,11 +142,11 @@ router.post('/api/admin/heal', rateLimit(60000, 20), requireAdmin, async (req, r
   try { await resetAdaptiveBackoff(supabase, slug); } catch (e) { log.warn('Heal: resetAdaptiveBackoff failed (non-fatal)', { slug, error: e.message }); }
 
   try {
-    const healedUrl = await healBrokenHouse(slug, rootUrl);
+    const healedUrl = await healBrokenHouse(slug, rootUrl, { force: true });
     if (healedUrl) {
       res.json({ healed: true, slug, oldUrl: rootUrl, newUrl: healedUrl });
     } else {
-      res.json({ healed: false, slug, message: 'Healing did not find a new URL' });
+      res.json({ healed: false, slug, message: 'Healing did not find a new URL (manual force was used; auto-heal remains off elsewhere)' });
     }
   } catch (e) {
     log.error('Admin heal error', { slug, error: e.message });

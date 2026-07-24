@@ -704,7 +704,7 @@ function scheduleTick() {
     console.log('SCHEDULE: 02:30 UK — running alert sweeper');
     import('./lib/pipeline/alert-sweeper.js')
       .then(({ sweepStaleAlerts }) => sweepStaleAlerts(supabase))
-      .then(r => console.log(`SCHEDULE alert sweep: scanned=${r.scanned} resolved=${r.resolved.length} skipped(no-predicate)=${r.skippedNoPredicate} skipped(unhealthy)=${r.skippedNotHealthy}`))
+      .then(r => console.log(`SCHEDULE alert sweep: scanned=${r.scanned} resolved=${r.resolved.length} noise=${r.noiseCleared || 0} skipped(no-predicate)=${r.skippedNoPredicate} skipped(unhealthy)=${r.skippedNotHealthy}`))
       .catch(e => console.error('SCHEDULE alert sweep failed:', e.message));
   }
 
@@ -772,13 +772,20 @@ function scheduleTick() {
           console.log(`SCHEDULE homepage watch: total=${s.total} unchanged=${s.unchanged} drift=${s.drift} healed=${s.healed} alerts=${s.alerts} errors=${s.errors}`);
         }
 
-        // Backlog digest — surface unresolved alerts older than 24h as
-        // actionable cards so the long tail doesn't decay into noise.
-        try {
-          const { sendBacklogDigest } = await import('./lib/pipeline/telegram-backlog.js');
-          const backlog = await sendBacklogDigest(supabase, { sendTelegram, sendActionableCard, log });
-          if (backlog.sent > 0) console.log(`SCHEDULE backlog digest: sent ${backlog.sent} cards (${backlog.total} total open)`);
-        } catch (e) { console.warn('SCHEDULE backlog digest failed:', e.message); }
+        // Backlog digest — OFF by default (2026-07-24). The old path re-emitted
+        // 75-day parked houses and null-URL merger cards. Enable only with
+        // BACKLOG_DIGEST_ENABLED=true (still filtered: ≤14d, non-null candidates,
+        // no parked).
+        if (String(process.env.BACKLOG_DIGEST_ENABLED || '').toLowerCase() === 'true') {
+          try {
+            const { sendBacklogDigest } = await import('./lib/pipeline/telegram-backlog.js');
+            const backlog = await sendBacklogDigest(supabase, { sendTelegram, sendActionableCard, log });
+            if (backlog.sent > 0) console.log(`SCHEDULE backlog digest: sent ${backlog.sent} cards (${backlog.total} total open)`);
+            else if (backlog.reason) console.log(`SCHEDULE backlog digest: ${backlog.reason}`);
+          } catch (e) { console.warn('SCHEDULE backlog digest failed:', e.message); }
+        } else {
+          console.log('SCHEDULE backlog digest: skipped (BACKLOG_DIGEST_ENABLED!=true)');
+        }
       })
       .catch(e => console.error('SCHEDULE homepage watch failed:', e.message));
   }
