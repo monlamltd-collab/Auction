@@ -724,6 +724,25 @@ function scheduleTick() {
         console.log(`SCHEDULE coverage digest: total=${digest.totalLots} epc=${digest.coverage?.epc_pct}% image=${digest.coverage?.image_pct}%`);
         const sender = telegram.sendNotification || telegram.default?.sendNotification;
         if (sender) await sender(formatDigestForTelegram(digest));
+
+        // Fleet population scoreboard (next-sale / dark houses). Default OFF.
+        // Keeps enrichment digest unchanged; additive when explicitly enabled.
+        try {
+          const { buildFleetCoverageDigest, formatFleetCoverageForTelegram, isFleetCoverageAlertsEnabled } =
+            await import('./lib/pipeline/fleet-coverage.js');
+          if (isFleetCoverageAlertsEnabled()) {
+            const fleet = await buildFleetCoverageDigest(supabase);
+            console.log(
+              `SCHEDULE fleet coverage: active=${fleet.active_total || 0} score=${fleet.scores?.fleet_populate_score ?? 'n/a'}% dark=${fleet.dark_houses_total ?? 0}`
+            );
+            if (sender && !fleet.error) await sender(formatFleetCoverageForTelegram(fleet));
+            else if (fleet.error) console.warn('SCHEDULE fleet coverage: ' + fleet.error);
+          } else {
+            console.log('SCHEDULE fleet coverage: skipped (FLEET_COVERAGE_ALERTS_ENABLED!=true)');
+          }
+        } catch (fe) {
+          console.warn('SCHEDULE fleet coverage failed (non-fatal):', fe.message);
+        }
       })
       .catch(e => console.error('SCHEDULE coverage digest failed:', e.message));
   }
