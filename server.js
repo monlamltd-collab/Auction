@@ -473,6 +473,10 @@ async function bootDecision() {
       _scheduleState.lastFullPass = Date.now();
       withTier('full', async () => {
         try { await watchAuctionCalendar(); } catch (e) { console.error('SCHEDULE boot watcher failed (non-fatal):', e.message); }
+        try {
+          const { runHomepageDateFeed } = await import('./lib/pipeline/homepage-date-feed.js');
+          await runHomepageDateFeed(supabase, {});
+        } catch (e) { console.error('SCHEDULE boot homepage-date-feed failed (non-fatal):', e.message); }
         try { await syncCalendar({ supabase }); } catch (e) { console.error('SCHEDULE boot syncCalendar failed (non-fatal):', e.message); }
         await autoAnalyseAll();
       }).catch(e => console.error('SCHEDULE boot full pass failed:', e.message));
@@ -506,13 +510,27 @@ function scheduleTick() {
     );
   }
 
-  // Tier 1: Full pass at 03:00 UK — watcher first (discovers Cat B URLs),
+  // Tier 1: Full pass at 03:00 UK — watcher first (discovers Cat B / family URLs),
+  // homepage-date feed (cheap scored candidates), syncCalendar continuity,
   // then autoAnalyseAll scrapes whatever the calendar now points at.
+  // Discovery runs inside autoAnalyseAll post-scrape and skips watcher-handled slugs.
   if (hour === 3 && minute < 5 && now - _scheduleState.lastFullPass > 60 * 60 * 1000) {
     _scheduleState.lastFullPass = now;
-    console.log('SCHEDULE: 03:00 UK — running auction-watcher then full autoAnalyseAll');
+    console.log('SCHEDULE: 03:00 UK — watcher → homepage-date-feed → syncCalendar → autoAnalyseAll');
     withTier('full', async () => {
       try { await watchAuctionCalendar(); } catch (e) { console.error('SCHEDULE watcher failed (non-fatal):', e.message); }
+      try {
+        const { runHomepageDateFeed } = await import('./lib/pipeline/homepage-date-feed.js');
+        const { fetchPage } = await import('./lib/scraper/http.js');
+        const feed = await runHomepageDateFeed(supabase, {
+          fetchHtml: async (u) => {
+            try { return await fetchPage(u); } catch { return ''; }
+          },
+        });
+        console.log(
+          `SCHEDULE homepage-date-feed: rows=${feed.rows} auto=${feed.autoUpserted} ready=${feed.readyToApply} skip=${feed.skipped} err=${feed.errors}`,
+        );
+      } catch (e) { console.error('SCHEDULE homepage-date-feed failed (non-fatal):', e.message); }
       try { await syncCalendar(supabase, { log }); } catch (e) { console.error('SCHEDULE syncCalendar failed (non-fatal):', e.message); }
       await autoAnalyseAll();
       invalidateAllLotsCache(); // fresh scrape data should appear immediately
@@ -789,6 +807,22 @@ function scheduleTick() {
         } else {
           const s = result.summary;
           console.log(`SCHEDULE homepage watch: total=${s.total} unchanged=${s.unchanged} drift=${s.drift} healed=${s.healed} alerts=${s.alerts} errors=${s.errors}`);
+          // After homepage-watch persists next dates/URLs, promote high-confidence
+          // same-domain candidates into upcoming calendar (Task 7).
+          try {
+            const { runHomepageDateFeed } = await import('./lib/pipeline/homepage-date-feed.js');
+            const { fetchPage } = await import('./lib/scraper/http.js');
+            const feed = await runHomepageDateFeed(supabase, {
+              fetchHtml: async (u) => {
+                try { return await fetchPage(u); } catch { return ''; }
+              },
+            });
+            console.log(
+              `SCHEDULE homepage-date-feed(post-watch): auto=${feed.autoUpserted} ready=${feed.readyToApply} recorded=${feed.recorded}`,
+            );
+          } catch (fe) {
+            console.warn('SCHEDULE homepage-date-feed(post-watch) failed:', fe.message);
+          }
         }
 
         // Backlog digest — OFF by default (2026-07-24). The old path re-emitted

@@ -1062,6 +1062,120 @@ router.post('/api/admin/run-watcher', rateLimit(60000, 20), requireAdmin, async 
   }
 });
 
+// ═══════════════════════════════════════════════════════════════
+// Admin: fleet population coverage + discovery dry-run (Task 10)
+// ═══════════════════════════════════════════════════════════════
+router.get('/api/admin/fleet-coverage', requireAdmin, async (req, res) => {
+  try {
+    const { buildFleetCoverageDigest, formatFleetCoverageForTelegram } =
+      await import('../lib/pipeline/fleet-coverage.js');
+    const {
+      getLastWatcherSummary,
+      getLastHomepageFeedSummary,
+      getLastLotConsensusSummary,
+      getWatcherHandledSlugs,
+    } = await import('../lib/pipeline/cycle-coordination.js');
+
+    const fleet = await buildFleetCoverageDigest(supabase, {
+      // allow ?horizonDays=
+      options: {
+        horizonDays: req.query.horizonDays
+          ? Number(req.query.horizonDays)
+          : undefined,
+      },
+    });
+    const includeTelegram = String(req.query.telegram || '') === '1';
+    res.json({
+      ok: !fleet.error,
+      fleet,
+      telegram_preview: includeTelegram && !fleet.error
+        ? formatFleetCoverageForTelegram(fleet)
+        : undefined,
+      last_cycle: {
+        watcher: getLastWatcherSummary(),
+        homepage_date_feed: getLastHomepageFeedSummary(),
+        lot_consensus: getLastLotConsensusSummary(),
+        watcher_handled: [...getWatcherHandledSlugs()],
+      },
+      flags: {
+        AUCTION_WATCHER_EXPAND_ENABLED: process.env.AUCTION_WATCHER_EXPAND_ENABLED ?? '(default on)',
+        HOMEPAGE_DATE_FEED_AUTO_UPSERT: process.env.HOMEPAGE_DATE_FEED_AUTO_UPSERT ?? '(default on)',
+        LOT_DATE_CONSENSUS_LIFT_ENABLED: process.env.LOT_DATE_CONSENSUS_LIFT_ENABLED ?? '(default off)',
+        FLEET_COVERAGE_ALERTS_ENABLED: process.env.FLEET_COVERAGE_ALERTS_ENABLED ?? '(default off)',
+        AUTO_HEAL_ENABLED: process.env.AUTO_HEAL_ENABLED ?? '(default off)',
+      },
+    });
+  } catch (e) {
+    log.error('fleet-coverage error', { error: e.message });
+    res.status(500).json({ error: 'Fleet coverage failed', detail: e.message });
+  }
+});
+
+router.post('/api/admin/discovery/dry-run', rateLimit(60000, 10), requireAdmin, async (req, res) => {
+  try {
+    const { slug, force } = req.body || {};
+    const { discoverAndUpdateCalendar } = await import('../lib/pipeline/discovery.js');
+    const { callAI } = await import('../lib/ai-provider.js');
+    // For a single-slug dry preview, use eligibility eval only when slug provided
+    // without spending Gemini — unless forceFull=true.
+    if (slug && !req.body?.forceFull) {
+      const {
+        evaluateDiscoveryEligibility,
+      } = await import('../lib/pipeline/discovery-eligibility.js');
+      const { HOUSE_ROOTS, RETIRED_HOUSES, AUCTION_DISCOVERY } = await import('../lib/houses.js');
+      const { AH_PLATFORM_SLUGS } = await import('../lib/pipeline/ah-resolver.js');
+      const s = String(slug).toLowerCase();
+      const { data: calRows } = await supabase
+        .from('auction_calendar')
+        .select('house_slug, status, date, url, catalogue_ready')
+        .eq('house_slug', s);
+      const { data: hw } = await supabase
+        .from('house_homepage_watch')
+        .select('slug, last_next_auction_date, last_extracted_catalogue_url')
+        .eq('slug', s)
+        .maybeSingle();
+      const ev = evaluateDiscoveryEligibility({
+        slug: s,
+        force: !!force,
+        calendarRows: calRows || [],
+        classifyInput: {
+          slug: s,
+          rootUrl: HOUSE_ROOTS[s] || null,
+          calendarRows: calRows || [],
+          discoveryConfig: AUCTION_DISCOVERY[s] || null,
+          platformHints: { ah: AH_PLATFORM_SLUGS.has(s) },
+          homepageWatch: hw || null,
+          retired: RETIRED_HOUSES.has(s),
+        },
+      });
+      return res.json({ ok: true, mode: 'eligibility', slug: s, evaluation: ev });
+    }
+
+    // Full dry-run of discovery selection+candidates (may call Gemini if selected)
+    const result = await discoverAndUpdateCalendar({
+      callAI,
+      dryRun: true,
+      force: !!force,
+    });
+    return res.json({ ok: true, mode: 'full_dry_run', ...result });
+  } catch (e) {
+    log.error('discovery dry-run error', { error: e.message });
+    res.status(500).json({ error: 'Discovery dry-run failed', detail: e.message });
+  }
+});
+
+router.post('/api/admin/homepage-date-feed', rateLimit(60000, 10), requireAdmin, async (req, res) => {
+  try {
+    const dryRun = req.body?.dryRun !== false; // default dry-run for safety
+    const { runHomepageDateFeed } = await import('../lib/pipeline/homepage-date-feed.js');
+    const summary = await runHomepageDateFeed(supabase, { dryRun });
+    res.json({ ok: true, ...summary });
+  } catch (e) {
+    log.error('homepage-date-feed admin error', { error: e.message });
+    res.status(500).json({ error: 'Homepage date feed failed', detail: e.message });
+  }
+});
+
 router.get('/api/quality-report', requireAdmin, async (req, res) => {
   try {
     // Get cache metadata (no lots JSONB) and lots from lots table.
