@@ -743,8 +743,8 @@ function scheduleTick() {
         const sender = telegram.sendNotification || telegram.default?.sendNotification;
         if (sender) await sender(formatDigestForTelegram(digest));
 
-        // Fleet population scoreboard (next-sale / dark houses). Default OFF.
-        // Keeps enrichment digest unchanged; additive when explicitly enabled.
+        // Fleet population scoreboard (next-sale / dark houses). Default ON
+        // (owner approved 2026-07-25). Set FLEET_COVERAGE_ALERTS_ENABLED=false to silence.
         try {
           const { buildFleetCoverageDigest, formatFleetCoverageForTelegram, isFleetCoverageAlertsEnabled } =
             await import('./lib/pipeline/fleet-coverage.js');
@@ -756,7 +756,7 @@ function scheduleTick() {
             if (sender && !fleet.error) await sender(formatFleetCoverageForTelegram(fleet));
             else if (fleet.error) console.warn('SCHEDULE fleet coverage: ' + fleet.error);
           } else {
-            console.log('SCHEDULE fleet coverage: skipped (FLEET_COVERAGE_ALERTS_ENABLED!=true)');
+            console.log('SCHEDULE fleet coverage: skipped (FLEET_COVERAGE_ALERTS_ENABLED=false)');
           }
         } catch (fe) {
           console.warn('SCHEDULE fleet coverage failed (non-fatal):', fe.message);

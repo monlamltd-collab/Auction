@@ -176,8 +176,10 @@ console.log('\nformatFleetCoverageForTelegram');
 console.log('\nflag + maps builder');
 {
   assert(isFleetCoverageAlertsEnabled({ FLEET_COVERAGE_ALERTS_ENABLED: 'true' }) === true, 'flag on');
-  assert(isFleetCoverageAlertsEnabled({ FLEET_COVERAGE_ALERTS_ENABLED: '' }) === false, 'flag default off');
-  assert(isFleetCoverageAlertsEnabled({}) === false, 'flag missing off');
+  assert(isFleetCoverageAlertsEnabled({ FLEET_COVERAGE_ALERTS_ENABLED: '' }) === true, 'empty default on');
+  assert(isFleetCoverageAlertsEnabled({}) === true, 'flag missing on');
+  assert(isFleetCoverageAlertsEnabled({ FLEET_COVERAGE_ALERTS_ENABLED: 'false' }) === false, 'flag off');
+  assert(isFleetCoverageAlertsEnabled({ FLEET_COVERAGE_ALERTS_ENABLED: '0' }) === false, '0 off');
 
   const dig = buildFleetCoverageFromMaps({
     houseRoots: {

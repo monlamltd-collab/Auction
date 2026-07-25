@@ -18,26 +18,24 @@ Owner should not need routine tinkering.
 2. `runHomepageDateFeed` — scored homepage dates → calendar (high conf)
 3. `syncCalendar` — always_on continuity only
 4. `autoAnalyseAll` — scrape / extract / persist
-5. lot-date consensus (per house after persist; **write gated**)
+5. lot-date consensus (per house after persist; writers **default ON**)
 6. `discoverAndUpdateCalendar` — post-scrape, dark / unhealthy only; skips watcher-handled
-7. morning digests — enrichment coverage + optional fleet Telegram
+7. morning digests — enrichment coverage + fleet Telegram scoreboard (default ON)
 
 Homepage-watch at 03:30 (alternate days) still runs; after a successful cycle it also re-runs the homepage date feed.
 
 ## Feature flags (safe defaults)
 
-| Flag | Default | Notes |
-|------|---------|--------|
-| `AUCTION_WATCHER_EXPAND_ENABLED` | on | Set `false` = explicit Cat B only |
-| `HOMEPAGE_DATE_FEED_AUTO_UPSERT` | on | ≥80 conf, same-domain only |
-| `LOT_DATE_CONSENSUS_LIFT_ENABLED` | **off** | Enable after soak |
-| `FLEET_COVERAGE_ALERTS_ENABLED` | **off** | Telegram scoreboard |
-| `AUTO_HEAL_ENABLED` | **off** | Do not flip casually |
-| `BACKLOG_DIGEST_ENABLED` | **off** | Noise control |
-| `DISCOVERY_DARK_BUDGET` | 25 | AI dark houses / pass |
-| `DISCOVERY_RECHECK_BUDGET` | 10 | healthy rechecks / pass |
-| `WATCHER_HORIZON_DAYS` | 56 | ready horizon |
-| `WATCHER_MAX_UPSERTS` | 3 | multi-sale upserts |
+- `AUCTION_WATCHER_EXPAND_ENABLED` — **on** (set `false` = explicit Cat B only)
+- `HOMEPAGE_DATE_FEED_AUTO_UPSERT` — **on** (≥80 conf, same-domain only)
+- `LOT_DATE_CONSENSUS_LIFT_ENABLED` — **on** (2026-07-25 owner approve; set `false` = observe-only)
+- `FLEET_COVERAGE_ALERTS_ENABLED` — **on** (Telegram scoreboard; set `false` to silence)
+- `AUTO_HEAL_ENABLED` — **off** (do not flip casually)
+- `BACKLOG_DIGEST_ENABLED` — **off** (noise control)
+- `DISCOVERY_DARK_BUDGET` — 25
+- `DISCOVERY_RECHECK_BUDGET` — 10
+- `WATCHER_HORIZON_DAYS` — 56
+- `WATCHER_MAX_UPSERTS` — 3
 
 ## Admin endpoints
 
@@ -108,8 +106,7 @@ Default dry-run. Set `"dryRun": false` to apply high-confidence upserts.
 5. MMOA freshness does not regress >2pp  
 6. Firecrawl / Gemini daily usage inside budget  
 
-When gates hold: leave watcher expand + homepage feed on; optionally enable  
-`LOT_DATE_CONSENSUS_LIFT_ENABLED=true` then `FLEET_COVERAGE_ALERTS_ENABLED=true`.
+When gates hold: leave watcher expand + homepage feed + lot-consensus lift + fleet Telegram on. Kill with `=false` only if something misbehaves. Do **not** enable `AUTO_HEAL` or backlog digest as part of coverage work.
 
 ## Ballasts if something misbehaves
 
@@ -120,8 +117,11 @@ AUCTION_WATCHER_EXPAND_ENABLED=false
 # Homepage feed observe-only
 HOMEPAGE_DATE_FEED_AUTO_UPSERT=false
 
-# Consensus already default off
+# Consensus — observe-only if needed
 LOT_DATE_CONSENSUS_LIFT_ENABLED=false
+
+# Silence fleet Telegram only
+FLEET_COVERAGE_ALERTS_ENABLED=false
 
 # Discovery cheaper
 DISCOVERY_DARK_BUDGET=10

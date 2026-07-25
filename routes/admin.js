@@ -1100,8 +1100,8 @@ router.get('/api/admin/fleet-coverage', requireAdmin, async (req, res) => {
       flags: {
         AUCTION_WATCHER_EXPAND_ENABLED: process.env.AUCTION_WATCHER_EXPAND_ENABLED ?? '(default on)',
         HOMEPAGE_DATE_FEED_AUTO_UPSERT: process.env.HOMEPAGE_DATE_FEED_AUTO_UPSERT ?? '(default on)',
-        LOT_DATE_CONSENSUS_LIFT_ENABLED: process.env.LOT_DATE_CONSENSUS_LIFT_ENABLED ?? '(default off)',
-        FLEET_COVERAGE_ALERTS_ENABLED: process.env.FLEET_COVERAGE_ALERTS_ENABLED ?? '(default off)',
+        LOT_DATE_CONSENSUS_LIFT_ENABLED: process.env.LOT_DATE_CONSENSUS_LIFT_ENABLED ?? '(default on)',
+        FLEET_COVERAGE_ALERTS_ENABLED: process.env.FLEET_COVERAGE_ALERTS_ENABLED ?? '(default on)',
         AUTO_HEAL_ENABLED: process.env.AUTO_HEAL_ENABLED ?? '(default off)',
       },
     });

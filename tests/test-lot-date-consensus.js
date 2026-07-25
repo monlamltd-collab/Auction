@@ -86,9 +86,11 @@ console.log('\nlift decision');
   assert(otherUrl.lift === true, 'can fix not-ready');
 }
 
-console.log('\nflag default off');
-assert(isLotConsensusLiftEnabled({}) === false, 'default off');
+console.log('\nflag default on');
+assert(isLotConsensusLiftEnabled({}) === true, 'default on');
 assert(isLotConsensusLiftEnabled({ LOT_DATE_CONSENSUS_LIFT_ENABLED: 'true' }) === true, 'on');
+assert(isLotConsensusLiftEnabled({ LOT_DATE_CONSENSUS_LIFT_ENABLED: 'false' }) === false, 'off');
+assert(isLotConsensusLiftEnabled({ LOT_DATE_CONSENSUS_LIFT_ENABLED: '0' }) === false, '0 off');
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
