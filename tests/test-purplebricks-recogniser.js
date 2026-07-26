@@ -5,6 +5,8 @@
 
 import { recognisePurplebricksGotoLotsFromMarkdown } from '../lib/pipeline/firecrawl-extract.js';
 import { HOUSE_RECOGNISERS } from '../lib/scraper/house-recognisers.js';
+import { HOUSE_ROOTS } from '../lib/houses.js';
+import { FALLBACK_CALENDAR } from '../lib/calendar.js';
 
 let pass = 0, fail = 0;
 function assert(cond, msg) {
@@ -126,6 +128,18 @@ console.log('\nrecall sentinel');
   const sentinel = HOUSE_RECOGNISERS.purplebricksgoto.recallSentinelPattern;
   sentinel.lastIndex = 0;
   assert(sentinel.test('https://purplebricks.gotoproperties.co.uk/lot/details/c3339e64-2406-46d1-b39a-91eb0eed2fb7'), 'recall sentinel counts UUID lot IDs');
+}
+
+console.log('\nfull archive configuration');
+{
+  // The deterministic recogniser must receive the complete EIG archive and
+  // then filter it down to affirmative-live cards. A 48-card fetch can contain
+  // only ended/result cards and produce a false zero-lot scrape.
+  assert(new URL(HOUSE_ROOTS.purplebricksgoto).searchParams.get('pagesize') === '5000',
+    'house root requests the complete Purplebricks archive');
+  const purpleCalendar = FALLBACK_CALENDAR.find(a => a.houseSlug === 'purplebricksgoto');
+  assert(new URL(purpleCalendar?.url).searchParams.get('pagesize') === '5000',
+    'fallback calendar requests the complete Purplebricks archive');
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

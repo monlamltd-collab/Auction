@@ -1,4 +1,4 @@
-name: Phase 2 Purplebricks Reconciliation
+name: Phase 2 Purplebricks Reconciliation — Full Archive Retry
 
 on:
   push:
