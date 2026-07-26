@@ -53,7 +53,7 @@ Modern two bedroom flat.
 
 ### End Time - **10 Aug 2026 12:00**
 
-[![Primary Lot Photo](https://cdn.eigpropertyauctions.co.uk/ams/images/156/auction/0/2600000_web_medium?v=)](https://purplebricks.gotoproperties.co.uk/lot/details/c3339e64-2406-46d1-b39a-91eb0eed2fb7)
+[![Primary Lot Photo](https://cdn.eigpropertyauctions.co.uk/ams/images/156/auction/0/2600000_web_medium?v=6/1/2026 10:02:50 AM)](https://purplebricks.gotoproperties.co.uk/lot/details/c3339e64-2406-46d1-b39a-91eb0eed2fb7)
 
 [
 
@@ -110,6 +110,7 @@ console.log('\nrecognisePurplebricksGotoLotsFromMarkdown');
   assert(uuidLive && uuidLive.guide_price === '£210,000', 'UUID lot price');
   assert(uuidLive && uuidLive.lot_status === 'available', 'live UUID remains available');
   assert(uuidLive && uuidLive.auction_date === '2026-08-10', 'live UUID carries its end date');
+  assert(uuidLive && uuidLive.image_url.endsWith('/2600000_web_medium'), 'live UUID preserves EIG image with a spaced cache query');
   assert(uuidLive && uuidLive.description === 'A TWO BEDROOM CITY APARTMENT', `live UUID preserves its source descriptor (got ${uuidLive && uuidLive.description})`);
   assert(uuidLive && uuidLive.bullets.includes('A TWO BEDROOM CITY APARTMENT'), 'live UUID preserves descriptor as a useful bullet');
 

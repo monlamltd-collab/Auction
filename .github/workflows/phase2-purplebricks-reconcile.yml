@@ -1,4 +1,4 @@
-name: Phase 2 Purplebricks Reconciliation — Full Archive Retry
+name: Phase 2 Purplebricks Reconciliation — Image Query Retry
 
 on:
   push:
