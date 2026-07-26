@@ -8,7 +8,7 @@
 //     /auction/<date>/ event URL.
 // canonicaliseLotUrl runs at persist so the conflict key is render-stable;
 // isEventPageUrl drops event pages before they become rows.
-import { canonicaliseLotUrl, UNSTABLE_LOT_URL_HOUSES } from '../lib/houses.js';
+import { canonicaliseLotUrl, HOUSE_ROOTS, UNSTABLE_LOT_URL_HOUSES } from '../lib/houses.js';
 import { isEventPageUrl } from '../lib/scraper/validation.js';
 
 let pass = 0, fail = 0;
@@ -42,6 +42,9 @@ check('venmore www host unchanged',
 
 // Paul Fosh migrated from the generic EIG hostname to its branded auction host
 // while preserving UUID lot IDs. Both variants must collide on the LIVE host.
+check('paulfosh catalogue requests complete one-page list',
+  HOUSE_ROOTS.paulfosh,
+  'https://auction.paulfosh.com/search?view=List&pagesize=200&page=1');
 check('paulfosh legacy EIG host aligned to current auction host',
   canonicaliseLotUrl('https://paulfosh.eigonlineauctions.com/lot/details/7096c572-6751-4075-94de-99cbcf3a4878', 'paulfosh'),
   'https://auction.paulfosh.com/lot/details/7096c572-6751-4075-94de-99cbcf3a4878');

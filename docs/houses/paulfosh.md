@@ -2,7 +2,8 @@
 
 ## Canonical source
 
-- Live catalogue: `https://auction.paulfosh.com/search`
+- Live catalogue: `https://auction.paulfosh.com/search?view=List&pagesize=200&page=1`
+- The explicit list/page-size parameters are required for complete one-request parity. The default paginated search can omit a newly appended final card while a catalogue is changing.
 - Legacy alias: `https://paulfosh.eigonlineauctions.com/search` (redirects to the branded host)
 - Platform: EIG Online Auction System, static list-view recogniser
 - Canonical lot identity: branded-host `/lot/details/{uuid}` URL
