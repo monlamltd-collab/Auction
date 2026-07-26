@@ -1,0 +1,34 @@
+name: TCPA Complete Catalogue Rescrape
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/tcpa-complete-rescrape.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rescrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Allow Railway deployment to settle
+        run: sleep 90
+
+      - name: Force fresh TCPA production scrape
+        env:
+          ADMIN_SECRET: ${{ secrets.ADMIN_SECRET }}
+        run: |
+          curl --fail --show-error --silent --max-time 90 \
+            --retry 3 --retry-delay 20 --retry-all-errors \
+            -X POST "https://auctions.bridgematch.co.uk/api/admin/rescrape" \
+            -H "x-admin-secret: $ADMIN_SECRET" \
+            -H "Origin: https://auctions.bridgematch.co.uk" \
+            -H "Content-Type: application/json" \
+            -d '{"house":"tcpa"}'
+
+      - name: Allow background scrape and persistence to complete
+        run: sleep 300
