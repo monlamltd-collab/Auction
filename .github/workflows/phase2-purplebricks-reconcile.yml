@@ -1,0 +1,33 @@
+name: Phase 2 Purplebricks Reconciliation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase2-purplebricks-reconcile.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  rescrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Wait for Railway auto-deploy
+        run: sleep 300
+
+      - name: Force a fresh Purplebricks scrape
+        env:
+          ADMIN_SECRET: ${{ secrets.ADMIN_SECRET }}
+        run: |
+          curl --fail --show-error --silent --max-time 60 \
+            --retry 3 --retry-delay 20 --retry-all-errors \
+            -X POST "https://auctions.bridgematch.co.uk/api/admin/rescrape" \
+            -H "x-admin-secret: $ADMIN_SECRET" \
+            -H "Origin: https://auctions.bridgematch.co.uk" \
+            -H "Content-Type: application/json" \
+            -d '{"house":"purplebricksgoto"}'
+
+      - name: Allow background scrape to complete
+        run: sleep 180
