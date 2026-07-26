@@ -20,9 +20,9 @@ jobs:
       # Calls the in-process admin endpoint so we don't need new Supabase secrets in CI.
       # writeAlerts:false — we deliberately keep findings out of pipeline_alerts
       # (state-shaped data doesn't belong in an event-shaped table). Instead:
-      #   - autoFix:true        — applies known-recipe fixes (v1: hero_image_bleed)
+      #   - autoFix:false       — guarded diagnostic only; no production mutations
       #   - includeMarkdown:true — returns the full markdown report; saved to audits/
-      - name: Run visual audit (markdown report + auto-fix bot)
+      - name: Run visual audit (guarded diagnostic; no auto-fix)
         continue-on-error: true
         run: |
           # Origin header is required by csrfCheck middleware (lib/security.js).
@@ -33,13 +33,13 @@ jobs:
             -H "x-admin-secret: $ADMIN_SECRET" \
             -H "Origin: https://auctions.bridgematch.co.uk" \
             -H "Content-Type: application/json" \
-            -d '{"writeAlerts": false, "autoFix": true, "includeMarkdown": true}' \
+            -d '{"writeAlerts": false, "autoFix": false, "includeMarkdown": true}' \
             -o visual-audit-result.json
           if [ -s visual-audit-result.json ]; then
             mkdir -p audits
             DATE=$(date -u +%Y-%m-%d)
             jq -r '.markdown // ""' visual-audit-result.json > "audits/visual-audit-${DATE}.md"
-            jq -r '"Visual audit: \(.scannedRows) rows in \(.ms)ms — \(.findingCount) findings (errors: \([.findings[]|select(.severity=="error")]|length), warns: \([.findings[]|select(.severity=="warn")]|length), infos: \([.findings[]|select(.severity=="info")]|length)) — autoFix hero_image_bleed: \(.autoFixApplied.hero_image_bleed.rows_nulled // 0) rows nulled across \(.autoFixApplied.hero_image_bleed.houses_affected // 0) house(s)"' visual-audit-result.json || cat visual-audit-result.json
+            jq -r '"Visual audit: \(.scannedRows) rows in \(.ms)ms — \(.findingCount) findings (errors: \([.findings[]|select(.severity=="error")]|length), warns: \([.findings[]|select(.severity=="warn")]|length), infos: \([.findings[]|select(.severity=="info")]|length)) — diagnostic only; autoFix disabled"' visual-audit-result.json || cat visual-audit-result.json
             # Drop the raw JSON before commit step — only the markdown belongs in the repo
             rm -f visual-audit-result.json
           fi
