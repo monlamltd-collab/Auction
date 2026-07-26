@@ -40,11 +40,14 @@ check('venmore www host unchanged',
   canonicaliseLotUrl('https://www.venmoreauctions.co.uk/Property-Details?property_reference=4', 'venmore'),
   'https://www.venmoreauctions.co.uk/Property-Details?property_reference=4');
 
-// Paul Fosh migrated between two EIG hostnames while preserving UUID lot IDs.
-// Both host variants must collide on the same canonical conflict key.
-check('paulfosh legacy auction host aligned to canonical EIG host',
+// Paul Fosh migrated from the generic EIG hostname to its branded auction host
+// while preserving UUID lot IDs. Both variants must collide on the LIVE host.
+check('paulfosh legacy EIG host aligned to current auction host',
+  canonicaliseLotUrl('https://paulfosh.eigonlineauctions.com/lot/details/7096c572-6751-4075-94de-99cbcf3a4878', 'paulfosh'),
+  'https://auction.paulfosh.com/lot/details/7096c572-6751-4075-94de-99cbcf3a4878');
+check('paulfosh branded host is already canonical',
   canonicaliseLotUrl('https://auction.paulfosh.com/lot/details/7096c572-6751-4075-94de-99cbcf3a4878', 'paulfosh'),
-  'https://paulfosh.eigonlineauctions.com/lot/details/7096c572-6751-4075-94de-99cbcf3a4878');
+  'https://auction.paulfosh.com/lot/details/7096c572-6751-4075-94de-99cbcf3a4878');
 
 // Tracking params are never identity — stripped on any house; real params
 // kept. (Host also aligns to the HOUSE_ROOTS www form — that applies to

@@ -11,7 +11,7 @@ differences are only the catalogue URL and whether the house is currently live.
 | **Recogniser** | `recogniseEigOasLotsFromMarkdown` (`lib/pipeline/firecrawl-extract.js`) |
 | **Registration** | `resolvePlatformRecogniser` → `EIG_OAS_HOUSES` allowlist (`lib/scraper/house-recognisers.js`) |
 | **Sentinel** | `EIG_SENTINEL_SRC` — `/lot/(details\|redirect)/({uuid}\|{numeric})` (`lib/scraper/recall-sentinels.js`) |
-| **Test** | `tests/test-eig-oas-recogniser.js` (anti-leak contract, 22 assertions) |
+| **Test** | `tests/test-eig-oas-recogniser.js` (anti-leak + image-identity contract, 32 assertions) |
 | **Status** | Built + verified on branch `feat/eig-current-auction-scoping` 2026-07-09; **prod rescrape pending** |
 | **Last verified** | 2026-07-09 (live sweep, forced `?view=List`) |
 

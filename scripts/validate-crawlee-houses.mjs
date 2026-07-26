@@ -31,7 +31,7 @@ const BAMBOO = /\/property\/([a-z0-9_-]{6,})/gi;
 const HOUSES = {
   // Platform houses (Gemini-extracted in production; here we check render + sentinel)
   astleys:                { url: 'https://astleys.eigonlineauctions.com/search', sentinel: EIG_AH },
-  paulfosh:               { url: 'https://paulfosh.eigonlineauctions.com/search', sentinel: EIG_AH },
+  paulfosh:               { url: 'https://auction.paulfosh.com/search', sentinel: EIG_AH },
   brownco:                { url: 'https://brownandco.eigonlineauctions.com/search', sentinel: EIG_AH },
   auctionhouseeastanglia: { url: 'https://www.auctionhouse.co.uk/eastanglia/auction/search-results', sentinel: EIG_AH },
   stags:                  { url: 'https://stags.bambooauctions.com/', sentinel: BAMBOO },

@@ -29,6 +29,7 @@ files. Consult the relevant dossier **first** when touching a house.
 | `cliveemson` | Clive Emson | own JS-rendered SPA (Crawlee render); land-heavy | [cliveemson.md](cliveemson.md) |
 | `savills` | Savills | own Joomla site (static SSR); calendar drill → every upcoming sale, `/page-n/quantity-100` | [savills.md](savills.md) |
 | `purplebricksgoto` | Purplebricks (GOTO) | EIG OAS, static `?pagesize=5000` | [purplebricksgoto.md](purplebricksgoto.md) |
+| `paulfosh` | Paul Fosh | EIG OAS branded host; UUID identity; gallery-before-metadata cards | [paulfosh.md](paulfosh.md) |
 | **EIG OAS cluster** (26: `tcpa`, `firstforauctions`, `landwood`, `sageandco`, `harmanhealy`, `hmox`, `thepropertyauctionhouse`, `ahlondon`, +18) | — | EIG OAS current-auction recogniser + live-boundary static path (`?view=List`) | [eig-oas.md](eig-oas.md) |
 | `underthehammer` | Under The Hammer | Next.js SPA served by its own public JSON API (`/api/properties`) — bespoke scraper, no AI | [underthehammer.md](underthehammer.md) |
 | `pattinson` | Pattinson | Next.js + Payload CMS behind Cloudflare, 90 fixed 20-lot pages — bespoke scraper: render page 1 once to clear CF, then walk `/api/property/list-search` in-page, no AI | [pattinson.md](pattinson.md) |

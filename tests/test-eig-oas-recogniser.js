@@ -107,12 +107,52 @@ const uuidLot = lots.get('742e9488-b032-426b-8af4-e243afaa0265');
 assert(uuidLot.address === '91 Bridgeman Road, Coventry, West Midlands, CV6 1NS', 'UUID lot address parsed');
 assert(uuidLot.guide_price === '£260,000', `UUID lot guide price parsed (got ${uuidLot.guide_price})`);
 assert(uuidLot.auction_date === '2099-07-09', `UUID lot date DD/MM/YYYY → ISO (got ${uuidLot.auction_date})`);
+assert(uuidLot.image_url.endsWith('/2713510_web_medium'),
+  `image-before-anchor theme keeps explicit linked-image identity (got ${uuidLot.image_url})`);
 assert(!/[?]/.test(uuidLot.detail_url) && /\/lot\/details\/742e9488/.test(uuidLot.detail_url),
   `UUID lot detail_url keeps host+path, strips searchToken (got ${uuidLot.detail_url})`);
 
 const numLot = lots.get('186060');
 assert(numLot.guide_price === '£80,000', `numeric lot guide price parsed (got ${numLot.guide_price})`);
 assert(numLot.auction_date === '2099-07-15', `numeric lot date parsed (got ${numLot.auction_date})`);
+
+// Paul Fosh's OAS theme puts the NEXT card's gallery before its "Lot N" header.
+// A header-to-header slice therefore contains the current card's metadata plus
+// the next card's gallery. Identity, address, image and descriptor must remain
+// bound to the same UUID — never shifted by one card.
+const PF_MD = `
+[](https://auction.paulfosh.com/lot/details/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa)
+[![](https://cdn.eigpropertyauctions.co.uk/ams/images/37/auction/0/1111111_web_medium?v=)](https://auction.paulfosh.com/lot/details/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa)
+Lot 1 - Auction starts - 28/07/2099 12:00
+#### 1 First Street, Cardiff, CF1 1AA
+3 Bedrooms
+Lot 1 - Detached Bungalow on a Generous Plot
+Guide Price\\*: #### £44,000+
+Upcoming
+[View / Bid](https://auction.paulfosh.com/lot/details/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa)
+
+[](https://auction.paulfosh.com/lot/details/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb)
+[![](https://cdn.eigpropertyauctions.co.uk/ams/images/37/auction/0/2222222_web_medium?v=)](https://auction.paulfosh.com/lot/details/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb)
+Lot 2 - Auction starts - 28/07/2099 12:00
+#### 2 Second Street, Newport, NP2 2BB
+2 Bedrooms
+Lot 2 - House for Owner Occupation/Investment
+Guide Price\\*: #### £69,000+
+Upcoming
+[View / Bid](https://auction.paulfosh.com/lot/details/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb)
+`;
+const pfLots = recogniseEigOasLotsFromMarkdown(PF_MD, TODAY);
+assert(pfLots.size === 2, `Paul Fosh gallery-before-header: both lots recovered (got ${pfLots.size})`);
+const pf1 = pfLots.get('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+const pf2 = pfLots.get('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+assert(pf1?.address === '1 First Street, Cardiff, CF1 1AA', `Paul Fosh lot 1 keeps own address (got ${pf1?.address})`);
+assert(pf2?.address === '2 Second Street, Newport, NP2 2BB', `Paul Fosh lot 2 keeps own address (got ${pf2?.address})`);
+assert(pf1?.detail_url.endsWith('/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'), `Paul Fosh lot 1 keeps own UUID URL (got ${pf1?.detail_url})`);
+assert(pf2?.detail_url.endsWith('/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'), `Paul Fosh lot 2 keeps own UUID URL (got ${pf2?.detail_url})`);
+assert(pf1?.image_url.endsWith('/1111111_web_medium'), `Paul Fosh lot 1 keeps own hero image (got ${pf1?.image_url})`);
+assert(pf2?.image_url.endsWith('/2222222_web_medium'), `Paul Fosh lot 2 keeps own hero image (got ${pf2?.image_url})`);
+assert(pf1?.description === 'Detached Bungalow on a Generous Plot', `Paul Fosh lot 1 card descriptor captured (got ${pf1?.description})`);
+assert(pf2?.description === 'House for Owner Occupation/Investment', `Paul Fosh lot 2 card descriptor captured (got ${pf2?.description})`);
 
 // ── Empty / garbage input never throws ──
 assert(recogniseEigOasLotsFromMarkdown('', TODAY).size === 0, 'empty markdown → empty map');
