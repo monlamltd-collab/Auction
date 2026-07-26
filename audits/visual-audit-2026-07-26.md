@@ -1,8 +1,8 @@
 # Visual Audit — 2026-07-26
 
-Scanned **34,365** rows in **22921ms** across **24** houses with findings.
+Scanned **34,365** rows in **30274ms** across **24** houses with findings.
 
-**Findings:** 2 error · 2 warn · 22 info
+**Findings:** 2 error · 2 warn · 21 info
 
 ## auctionhousekent
 
@@ -70,8 +70,6 @@ Scanned **34,365** rows in **22921ms** across **24** houses with findings.
 
 - **[error] duplicate_address_wall** — Duplicate-address wall: 117 visible address/sale pairs appear ≥3 times each (351 rows users can see) — stale re-list rows, URL variants, or venue extraction
   - `{"unique_dupes":117,"total_dupe_rows":351,"examples":[{"address":"unit 2, 15 john street, carmarthen, dyfed, sa31 1qt","auction_date":"2026-07-28","count":3},{"address":"33 wharf road, newport, gwent, np19 0ed","auction_date":"2026-07-28","count":3},{"address":"building plot the pump house, little newcastle, pembrokeshire, dyfed, sa62 5td","auction_date":"2026-07-28","count":3}]}`
-- **[info] bullet_starvation** — Content starvation: 367/370 (99%) lots have neither usable bullets nor a meaningful description
-  - `{"empty":367,"total":370,"ratio":0.992}`
 
 ## sarahmains
 
