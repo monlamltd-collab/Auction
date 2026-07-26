@@ -1,8 +1,8 @@
 # Visual Audit — 2026-07-26
 
-Scanned **34,365** rows in **30519ms** across **24** houses with findings.
+Scanned **34,365** rows in **23644ms** across **23** houses with findings.
 
-**Findings:** 2 error · 2 warn · 21 info
+**Findings:** 1 error · 2 warn · 21 info
 
 ## auctionhousekent
 
@@ -100,11 +100,6 @@ Scanned **34,365** rows in **30519ms** across **24** houses with findings.
 
 - **[info] bullet_starvation** — Content starvation: 31/31 (100%) lots have neither usable bullets nor a meaningful description
   - `{"empty":31,"total":31,"ratio":1}`
-
-## tcpa
-
-- **[error] duplicate_address_wall** — Duplicate-address wall: 1 visible address/sale pairs appear ≥3 times each (75 rows users can see) — stale re-list rows, URL variants, or venue extraction
-  - `{"unique_dupes":1,"total_dupe_rows":75,"examples":[{"address":"261 barlow moor road, manchester, lancashire, m21 7gj","auction_date":"2026-07-28","count":75}]}`
 
 ## thepropertyauctionhouse
 
