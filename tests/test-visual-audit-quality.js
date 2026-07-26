@@ -69,6 +69,30 @@ if (audit.duplicateAddressWall) {
   assert(audit.duplicateAddressWall(relists).length === 0, 'does not treat the same property in distinct future sales as duplicate rows');
   const sameSale = relists.map(r => ({ ...r, auction_date: '2026-08-01' }));
   assert(audit.duplicateAddressWall(sameSale).length === 1, 'still flags three copies of one address in the same sale');
+
+  const tcpaLodges = Array.from({ length: 5 }, (_, i) => ({
+    house: 'tcpa',
+    address: '261 Barlow Moor Road, Manchester, Lancashire, M21 7GJ',
+    auction_date: '2026-07-28',
+    status: 'available',
+    last_seen_at: '2026-07-26T10:00:00Z',
+    url: `https://yorkshire.townandcountrypropertyauctions.co.uk/lot/details/lodge-${i}`,
+    image_url: `https://cdn.eigpropertyauctions.co.uk/ams/images/421/auction/0/lodge-${i}_web_medium`,
+    price: 6500 + (i * 1000),
+  }));
+  assert(audit.duplicateAddressWall(tcpaLodges).length === 0,
+    'does not misclassify verified TCPA lodge inventory sharing one campsite address as duplicates');
+
+  const repeatedTcpaUuid = tcpaLodges.map((r, i) => ({
+    ...r,
+    url: `https://${i}.townandcountrypropertyauctions.co.uk/lot/details/lodge-0?variant=${i}`,
+  }));
+  assert(audit.duplicateAddressWall(repeatedTcpaUuid).length === 1,
+    'still flags repeated TCPA UUIDs across distinct regional-host/query variants');
+
+  const unknownSharedSite = tcpaLodges.map(r => ({ ...r, house: 'unknown-house' }));
+  assert(audit.duplicateAddressWall(unknownSharedSite).length === 1,
+    'shared-site suppression is source-specific and does not hide unverified address walls');
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

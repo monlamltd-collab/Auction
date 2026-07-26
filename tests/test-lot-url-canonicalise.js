@@ -9,6 +9,7 @@
 // canonicaliseLotUrl runs at persist so the conflict key is render-stable;
 // isEventPageUrl drops event pages before they become rows.
 import { canonicaliseLotUrl, HOUSE_ROOTS, rewriteUrl, UNSTABLE_LOT_URL_HOUSES } from '../lib/houses.js';
+import { FALLBACK_CALENDAR } from '../lib/calendar.js';
 import { isEventPageUrl } from '../lib/scraper/validation.js';
 
 let pass = 0, fail = 0;
@@ -48,6 +49,15 @@ check('paulfosh catalogue requests complete one-page list',
 check('paulfosh stale calendar URL rewrites to complete branded catalogue',
   (await rewriteUrl('https://paulfosh.eigonlineauctions.com/search', 'paulfosh')).baseUrl,
   HOUSE_ROOTS.paulfosh);
+check('tcpa catalogue requests the complete national list',
+  HOUSE_ROOTS.tcpa,
+  'https://www.townandcountrypropertyauctions.co.uk/search?pagesize=500');
+check('tcpa stale regional calendar URL rewrites to complete national catalogue',
+  (await rewriteUrl('https://yorkshire.townandcountrypropertyauctions.co.uk/search', 'tcpa')).baseUrl,
+  HOUSE_ROOTS.tcpa);
+check('tcpa fallback calendar requests the complete national list',
+  FALLBACK_CALENDAR.find(a => a.houseSlug === 'tcpa')?.url,
+  HOUSE_ROOTS.tcpa);
 check('paulfosh legacy EIG host aligned to current auction host',
   canonicaliseLotUrl('https://paulfosh.eigonlineauctions.com/lot/details/7096c572-6751-4075-94de-99cbcf3a4878', 'paulfosh'),
   'https://auction.paulfosh.com/lot/details/7096c572-6751-4075-94de-99cbcf3a4878');

@@ -56,6 +56,29 @@ const STALE_LOT_RATIO = 0.5;             // >50% past auction_date but still 'av
 const DUPLICATE_ADDRESS_MIN = 3;         // address appears in ≥3 rows in one house
 const MIN_HOUSE_LOTS = 5;                // ratio heuristics need a meaningful sample
 
+// Source-verified shared-address inventory: separately identified physical
+// units sold from one site, not duplicate property rows. Keep this exact and
+// source-scoped. A generic distinct-URL/image exemption would hide genuine
+// venue-address parser leakage at other houses.
+const VERIFIED_SHARED_ADDRESS_INVENTORY = new Map([
+  ['tcpa', new Set(['261 barlow moor road, manchester, lancashire, m21 7gj'])],
+]);
+const normaliseSharedAddress = (s) => String(s || '')
+  .replace(/\u00a0/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim()
+  .toLowerCase();
+function isVerifiedSharedAddressInventory(house, address) {
+  return VERIFIED_SHARED_ADDRESS_INVENTORY.get(String(house || '').toLowerCase())
+    ?.has(normaliseSharedAddress(address)) || false;
+}
+function eigLotDetailIdentity(url) {
+  try {
+    const match = new URL(String(url || '')).pathname.match(/\/lot\/details\/([^/]+)\/?$/i);
+    return match?.[1]?.toLowerCase() || null;
+  } catch { return null; }
+}
+
 // ── Severity ordering for sorted output ──
 const SEV_ORDER = { error: 0, warn: 1, info: 2 };
 
@@ -354,25 +377,40 @@ function duplicateAddressWall(rows) {
     (l.status === 'unsold' && l.auction_date && (new Date(l.auction_date).getTime()) > now - 30 * DAY));
   for (const [house, lots] of groupByHouse(visible)) {
     if (lots.length < MIN_HOUSE_LOTS) continue;
-    const counts = new Map();
+    const groups = new Map();
     for (const l of lots) {
-      const a = (l.address || '').trim().toLowerCase();
+      const a = normaliseSharedAddress(l.address);
       if (!a) continue;
       // Re-listing the same property in genuinely different sales is not a
       // duplicate wall. Only count copies of the same address in the same
       // sale (or multiple undated copies).
       const key = `${a}\u0000${l.auction_date || 'undated'}`;
-      counts.set(key, (counts.get(key) || 0) + 1);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(l);
     }
-    const dupes = [...counts.entries()].filter(([, c]) => c >= DUPLICATE_ADDRESS_MIN);
+    const dupes = [...groups.entries()].filter(([key, group]) => {
+      if (group.length < DUPLICATE_ADDRESS_MIN) return false;
+      const [address] = key.split('\u0000');
+      if (!isVerifiedSharedAddressInventory(house, address)) return true;
+
+      // The campsite exemption is valid only while the rows still prove
+      // separate source identities. Repeated UUIDs/URLs or image collapse must
+      // remain visible to Auction Heal even at this verified shared address.
+      const identities = group.map(l => eigLotDetailIdentity(l.url)).filter(Boolean);
+      const images = group.map(l => String(l.image_url || '').trim()).filter(Boolean);
+      const allIdentitiesUnique = identities.length === group.length
+        && new Set(identities).size === group.length;
+      const distinctImageRatio = new Set(images).size / group.length;
+      return !(allIdentitiesUnique && distinctImageRatio >= 0.8);
+    });
     if (dupes.length > 0) {
-      const total = dupes.reduce((s, [, c]) => s + c, 0);
+      const total = dupes.reduce((s, [, group]) => s + group.length, 0);
       findings.push({
         heuristic: 'duplicate_address_wall',
         severity: 'error',
         house,
         message: `Duplicate-address wall: ${dupes.length} visible address/sale pairs appear ≥${DUPLICATE_ADDRESS_MIN} times each (${total} rows users can see) — stale re-list rows, URL variants, or venue extraction`,
-        meta: { unique_dupes: dupes.length, total_dupe_rows: total, examples: dupes.slice(0, 3).map(([key, c]) => { const [address, auction_date] = key.split('\u0000'); return { address, auction_date: auction_date === 'undated' ? null : auction_date, count: c }; }) },
+        meta: { unique_dupes: dupes.length, total_dupe_rows: total, examples: dupes.slice(0, 3).map(([key, group]) => { const [address, auction_date] = key.split('\u0000'); return { address, auction_date: auction_date === 'undated' ? null : auction_date, count: group.length }; }) },
       });
     }
   }
