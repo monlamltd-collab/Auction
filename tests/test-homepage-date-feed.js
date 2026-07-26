@@ -2,13 +2,16 @@
  * Homepage date feed scorer (Task 7)
  * Run: node tests/test-homepage-date-feed.js
  */
-import {
+process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'http://localhost.invalid';
+process.env.SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || 'test-key';
+
+const {
   scoreHomepageDateCandidate,
   buildHomepageDateCandidates,
   AUTO_UPSERT_MIN,
   MEDIUM_MIN,
-} from '../lib/pipeline/homepage-date-feed.js';
-import { parseUkDate } from '../lib/utils/auction-date-parse.js';
+} = await import('../lib/pipeline/homepage-date-feed.js');
+const { parseUkDate } = await import('../lib/utils/auction-date-parse.js');
 
 let passed = 0, failed = 0;
 function assert(cond, msg) {
@@ -113,6 +116,20 @@ console.log('\nbuild list');
   });
   assert(list.length === 1, 'one candidate');
   assert(list[0].date === '2026-09-01', 'built date');
+}
+
+console.log('\nstrict watcher ownership');
+{
+  const list = buildHomepageDateCandidates([{
+    slug: 'mchughandco',
+    last_extracted_catalogue_url: 'https://mchughandco.com/current-auction',
+    last_next_auction_date: '16 September 2026',
+  }], {
+    todayIso: TODAY,
+    calendarBySlug: {},
+  });
+  assert(list[0].action === 'record', 'homepage feed cannot bypass McHugh date+lot verification');
+  assert(list[0].reasons.includes('strict_watcher_verification_required'), 'strict-owner reason recorded');
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

@@ -276,7 +276,6 @@ import { LOT_EVENT_TYPES, buildLotEvent, buildVanishedEvent, insertLotEvents } f
 import { isPdfUrl } from './lib/scraper/extraction.js';
 import { auditStatusDrift } from './lib/harness/sub-agents.js';
 import { initWatcher, watchAuctionCalendar } from './lib/pipeline/auction-watcher.js';
-import { syncCalendar } from './lib/pipeline/calendar-sync.js';
 import { pickNextHouseForDrift } from './lib/pipeline/drift-scheduler.js';
 import { initRentals, drainStaleRentals } from './lib/rentals/index.js';
 import { initHpi } from './lib/land-registry-hpi.js';
@@ -475,9 +474,14 @@ async function bootDecision() {
         try { await watchAuctionCalendar(); } catch (e) { console.error('SCHEDULE boot watcher failed (non-fatal):', e.message); }
         try {
           const { runHomepageDateFeed } = await import('./lib/pipeline/homepage-date-feed.js');
-          await runHomepageDateFeed(supabase, {});
+          const { fetchPage } = await import('./lib/scraper/http.js');
+          await runHomepageDateFeed(supabase, {
+            fetchHtml: async (u) => {
+              try { return await fetchPage(u); } catch { return ''; }
+            },
+          });
         } catch (e) { console.error('SCHEDULE boot homepage-date-feed failed (non-fatal):', e.message); }
-        try { await syncCalendar({ supabase }); } catch (e) { console.error('SCHEDULE boot syncCalendar failed (non-fatal):', e.message); }
+        // syncCalendar is owned once by autoAnalyseAll — avoid double reconciliation.
         await autoAnalyseAll();
       }).catch(e => console.error('SCHEDULE boot full pass failed:', e.message));
     } else {
@@ -511,12 +515,12 @@ function scheduleTick() {
   }
 
   // Tier 1: Full pass at 03:00 UK — watcher first (discovers Cat B / family URLs),
-  // homepage-date feed (cheap scored candidates), syncCalendar continuity,
-  // then autoAnalyseAll scrapes whatever the calendar now points at.
+  // homepage-date feed (cheap scored candidates), then autoAnalyseAll which owns
+  // syncCalendar reconciliation and scrapes whatever the calendar now points at.
   // Discovery runs inside autoAnalyseAll post-scrape and skips watcher-handled slugs.
   if (hour === 3 && minute < 5 && now - _scheduleState.lastFullPass > 60 * 60 * 1000) {
     _scheduleState.lastFullPass = now;
-    console.log('SCHEDULE: 03:00 UK — watcher → homepage-date-feed → syncCalendar → autoAnalyseAll');
+    console.log('SCHEDULE: 03:00 UK — watcher → homepage-date-feed → autoAnalyseAll');
     withTier('full', async () => {
       try { await watchAuctionCalendar(); } catch (e) { console.error('SCHEDULE watcher failed (non-fatal):', e.message); }
       try {
@@ -531,7 +535,6 @@ function scheduleTick() {
           `SCHEDULE homepage-date-feed: rows=${feed.rows} auto=${feed.autoUpserted} ready=${feed.readyToApply} skip=${feed.skipped} err=${feed.errors}`,
         );
       } catch (e) { console.error('SCHEDULE homepage-date-feed failed (non-fatal):', e.message); }
-      try { await syncCalendar(supabase, { log }); } catch (e) { console.error('SCHEDULE syncCalendar failed (non-fatal):', e.message); }
       await autoAnalyseAll();
       invalidateAllLotsCache(); // fresh scrape data should appear immediately
     }).catch(e => console.error('SCHEDULE full pass failed:', e.message));

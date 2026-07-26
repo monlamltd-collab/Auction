@@ -2,14 +2,18 @@
  * Platform family discovery resolver (Task 6)
  * Run: node tests/test-platform-discovery.js
  */
-import {
+process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'http://localhost.invalid';
+process.env.SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || 'test-key';
+
+const {
   resolveDiscoveryConfig,
   listWatchableSlugs,
   looksLikeEigRoot,
   isAuctionWatcherExpandEnabled,
   ahFamilyConfig,
   eigFamilyConfig,
-} from '../lib/pipeline/platform-discovery.js';
+} = await import('../lib/pipeline/platform-discovery.js');
+const { AUCTION_DISCOVERY } = await import('../lib/houses.js');
 
 let passed = 0, failed = 0;
 function assert(cond, msg) {
@@ -94,6 +98,15 @@ console.log('\nlistWatchableSlugs');
   assert(!slugs.includes('puremmoa'), 'pure mmoa root not auto-enrolled without signal');
   // maggs is explicit already
   assert(new Set(slugs).size === slugs.length, 'deduped');
+}
+
+console.log('\nMcHugh explicit readiness watcher');
+{
+  const cfg = AUCTION_DISCOVERY.mchughandco;
+  assert(!!cfg, 'mchughandco is explicitly revisited rather than waiting for generic budget rotation');
+  assert(cfg?.homepage === 'https://mchughandco.com/current-auction', 'watcher probes the canonical rolling catalogue');
+  assert(cfg?.requireCandidateDateVerification === true, 'rolling catalogue requires its candidate date on the fetched page');
+  assert(cfg?.allowDateFallback === false, 'rolling catalogue cannot receive a synthetic fallback date');
 }
 
 console.log('\nflag');

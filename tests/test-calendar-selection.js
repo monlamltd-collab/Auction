@@ -112,5 +112,18 @@ console.log('\nTest 6: empty input');
   assert(ready.length === 0 && skipped.length === 0, 'no houses → nothing selected, no crash');
 }
 
+console.log('\nTest 7: resolver_backstop queue records remain schedulable');
+{
+  const byHouse = {
+    savills: [
+      { url: 'https://auctions.savills.co.uk/upcoming-auctions', date: null, status: 'resolver_backstop', catalogueReady: false, resolverBackstop: true },
+      { url: 'https://auctions.savills.co.uk/auctions/far-out', date: '2026-12-01', status: 'upcoming' },
+    ],
+  };
+  const { ready, skipped } = selectAuctionsPerHouse(byHouse, 1);
+  assert(ready.length === 1 && ready[0].status === 'resolver_backstop', 'resolver backstop is selected without claiming always_on readiness');
+  assert(skipped.length === 1 && skipped[0].auction.url.includes('far-out'), 'dated false/unready rows can yield to the resolver queue entry');
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

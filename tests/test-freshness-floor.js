@@ -121,15 +121,24 @@ console.log('\nTest 4: pickCatalogueReadyRescues');
   const out = pickCatalogueReadyRescues({ rows, houseRoots: ROOTS, retiredHouses: RETIRED, todayStr: TODAY });
   const ids = out.map(r => r.id).sort((a, b) => a - b);
 
-  assert(ids.includes(1), 'rescues the mchughandco dated row (URL == canonical root, future date, no ready row)');
-  assert(ids.includes(2), 'www/trailing-slash variant of root still matches (normaliseUrl both sides)');
+  assert(!ids.includes(1), 'canonical-root equality alone does NOT prove a catalogue has lots');
+  assert(!ids.includes(2), 'URL normalisation alone does not bypass catalogue verification');
   assert(!ids.includes(3), 'bespoke per-auction URL (bondwolfe marketing page) NOT rescued — guardrail alert covers it');
   assert(!ids.includes(4), 'merged rows never rescued');
   assert(!ids.includes(5), 'past-dated rows never rescued');
   assert(!ids.includes(6) && !ids.includes(7), 'house with an existing ready row untouched');
   assert(!ids.includes(8), 'retired house skipped');
   assert(!ids.includes(9), 'always_on rows left to the realign pass');
-  assert(JSON.stringify(ids) === JSON.stringify([1, 2]), `exactly the two safe rescues (got ${JSON.stringify(ids)})`);
+  assert(ids.length === 0, `no unverified rows are force-readied (got ${JSON.stringify(ids)})`);
+
+  const verified = pickCatalogueReadyRescues({
+    rows,
+    houseRoots: ROOTS,
+    retiredHouses: RETIRED,
+    todayStr: TODAY,
+    verifiedRowIds: new Set([2]),
+  });
+  assert(JSON.stringify(verified.map(r => r.id)) === JSON.stringify([2]), 'an explicitly lot-verified row may be promoted');
 
   // repairedSlugs: a slug fixed by the realign pass this run is skipped.
   const out2 = pickCatalogueReadyRescues({ rows: [mchugh], houseRoots: ROOTS, retiredHouses: RETIRED, repairedSlugs: new Set(['mchughandco']), todayStr: TODAY });

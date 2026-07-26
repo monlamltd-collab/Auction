@@ -154,5 +154,43 @@ console.log('\nbudget select prioritises dark');
   assert(sel.darkUsed === 1 && sel.recheckUsed === 1, 'budgets applied');
 }
 
+console.log('\nequal-priority targets rotate oldest attempt first');
+{
+  const evals = [
+    { slug: 'alpha', eligible: true, priority: 95, bucket: 'dark', lastDiscoveryAt: '2026-07-24T00:00:00Z' },
+    { slug: 'bravo', eligible: true, priority: 95, bucket: 'dark', lastDiscoveryAt: null },
+    { slug: 'charlie', eligible: true, priority: 95, bucket: 'dark', lastDiscoveryAt: '2026-07-01T00:00:00Z' },
+  ];
+  const sel = selectDiscoveryTargets(evals, { darkBudget: 2, recheckBudget: 0 });
+  assert(JSON.stringify(sel.selected.map(x => x.slug)) === JSON.stringify(['bravo', 'charlie']), 'never-attempted then oldest-attempted; recently attempted cannot starve them');
+}
+
+console.log('\ncross-priority targets rotate across repeated cycles');
+{
+  const evals = [
+    { slug: 'high-a', eligible: true, priority: 95, bucket: 'dark', lastDiscoveryAt: null },
+    { slug: 'high-b', eligible: true, priority: 95, bucket: 'dark', lastDiscoveryAt: null },
+    { slug: 'lower', eligible: true, priority: 70, bucket: 'dark', lastDiscoveryAt: null },
+  ];
+  const selectedAcrossCycles = [];
+  for (let cycle = 1; cycle <= 3; cycle++) {
+    const sel = selectDiscoveryTargets(evals, { darkBudget: 1, recheckBudget: 0 });
+    const chosen = sel.selected[0];
+    selectedAcrossCycles.push(chosen.slug);
+    chosen.lastDiscoveryAt = `2026-07-${String(20 + cycle).padStart(2, '0')}T00:00:00Z`;
+  }
+  assert(JSON.stringify(selectedAcrossCycles) === JSON.stringify(['high-a', 'high-b', 'lower']), 'lower-priority never-attempted house is selected before recently attempted high-priority houses');
+}
+
+console.log('\nforce selection retains precedence and budget semantics');
+{
+  const evals = [
+    { slug: 'normal-never', eligible: true, priority: 95, bucket: 'dark', lastDiscoveryAt: null },
+    { slug: 'forced-recent', eligible: true, priority: 100, bucket: 'force', lastDiscoveryAt: '2026-07-24T00:00:00Z' },
+  ];
+  const sel = selectDiscoveryTargets(evals, { darkBudget: 0, recheckBudget: 0, maxTotal: 1 });
+  assert(sel.selected[0]?.slug === 'forced-recent' && sel.darkUsed === 0, 'force bypasses dark budget and sorts before ordinary work');
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
