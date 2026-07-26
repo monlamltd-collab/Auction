@@ -1,6 +1,6 @@
 # Visual Audit — 2026-07-26
 
-Scanned **34,365** rows in **30274ms** across **24** houses with findings.
+Scanned **34,365** rows in **30519ms** across **24** houses with findings.
 
 **Findings:** 2 error · 2 warn · 21 info
 
