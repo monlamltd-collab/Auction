@@ -62,38 +62,24 @@ const SEV_ORDER = { error: 0, warn: 1, info: 2 };
 // ── Heuristic runners ──
 // Each runner returns array of findings: { heuristic, severity, house, message, meta }
 
-async function heroImageBleed() {
-  // Group by (house, image_url) — flag where the same image_url is shared by ≥N distinct addresses
-  const { data, error } = await supabase.rpc('exec_sql_visual_audit_v1');
-  // Fallback to direct SELECT (no custom RPC required)
-  if (!data) {
-    const { data: rows, error: e2 } = await supabase
-      .from('lots')
-      .select('house, image_url, address')
-      .not('image_url', 'is', null)
-      .not('address', 'is', null);
-    if (e2) throw e2;
-    const map = new Map();
-    for (const r of rows || []) {
-      const k = `${(r.house || '').toLowerCase()}|${r.image_url}`;
-      if (!map.has(k)) map.set(k, { house: (r.house || '').toLowerCase(), image_url: r.image_url, addrs: new Set() });
-      map.get(k).addrs.add((r.address || '').trim().toLowerCase());
-    }
-    const findings = [];
-    for (const v of map.values()) {
-      if (v.addrs.size >= HERO_BLEED_MIN_DISTINCT) {
-        findings.push({
-          heuristic: 'hero_image_bleed',
-          severity: 'error',
-          house: v.house,
-          message: `Hero-image bleed: ${v.addrs.size} distinct addresses share one image_url`,
-          meta: { image_url: v.image_url, distinct_addresses: v.addrs.size },
-        });
-      }
-    }
-    return findings;
+function heroImageBleed(rows) {
+  const map = new Map();
+  for (const r of rows || []) {
+    if (!r.image_url || !r.address) continue;
+    const k = `${(r.house || '').toLowerCase()}|${r.image_url}`;
+    if (!map.has(k)) map.set(k, { house: (r.house || '').toLowerCase(), image_url: r.image_url, addrs: new Set(), ids: new Set() });
+    map.get(k).addrs.add((r.address || '').trim().toLowerCase());
+    if (r.id) map.get(k).ids.add(r.id);
   }
-  return [];
+  const findings = [];
+  for (const v of map.values()) {
+    if (v.addrs.size >= HERO_BLEED_MIN_DISTINCT) findings.push({
+      heuristic: 'hero_image_bleed', severity: 'error', house: v.house,
+      message: `Hero-image bleed: ${v.addrs.size} distinct current addresses share one image_url`,
+      meta: { image_url: v.image_url, distinct_addresses: v.addrs.size, row_ids: [...v.ids] },
+    });
+  }
+  return findings;
 }
 
 async function slugCaseDuplication() {
@@ -133,7 +119,7 @@ async function loadAllLots() {
   while (true) {
     const { data, error } = await supabase
       .from('lots')
-      .select('house, address, price, price_text, bullets, image_url, url, auction_date, status, last_seen_at')
+      .select('id, house, address, price, price_text, bullets, description, image_url, url, auction_date, status, last_seen_at')
       .order('id', { ascending: true })
       .range(from, from + PAGE - 1);
     if (error) throw error;
@@ -154,6 +140,28 @@ function groupByHouse(rows) {
     m.get(h).push(r);
   }
   return m;
+}
+
+// Quality ratios should describe what users can see now, not the full archive.
+// Mirror the production active-feed contract exactly.
+function currentAuditRows(rows, nowMs = Date.now()) {
+  const DAY = 86400000;
+  const yesterday = new Date(nowMs - DAY).toISOString().slice(0, 10);
+  return (rows || []).filter(r => {
+    const status = (r.status || '').toLowerCase();
+    const seen = r.last_seen_at ? new Date(r.last_seen_at).getTime() : NaN;
+    if (status === 'available') {
+      return Number.isFinite(seen) && nowMs - seen <= 7 * DAY
+        && (!r.auction_date || r.auction_date >= yesterday);
+    }
+    if (status === 'unsold') {
+      const sale = r.auction_date ? new Date(`${r.auction_date}T00:00:00Z`).getTime() : NaN;
+      if (!Number.isFinite(sale)) return false;
+      if (sale <= nowMs) return sale > nowMs - 30 * DAY;
+      return Number.isFinite(seen) && nowMs - seen <= 7 * DAY;
+    }
+    return false;
+  });
 }
 
 function townOnlyAddress(rows) {
@@ -232,14 +240,18 @@ function bulletStarvation(rows) {
   const findings = [];
   for (const [house, lots] of groupByHouse(rows)) {
     if (lots.length < MIN_HOUSE_LOTS) continue;
-    const empty = lots.filter(l => !Array.isArray(l.bullets) || l.bullets.length === 0).length;
+    const empty = lots.filter(l => {
+      const hasBullets = Array.isArray(l.bullets) && l.bullets.some(b => String(b || '').trim().length >= 10);
+      const hasDescription = String(l.description || '').trim().length >= 40;
+      return !hasBullets && !hasDescription;
+    }).length;
     const ratio = empty / lots.length;
     if (ratio > BULLET_STARVATION_RATIO) {
       findings.push({
         heuristic: 'bullet_starvation',
         severity: 'info',
         house,
-        message: `Bullet starvation: ${empty}/${lots.length} (${(ratio * 100).toFixed(0)}%) lots have empty bullets`,
+        message: `Content starvation: ${empty}/${lots.length} (${(ratio * 100).toFixed(0)}%) lots have neither usable bullets nor a meaningful description`,
         meta: { empty, total: lots.length, ratio: +ratio.toFixed(3) },
       });
     }
@@ -274,24 +286,28 @@ function imageDomainMismatch(rows) {
   for (const [house, lots] of groupByHouse(rows)) {
     if (lots.length < MIN_HOUSE_LOTS) continue;
     const hosts = new Map();
+    const urls = new Map();
     for (const l of lots) {
       if (!l.image_url) continue;
       try {
         const host = new URL(l.image_url).host;
         hosts.set(host, (hosts.get(host) || 0) + 1);
+        urls.set(l.image_url, (urls.get(l.image_url) || 0) + 1);
       } catch {}
     }
     if (hosts.size === 0) continue;
     let topHost = null, topCount = 0;
     for (const [h, c] of hosts) if (c > topCount) { topHost = h; topCount = c; }
     const ratio = topCount / lots.length;
-    if (topHost && ratio > 0.9 && !KNOWN_CDNS.some(c => topHost.includes(c)) && !topHost.includes(house)) {
+    const topUrlCount = Math.max(0, ...urls.values());
+    const repeatedUrlRatio = topUrlCount / lots.length;
+    if (topHost && ratio > 0.9 && repeatedUrlRatio > 0.5 && !KNOWN_CDNS.some(c => topHost.includes(c)) && !topHost.includes(house)) {
       findings.push({
         heuristic: 'image_domain_mismatch',
         severity: 'info',
         house,
-        message: `Image domain mismatch: ${topCount}/${lots.length} (${(ratio * 100).toFixed(0)}%) lots use host '${topHost}' — could be a logo/placeholder`,
-        meta: { host: topHost, count: topCount, total: lots.length, ratio: +ratio.toFixed(3) },
+        message: `Image placeholder wall: ${topCount}/${lots.length} lots use host '${topHost}' and one URL repeats on ${(repeatedUrlRatio * 100).toFixed(0)}% of lots`,
+        meta: { host: topHost, count: topCount, total: lots.length, ratio: +ratio.toFixed(3), repeated_url_ratio: +repeatedUrlRatio.toFixed(3) },
       });
     }
   }
@@ -342,7 +358,11 @@ function duplicateAddressWall(rows) {
     for (const l of lots) {
       const a = (l.address || '').trim().toLowerCase();
       if (!a) continue;
-      counts.set(a, (counts.get(a) || 0) + 1);
+      // Re-listing the same property in genuinely different sales is not a
+      // duplicate wall. Only count copies of the same address in the same
+      // sale (or multiple undated copies).
+      const key = `${a}\u0000${l.auction_date || 'undated'}`;
+      counts.set(key, (counts.get(key) || 0) + 1);
     }
     const dupes = [...counts.entries()].filter(([, c]) => c >= DUPLICATE_ADDRESS_MIN);
     if (dupes.length > 0) {
@@ -351,8 +371,8 @@ function duplicateAddressWall(rows) {
         heuristic: 'duplicate_address_wall',
         severity: 'error',
         house,
-        message: `Duplicate-address wall: ${dupes.length} visible addresses appear ≥${DUPLICATE_ADDRESS_MIN} times each (${total} rows users can see) — stale re-list rows, URL variants, or venue extraction`,
-        meta: { unique_dupes: dupes.length, total_dupe_rows: total, examples: dupes.slice(0, 3).map(([a, c]) => ({ address: a, count: c })) },
+        message: `Duplicate-address wall: ${dupes.length} visible address/sale pairs appear ≥${DUPLICATE_ADDRESS_MIN} times each (${total} rows users can see) — stale re-list rows, URL variants, or venue extraction`,
+        meta: { unique_dupes: dupes.length, total_dupe_rows: total, examples: dupes.slice(0, 3).map(([key, c]) => { const [address, auction_date] = key.split('\u0000'); return { address, auction_date: auction_date === 'undated' ? null : auction_date, count: c }; }) },
       });
     }
   }
@@ -409,22 +429,23 @@ async function runAudit() {
   const findings = [];
   const t0 = Date.now();
 
-  // hero-image bleed + slug-case dup query their own slim data sets
-  findings.push(...await heroImageBleed());
+  // Slug-case duplication still needs its own case-preserving query.
   findings.push(...await slugCaseDuplication());
 
   // Single fat fetch for all ratio-style heuristics
   const rows = await loadAllLots();
-  findings.push(...townOnlyAddress(rows));
-  findings.push(...identicalPriceWall(rows));
-  findings.push(...guideTbaWall(rows));
-  findings.push(...bulletStarvation(rows));
-  findings.push(...imageCoverageLow(rows));
-  findings.push(...imageDomainMismatch(rows));
+  const currentRows = currentAuditRows(rows);
+  findings.push(...heroImageBleed(currentRows));
+  findings.push(...townOnlyAddress(currentRows));
+  findings.push(...identicalPriceWall(currentRows));
+  findings.push(...guideTbaWall(currentRows));
+  findings.push(...bulletStarvation(currentRows));
+  findings.push(...imageCoverageLow(currentRows));
+  findings.push(...imageDomainMismatch(currentRows));
   findings.push(...staleLotWall(rows));
-  findings.push(...duplicateAddressWall(rows));
-  findings.push(...crossHouseUrlLeak(rows));
-  findings.push(...retiredSlugStraggler(rows));
+  findings.push(...duplicateAddressWall(currentRows));
+  findings.push(...crossHouseUrlLeak(currentRows));
+  findings.push(...retiredSlugStraggler(currentRows));
 
   const ms = Date.now() - t0;
   return { findings, scannedRows: rows.length, ms };
@@ -481,19 +502,11 @@ async function applyAutoFixes(findings) {
   for (const f of bleedFindings) {
     const slug = (f.house || '').toLowerCase();
     const url = f.meta?.image_url;
+    // IDs come from the exact current cohort that produced the finding. Never
+    // re-expand by image URL here: that would include archived rows that were
+    // intentionally excluded from the audit.
+    const ids = Array.isArray(f.meta?.row_ids) ? [...new Set(f.meta.row_ids.filter(Boolean))] : [];
     if (!slug || !url) continue;
-    // Cannot use lower(house) in a Supabase JS client filter directly — fetch
-    // matching rows by image_url first, then filter slug client-side. With a
-    // single equality on image_url this is cheap (one image_url per finding).
-    const { data: matches, error: selErr } = await supabase
-      .from('lots')
-      .select('id, house')
-      .eq('image_url', url);
-    if (selErr) {
-      console.warn(`AUTO-FIX: select failed for ${slug} ${url}: ${selErr.message}`);
-      continue;
-    }
-    const ids = (matches || []).filter(r => (r.house || '').toLowerCase() === slug).map(r => r.id);
     if (ids.length === 0) continue;
     const { error: updErr } = await supabase
       .from('lots')
@@ -585,7 +598,7 @@ async function main() {
 // Allow import as a module (for /api/admin/visual-audit) AND CLI usage
 const isMainModule = import.meta.url === `file://${process.argv[1].replace(/\\/g, '/')}` || import.meta.url.endsWith(process.argv[1].split(/[\\\/]/).pop());
 
-export { runAudit, renderReport, writeAlerts, applyAutoFixes };
+export { runAudit, renderReport, writeAlerts, applyAutoFixes, currentAuditRows, heroImageBleed, bulletStarvation, imageDomainMismatch, duplicateAddressWall };
 
 if (isMainModule) {
   main().catch(err => {
