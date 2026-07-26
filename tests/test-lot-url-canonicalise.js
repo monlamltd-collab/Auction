@@ -8,7 +8,7 @@
 //     /auction/<date>/ event URL.
 // canonicaliseLotUrl runs at persist so the conflict key is render-stable;
 // isEventPageUrl drops event pages before they become rows.
-import { canonicaliseLotUrl, HOUSE_ROOTS, UNSTABLE_LOT_URL_HOUSES } from '../lib/houses.js';
+import { canonicaliseLotUrl, HOUSE_ROOTS, rewriteUrl, UNSTABLE_LOT_URL_HOUSES } from '../lib/houses.js';
 import { isEventPageUrl } from '../lib/scraper/validation.js';
 
 let pass = 0, fail = 0;
@@ -45,6 +45,9 @@ check('venmore www host unchanged',
 check('paulfosh catalogue requests complete one-page list',
   HOUSE_ROOTS.paulfosh,
   'https://auction.paulfosh.com/search?view=List&pagesize=200&page=1');
+check('paulfosh stale calendar URL rewrites to complete branded catalogue',
+  (await rewriteUrl('https://paulfosh.eigonlineauctions.com/search', 'paulfosh')).baseUrl,
+  HOUSE_ROOTS.paulfosh);
 check('paulfosh legacy EIG host aligned to current auction host',
   canonicaliseLotUrl('https://paulfosh.eigonlineauctions.com/lot/details/7096c572-6751-4075-94de-99cbcf3a4878', 'paulfosh'),
   'https://auction.paulfosh.com/lot/details/7096c572-6751-4075-94de-99cbcf3a4878');
