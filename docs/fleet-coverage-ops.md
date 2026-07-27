@@ -34,8 +34,17 @@ Homepage-watch at 03:30 (alternate days) still runs; after a successful cycle it
 - `BACKLOG_DIGEST_ENABLED` — **off** (noise control)
 - `DISCOVERY_DARK_BUDGET` — 25
 - `DISCOVERY_RECHECK_BUDGET` — 10
+- `DISCOVERY_VIP_BUDGET` — 5 (extra slots so VIP must-cover never starve)
 - `WATCHER_HORIZON_DAYS` — 56
 - `WATCHER_MAX_UPSERTS` — 3
+- `WATCHER_NEAR_READY_DAYS` — 21 (nearest sale in window must be ready or refresh)
+- `WATCHER_STALE_NOT_READY_DAYS` — 7 (stale not-ready rows force refresh)
+
+### Coverage rule (Savills class)
+
+A house is **not** covered merely because *some* future sale is `catalogue_ready`. The **nearest** upcoming inside `WATCHER_NEAR_READY_DAYS` must be ready (or correctly not-ready with a **fresh** check). Multi-sale houses like Savills previously skipped refresh when Aug/Sep were ready while Jul stayed `ready=false` since March.
+
+VIP must-cover list (`VIP_MUST_COVER_HOUSES` in `discovery-eligibility.js`): savills, allsop, btgeddisons, knightfrank, bondwolfe, suttonkersh, buttersjohnbee — shorter recheck (3d), higher priority, VIP budget overflow.
 
 ## Admin endpoints
 

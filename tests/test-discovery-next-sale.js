@@ -6,6 +6,7 @@ import {
   evaluateDiscoveryEligibility,
   selectDiscoveryTargets,
   DEFAULT_RECHECK_DAYS,
+  isVipMustCoverHouse,
 } from '../lib/pipeline/discovery-eligibility.js';
 
 let passed = 0, failed = 0;
@@ -82,7 +83,7 @@ console.log('\ndark traditional eligible high priority');
 console.log('\nhealthy + recent recheck skip');
 {
   const e = evaluateDiscoveryEligibility({
-    slug: 'savills',
+    slug: 'example-trad',
     todayIso: TODAY,
     lastDiscoveryAt: '2026-07-24T12:00:00.000Z',
     calendarRows: [
@@ -90,7 +91,7 @@ console.log('\nhealthy + recent recheck skip');
       { status: 'upcoming', date: '2026-10-01', catalogue_ready: true, url: 'https://x/b' },
     ],
     classifyInput: {
-      slug: 'savills',
+      slug: 'example-trad',
       discoveryConfig: {},
       calendarRows: [
         { status: 'upcoming', date: '2026-09-01', catalogue_ready: true, url: 'https://x/a' },
@@ -100,6 +101,60 @@ console.log('\nhealthy + recent recheck skip');
   });
   assert(e.eligible === false, 'healthy skip');
   assert(e.bucket === 'healthy_skip', 'healthy_skip bucket');
+}
+
+console.log('\nSavills multi-sale nearest_not_ready is unhealthy VIP');
+{
+  const e = evaluateDiscoveryEligibility({
+    slug: 'savills',
+    todayIso: TODAY,
+    lastDiscoveryAt: '2026-07-24T12:00:00.000Z',
+    calendarRows: [
+      {
+        status: 'upcoming',
+        date: '2026-07-28',
+        catalogue_ready: false,
+        url: 'https://x/jul',
+        updated_at: '2026-03-10',
+      },
+      { status: 'upcoming', date: '2026-08-18', catalogue_ready: true, url: 'https://x/aug' },
+    ],
+    classifyInput: {
+      slug: 'savills',
+      discoveryConfig: { homepage: 'https://auctions.savills.co.uk/upcoming-auctions' },
+      calendarRows: [
+        {
+          status: 'upcoming',
+          date: '2026-07-28',
+          catalogue_ready: false,
+          url: 'https://x/jul',
+          updated_at: '2026-03-10',
+        },
+        { status: 'upcoming', date: '2026-08-18', catalogue_ready: true, url: 'https://x/aug' },
+      ],
+    },
+  });
+  assert(e.eligible === true, 'savills nearest_not_ready eligible');
+  assert(e.bucket === 'unhealthy', 'unhealthy bucket');
+  assert(e.vip === true, 'savills is VIP');
+  assert(e.priority >= 96, 'VIP unhealthy high priority');
+  assert(e.horizon.reasons.includes('nearest_not_ready'), 'horizon nearest_not_ready');
+  assert(isVipMustCoverHouse('savills'), 'VIP list includes savills');
+}
+
+console.log('\nVIP dark not starved when dark budget full');
+{
+  // Attempt-age sorts never-attempted ordinary before VIP with a prior attempt,
+  // so VIP must consume vipBudget overflow once darkBudget is exhausted.
+  const evals = [
+    { slug: 'ordinary-a', eligible: true, priority: 95, bucket: 'dark', vip: false, lastDiscoveryAt: null },
+    { slug: 'ordinary-b', eligible: true, priority: 95, bucket: 'dark', vip: false, lastDiscoveryAt: null },
+    { slug: 'savills', eligible: true, priority: 98, bucket: 'dark', vip: true, lastDiscoveryAt: '2026-07-01T00:00:00Z' },
+  ];
+  const sel = selectDiscoveryTargets(evals, { darkBudget: 1, recheckBudget: 0, vipBudget: 2, maxTotal: 3 });
+  assert(sel.selected.some((x) => x.slug === 'savills'), 'VIP selected despite dark budget 1');
+  assert(sel.vipExtraUsed >= 1, 'vip extra budget used');
+  assert(sel.selected[0].slug === 'ordinary-a', 'never-attempted ordinary still first by age');
 }
 
 console.log('\nsingle sale weekly recheck when stale');

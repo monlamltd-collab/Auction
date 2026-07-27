@@ -66,15 +66,34 @@ console.log('\nscoreHousePopulation');
 
   const tradReady = scoreHousePopulation({
     discoveryClass: 'traditional_rotating',
-    spine: { fresh: false, availableN: 0, upcomingReadyInHorizon: 1, upcomingInHorizon: 1, upcomingReal: 1, upcomingReady: 1, hasAlwaysOn: false },
+    spine: {
+      fresh: false, availableN: 0, upcomingReadyInHorizon: 1, upcomingInHorizon: 1,
+      upcomingReal: 1, upcomingReady: 1, hasAlwaysOn: false,
+      nearestUpcoming: '2026-08-05', nearestReady: true, nearestInNearWindow: true,
+    },
   });
   assert(tradReady.credit === 1 && !tradReady.dark, 'trad ready horizon credit');
 
+  const savillsNearestTrap = scoreHousePopulation({
+    discoveryClass: 'traditional_rotating',
+    spine: {
+      fresh: false, availableN: 40, upcomingReadyInHorizon: 2, upcomingInHorizon: 3,
+      upcomingReal: 3, upcomingReady: 2, hasAlwaysOn: false,
+      nearestUpcoming: '2026-07-28', nearestReady: false, nearestInNearWindow: true,
+    },
+  });
+  assert(savillsNearestTrap.credit === 0 && savillsNearestTrap.dark === true, 'nearest not ready dark');
+  assert(savillsNearestTrap.reason === 'nearest_not_ready', 'nearest_not_ready reason');
+
   const tradNotReady = scoreHousePopulation({
     discoveryClass: 'traditional_rotating',
-    spine: { fresh: false, availableN: 0, upcomingReadyInHorizon: 0, upcomingInHorizon: 1, upcomingReal: 1, upcomingReady: 0, hasAlwaysOn: false },
+    spine: {
+      fresh: false, availableN: 0, upcomingReadyInHorizon: 0, upcomingInHorizon: 1,
+      upcomingReal: 1, upcomingReady: 0, hasAlwaysOn: false,
+      nearestUpcoming: '2026-08-10', nearestReady: false, nearestInNearWindow: true,
+    },
   });
-  assert(tradNotReady.reason === 'upcoming_not_ready', 'trad not ready');
+  assert(tradNotReady.reason === 'nearest_not_ready' || tradNotReady.reason === 'upcoming_not_ready', 'trad not ready');
 
   const tradDark = scoreHousePopulation({
     discoveryClass: 'traditional_rotating',
