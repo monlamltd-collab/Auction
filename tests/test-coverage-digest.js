@@ -135,10 +135,13 @@ console.log('\nTest 6: formatDigestForTelegram (no deltas)');
     deltas: {},
   });
   assert(out.includes('1234'), 'total lots in output');
+  assert(out.includes('Total lots:'), 'uses full-inventory label');
+  assert(out.includes('% of all lots with each field'), 'explains denominator');
   assert(out.includes('EPC: 75.0%'), 'epc rendered');
   assert(out.includes('Flood: 90.0%'), 'flood rendered');
   assert(out.includes('Yield: 55.0%'), 'yield rendered');
   assert(!out.includes('+'), 'no deltas means no plus signs');
+  assert(!out.includes('last 7d'), 'no longer a 7-day sample digest');
 }
 
 // ── Test 7: formatDigestForTelegram with deltas ──
@@ -167,7 +170,21 @@ console.log('\nTest 8: formatDigestForTelegram error path');
 console.log('\nTest 9: zero lots edge case');
 {
   const out = formatDigestForTelegram({ totalLots: 0, coverage: {}, deltas: {} });
-  assert(out.includes('No lots seen'), 'zero-lots message');
+  assert(out.includes('No lots in inventory'), 'zero-lots message');
+}
+
+console.log('\nTest 11: computeCoverage respects explicit total denominator');
+{
+  // 3 covered images out of 10 inventory lots → 30%, not 100% of the sample rows.
+  const rows = [
+    { image_url: 'a', postcode: 'X', est_gross_yield: 1, enrichment_manifest: null },
+    { image_url: 'b', postcode: 'Y', est_gross_yield: null, enrichment_manifest: null },
+    { image_url: 'c', postcode: null, est_gross_yield: null, enrichment_manifest: null },
+  ];
+  const c = computeCoverage(rows, 10);
+  assert(c.image_pct === 30, `image_pct = 30 over total=10 (got ${c.image_pct})`);
+  assert(c.postcode_pct === 20, `postcode_pct = 20 over total=10 (got ${c.postcode_pct})`);
+  assert(c.yield_pct === 10, `yield_pct = 10 over total=10 (got ${c.yield_pct})`);
 }
 
 console.log('\nTest 10: computeWorstHouses ranks weak image/postcode');
