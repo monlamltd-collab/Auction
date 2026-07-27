@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase.js';
 import { validateUserFromReq, rateLimit, getClientIP, safeCompare } from '../lib/auth.js';
 import { log } from '../lib/logging.js';
 import { resolveEffectiveTier, getAISearchLimit, STRIPE_ENABLED, stripAIFields, applyAnonTeaserGate } from '../lib/config.js';
+import { assessLotAddress } from '../lib/quality/address-quality.js';
 import { callAI, hasAIFallback } from '../lib/ai-provider.js';
 import { logActivityEvent, getCreditExhausted, setCreditExhausted, getCreditExhaustedAt, setCreditExhaustedAt } from '../lib/analysis.js';
 import { LOTS_SELECT, dbRowToLot } from '../lib/types/lot.js';
@@ -1485,14 +1486,16 @@ async function buildAllLotsResponse({ isSignedIn, includePast }) {
     if (crossRemoved > 0) console.log(`Cross-auction dedup: removed ${crossRemoved} duplicate lots (same house, different dates)`);
 
     // Sanitise junk lots — remove non-property entries (email addresses, field labels, etc.)
-    const junkAddr = /^(enquiries|info|sales|contact|admin|hello)@|^£[\d,]+|^Properties?$/i;
-    const junkAddr2 = /^(Lot|View|More|See|Click|Browse)\s|^Property Type$/i;
+    // Shared address-quality gate (city shells, portfolio titles, town-county
+    // labels, UI chrome). Keeps Allsop "Bristol" £8m and Clive "Dover - Kent"
+    // incomplete scrapes off the browse board even if extractors regress.
     const beforeJunkLot = finalLots.length;
     const cleanLots = finalLots.filter(l => {
-      const addr = (l.address || '').trim();
-      if (addr.length < 5) return false;
-      if (junkAddr.test(addr) || junkAddr2.test(addr)) return false;
-      return true;
+      const verdict = assessLotAddress(l.address, {
+        postcode: l.postcode || null,
+        url: l.url || null,
+      });
+      return verdict.ok;
     });
     const junkLotRemoved = beforeJunkLot - cleanLots.length;
     if (junkLotRemoved > 0) console.log(`Lot sanitiser: removed ${junkLotRemoved} junk lots (non-property entries)`);
