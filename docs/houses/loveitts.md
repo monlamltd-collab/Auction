@@ -12,6 +12,8 @@
 - Multi-sale traditional house — calendar must carry **real** `YYYY-MM-DD` upcoming rows, not `2099-*`.
 - `rewriteUrl` always pins scrapes to `HOUSE_ROOTS.loveitts` so stale EIG / upcoming-id calendar URLs cannot bypass the lot grid.
 - Sibling AH branch `auctionhousecoventry` is a separate slug on auctionhouse.co.uk (shared franchise network, different lot URL namespace).
+- Recall sentinel: `RECALL_SENTINELS.loveitts` matches `/auctions/{address-slug}` lot paths (not `/auctions/` or `/auctions/upcoming-auctions`).
 
 ## Incident
 - **2026-07-27:** Calendar had only `2099` upcoming + always_on EIG embed; no real future dates. Fixed root, watcher discovery, VIP cover, and calendar spine. Retired-slug `sdl` future rows cleared (coverage lives on `btgeddisons` / `sdlauctions`).
+- **2026-07-28:** `HOUSE_ROOTS.loveitts` shipped without a recall sentinel → CI `test-sentinel-coverage` red on main. Added explicit sentinel + sample URL.

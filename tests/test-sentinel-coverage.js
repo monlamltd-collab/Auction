@@ -79,6 +79,7 @@ console.log('\nTest 5: derived sentinels match the real production lot URLs they
     ['fisherGerman', 'https://fishergerman.bambooauctions.com/property/chester-cottage-wakefield-road-hampole-doncaster-dn6-7ez-6903829', 'chester-cottage-wakefield-road-hampole-doncaster-dn6-7ez-6903829'],
     ['williamhbrownnorwich', 'https://www.barnardmarcusauctions.co.uk/auctions/19-may-2026/688382/', '688382'],
     ['dedmangray', 'https://www.dedmangray.co.uk/current-auction.htm?lid=4421', '4421'],
+    ['loveitts', 'https://loveitts.co.uk/auctions/52-abbey-court-whitley-coventry-west-midlands-cv3-4bb', '52-abbey-court-whitley-coventry-west-midlands-cv3-4bb'],
   ];
   for (const [slug, url, expectId] of samples) {
     const re = resolveRecallSentinel(slug);
